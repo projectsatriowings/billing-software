@@ -31,8 +31,20 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   return data as T;
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ token: string }> {
+  const res = await api<{ token: string }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (res.token) {
+    setToken(res.token);
+  }
+  return res;
+}
+
 export interface User {
   id: string;
+  employeeId?: string;
   name: string;
   email: string;
   role: string;

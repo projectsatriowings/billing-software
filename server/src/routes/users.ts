@@ -19,6 +19,7 @@ const view = (u: any) => {
   const allowedLocations = parseAllowed(u.allowedLocations || u.allowed_locations) || [assignedLocation];
   return {
     id: u.id,
+    employeeId: u.id,
     name: u.name,
     email: u.email,
     role: u.role as Role,
@@ -47,7 +48,6 @@ export function registerUsers(r: Router) {
   r.post('/api/users', requirePerm('users'), async (ctx) => {
     const b = ctx.body ?? {};
     const name = V.str(b.name, 'Name', { required: true, max: 80 });
-    const email = parseEmail(b.email);
     const role = V.oneOf(b.role, 'Role', ROLES);
     const pwErr = passwordProblem(b.password);
     if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD', { field: 'Password' });
@@ -58,6 +58,22 @@ export function registerUsers(r: Router) {
       if (role !== 'cashier') {
         throw bad('Store Managers can only create Cashier accounts.', 'FORBIDDEN_ROLE');
       }
+    }
+
+    let id: string;
+    let email: string;
+    if (role === 'cashier') {
+      const customId = V.optStr(b.employeeId, 'Employee ID', 50)?.trim().toUpperCase();
+      const employeeId = customId || ('CSH-' + Math.floor(1000 + Math.random() * 9000));
+      id = employeeId;
+      if (b.email && String(b.email).trim()) {
+        email = parseEmail(b.email);
+      } else {
+        email = `${employeeId.toLowerCase()}@billing.local`;
+      }
+    } else {
+      email = parseEmail(b.email);
+      id = newId('u');
     }
 
     const assignedLocation = V.optStr(b.assignedLocation, 'Assigned location', 50) || (isManager ? (ctx.user!.assignedLocation || 'MAIN') : 'MAIN');
@@ -74,8 +90,17 @@ export function registerUsers(r: Router) {
       }
     }
 
-    if (await ctx.db.one('SELECT 1 AS x FROM users WHERE lower(email) = ?', [email])) throw conflict('Someone already uses this email', 'EMAIL_TAKEN');
-    const id = newId('u');
+    const existing = await ctx.db.one(
+      'SELECT id, email FROM users WHERE upper(id) = ? OR lower(email) = ?',
+      [id.toUpperCase(), email.toLowerCase()]
+    );
+    if (existing) {
+      if (existing.email.toLowerCase() === email.toLowerCase()) {
+        throw conflict('Someone already uses this email', 'EMAIL_TAKEN');
+      }
+      throw conflict(`Employee ID "${id}" is already in use. Please choose another.`, 'EMPLOYEE_ID_TAKEN');
+    }
+
     const hash = hashPassword(b.password);
     try {
       await ctx.db.tx(async (q) => {
@@ -83,10 +108,13 @@ export function registerUsers(r: Router) {
           'INSERT INTO users (id, tenant_id, name, email, password_hash, role, assigned_location, assigned_counter, allowed_locations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)',
           [id, ctx.user!.tenantId, name, email, hash, role, assignedLocation, assignedCounter, j(allowedLocations)],
         );
-        await audit(q, ctx, { action: 'user.create', entity: 'user', entityId: id, detail: { name, email, role, assignedLocation, assignedCounter } });
+        await audit(q, ctx, { action: 'user.create', entity: 'user', entityId: id, detail: { name, email, role, assignedLocation, assignedCounter, employeeId: id } });
       });
     } catch (e: any) {
-      if (e?.code === '23505' && String(e.constraint ?? '').includes('users_email')) throw conflict('Someone already uses this email', 'EMAIL_TAKEN');
+      if (e?.code === '23505') {
+        if (String(e.constraint ?? '').includes('users_email')) throw conflict('Someone already uses this email', 'EMAIL_TAKEN');
+        if (String(e.constraint ?? '').includes('users_pkey')) throw conflict(`Employee ID "${id}" is already in use. Please choose another.`, 'EMPLOYEE_ID_TAKEN');
+      }
       throw e;
     }
     return view(await ctx.db.one(`SELECT * FROM users WHERE id = ?`, [id]));
@@ -142,16 +170,28 @@ export function registerUsers(r: Router) {
     });
   });
 
-  // Owner sets a new password for a staff member who forgot theirs. Their old sessions stop working at once.
+  // Owner or Store Manager sets a new password for a staff member who forgot theirs. Their old sessions stop working at once.
   r.post('/api/users/:id/reset-password', requirePerm('users'), async (ctx) => {
     const pwErr = passwordProblem(ctx.body?.newPassword);
     if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD', { field: 'Password' });
-    const t = await ctx.db.one('SELECT id FROM users WHERE id = ? AND tenant_id = ?', [ctx.params.id, ctx.user!.tenantId]);
+    const isManager = ctx.user!.role === 'manager';
+    const t = await ctx.db.one(
+      'SELECT id, role, assigned_location FROM users WHERE (id = ? OR upper(id) = ?) AND tenant_id = ?',
+      [ctx.params.id, ctx.params.id.toUpperCase(), ctx.user!.tenantId]
+    );
     if (!t) throw notFound('User');
+    if (isManager) {
+      if (t.role !== 'cashier') throw bad('Store Managers can only reset Cashier passwords.', 'FORBIDDEN_ROLE');
+      const allowed = new Set(ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN']);
+      if (!allowed.has(t.assignedLocation || t.assigned_location || 'MAIN')) {
+        throw bad('You cannot reset passwords for staff outside your authorized branches.', 'UNAUTHORIZED_BRANCH');
+      }
+    }
     const hash = hashPassword(ctx.body.newPassword);
     await ctx.db.tx(async (q) => {
       await q.exec('UPDATE users SET password_hash = ? WHERE id = ? AND tenant_id = ?', [hash, t.id, ctx.user!.tenantId]);
       await audit(q, ctx, { action: 'user.password_reset', entity: 'user', entityId: t.id });
     });
+    return { ok: true, message: 'Password reset successfully' };
   });
 }

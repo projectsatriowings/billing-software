@@ -44,11 +44,87 @@ export function StoreManagerDashboard({
   // Add cashier state
   const [showAddCashierModal, setShowAddCashierModal] = useState(false);
   const [cashierName, setCashierName] = useState('');
+  const [cashierEmployeeId, setCashierEmployeeId] = useState('');
   const [cashierEmail, setCashierEmail] = useState('');
   const [cashierPassword, setCashierPassword] = useState('Cashier123!');
+  const [showPassword, setShowPassword] = useState(false);
   const [cashierCounter, setCashierCounter] = useState('COUNTER-1');
   const [cashierError, setCashierError] = useState('');
   const [isSubmittingCashier, setIsSubmittingCashier] = useState(false);
+
+  // Credentials One-Time Display / WhatsApp Share State
+  const [createdCashierCredentials, setCreatedCashierCredentials] = useState<{
+    name: string;
+    employeeId: string;
+    email: string;
+    initialPassword: string;
+    branch: string;
+    counter: string;
+    loginUrl: string;
+    isReset?: boolean;
+  } | null>(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
+
+  // Reset Cashier Password State
+  const [resetCashierUser, setResetCashierUser] = useState<any | null>(null);
+  const [resetPasswordVal, setResetPasswordVal] = useState('Cashier123!');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [isSubmittingReset, setIsSubmittingReset] = useState(false);
+  const [resetError, setResetError] = useState('');
+
+  const generateEmployeeId = () => {
+    const num = Math.floor(100 + Math.random() * 900);
+    setCashierEmployeeId(`CSH-${num}`);
+  };
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let res = '';
+    for (let i = 0; i < 10; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCashierPassword(res);
+  };
+
+  const getWhatsAppMessage = (creds: {
+    name: string;
+    employeeId: string;
+    email: string;
+    initialPassword: string;
+    branch: string;
+    counter: string;
+    loginUrl: string;
+    isReset?: boolean;
+  }) => {
+    const storeName = shop?.name || 'Adaptive Billing Platform';
+    return (
+`👋 Hello ${creds.name},
+
+${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have been reset:` : `🎉 Welcome to ${storeName}! Here are your Cashier login credentials:`}
+
+🆔 Employee ID: ${creds.employeeId}
+📧 Sign-in ID / Email: ${creds.email}
+🔑 Initial Password: ${creds.initialPassword}
+🏪 Branch: ${creds.branch}
+🖥️ Counter: ${creds.counter}
+🌐 Login URL: ${creds.loginUrl}
+
+⚠️ Security Reminder: Please sign in at the Cashier portal and change your password upon first login.`
+    );
+  };
+
+  const handleCopyCredentials = (creds: any) => {
+    const text = getWhatsAppMessage(creds);
+    navigator.clipboard.writeText(text);
+    setCopiedCredentials(true);
+    setTimeout(() => setCopiedCredentials(false), 3000);
+  };
+
+  const handleOpenWhatsApp = (creds: any) => {
+    const text = getWhatsAppMessage(creds);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   const loadAuthorizedBranches = async () => {
     try {
@@ -134,11 +210,13 @@ export function StoreManagerDashboard({
     setCashierError('');
     setIsSubmittingCashier(true);
     try {
-      await api('/api/users', {
+      const empId = cashierEmployeeId.trim().toUpperCase() || ('CSH-' + Math.floor(100 + Math.random() * 900));
+      const res = await api<any>('/api/users', {
         method: 'POST',
         body: JSON.stringify({
           name: cashierName.trim(),
-          email: cashierEmail.trim(),
+          employeeId: empId,
+          email: cashierEmail.trim() || undefined,
           password: cashierPassword,
           role: 'cashier',
           assignedLocation: selectedBranchCode,
@@ -147,10 +225,24 @@ export function StoreManagerDashboard({
         }),
       });
 
+      // Save credentials for one-time display and WhatsApp sharing
+      setCreatedCashierCredentials({
+        name: cashierName.trim(),
+        employeeId: res.employeeId || res.id || empId,
+        email: res.email || (cashierEmail.trim() || `${empId.toLowerCase()}@billing.local`),
+        initialPassword: cashierPassword,
+        branch: selectedBranchCode,
+        counter: cashierCounter,
+        loginUrl: window.location.origin,
+      });
+      setCopiedCredentials(false);
+
       setShowAddCashierModal(false);
       setCashierName('');
+      setCashierEmployeeId('');
       setCashierEmail('');
       setCashierPassword('Cashier123!');
+
       // Reload branch summary to show new cashier
       const currentBranch = branches.find((b) => b.code === selectedBranchCode);
       if (currentBranch) loadBranchDetails(currentBranch.id);
@@ -158,6 +250,36 @@ export function StoreManagerDashboard({
       setCashierError(err.message || 'Failed to create cashier account');
     } finally {
       setIsSubmittingCashier(false);
+    }
+  };
+
+  const handleResetCashierPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCashierUser) return;
+    setResetError('');
+    setIsSubmittingReset(true);
+    try {
+      await api(`/api/users/${resetCashierUser.id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: resetPasswordVal }),
+      });
+
+      setCreatedCashierCredentials({
+        name: resetCashierUser.name,
+        employeeId: resetCashierUser.id,
+        email: resetCashierUser.email,
+        initialPassword: resetPasswordVal,
+        branch: selectedBranchCode,
+        counter: resetCashierUser.counter || resetCashierUser.assignedCounter || 'COUNTER-1',
+        loginUrl: window.location.origin,
+        isReset: true,
+      });
+      setCopiedCredentials(false);
+      setResetCashierUser(null);
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to reset cashier password');
+    } finally {
+      setIsSubmittingReset(false);
     }
   };  if (loading) {
     return (
@@ -535,15 +657,56 @@ export function StoreManagerDashboard({
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.5rem', maxHeight: '250px', overflowY: 'auto' }}>
             {branchSummary?.staff && branchSummary.staff.length > 0 ? (
               branchSummary.staff.map((st) => (
-                <div key={st.id} style={{ padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                  <div>
-                    <span style={{ fontWeight: 800, color: '#0f172a' }}>{st.name}</span>
-                    <span style={{ color: '#94a3b8', marginLeft: '6px' }}>({st.email})</span>
+                <div key={st.id} style={{ padding: '0.65rem 0.85rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem' }}>
+                      💳
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 800, color: '#0f172a' }}>{st.name}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.68rem', padding: '1px 5px', background: '#eef2ff', color: '#4338ca', borderRadius: '4px', fontWeight: 700 }}>
+                          ID: {st.id}
+                        </span>
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: '2px' }}>
+                        <span>{st.email}</span>
+                      </div>
+                    </div>
                   </div>
-                  <span style={{ fontFamily: 'monospace', color: '#4338ca', fontWeight: 700, background: '#eef2ff', padding: '2px 6px', borderRadius: '4px' }}>{st.counter || 'COUNTER-1'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ fontFamily: 'monospace', color: '#0369a1', fontWeight: 700, background: '#e0f2fe', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem' }}>
+                      {st.counter || 'COUNTER-1'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetCashierUser(st);
+                        setResetPasswordVal('Cashier123!');
+                        setResetError('');
+                        setShowResetPassword(false);
+                      }}
+                      title="Reset Cashier Password"
+                      style={{
+                        padding: '3px 7px',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        color: '#475569',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                      }}
+                    >
+                      🔑 Reset PW
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -767,7 +930,7 @@ export function StoreManagerDashboard({
             style={{
               background: '#ffffff',
               borderRadius: '16px',
-              maxWidth: '440px',
+              maxWidth: '460px',
               width: '100%',
               padding: '1.75rem',
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
@@ -776,9 +939,12 @@ export function StoreManagerDashboard({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
-              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
-                Add Cashier for {selectedBranchCode}
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.25rem' }}>💳</span>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                  Create Cashier Account
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAddCashierModal(false)}
@@ -786,6 +952,10 @@ export function StoreManagerDashboard({
               >
                 ✕
               </button>
+            </div>
+
+            <div style={{ padding: '0.6rem 0.85rem', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', marginTop: '0.85rem', fontSize: '0.75rem', color: '#1e40af' }}>
+              🏪 Assigned to branch: <strong>{selectedBranchCode}</strong> ({shop?.name || 'Central Store'})
             </div>
 
             {cashierError && (
@@ -796,7 +966,9 @@ export function StoreManagerDashboard({
 
             <form onSubmit={handleCreateCashier} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Cashier Full Name</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Cashier Employee Full Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -815,11 +987,51 @@ export function StoreManagerDashboard({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Email / Sign-in ID</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                    Employee ID <span style={{ color: '#64748b', fontWeight: 500 }}>(Login Identifier)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateEmployeeId}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4f46e5',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    ⚡ Auto-Generate
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. CSH-101 (Leave empty to auto-generate)"
+                  value={cashierEmployeeId}
+                  onChange={(e) => setCashierEmployeeId(e.target.value.toUpperCase())}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                    textTransform: 'uppercase',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Email ID <span style={{ color: '#64748b', fontWeight: 500 }}>(Optional — Employee ID can be used to log in)</span>
+                </label>
                 <input
                   type="email"
-                  required
-                  placeholder="cashier@store.com"
+                  placeholder="e.g. ramesh@store.com (optional)"
                   value={cashierEmail}
                   onChange={(e) => setCashierEmail(e.target.value)}
                   style={{
@@ -834,9 +1046,44 @@ export function StoreManagerDashboard({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Initial Password</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                    Initial Password <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={generateRandomPassword}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#4f46e5',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      🎲 Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={cashierPassword}
                   onChange={(e) => setCashierPassword(e.target.value)}
@@ -850,10 +1097,15 @@ export function StoreManagerDashboard({
                     boxSizing: 'border-box',
                   }}
                 />
+                <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                  Minimum 8 characters. Stored securely hashed using scrypt.
+                </span>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Counter</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Assigned POS Counter <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <select
                   value={cashierCounter}
                   onChange={(e) => setCashierCounter(e.target.value)}
@@ -880,7 +1132,7 @@ export function StoreManagerDashboard({
                   type="button"
                   onClick={() => setShowAddCashierModal(false)}
                   style={{
-                    padding: '0.5rem 1rem',
+                    padding: '0.55rem 1.1rem',
                     border: '1px solid #cbd5e1',
                     background: '#ffffff',
                     color: '#475569',
@@ -896,7 +1148,7 @@ export function StoreManagerDashboard({
                   type="submit"
                   disabled={isSubmittingCashier}
                   style={{
-                    padding: '0.5rem 1.25rem',
+                    padding: '0.55rem 1.35rem',
                     background: '#4f46e5',
                     color: '#ffffff',
                     border: 'none',
@@ -908,7 +1160,326 @@ export function StoreManagerDashboard({
                     boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
                   }}
                 >
-                  {isSubmittingCashier ? 'Creating...' : 'Create Cashier'}
+                  {isSubmittingCashier ? 'Creating...' : 'Create Cashier Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* One-Time Credentials & WhatsApp Sharing Modal */}
+      {createdCashierCredentials && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '1rem',
+          }}
+          onClick={() => setCreatedCashierCredentials(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '500px',
+              width: '100%',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', marginBottom: '0.75rem' }}>
+                ✓
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#0f172a' }}>
+                {createdCashierCredentials.isReset ? 'Cashier Password Reset Successfully' : 'Cashier Account Created!'}
+              </h3>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                Initial credentials are shown <strong>only once</strong>. Copy and send them to the employee via WhatsApp now.
+              </p>
+            </div>
+
+            {/* Credentials Card */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Employee Name:</span>
+                <span style={{ fontWeight: 800, color: '#0f172a' }}>{createdCashierCredentials.name}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Employee ID (Sign-in):</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#4338ca', background: '#eef2ff', padding: '2px 8px', borderRadius: '6px' }}>
+                  {createdCashierCredentials.employeeId}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Sign-in Email / ID:</span>
+                <span style={{ fontWeight: 700, color: '#334155' }}>{createdCashierCredentials.email}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Initial Password:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecdd3', padding: '3px 8px', borderRadius: '6px' }}>
+                  {createdCashierCredentials.initialPassword}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Assigned Station:</span>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                  {createdCashierCredentials.branch} • {createdCashierCredentials.counter}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Login Portal URL:</span>
+                <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: '#2563eb' }}>
+                  {createdCashierCredentials.loginUrl}
+                </span>
+              </div>
+            </div>
+
+            {/* Security Notice */}
+            <div style={{ marginTop: '1rem', padding: '0.65rem 0.85rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '0.75rem', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>🔒</span>
+              <span>
+                <strong>Security Guarantee:</strong> Passwords are never stored in plaintext. If lost, use the Reset Password action.
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '1.25rem' }}>
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <button
+                  type="button"
+                  onClick={() => handleCopyCredentials(createdCashierCredentials)}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1rem',
+                    background: copiedCredentials ? '#16a34a' : '#4f46e5',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{copiedCredentials ? '✓' : '📋'}</span>
+                  <span>{copiedCredentials ? 'Copied to Clipboard!' : 'Copy Login Details'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenWhatsApp(createdCashierCredentials)}
+                  title="Open WhatsApp Web or App to paste and send"
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1rem',
+                    background: '#25d366',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)',
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>💬</span>
+                  <span>Open WhatsApp</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCreatedCashierCredentials(null)}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Done / Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Cashier Password Modal */}
+      {resetCashierUser && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setResetCashierUser(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '420px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.25rem' }}>🔑</span>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                  Reset Cashier Password
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetCashierUser(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 700 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ margin: '8px 0 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+              Reset password for <strong>{resetCashierUser.name}</strong> ({resetCashierUser.id}).
+            </p>
+
+            {resetError && (
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '8px', fontSize: '0.8rem' }}>
+                {resetError}
+              </div>
+            )}
+
+            <form onSubmit={handleResetCashierPassword} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                    New Initial Password <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#4f46e5',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    {showResetPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  required
+                  value={resetPasswordVal}
+                  onChange={(e) => setResetPasswordVal(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '3px', display: 'block' }}>
+                  New password will be securely hashed. You can copy details to WhatsApp right after saving.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                <button
+                  type="button"
+                  onClick={() => setResetCashierUser(null)}
+                  style={{
+                    padding: '0.55rem 1rem',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#475569',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReset}
+                  style={{
+                    padding: '0.55rem 1.35rem',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    opacity: isSubmittingReset ? 0.6 : 1,
+                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+                  }}
+                >
+                  {isSubmittingReset ? 'Updating...' : 'Save & Share Credentials'}
                 </button>
               </div>
             </form>

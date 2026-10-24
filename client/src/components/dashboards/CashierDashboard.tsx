@@ -7,6 +7,7 @@ import {
   type CashMovement,
   fetchActiveShift,
   fetchShiftDetails,
+  changePassword,
 } from '../../api.ts';
 import { formatMoney } from '../../../../shared/shifts.ts';
 import { OpenShiftModal } from '../shifts/OpenShiftModal.tsx';
@@ -47,6 +48,56 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [closingReportShiftId, setClosingReportShiftId] = useState<string | null>(null);
+
+  // Cashier password change state
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password');
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password must be different from current password');
+      return;
+    }
+
+    setPasswordSubmitting(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setPasswordSuccess('Password changed successfully! Please keep your new credentials safe.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setIsChangePasswordOpen(false);
+        setPasswordSuccess('');
+      }, 2000);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password');
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
 
   const assignedBranch = user.assignedLocation || 'MAIN';
   const assignedCounter = user.assignedCounter || 'COUNTER-1';
@@ -165,6 +216,21 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
               >
                 CASHIER
               </span>
+              <span
+                style={{
+                  background: 'rgba(148, 163, 184, 0.15)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.3)',
+                  padding: '2px 10px',
+                  borderRadius: '999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.03em',
+                }}
+              >
+                ID: {user.employeeId || user.id}
+              </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#94a3b8', fontSize: '0.875rem' }}>
               <span>
@@ -180,8 +246,38 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           </div>
         </div>
 
-        {/* Big POS Trigger Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        {/* Action Buttons: Change Password & POS Trigger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsChangePasswordOpen(true);
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+              setPasswordError('');
+              setPasswordSuccess('');
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '12px',
+              padding: '0.875rem 1.25rem',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)')}
+          >
+            <span>🔐 Change Password</span>
+          </button>
+
           <button
             type="button"
             onClick={onNavigateToPos}
@@ -736,6 +832,257 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           onClose={() => setClosingReportShiftId(null)}
           userRole={user.role}
         />
+      )}
+
+      {/* Modal: Change Password */}
+      {isChangePasswordOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !passwordSubmitting) {
+              setIsChangePasswordOpen(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              position: 'relative',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                  🔐 Change Password
+                </h3>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+                  Update your initial login password securely.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordOpen(false)}
+                disabled={passwordSubmitting}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1.25rem',
+                  cursor: 'pointer',
+                  color: '#94a3b8',
+                  padding: '4px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '0.75rem 1rem',
+                fontSize: '0.85rem',
+                color: '#475569',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div><strong>Cashier:</strong> {user.name}</div>
+              <div><strong>Employee ID:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{user.employeeId || user.id}</span></div>
+              <div><strong>Assigned Branch:</strong> {assignedBranch} (Counter: {assignedCounter})</div>
+            </div>
+
+            {passwordError && (
+              <div
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  color: '#b91c1c',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  marginBottom: '1rem',
+                }}
+              >
+                ⚠️ {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div
+                style={{
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  color: '#047857',
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  marginBottom: '1rem',
+                }}
+              >
+                ✅ {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordSubmit}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  Current Password (Initial Password) *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showCurrentPw ? 'text' : 'password'}
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 2.5rem 0.65rem 0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.95rem',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPw(!showCurrentPw)}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      color: '#64748b',
+                    }}
+                  >
+                    {showCurrentPw ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  New Password (Min. 8 characters) *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showNewPw ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter at least 8 characters"
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 2.5rem 0.65rem 0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.95rem',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw(!showNewPw)}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      color: '#64748b',
+                    }}
+                  >
+                    {showNewPw ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  Confirm New Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.95rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(false)}
+                  disabled={passwordSubmitting}
+                  style={{
+                    padding: '0.65rem 1.25rem',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc',
+                    color: '#475569',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordSubmitting}
+                  style={{
+                    padding: '0.65rem 1.5rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                    color: '#ffffff',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    cursor: passwordSubmitting ? 'not-allowed' : 'pointer',
+                    opacity: passwordSubmitting ? 0.7 : 1,
+                  }}
+                >
+                  {passwordSubmitting ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

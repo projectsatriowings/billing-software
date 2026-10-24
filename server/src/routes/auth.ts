@@ -20,6 +20,7 @@ export const userView = (u: any) => {
   const allowedLocations = parseAllowed(u.allowedLocations || u.allowed_locations) || [assignedLocation];
   return {
     id: u.id,
+    employeeId: u.id,
     name: u.name,
     email: u.email,
     role: u.role as Role,
@@ -72,11 +73,18 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
   });
 
   r.post('/api/auth/login', async (ctx) => {
-    const email = parseEmail(ctx.body?.email);
+    const rawLogin = V.str(ctx.body?.email || ctx.body?.login || ctx.body?.employeeId, 'Email or Employee ID', { required: true, max: 254 }).trim();
     const password = V.str(ctx.body?.password, 'Password', { required: true, max: 128 });
-    rateLimit(`login:${ctx.ip}:${email}`, 10, 15 * 60_000);
+    const loginLower = rawLogin.toLowerCase();
+    const loginUpper = rawLogin.toUpperCase();
+    rateLimit(`login:${ctx.ip}:${loginLower}`, 10, 15 * 60_000);
     rateLimit(`login-ip:${ctx.ip}`, 100, 15 * 60_000);
-    const u = await ctx.db.one('SELECT id, tenant_id, name, email, role, active, password_hash, assigned_location, assigned_counter, allowed_locations FROM users WHERE lower(email) = ?', [email]);
+    const u = await ctx.db.one(
+      `SELECT id, tenant_id, name, email, role, active, password_hash, assigned_location, assigned_counter, allowed_locations
+       FROM users
+       WHERE lower(email) = ? OR upper(id) = ? OR lower(id) = ? OR lower(email) = ?`,
+      [loginLower, loginUpper, loginLower, `${loginLower}@billing.local`]
+    );
     if (!u) {
       burnPasswordTime(password);
       throw new HttpError(401, 'BAD_LOGIN', 'Email or password is wrong');

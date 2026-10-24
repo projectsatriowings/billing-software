@@ -286,19 +286,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <label className="form-label" htmlFor="login-email">
                   {selectedRole === 'super_admin' && 'Super Admin Email'}
                   {selectedRole === 'store_manager' && 'Store Manager Email'}
-                  {selectedRole === 'cashier' && 'Cashier / Counter Login Email'}{' '}
+                  {selectedRole === 'cashier' && 'Cashier Employee ID or Email'}{' '}
                   <span className="required-star">*</span>
                 </label>
                 <div className="input-with-icon">
                   <input
                     id="login-email"
-                    type="email"
+                    type={selectedRole === 'cashier' ? 'text' : 'email'}
                     className="form-input"
                     required
-                    placeholder="you@business.com"
+                    placeholder={selectedRole === 'cashier' ? 'e.g. CSH-101 or cashier@billing.local' : 'you@business.com'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
+                    autoComplete={selectedRole === 'cashier' ? 'username' : 'email'}
                   />
                 </div>
               </div>
