@@ -1,0 +1,301 @@
+import React, { useState } from 'react';
+import { closeShift, type Shift, type ShiftSummary } from '../../api.ts';
+import { formatMoney } from '../../../../shared/shifts.ts';
+
+interface CloseShiftModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (closedShift: Shift) => void;
+  activeShift: Shift;
+  summary: ShiftSummary;
+}
+
+export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  activeShift,
+  summary,
+}) => {
+  const [countedRupees, setCountedRupees] = useState<string>(
+    (summary.expectedCashMinor / 100).toFixed(2)
+  );
+  const [varianceReason, setVarianceReason] = useState<string>('');
+  const [closingNote, setClosingNote] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const parsedCounted = parseFloat(countedRupees);
+  const countedMinor = isNaN(parsedCounted) || parsedCounted < 0 ? 0 : Math.round(parsedCounted * 100);
+  const expectedMinor = summary.expectedCashMinor;
+  const varianceMinor = countedMinor - expectedMinor;
+
+  const isBalanced = varianceMinor === 0;
+  const isShortage = varianceMinor < 0;
+  const isExcess = varianceMinor > 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (isNaN(parsedCounted) || parsedCounted < 0) {
+      setError('Please enter a valid non-negative counted cash amount.');
+      return;
+    }
+
+    if (!isBalanced && !varianceReason.trim()) {
+      setError(
+        `A mandatory explanation reason is required for a cash ${
+          isShortage ? 'shortage' : 'excess'
+        } of ${formatMoney(Math.abs(varianceMinor))}.`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await closeShift(activeShift.id, {
+        countedCashMinor: countedMinor,
+        varianceReason: varianceReason.trim() || undefined,
+        note: closingNote.trim() || undefined,
+      });
+      onSuccess(res.shift);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to close shift.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content shift-modal-card wide" onClick={(e) => e.stopPropagation()}>
+        {/* Top Accent Gradient Bar */}
+        <div className="modal-top-accent red-accent"></div>
+
+        <div className="modal-header">
+          <div className="modal-title-wrap">
+            <div className="modal-icon-badge red">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <div>
+              <h2 className="modal-title">Close Shift & Day-End Reconcile</h2>
+              <p className="modal-subtitle">
+                Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span> • Cashier:{' '}
+                <span className="cashier-pill-tag">👤 {activeShift.userName || 'Current Cashier'}</span>
+              </p>
+            </div>
+          </div>
+          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="shift-modal-body">
+          {error && (
+            <div className="shift-modal-alert error">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Expected Drawer Cash Breakdown Panel */}
+          <div className="shift-reconciliation-panel">
+            <h4 className="panel-subheading">Authoritative Drawer Cash Balance</h4>
+            <div className="recon-formula-grid">
+              <div className="recon-term">
+                <span className="term-label">Opening Float</span>
+                <span className="term-val">{formatMoney(summary.openingCashMinor)}</span>
+              </div>
+              <span className="recon-op">+</span>
+              <div className="recon-term">
+                <span className="term-label">Cash Sales</span>
+                <span className="term-val">{formatMoney(summary.cashSalesMinor)}</span>
+              </div>
+              <span className="recon-op">+</span>
+              <div className="recon-term">
+                <span className="term-label">Cash-In</span>
+                <span className="term-val text-success">+{formatMoney(summary.cashInMinor)}</span>
+              </div>
+              <span className="recon-op">-</span>
+              <div className="recon-term">
+                <span className="term-label">Cash-Out</span>
+                <span className="term-val text-warning">-{formatMoney(summary.cashOutMinor)}</span>
+              </div>
+              <span className="recon-op">-</span>
+              <div className="recon-term">
+                <span className="term-label">Cash Refunds</span>
+                <span className="term-val text-danger">-{formatMoney(summary.cashRefundsMinor)}</span>
+              </div>
+              <span className="recon-op">=</span>
+              <div className="recon-term expected-term">
+                <span className="term-label">EXPECTED CASH</span>
+                <span className="term-val expected-val">{formatMoney(expectedMinor)}</span>
+              </div>
+            </div>
+
+            <div className="recon-noncash-notice">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>
+                <strong>Non-Cash Collections:</strong> UPI, Card, and Bank payments total{' '}
+                <strong>{formatMoney(summary.nonCashPaymentsMinor)}</strong> and are safely excluded from the physical cash drawer.
+              </span>
+            </div>
+          </div>
+
+          {/* Physical Counted Cash Input */}
+          <div className="form-group count-cash-group">
+            <label className="form-label">
+              <span>Actual Physical Cash Counted in Drawer (₹)</span>
+              <span className="req">*</span>
+            </label>
+            <div className="rupee-input-wrapper large">
+              <div className="rupee-badge-prefix">₹</div>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-input rupee-input large"
+                placeholder="0.00"
+                value={countedRupees}
+                onChange={(e) => setCountedRupees(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+            <div className="quick-amount-pills">
+              <button
+                type="button"
+                className="quick-pill active"
+                onClick={() => setCountedRupees((expectedMinor / 100).toFixed(2))}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Match Expected ({formatMoney(expectedMinor)})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Live Variance Visual Indicator */}
+          <div className={`variance-banner ${isBalanced ? 'balanced' : isShortage ? 'shortage' : 'excess'}`}>
+            <div className="variance-banner-left">
+              <div className="variance-icon-wrap">
+                {isBalanced ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                ) : isShortage ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 20 4 8 20 8 12 20"></polygon>
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 4 4 16 20 16 12 4"></polygon>
+                  </svg>
+                )}
+              </div>
+              <div>
+                <span className="variance-title">
+                  {isBalanced && 'Cash Drawer Perfectly Balanced (₹0.00 Variance)'}
+                  {isShortage && `Cash Shortage: ${formatMoney(Math.abs(varianceMinor))} Deficit`}
+                  {isExcess && `Cash Excess: +${formatMoney(varianceMinor)} Surplus`}
+                </span>
+                <p className="variance-subtitle">
+                  {isBalanced && 'Physical counted cash matches expected calculations to the exact paisa.'}
+                  {isShortage && 'Counted cash is less than expected. An explanation note is mandatory.'}
+                  {isExcess && 'Counted cash exceeds expected. An explanation note is mandatory.'}
+                </p>
+              </div>
+            </div>
+            <div className="variance-badge-number">
+              {formatMoney(varianceMinor)}
+            </div>
+          </div>
+
+          {/* Mandatory Discrepancy Reason if variance != 0 */}
+          {!isBalanced && (
+            <div className="form-group highlight-danger">
+              <label className="form-label text-danger">
+                <span>Mandatory Discrepancy Explanation Reason</span>
+                <span className="req">*</span>
+              </label>
+              <textarea
+                className="form-input form-textarea"
+                rows={2}
+                placeholder="Explain the reason for cash shortage or excess (e.g., Shortage on customer change, Safe transfer difference, etc.)"
+                value={varianceReason}
+                onChange={(e) => setVarianceReason(e.target.value)}
+                required
+              />
+              <span className="form-hint text-warning">
+                This explanation will be permanently recorded in the Day-End Closing Report and flagged for Manager review.
+              </span>
+            </div>
+          )}
+
+          {/* General Closing Notes */}
+          <div className="form-group">
+            <label className="form-label">General Handover / Closing Notes (Optional)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g., Evening handover to night cashier, all card batches settled"
+              value={closingNote}
+              onChange={(e) => setClosingNote(e.target.value)}
+              maxLength={250}
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary modal-cancel-btn"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-danger btn-finalize-close"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="spinner-sm"></span>
+                  <span>Closing & Finalizing Shift...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span>Finalize Day-End Close</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
