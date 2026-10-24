@@ -12,6 +12,7 @@
     "migrate": "node --import tsx server/src/migrate.ts",
     "seed:demo": "node --import tsx server/src/seed-demo.ts",
     "test": "node --import tsx --test --test-concurrency=1 \"shared/test/*.test.ts\" \"server/test/*.test.ts\"",
+    "backup": "node scripts/backup-db.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p client/tsconfig.json"
   },
   "dependencies": {
