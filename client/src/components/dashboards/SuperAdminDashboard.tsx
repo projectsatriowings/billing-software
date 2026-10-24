@@ -278,7 +278,7 @@ export function SuperAdminDashboard({
             </button>
             <button
               type="button"
-              onClick={() => onNavigate?.('shifts')}
+              onClick={() => setActiveSubTab('branches')}
               style={{
                 background: '#4f46e5',
                 color: '#ffffff',
@@ -294,7 +294,7 @@ export function SuperAdminDashboard({
                 boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
               }}
             >
-              <span>⏱️</span> Shifts Hub
+              <span>🌐</span> Branches Hub
             </button>
             <button
               type="button"
@@ -416,23 +416,17 @@ export function SuperAdminDashboard({
               </div>
             </div>
 
-            {/* 4. Active Shifts & Discrepancies */}
+            {/* 4. Total GST & Tax Revenue (Pure Enterprise Total) */}
             <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shift Oversight</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total GST & Tax Revenue</div>
               <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>
-                {openShifts} <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#059669' }}>Open Shifts</span>
+                {formatRupees(report?.today?.gstMinor ?? 0)}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
-                <span style={{ color: pendingReviews > 0 ? '#d97706' : '#64748b', fontWeight: pendingReviews > 0 ? 700 : 500 }}>
-                  {pendingReviews} Need Review
+                <span style={{ color: '#64748b' }}>
+                  Taxable: <strong style={{ color: '#0f172a' }}>{formatRupees(report?.today?.taxableMinor ?? 0)}</strong>
                 </span>
-                {discrepancies > 0 ? (
-                  <span style={{ padding: '2px 8px', background: '#ffe4e6', color: '#be123c', borderRadius: '6px', fontWeight: 700 }}>
-                    ⚠️ {discrepancies} Discrepancy
-                  </span>
-                ) : (
-                  <span style={{ color: '#059669', fontWeight: 700 }}>✓ Balanced</span>
-                )}
+                <span style={{ color: '#059669', fontWeight: 700 }}>✓ GST Compliant</span>
               </div>
             </div>
           </div>
@@ -463,7 +457,7 @@ export function SuperAdminDashboard({
                   Branch Performance Comparison
                 </h2>
                 <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                  Live sales, payment collections, and cashier shifts across all authorized branches.
+                  Consolidated sales, payment collections, and branch performance across all authorized branches.
                 </p>
               </div>
               <button
@@ -499,7 +493,7 @@ export function SuperAdminDashboard({
                       <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Today Invoices</th>
                       <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Today Sales</th>
                       <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Collections</th>
-                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Open Shifts</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Avg Bill Value</th>
                       <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Status</th>
                       <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Action</th>
                     </tr>
@@ -517,14 +511,10 @@ export function SuperAdminDashboard({
                         <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#334155', fontWeight: 600 }}>{b.todaySalesCount}</td>
                         <td style={{ padding: '0.875rem 1rem', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>{formatRupees(b.todaySalesTotalMinor)}</td>
                         <td style={{ padding: '0.875rem 1rem', textAlign: 'right', fontWeight: 700, color: '#059669' }}>{formatRupees(b.todayCollectionsMinor)}</td>
-                        <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
-                          {b.openShiftsCount > 0 ? (
-                            <span style={{ padding: '2px 8px', background: '#dcfce7', color: '#15803d', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700 }}>
-                              {b.openShiftsCount} Active
-                            </span>
-                          ) : (
-                            <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
-                          )}
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'center', fontWeight: 600, color: '#475569' }}>
+                          {b.todaySalesCount > 0
+                            ? formatRupees(Math.round(b.todaySalesTotalMinor / b.todaySalesCount))
+                            : '—'}
                         </td>
                         <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
                           <span

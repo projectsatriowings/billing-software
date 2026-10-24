@@ -12,12 +12,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onNavigateRegister,
   onBackToHome,
 }) => {
+  const [selectedRole, setSelectedRole] = useState<'super_admin' | 'store_manager' | 'cashier'>('super_admin');
   const [email, setEmail] = useState('demo@billing.local');
   const [password, setPassword] = useState('Password123!');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleRoleTabChange = (role: 'super_admin' | 'store_manager' | 'cashier') => {
+    setSelectedRole(role);
+    setError('');
+    if (role === 'super_admin') {
+      setEmail('demo@billing.local');
+      setPassword('Password123!');
+    } else if (role === 'store_manager') {
+      setEmail('manager@billing.local');
+      setPassword('Password123!');
+    } else {
+      setEmail('cashier@billing.local');
+      setPassword('Password123!');
+    }
+  };
 
   // Forgot password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -166,16 +182,97 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
         <div className="login-form-container">
           <div className="login-card">
-            {/* Header Badge */}
-            <div className="login-avatar-badge">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+            {/* 3 Role Selection Tabs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#f1f5f9', padding: '6px', borderRadius: '12px', marginBottom: '1.25rem' }}>
+              <button
+                type="button"
+                onClick={() => handleRoleTabChange('super_admin')}
+                style={{
+                  padding: '10px 4px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: selectedRole === 'super_admin' ? '#ffffff' : 'transparent',
+                  color: selectedRole === 'super_admin' ? '#4338ca' : '#64748b',
+                  boxShadow: selectedRole === 'super_admin' ? '0 2px 8px rgba(67, 56, 202, 0.15)' : 'none',
+                  borderBottom: selectedRole === 'super_admin' ? '2px solid #4338ca' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ fontSize: '1.25rem' }}>👑</span>
+                <span>Super Admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRoleTabChange('store_manager')}
+                style={{
+                  padding: '10px 4px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: selectedRole === 'store_manager' ? '#ffffff' : 'transparent',
+                  color: selectedRole === 'store_manager' ? '#0369a1' : '#64748b',
+                  boxShadow: selectedRole === 'store_manager' ? '0 2px 8px rgba(3, 105, 161, 0.15)' : 'none',
+                  borderBottom: selectedRole === 'store_manager' ? '2px solid #0284c7' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ fontSize: '1.25rem' }}>🏪</span>
+                <span>Store Manager</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRoleTabChange('cashier')}
+                style={{
+                  padding: '10px 4px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: selectedRole === 'cashier' ? '#ffffff' : 'transparent',
+                  color: selectedRole === 'cashier' ? '#059669' : '#64748b',
+                  boxShadow: selectedRole === 'cashier' ? '0 2px 8px rgba(5, 150, 105, 0.15)' : 'none',
+                  borderBottom: selectedRole === 'cashier' ? '2px solid #059669' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ fontSize: '1.25rem' }}>💳</span>
+                <span>Cashier Counter</span>
+              </button>
             </div>
 
-            <h2 className="login-card-title">Welcome Back</h2>
-            <p className="login-card-subtitle">Login to your account</p>
+            {/* Role Purpose Pill & Subtitle */}
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <h2 className="login-card-title" style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+                {selectedRole === 'super_admin' && '👑 Super Admin Portal'}
+                {selectedRole === 'store_manager' && '🏪 Store Manager Portal'}
+                {selectedRole === 'cashier' && '💳 Cashier Billing Portal'}
+              </h2>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                {selectedRole === 'super_admin' && 'Enterprise headquarters: consolidated sales, multi-branch network & governance.'}
+                {selectedRole === 'store_manager' && 'Branch-level management: shift approvals, counter controls & staff supervision.'}
+                {selectedRole === 'cashier' && 'Register checkout counter: POS billing, cash float & drawer shift operations.'}
+              </p>
+            </div>
 
             {error && (
               <div className="login-alert-error">
@@ -187,7 +284,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <form onSubmit={handleSubmit} className="login-auth-form">
               <div className="form-group">
                 <label className="form-label" htmlFor="login-email">
-                  Email address <span className="required-star">*</span>
+                  {selectedRole === 'super_admin' && 'Super Admin Email'}
+                  {selectedRole === 'store_manager' && 'Store Manager Email'}
+                  {selectedRole === 'cashier' && 'Cashier / Counter Login Email'}{' '}
+                  <span className="required-star">*</span>
                 </label>
                 <div className="input-with-icon">
                   <input
@@ -266,52 +366,102 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="submit"
                 className="btn-primary-login"
                 disabled={isLoading}
+                style={{
+                  background:
+                    selectedRole === 'super_admin'
+                      ? 'linear-gradient(135deg, #4338ca 0%, #6d4aff 100%)'
+                      : selectedRole === 'store_manager'
+                      ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                      : 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                }}
               >
                 {isLoading ? (
                   <span className="btn-loading-content">
-                    <span className="spinner-icon"></span> Logging in...
+                    <span className="spinner-icon"></span> Authenticating...
                   </span>
                 ) : (
-                  'Login'
+                  `Login as ${
+                    selectedRole === 'super_admin'
+                      ? 'Super Admin'
+                      : selectedRole === 'store_manager'
+                      ? 'Store Manager'
+                      : 'Cashier'
+                  }`
                 )}
               </button>
             </form>
 
-            {/* Quick Demo Logins Helper */}
-            <div className="demo-accounts-box">
-              <div className="demo-accounts-title">Quick Demo Logins</div>
-              <div className="demo-buttons-grid">
+            {/* Quick 1-Click Role Logins */}
+            <div className="demo-accounts-box" style={{ marginTop: '1.25rem' }}>
+              <div className="demo-accounts-title">1-Click Role Demonstrations</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
                 <button
                   type="button"
-                  className="demo-chip-btn"
-                  onClick={() => handleDemoSelect('demo@billing.local', 'Password123!')}
-                  title="Green Mart Retail / Supermarket"
+                  onClick={() => handleRoleTabChange('super_admin')}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '8px',
+                    border: '1px solid #c7d2fe',
+                    background: selectedRole === 'super_admin' ? '#eef2ff' : '#ffffff',
+                    color: '#3730a3',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '2px',
+                  }}
+                  title="Super Admin (demo@billing.local)"
                 >
-                  🛒 Green Mart Supermarket
+                  <span>👑 Admin</span>
+                  <span style={{ fontSize: '0.65rem', color: '#6366f1', fontWeight: 600 }}>demo@billing.local</span>
                 </button>
+
                 <button
                   type="button"
-                  className="demo-chip-btn"
-                  onClick={() => handleDemoSelect('pharmacy@billing.local', 'Password123!')}
-                  title="City Care Pharmacy"
+                  onClick={() => handleRoleTabChange('store_manager')}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '8px',
+                    border: '1px solid #bae6fd',
+                    background: selectedRole === 'store_manager' ? '#f0f9ff' : '#ffffff',
+                    color: '#0369a1',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '2px',
+                  }}
+                  title="Store Manager (manager@billing.local)"
                 >
-                  💊 City Care Pharmacy
+                  <span>🏪 Manager</span>
+                  <span style={{ fontSize: '0.65rem', color: '#0284c7', fontWeight: 600 }}>manager@billing.local</span>
                 </button>
+
                 <button
                   type="button"
-                  className="demo-chip-btn"
-                  onClick={() => handleDemoSelect('restaurant@billing.local', 'Password123!')}
-                  title="Spice Route Cafe & Restaurant"
+                  onClick={() => handleRoleTabChange('cashier')}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '8px',
+                    border: '1px solid #a7f3d0',
+                    background: selectedRole === 'cashier' ? '#ecfdf5' : '#ffffff',
+                    color: '#047857',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '2px',
+                  }}
+                  title="Cashier (cashier@billing.local)"
                 >
-                  🍽️ Spice Route Restaurant
-                </button>
-                <button
-                  type="button"
-                  className="demo-chip-btn"
-                  onClick={() => handleDemoSelect('clothing@billing.local', 'Password123!')}
-                  title="Style Haven Clothing"
-                >
-                  👗 Style Haven Clothing
+                  <span>💳 Cashier</span>
+                  <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: 600 }}>cashier@billing.local</span>
                 </button>
               </div>
             </div>

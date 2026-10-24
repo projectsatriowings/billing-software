@@ -2629,16 +2629,23 @@ export function App() {
             )}
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links - Strictly Tailored per Role */}
           <nav className="sidebar-nav">
+            {/* 1. Dashboard Tab - Custom title and icon per role */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveTab('dashboard')}
             >
-              <span className="nav-icon">🏠</span>
-              <span className="nav-text">Dashboard</span>
+              <span className="nav-icon">
+                {user.role === 'owner' ? '👑' : user.role === 'manager' ? '🏪' : '💳'}
+              </span>
+              <span className="nav-text">
+                {user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
+              </span>
             </button>
+
+            {/* 2. POS Counter - Available to Cashier, Store Manager, and Super Admin */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'pos' ? 'active' : ''}`}
@@ -2648,75 +2655,103 @@ export function App() {
               <span className="nav-text">POS Counter</span>
               <span className="nav-tag-shortcut">F1</span>
             </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('shifts')}
-            >
-              <span className="nav-icon">💵</span>
-              <span className="nav-text">Cashier Shifts</span>
-              {activeShiftNumber ? (
-                <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
-                  ● {activeShiftNumber}
+
+            {/* 3. Cashier Shifts: ONLY for Cashier and Store Manager (Super Admin does not run cashier shifts!) */}
+            {user.role !== 'owner' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('shifts')}
+              >
+                <span className="nav-icon">💵</span>
+                <span className="nav-text">
+                  {user.role === 'manager' ? 'Shift Approvals & Hub' : 'My Cashier Shift'}
                 </span>
-              ) : (
-                <span className="nav-shift-badge closed">
-                  Closed
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
-              onClick={() => setActiveTab('items')}
-            >
-              <span className="nav-icon">📦</span>
-              <span className="nav-text">Products</span>
-              <span className="nav-count-badge">{items.length}</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
-              onClick={() => setActiveTab('inventory')}
-            >
-              <span className="nav-icon">🏬</span>
-              <span className="nav-text">Inventory Hub</span>
-              {totalStockAlerts > 0 && (
-                <span
-                  className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
-                  title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
-                >
-                  {totalStockAlerts}
-                </span>
-              )}
-            </button>
+                {activeShiftNumber ? (
+                  <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
+                    ● {activeShiftNumber}
+                  </span>
+                ) : (
+                  <span className="nav-shift-badge closed">
+                    Closed
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* 4. Products: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
+                onClick={() => setActiveTab('items')}
+              >
+                <span className="nav-icon">📦</span>
+                <span className="nav-text">Products</span>
+                <span className="nav-count-badge">{items.length}</span>
+              </button>
+            )}
+
+            {/* 5. Inventory Hub: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('inventory')}
+              >
+                <span className="nav-icon">🏬</span>
+                <span className="nav-text">Inventory Hub</span>
+                {totalStockAlerts > 0 && (
+                  <span
+                    className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
+                    title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
+                  >
+                    {totalStockAlerts}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* 6. Bills & Invoices: Visible to all (Cashier views recent counter invoices) */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
               onClick={() => setActiveTab('invoices')}
             >
               <span className="nav-icon">📄</span>
-              <span className="nav-text">Bills & Invoices</span>
+              <span className="nav-text">
+                {user.role === 'cashier' ? 'Recent Bills' : 'Bills & Invoices'}
+              </span>
             </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('customers')}
-            >
-              <span className="nav-icon">👥</span>
-              <span className="nav-text">Customers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('suppliers')}
-            >
-              <span className="nav-icon">🚚</span>
-              <span className="nav-text">Suppliers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
-            </button>
-            {can(user?.role as any, 'purchases') && (
+
+            {/* 7. Customers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('customers')}
+              >
+                <span className="nav-icon">👥</span>
+                <span className="nav-text">Customers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+              </button>
+            )}
+
+            {/* 8. Suppliers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('suppliers')}
+              >
+                <span className="nav-icon">🚚</span>
+                <span className="nav-text">Suppliers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+              </button>
+            )}
+
+            {/* 9. Purchases & Inward: Only for Store Manager and Super Admin if permitted */}
+            {user.role !== 'cashier' && can(user?.role as any, 'purchases') && (
               <button
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
@@ -2731,23 +2766,30 @@ export function App() {
               </button>
             )}
 
-            <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reports')}
-            >
-              <span className="nav-icon">📊</span>
-              <span className="nav-text">Analytics & Reports</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <span className="nav-icon">⚙️</span>
-              <span className="nav-text">Business Packs</span>
-            </button>
+            {/* Management Section: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <>
+                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('reports')}
+                >
+                  <span className="nav-icon">📊</span>
+                  <span className="nav-text">Analytics & Reports</span>
+                </button>
+                {user.role === 'owner' && (
+                  <button
+                    type="button"
+                    className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('settings')}
+                  >
+                    <span className="nav-icon">⚙️</span>
+                    <span className="nav-text">Business Packs</span>
+                  </button>
+                )}
+              </>
+            )}
           </nav>
         </div>
 
@@ -2761,21 +2803,23 @@ export function App() {
               <span className="sidebar-user-name">{user.name}</span>
               <span className="sidebar-user-role">
                 <span className="user-status-dot"></span>
-                {user.role}
+                {user.role === 'owner' ? '👑 Super Admin' : user.role === 'manager' ? '🏪 Store Manager' : user.role === 'cashier' ? '💳 Cashier' : user.role}
               </span>
             </div>
           </div>
 
           <div className="sidebar-footer-buttons-list">
-            <button
-              type="button"
-              className="sidebar-action-row-btn"
-              onClick={() => setActiveTab('settings')}
-              title="Store Configuration & Settings"
-            >
-              <span className="action-row-icon">⚙️</span>
-              <span>Settings</span>
-            </button>
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className="sidebar-action-row-btn"
+                onClick={() => setActiveTab('settings')}
+                title="Store Configuration & Settings"
+              >
+                <span className="action-row-icon">⚙️</span>
+                <span>Settings</span>
+              </button>
+            )}
             <button
               type="button"
               className="sidebar-action-row-btn signout"
