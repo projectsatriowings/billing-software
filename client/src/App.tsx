@@ -2656,17 +2656,15 @@ export function App() {
               <span className="nav-tag-shortcut">F1</span>
             </button>
 
-            {/* 3. Cashier Shifts: ONLY for Cashier and Store Manager (Super Admin does not run cashier shifts!) */}
-            {user.role !== 'owner' && (
+            {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
+            {user.role === 'cashier' && (
               <button
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
                 onClick={() => setActiveTab('shifts')}
               >
                 <span className="nav-icon">💵</span>
-                <span className="nav-text">
-                  {user.role === 'manager' ? 'Shift Approvals & Hub' : 'My Cashier Shift'}
-                </span>
+                <span className="nav-text">My Cashier Shift</span>
                 {activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
@@ -2878,7 +2876,7 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && activeTab !== 'dashboard' && (
+        {activeTab !== 'pos' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -3626,11 +3624,19 @@ export function App() {
 
         {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
         {activeTab === 'shifts' && user && (
-          <ShiftsDashboard
-            user={user}
-            shop={shop}
-            onNavigateToPos={() => setActiveTab('pos')}
-          />
+          user.role === 'manager' ? (
+            <StoreManagerDashboard
+              user={user}
+              shop={shop}
+              onNavigate={setActiveTab}
+            />
+          ) : (
+            <ShiftsDashboard
+              user={user}
+              shop={shop}
+              onNavigateToPos={() => setActiveTab('pos')}
+            />
+          )
         )}
 
         {/* TAB 2: PRODUCTS */}
