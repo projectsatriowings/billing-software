@@ -159,11 +159,9 @@ export function StoreManagerDashboard({
     } finally {
       setIsSubmittingCashier(false);
     }
-  };
-
-  if (loading) {
+  };  if (loading) {
     return (
-      <div className="p-8 text-center text-slate-500 text-sm">
+      <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
         Loading authorized branch operations...
       </div>
     );
@@ -172,45 +170,111 @@ export function StoreManagerDashboard({
   const currentBranch = branches.find((b) => b.code === selectedBranchCode) || branches[0];
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div style={{ padding: '0.5rem 0', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-6 shadow-xl border border-blue-800/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 50%, #0f172a 100%)',
+          borderRadius: '16px',
+          padding: '1.75rem 2rem',
+          color: '#ffffff',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 12px 30px -5px rgba(30, 58, 138, 0.35)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', position: 'relative', zIndex: 2 }}>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/30 text-blue-300 border border-blue-400/30">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <span
+                style={{
+                  background: 'rgba(59, 130, 246, 0.25)',
+                  color: '#93c5fd',
+                  border: '1px solid rgba(96, 165, 250, 0.4)',
+                  padding: '3px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
                 🏪 Store Manager Dashboard
               </span>
-              <span className="text-xs text-slate-300">
-                Managing: <strong className="text-white">{currentBranch?.name || selectedBranchCode}</strong>
+              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                Managing: <strong style={{ color: '#ffffff' }}>{currentBranch?.name || selectedBranchCode}</strong> ({selectedBranchCode})
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
               {currentBranch?.name || shop?.name || 'Store Branch'}
             </h1>
-            <p className="text-sm text-slate-300 mt-1">
+            <p style={{ margin: '0.35rem 0 0 0', color: '#cbd5e1', fontSize: '0.875rem' }}>
               Branch operations hub: cashier shift monitoring, counter management, and physical inventory reconciliations.
             </p>
           </div>
 
           {/* Quick Action Navigation */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem' }}>
             <button
+              type="button"
               onClick={() => onNavigate?.('pos')}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg shadow-md transition-all flex items-center gap-1.5"
+              style={{
+                background: '#059669',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)',
+              }}
             >
               <span>🛒</span> Start POS
             </button>
             <button
+              type="button"
               onClick={() => onNavigate?.('shifts')}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg shadow-md transition-all flex items-center gap-1.5"
+              style={{
+                background: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              }}
             >
               <span>⏱️</span> Shift Log
             </button>
             <button
+              type="button"
               onClick={() => onNavigate?.('inventory')}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg border border-slate-700 transition-all flex items-center gap-1.5"
+              style={{
+                background: '#1e293b',
+                color: '#e2e8f0',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
             >
               <span>📦</span> Stock Hub
             </button>
@@ -219,18 +283,26 @@ export function StoreManagerDashboard({
 
         {/* Branch Selector (if manager has multiple branches assigned) */}
         {branches.length > 1 && (
-          <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Switch Branch:</span>
-            <div className="flex flex-wrap gap-2">
+          <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Switch Branch:</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {branches.map((b) => (
                 <button
                   key={b.code}
+                  type="button"
                   onClick={() => handleBranchChange(b.code)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    selectedBranchCode === b.code
-                      ? 'bg-blue-500 text-white shadow'
-                      : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-                  }`}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: selectedBranchCode === b.code ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                    color: '#ffffff',
+                    boxShadow: selectedBranchCode === b.code ? '0 2px 8px rgba(59, 130, 246, 0.4)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   {b.name} ({b.code})
                 </button>
@@ -241,141 +313,152 @@ export function StoreManagerDashboard({
       </div>
 
       {/* Branch Metrics KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
         {/* Today's Branch Sales */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Branch Sales</div>
-          <div className="text-2xl font-black text-slate-900 mt-2">
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's Branch Sales</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>
             {formatRupees(branchSummary?.todaySalesTotalMinor ?? 0)}
           </div>
-          <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
             <span>{branchSummary?.todaySalesCount ?? 0} Invoices</span>
-            <span className="text-emerald-600 font-semibold">Active Counter Sales</span>
+            <span style={{ color: '#059669', fontWeight: 600 }}>Active Counter Sales</span>
           </div>
         </div>
 
         {/* Collections */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Collections</div>
-          <div className="text-2xl font-black text-emerald-600 mt-2">
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's Collections</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#059669', margin: '0.5rem 0' }}>
             {formatRupees(branchSummary?.todayCollectionsMinor ?? 0)}
           </div>
-          <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+          <div style={{ fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
             <span>Drawer cash & digital settlements</span>
           </div>
         </div>
 
         {/* Active Cashier Shifts */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Open Cashier Shifts</div>
-          <div className="text-2xl font-black text-indigo-700 mt-2">
-            {branchSummary?.activeShiftsCount ?? 0} <span className="text-sm font-medium text-slate-500">Active</span>
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Open Cashier Shifts</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#4338ca', margin: '0.5rem 0' }}>
+            {branchSummary?.activeShiftsCount ?? 0} <span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#64748b' }}>Active</span>
           </div>
-          <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
             <span>Counters: {branchSummary?.branch?.counters?.length ?? 1}</span>
-            <span className="text-indigo-600 font-semibold cursor-pointer" onClick={() => onNavigate?.('shifts')}>
+            <span style={{ color: '#4f46e5', fontWeight: 700, cursor: 'pointer' }} onClick={() => onNavigate?.('shifts')}>
               View ➔
             </span>
           </div>
         </div>
 
         {/* Shift Reviews & Discrepancies */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Shift Reviews</div>
-          <div className="text-2xl font-black text-slate-900 mt-2">
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shift Reviews</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>
             {branchSummary?.pendingReviewShiftsCount ?? 0}{' '}
-            <span className="text-sm font-medium text-amber-600">Pending</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#d97706' }}>Pending</span>
           </div>
-          <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+          <div style={{ fontSize: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
             {branchSummary && branchSummary.pendingReviewShiftsCount > 0 ? (
-              <span className="text-amber-600 font-bold">Requires Manager Approval</span>
+              <span style={{ color: '#d97706', fontWeight: 700 }}>⚠️ Requires Manager Approval</span>
             ) : (
-              <span className="text-emerald-600 font-semibold">All closures reviewed</span>
+              <span style={{ color: '#059669', fontWeight: 600 }}>✓ All closures reviewed</span>
             )}
           </div>
         </div>
       </div>
 
       {/* Main Grid: Active Shifts & Shift Reviews */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
         {/* Active Cashiers & Counters */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Active Cashiers & Counters</h2>
-              <p className="text-xs text-slate-500">Live open shifts currently processing billing in this branch.</p>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Active Cashiers & Counters</h2>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Live open shifts currently processing billing in this branch.</p>
             </div>
             <button
+              type="button"
               onClick={() => onNavigate?.('shifts')}
-              className="text-xs font-semibold text-indigo-600 hover:underline"
+              style={{ background: 'none', border: 'none', fontSize: '0.8rem', fontWeight: 700, color: '#4f46e5', cursor: 'pointer' }}
             >
               Open Shift ➔
             </button>
           </div>
 
           {branchSummary?.activeShifts && branchSummary.activeShifts.length > 0 ? (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {branchSummary.activeShifts.map((s) => (
-                <div key={s.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div key={s.id} style={{ padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-mono text-xs font-bold rounded">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ padding: '2px 8px', background: '#e0e7ff', color: '#3730a3', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 800, borderRadius: '4px' }}>
                         {s.counter}
                       </span>
-                      <span className="font-bold text-slate-900 text-sm">{s.cashierName}</span>
+                      <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{s.cashierName}</span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Shift: <strong className="text-slate-700">{s.shiftNumber}</strong> • Float: {formatRupees(s.openingCashMinor)}
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+                      Shift: <strong style={{ color: '#334155' }}>{s.shiftNumber}</strong> • Float: {formatRupees(s.openingCashMinor)}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Billing Active
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ padding: '3px 10px', background: '#dcfce7', color: '#15803d', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      ● Billing Active
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-400 text-sm bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
               No active cashier shifts right now. Cashiers can log in and open their counter shift.
             </div>
           )}
         </div>
 
         {/* Closed Shifts Awaiting Manager Review / Discrepancies */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Shift Closures Awaiting Review</h2>
-              <p className="text-xs text-slate-500">Confirm cash drawer reconciliations and approve variance notes.</p>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Shift Closures Awaiting Review</h2>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Confirm cash drawer reconciliations and approve variance notes.</p>
             </div>
           </div>
 
           {branchSummary?.pendingReviewShifts && branchSummary.pendingReviewShifts.length > 0 ? (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {branchSummary.pendingReviewShifts.map((s) => (
-                <div key={s.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div key={s.id} style={{ padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div className="font-bold text-slate-900 text-sm">{s.cashierName}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">
+                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{s.cashierName}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
                       Shift {s.shiftNumber} • Closed at: {new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div className="text-xs mt-1">
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
                       {s.varianceMinor !== 0 ? (
-                        <span className="font-bold text-rose-600">
+                        <span style={{ fontWeight: 800, color: '#e11d48' }}>
                           Variance: {formatRupees(s.varianceMinor)}
                         </span>
                       ) : (
-                        <span className="font-semibold text-emerald-600">✓ Exact balance</span>
+                        <span style={{ fontWeight: 700, color: '#059669' }}>✓ Exact balance</span>
                       )}
                     </div>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => { setReviewShiftId(s.id); setReviewNotes(''); }}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                    style={{
+                      padding: '0.45rem 1rem',
+                      background: '#4f46e5',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)',
+                    }}
                   >
                     Approve ➔
                   </button>
@@ -383,7 +466,7 @@ export function StoreManagerDashboard({
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-400 text-sm bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.85rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
               No shifts awaiting review. All past shifts are reviewed and approved.
             </div>
           )}
@@ -391,25 +474,35 @@ export function StoreManagerDashboard({
       </div>
 
       {/* Branch Management & Staff Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
         {/* Branch Counters Management */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-3">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Branch Counters</h2>
-              <p className="text-xs text-slate-500">Configure point-of-sale checkout counters for this branch.</p>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Branch Counters</h2>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Configure point-of-sale checkout counters for this branch.</p>
             </div>
             <button
+              type="button"
               onClick={() => setShowAddCounterModal(true)}
-              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition-colors"
+              style={{
+                padding: '0.45rem 0.9rem',
+                background: '#eef2ff',
+                color: '#4338ca',
+                border: '1px solid #c7d2fe',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
             >
               ➕ Add Counter
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
             {branchSummary?.branch?.counters?.map((c) => (
-              <div key={c} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 flex items-center gap-1.5">
+              <div key={c} style={{ padding: '0.4rem 0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>🖥️</span> {c}
               </div>
             ))}
@@ -417,33 +510,44 @@ export function StoreManagerDashboard({
         </div>
 
         {/* Branch Cashiers */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-3">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Cashiers in this Branch</h2>
-              <p className="text-xs text-slate-500">Staff authorized to bill and operate registers at this location.</p>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Cashiers in this Branch</h2>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Staff authorized to bill and operate registers at this location.</p>
             </div>
             <button
+              type="button"
               onClick={() => setShowAddCashierModal(true)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors"
+              style={{
+                padding: '0.45rem 0.9rem',
+                background: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(79, 70, 229, 0.3)',
+              }}
             >
               ➕ Add Cashier
             </button>
           </div>
 
-          <div className="space-y-2 mt-3 max-h-48 overflow-y-auto">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
             {branchSummary?.staff && branchSummary.staff.length > 0 ? (
               branchSummary.staff.map((st) => (
-                <div key={st.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between text-xs">
+                <div key={st.id} style={{ padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                   <div>
-                    <span className="font-bold text-slate-900">{st.name}</span>
-                    <span className="text-slate-400 ml-2">({st.email})</span>
+                    <span style={{ fontWeight: 800, color: '#0f172a' }}>{st.name}</span>
+                    <span style={{ color: '#94a3b8', marginLeft: '6px' }}>({st.email})</span>
                   </div>
-                  <span className="font-mono text-slate-600 font-semibold">{st.counter || 'COUNTER-1'}</span>
+                  <span style={{ fontFamily: 'monospace', color: '#4338ca', fontWeight: 700, background: '#eef2ff', padding: '2px 6px', borderRadius: '4px' }}>{st.counter || 'COUNTER-1'}</span>
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-xs text-slate-400 italic">
+              <div style={{ textAlign: 'center', padding: '1.5rem', fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>
                 No cashiers assigned to this branch yet.
               </div>
             )}
@@ -453,29 +557,73 @@ export function StoreManagerDashboard({
 
       {/* Approve Shift Modal */}
       {reviewShiftId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <h3 className="text-base font-bold text-slate-900">Approve Shift Closure</h3>
-            <p className="text-xs text-slate-500 mt-1">
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setReviewShiftId(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '420px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Approve Shift Closure</h3>
+            <p style={{ margin: '4px 0 1rem 0', fontSize: '0.8rem', color: '#64748b' }}>
               Add your manager sign-off note to confirm drawer physical cash reconciliation.
             </p>
 
-            <div className="mt-4">
-              <label className="block text-xs font-bold text-slate-700 mb-1">Manager Review Notes</label>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Manager Review Notes</label>
               <textarea
                 rows={3}
                 placeholder="e.g. Physical cash verified, variance verified against receipts."
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.75rem',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
               <button
                 type="button"
                 onClick={() => setReviewShiftId(null)}
-                className="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50"
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
               >
                 Cancel
               </button>
@@ -483,7 +631,18 @@ export function StoreManagerDashboard({
                 type="button"
                 disabled={isSubmittingReview}
                 onClick={() => handleApproveShift(reviewShiftId)}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow disabled:opacity-50"
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  background: '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: isSubmittingReview ? 0.6 : 1,
+                  boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)',
+                }}
               >
                 {isSubmittingReview ? 'Approving...' : 'Confirm Approval'}
               </button>
@@ -494,33 +653,88 @@ export function StoreManagerDashboard({
 
       {/* Add Counter Modal */}
       {showAddCounterModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <h3 className="text-base font-bold text-slate-900">Add Branch Counter</h3>
-            <form onSubmit={handleAddCounter} className="mt-4 space-y-4 text-xs">
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowAddCounterModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '400px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Add Branch Counter</h3>
+            <form onSubmit={handleAddCounter} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Counter Identifier</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Counter Identifier</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. COUNTER-3, EXPRESS-1"
                   value={newCounterName}
                   onChange={(e) => setNewCounterName(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm uppercase focus:ring-2 focus:ring-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                    textTransform: 'uppercase',
+                  }}
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
                 <button
                   type="button"
                   onClick={() => setShowAddCounterModal(false)}
-                  className="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg font-bold"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#475569',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow"
+                  style={{
+                    padding: '0.5rem 1.25rem',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+                  }}
                 >
                   Add Counter
                 </button>
@@ -532,65 +746,126 @@ export function StoreManagerDashboard({
 
       {/* Add Cashier Modal */}
       {showAddCashierModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowAddCashierModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '440px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
                 Add Cashier for {selectedBranchCode}
               </h3>
-              <button onClick={() => setShowAddCashierModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+              <button
+                type="button"
+                onClick={() => setShowAddCashierModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 700 }}
+              >
                 ✕
               </button>
             </div>
 
             {cashierError && (
-              <div className="mt-3 p-2 bg-rose-50 text-rose-700 border border-rose-200 rounded text-xs">
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '8px', fontSize: '0.8rem' }}>
                 {cashierError}
               </div>
             )}
 
-            <form onSubmit={handleCreateCashier} className="mt-4 space-y-3 text-xs">
+            <form onSubmit={handleCreateCashier} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Cashier Full Name</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Cashier Full Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Ramesh Kumar"
                   value={cashierName}
                   onChange={(e) => setCashierName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Email / Sign-in ID</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Email / Sign-in ID</label>
                 <input
                   type="email"
                   required
                   placeholder="cashier@store.com"
                   value={cashierEmail}
                   onChange={(e) => setCashierEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Initial Password</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Initial Password</label>
                 <input
                   type="password"
                   required
                   value={cashierPassword}
                   onChange={(e) => setCashierPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Assigned Counter</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Counter</label>
                 <select
                   value={cashierCounter}
                   onChange={(e) => setCashierCounter(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.75rem',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    boxSizing: 'border-box',
+                    background: '#ffffff',
+                  }}
                 >
                   {branchSummary?.branch?.counters?.map((c) => (
                     <option key={c} value={c}>
@@ -600,18 +875,38 @@ export function StoreManagerDashboard({
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
                 <button
                   type="button"
                   onClick={() => setShowAddCashierModal(false)}
-                  className="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg font-bold"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#475569',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingCashier}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow disabled:opacity-50"
+                  style={{
+                    padding: '0.5rem 1.25rem',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    opacity: isSubmittingCashier ? 0.6 : 1,
+                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+                  }}
                 >
                   {isSubmittingCashier ? 'Creating...' : 'Create Cashier'}
                 </button>

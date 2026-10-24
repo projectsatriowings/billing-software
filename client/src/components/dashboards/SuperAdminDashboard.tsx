@@ -27,7 +27,7 @@ const formatRupees = (paise: number = 0) => {
 export function SuperAdminDashboard({
   user,
   shop,
-  report,
+  report: propReport,
   onNavigate,
   onRefreshReport,
 }: SuperAdminDashboardProps) {
@@ -36,6 +36,7 @@ export function SuperAdminDashboard({
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [branchSummary, setBranchSummary] = useState<BranchSummary | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'branches' | 'staff'>('overview');
+  const [internalReport, setInternalReport] = useState<any>(null);
 
   // Branch create modal state
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
@@ -77,10 +78,22 @@ export function SuperAdminDashboard({
     }
   };
 
+  const loadDashboardReport = async () => {
+    try {
+      const res = await api<any>('/api/reports/dashboard');
+      setInternalReport(res);
+    } catch (err) {
+      console.error('Failed to load dashboard report:', err);
+    }
+  };
+
   useEffect(() => {
     loadBranches();
     loadUsers();
+    loadDashboardReport();
   }, []);
+
+  const report = propReport || internalReport;
 
   const handleOpenBranchDetail = async (branchId: string) => {
     setSelectedBranchId(branchId);
@@ -118,6 +131,7 @@ export function SuperAdminDashboard({
       setNewBranchPhone('');
       setNewBranchManagerId('');
       loadBranches();
+      loadDashboardReport();
       onRefreshReport?.();
     } catch (err: any) {
       setBranchError(err.message || 'Failed to create branch');
@@ -130,6 +144,7 @@ export function SuperAdminDashboard({
     try {
       await updateBranch(branch.id, { active: !branch.active });
       loadBranches();
+      loadDashboardReport();
       onRefreshReport?.();
     } catch (err: any) {
       alert(err.message || 'Failed to update branch status');
@@ -185,7 +200,6 @@ export function SuperAdminDashboard({
   const totalSalesMinor = report?.today?.totalMinor ?? 0;
   const billCount = report?.today?.billCount ?? 0;
   const grossSalesMinor = report?.today?.grossTotalMinor ?? totalSalesMinor;
-  const creditNotesMinor = report?.today?.totalCreditNotesMinor ?? 0;
   const khataCollectionsMinor = report?.today?.khataCollectionsMinor ?? 0;
   const outstandingDues = report?.outstandingDuesMinor ?? 0;
 
@@ -194,42 +208,110 @@ export function SuperAdminDashboard({
   const discrepancies = report?.shiftsSummary?.discrepanciesCount ?? 0;
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div style={{ padding: '0.5rem 0', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Top Banner / Role Identifier */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl border border-indigo-800/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #0f172a 100%)',
+          borderRadius: '16px',
+          padding: '1.75rem 2rem',
+          color: '#ffffff',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 12px 30px -5px rgba(30, 27, 75, 0.35)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', position: 'relative', zIndex: 2 }}>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <span
+                style={{
+                  background: 'rgba(109, 74, 255, 0.25)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(167, 139, 250, 0.4)',
+                  padding: '3px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
                 👑 Company Super Admin
               </span>
-              <span className="text-xs text-slate-400">All Company Branches Access</span>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                All Company Branches Access
+              </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
               {shop?.name || 'Adaptive Billing Platform'}
             </h1>
-            <p className="text-sm text-slate-300 mt-1">
+            <p style={{ margin: '0.35rem 0 0 0', color: '#cbd5e1', fontSize: '0.875rem' }}>
               Consolidated enterprise headquarters: multi-branch telemetry, staff governance, and real-time ledger oversight.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.6rem' }}>
             <button
+              type="button"
               onClick={() => onNavigate?.('pos')}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg shadow-md transition-all flex items-center gap-1.5"
+              style={{
+                background: '#059669',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)',
+              }}
             >
               <span>🛒</span> Launch POS
             </button>
             <button
+              type="button"
               onClick={() => onNavigate?.('shifts')}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg shadow-md transition-all flex items-center gap-1.5"
+              style={{
+                background: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              }}
             >
               <span>⏱️</span> Shifts Hub
             </button>
             <button
+              type="button"
               onClick={() => onNavigate?.('reports')}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg border border-slate-700 transition-all flex items-center gap-1.5"
+              style={{
+                background: '#1e293b',
+                color: '#e2e8f0',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
             >
               <span>📊</span> Reports
             </button>
@@ -237,34 +319,58 @@ export function SuperAdminDashboard({
         </div>
 
         {/* Navigation tabs */}
-        <div className="flex items-center gap-1 mt-6 pt-4 border-t border-slate-800">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <button
+            type="button"
             onClick={() => { setActiveSubTab('overview'); setSelectedBranchId(null); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeSubTab === 'overview' && !selectedBranchId
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: 'none',
+              background: activeSubTab === 'overview' && !selectedBranchId ? '#6d4aff' : 'transparent',
+              color: activeSubTab === 'overview' && !selectedBranchId ? '#ffffff' : '#cbd5e1',
+              boxShadow: activeSubTab === 'overview' && !selectedBranchId ? '0 4px 12px rgba(109, 74, 255, 0.4)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
           >
             🏢 Company Overview
           </button>
           <button
+            type="button"
             onClick={() => setActiveSubTab('branches')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeSubTab === 'branches'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: 'none',
+              background: activeSubTab === 'branches' ? '#6d4aff' : 'transparent',
+              color: activeSubTab === 'branches' ? '#ffffff' : '#cbd5e1',
+              boxShadow: activeSubTab === 'branches' ? '0 4px 12px rgba(109, 74, 255, 0.4)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
           >
             🌐 Branches ({branches.length})
           </button>
           <button
+            type="button"
             onClick={() => { setActiveSubTab('staff'); setSelectedBranchId(null); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeSubTab === 'staff'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-slate-300 hover:bg-slate-800/60'
-            }`}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: 'none',
+              background: activeSubTab === 'staff' ? '#6d4aff' : 'transparent',
+              color: activeSubTab === 'staff' ? '#ffffff' : '#cbd5e1',
+              boxShadow: activeSubTab === 'staff' ? '0 4px 12px rgba(109, 74, 255, 0.4)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
           >
             👥 Staff & Roles ({usersList.length})
           </button>
@@ -273,59 +379,59 @@ export function SuperAdminDashboard({
 
       {/* Main Tab Views */}
       {activeSubTab === 'overview' && !selectedBranchId && (
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Top Key Performance Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem' }}>
             {/* 1. Today's Net Sales */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 relative overflow-hidden">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Net Sales</div>
-              <div className="text-2xl font-black text-slate-900 mt-2">{formatRupees(totalSalesMinor)}</div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+            <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's Net Sales</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>{formatRupees(totalSalesMinor)}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
                 <span>{billCount} Invoices</span>
-                <span className="text-emerald-600 font-semibold">Gross: {formatRupees(grossSalesMinor)}</span>
+                <span style={{ color: '#059669', fontWeight: 600 }}>Gross: {formatRupees(grossSalesMinor)}</span>
               </div>
             </div>
 
             {/* 2. Customer Collections & Dues */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khata Collections & Dues</div>
-              <div className="text-2xl font-black text-emerald-600 mt-2">{formatRupees(khataCollectionsMinor)}</div>
-              <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-100">
-                <span className="text-slate-500">Outstanding:</span>
-                <span className="text-rose-600 font-bold">{formatRupees(outstandingDues)}</span>
+            <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Khata Collections & Dues</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#059669', margin: '0.5rem 0' }}>{formatRupees(khataCollectionsMinor)}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+                <span style={{ color: '#64748b' }}>Outstanding Dues:</span>
+                <span style={{ color: '#e11d48', fontWeight: 700 }}>{formatRupees(outstandingDues)}</span>
               </div>
             </div>
 
             {/* 3. Multi-Branch Operations */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Branches & Counters</div>
-              <div className="text-2xl font-black text-indigo-700 mt-2">
-                {activeBranches} <span className="text-sm font-medium text-slate-500">/ {totalBranches} Active</span>
+            <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Branches & Counters</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#4338ca', margin: '0.5rem 0' }}>
+                {activeBranches} <span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#64748b' }}>/ {totalBranches} Active</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
                 <span>Total Counters: {totalCounters}</span>
-                <span className="text-indigo-600 font-semibold cursor-pointer" onClick={() => setActiveSubTab('branches')}>
-                  Manage ➔
+                <span style={{ color: '#4f46e5', fontWeight: 700, cursor: 'pointer' }} onClick={() => setActiveSubTab('branches')}>
+                  Manage Branches ➔
                 </span>
               </div>
             </div>
 
             {/* 4. Active Shifts & Discrepancies */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Shift Oversight</div>
-              <div className="text-2xl font-black text-slate-900 mt-2">
-                {openShifts} <span className="text-sm font-medium text-emerald-600">Open Shifts</span>
+            <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shift Oversight</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>
+                {openShifts} <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#059669' }}>Open Shifts</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
-                <span className={pendingReviews > 0 ? 'text-amber-600 font-semibold' : 'text-slate-500'}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+                <span style={{ color: pendingReviews > 0 ? '#d97706' : '#64748b', fontWeight: pendingReviews > 0 ? 700 : 500 }}>
                   {pendingReviews} Need Review
                 </span>
                 {discrepancies > 0 ? (
-                  <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded font-bold">
+                  <span style={{ padding: '2px 8px', background: '#ffe4e6', color: '#be123c', borderRadius: '6px', fontWeight: 700 }}>
                     ⚠️ {discrepancies} Discrepancy
                   </span>
                 ) : (
-                  <span className="text-emerald-600 font-semibold">✓ Balanced</span>
+                  <span style={{ color: '#059669', fontWeight: 700 }}>✓ Balanced</span>
                 )}
               </div>
             </div>
@@ -333,16 +439,16 @@ export function SuperAdminDashboard({
 
           {/* Payment Method Breakdown Bar */}
           {report?.paymentBreakdown && report.paymentBreakdown.length > 0 && (
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-              <div className="text-sm font-bold text-slate-800 mb-3 flex items-center justify-between">
-                <span>Collections by Payment Instrument</span>
-                <span className="text-xs text-slate-500 font-normal">Reconciles cash drawer and electronic settlements</span>
+            <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.25rem 1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b' }}>Collections by Payment Instrument</span>
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Reconciles cash drawer and electronic settlements</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {report.paymentBreakdown.map((p) => (
-                  <div key={p.method} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                    <div className="text-xs font-semibold text-slate-500 uppercase">{p.method}</div>
-                    <div className="text-base font-bold text-slate-900 mt-0.5">{formatRupees(p.totalMinor)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                {report.paymentBreakdown.map((p: any) => (
+                  <div key={p.method} style={{ background: '#f8fafc', borderRadius: '10px', padding: '0.75rem 1rem', border: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{p.method}</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>{formatRupees(p.totalMinor)}</div>
                   </div>
                 ))}
               </div>
@@ -350,69 +456,105 @@ export function SuperAdminDashboard({
           )}
 
           {/* Branch-wise Sales & Collection Comparison Table */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
               <div>
-                <h2 className="text-base font-bold text-slate-900">Branch Performance Comparison</h2>
-                <p className="text-xs text-slate-500">Live sales, payment collections, and cashier shifts across all authorized branches.</p>
+                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+                  Branch Performance Comparison
+                </h2>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Live sales, payment collections, and cashier shifts across all authorized branches.
+                </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowAddBranchModal(true)}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"
+                style={{
+                  background: '#6d4aff',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)',
+                }}
               >
                 <span>➕</span> Add Branch
               </button>
             </div>
 
             {report?.branchComparison && report.branchComparison.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 uppercase">
-                      <th className="py-2.5 px-3">Branch Code</th>
-                      <th className="py-2.5 px-3">Branch Name</th>
-                      <th className="py-2.5 px-3 text-center">Counters</th>
-                      <th className="py-2.5 px-3 text-right">Today Invoices</th>
-                      <th className="py-2.5 px-3 text-right">Today Sales</th>
-                      <th className="py-2.5 px-3 text-right">Collections</th>
-                      <th className="py-2.5 px-3 text-center">Open Shifts</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
-                      <th className="py-2.5 px-3 text-right">Action</th>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Branch Code</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Branch Name</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Counters</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Today Invoices</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Today Sales</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Collections</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Open Shifts</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Status</th>
+                      <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {report.branchComparison.map((b) => (
-                      <tr key={b.id || b.code} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-3 font-mono font-bold text-slate-800">{b.code}</td>
-                        <td className="py-3 px-3 font-semibold text-slate-900">{b.name}</td>
-                        <td className="py-3 px-3 text-center">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium">
+                  <tbody>
+                    {report.branchComparison.map((b: any) => (
+                      <tr key={b.id || b.code} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '0.875rem 1rem', fontFamily: 'monospace', fontWeight: 800, color: '#1e293b' }}>{b.code}</td>
+                        <td style={{ padding: '0.875rem 1rem', fontWeight: 700, color: '#0f172a' }}>{b.name}</td>
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
+                          <span style={{ padding: '2px 8px', background: '#f1f5f9', color: '#334155', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                             {b.countersCount} counters
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-right text-slate-700">{b.todaySalesCount}</td>
-                        <td className="py-3 px-3 text-right font-bold text-slate-900">{formatRupees(b.todaySalesTotalMinor)}</td>
-                        <td className="py-3 px-3 text-right font-semibold text-emerald-600">{formatRupees(b.todayCollectionsMinor)}</td>
-                        <td className="py-3 px-3 text-center">
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#334155', fontWeight: 600 }}>{b.todaySalesCount}</td>
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>{formatRupees(b.todaySalesTotalMinor)}</td>
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'right', fontWeight: 700, color: '#059669' }}>{formatRupees(b.todayCollectionsMinor)}</td>
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
                           {b.openShiftsCount > 0 ? (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                            <span style={{ padding: '2px 8px', background: '#dcfce7', color: '#15803d', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700 }}>
                               {b.openShiftsCount} Active
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-xs">—</span>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            b.active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
-                          }`}>
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: b.active ? '#ecfdf5' : '#f1f5f9',
+                              color: b.active ? '#047857' : '#64748b',
+                              border: b.active ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                            }}
+                          >
                             {b.active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-right">
+                        <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
                           <button
+                            type="button"
                             onClick={() => handleOpenBranchDetail(b.id)}
-                            className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition-colors"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#6d4aff',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                            }}
                           >
                             Inspect ➔
                           </button>
@@ -423,37 +565,40 @@ export function SuperAdminDashboard({
                 </table>
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-400 text-sm">
-                No branches configured yet. Click "Add Branch" to create your first multi-branch node.
+              <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🌐</div>
+                <div style={{ fontWeight: 600, color: '#64748b' }}>No branches configured yet.</div>
+                <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>Click "Add Branch" to create your first multi-branch node.</div>
               </div>
             )}
           </div>
 
           {/* Low Stock Alerts Across Company */}
           {report?.lowStock && report.lowStock.length > 0 && (
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">⚠️</span>
-                  <h3 className="text-sm font-bold text-slate-900">Inventory Alerts Across Company Branches</h3>
+            <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>Inventory Alerts Across Company Branches</h3>
                 </div>
                 <button
+                  type="button"
                   onClick={() => onNavigate?.('inventory')}
-                  className="text-xs font-semibold text-indigo-600 hover:underline"
+                  style={{ background: 'none', border: 'none', color: '#6d4aff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
                 >
                   View Inventory Hub ➔
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {report.lowStock.map((item) => (
-                  <div key={item.id} className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-lg flex items-center justify-between">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                {report.lowStock.map((item: any) => (
+                  <div key={item.id} style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                      <div className="text-sm font-bold text-slate-800">{item.name}</div>
-                      <div className="text-xs text-slate-500">SKU: {item.sku || 'N/A'}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{item.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>SKU: {item.sku || 'N/A'}</div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-black text-rose-600">{(item.currentStockMilli / 1000).toFixed(0)}</span>
-                      <span className="text-xs text-slate-500 ml-1">left</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '1rem', fontWeight: 900, color: '#e11d48' }}>{(item.currentStockMilli / 1000).toFixed(0)}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '4px' }}>left</span>
                     </div>
                   </div>
                 ))}
@@ -463,61 +608,62 @@ export function SuperAdminDashboard({
         </div>
       )}
 
-      {/* Selected Branch Detail Modal / Overlay */}
+      {/* Selected Branch Detail Modal / Inspector */}
       {selectedBranchId && branchSummary && (
-        <div className="bg-white rounded-2xl p-6 shadow-xl border border-indigo-200 animate-fadeIn">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.5rem 2rem', border: '1px solid #c7d2fe', boxShadow: '0 10px 25px rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0' }}>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 font-mono font-bold text-xs rounded">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span style={{ padding: '3px 8px', background: '#e0e7ff', color: '#3730a3', fontFamily: 'monospace', fontWeight: 800, fontSize: '0.8rem', borderRadius: '6px' }}>
                   {branchSummary.branch.code}
                 </span>
-                <h2 className="text-xl font-black text-slate-900">{branchSummary.branch.name}</h2>
+                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{branchSummary.branch.name}</h2>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
                 {branchSummary.branch.address || 'No physical address configured'} • Phone: {branchSummary.branch.phone || 'N/A'}
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setSelectedBranchId(null)}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+              style={{ padding: '0.5rem 1rem', background: '#f1f5f9', border: 'none', color: '#475569', fontSize: '0.8rem', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}
             >
               ✕ Close Inspector
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-5">
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-              <div className="text-xs text-slate-500 font-bold uppercase">Today Sales</div>
-              <div className="text-xl font-black text-slate-900 mt-1">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', margin: '1.25rem 0' }}>
+            <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '1rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Today Sales</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', marginTop: '4px' }}>
                 {formatRupees(branchSummary.todaySalesTotalMinor)}
               </div>
-              <div className="text-xs text-slate-500 mt-1">{branchSummary.todaySalesCount} Invoices posted</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>{branchSummary.todaySalesCount} Invoices posted</div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-              <div className="text-xs text-slate-500 font-bold uppercase">Today Collections</div>
-              <div className="text-xl font-black text-emerald-600 mt-1">
+            <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '1rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Today Collections</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#059669', marginTop: '4px' }}>
                 {formatRupees(branchSummary.todayCollectionsMinor)}
               </div>
-              <div className="text-xs text-slate-500 mt-1">Cash, UPI & Card collections</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Cash, UPI & Card collections</div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-              <div className="text-xs text-slate-500 font-bold uppercase">Active Cashier Shifts</div>
-              <div className="text-xl font-black text-indigo-700 mt-1">
+            <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '1rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Active Cashier Shifts</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#4338ca', marginTop: '4px' }}>
                 {branchSummary.activeShiftsCount} Active
               </div>
-              <div className="text-xs text-slate-500 mt-1">{branchSummary.pendingReviewShiftsCount} shifts awaiting review</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>{branchSummary.pendingReviewShiftsCount} shifts awaiting review</div>
             </div>
           </div>
 
-          {/* Active Counters in this Branch */}
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">Configured Counters</h4>
-            <div className="flex flex-wrap gap-2">
+          {/* Active Counters */}
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Configured Counters</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {branchSummary.branch.counters.map((c) => (
-                <span key={c} className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono text-xs font-bold rounded-lg">
+                <span key={c} style={{ padding: '4px 10px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 700, borderRadius: '6px' }}>
                   🖥️ {c}
                 </span>
               ))}
@@ -525,23 +671,23 @@ export function SuperAdminDashboard({
           </div>
 
           {/* Assigned Staff */}
-          <div className="mt-5 pt-4 border-t border-slate-100">
-            <h4 className="text-xs font-bold text-slate-700 uppercase mb-3">Assigned Staff at this Branch</h4>
+          <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Assigned Staff at this Branch</div>
             {branchSummary.staff && branchSummary.staff.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
                 {branchSummary.staff.map((s) => (
-                  <div key={s.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-                    <div className="font-bold text-slate-900">{s.name}</div>
-                    <div className="text-slate-500">{s.email}</div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="capitalize font-semibold text-indigo-600">{s.role}</span>
-                      <span className="text-slate-400 font-mono">{s.counter || 'General'}</span>
+                  <div key={s.id} style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.75rem' }}>
+                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{s.name}</div>
+                    <div style={{ color: '#64748b' }}>{s.email}</div>
+                    <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ textTransform: 'uppercase', fontWeight: 700, color: '#6d4aff' }}>{s.role}</span>
+                      <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>{s.counter || 'General'}</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-xs text-slate-400 italic">No staff explicitly assigned to this branch yet.</div>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>No staff explicitly assigned to this branch yet.</div>
             )}
           </div>
         </div>
@@ -549,52 +695,74 @@ export function SuperAdminDashboard({
 
       {/* Branches Management SubTab */}
       {activeSubTab === 'branches' && (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-4">
-          <div className="flex items-center justify-between">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Branch Configuration & Counters</h2>
-              <p className="text-xs text-slate-500">Add, activate, or reassign Store Managers to branches without deleting historical data.</p>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Branch Configuration & Counters</h2>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Add, activate, or reassign Store Managers to branches without deleting historical data.</p>
             </div>
             <button
+              type="button"
               onClick={() => setShowAddBranchModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow"
+              style={{
+                background: '#6d4aff',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)',
+              }}
             >
               <span>➕</span> Add New Branch
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
             {branches.map((b) => (
-              <div key={b.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                <div className="flex items-start justify-between">
+              <div key={b.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fafafa' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-black px-2 py-0.5 bg-slate-200 text-slate-800 rounded">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 900, padding: '2px 8px', background: '#e2e8f0', color: '#1e293b', borderRadius: '4px' }}>
                         {b.code}
                       </span>
-                      <h3 className="font-bold text-slate-900">{b.name}</h3>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{b.name}</h3>
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {b.address || 'No address specified'}
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
+                      {b.address || 'No physical address specified'}
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleToggleBranchActive(b)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-full transition-colors ${
-                      b.active ? 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-800' : 'bg-slate-200 text-slate-600 hover:bg-emerald-100 hover:text-emerald-800'
-                    }`}
+                    style={{
+                      padding: '3px 10px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      borderRadius: '999px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: b.active ? '#dcfce7' : '#f1f5f9',
+                      color: b.active ? '#15803d' : '#64748b',
+                    }}
                   >
                     {b.active ? 'Active' : 'Disabled'}
                   </button>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-slate-600">
-                    <span className="font-semibold">Store Manager:</span>{' '}
-                    {b.managerName ? <span className="font-bold text-indigo-700">{b.managerName}</span> : <span className="text-slate-400">Unassigned</span>}
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', fontSize: '0.75rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#64748b' }}>Store Manager:</span>{' '}
+                    {b.managerName ? <span style={{ fontWeight: 700, color: '#4338ca' }}>{b.managerName}</span> : <span style={{ color: '#94a3b8' }}>Unassigned</span>}
                   </div>
-                  <div className="text-slate-600 font-mono">
-                    <span className="font-semibold">Counters:</span> {b.counters.join(', ')}
+                  <div style={{ fontFamily: 'monospace', color: '#475569' }}>
+                    <span style={{ fontWeight: 600 }}>Counters:</span> {b.counters.join(', ')}
                   </div>
                 </div>
               </div>
@@ -605,70 +773,103 @@ export function SuperAdminDashboard({
 
       {/* Staff Management SubTab */}
       {activeSubTab === 'staff' && (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-4">
-          <div className="flex items-center justify-between">
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Staff Hierarchy & Counter Assignments</h2>
-              <p className="text-xs text-slate-500">Manage Store Managers, Cashiers, and Accountants. Assign each cashier to a specific branch and billing counter.</p>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Staff Hierarchy & Counter Assignments</h2>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage Store Managers, Cashiers, and Accountants. Assign each cashier to a specific branch and billing counter.</p>
             </div>
             <button
+              type="button"
               onClick={() => setShowAddStaffModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow"
+              style={{
+                background: '#6d4aff',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.55rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)',
+              }}
             >
               <span>👤</span> Add Staff Member
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 uppercase">
-                  <th className="py-2.5 px-3">Name & Email</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Assigned Branch</th>
-                  <th className="py-2.5 px-3">Assigned Counter</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
-                  <th className="py-2.5 px-3 text-right">Action</th>
+                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Name & Email</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Role</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Assigned Branch</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Assigned Counter</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Status</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#64748b', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {usersList.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-3">
-                      <div className="font-bold text-slate-900">{u.name}</div>
-                      <div className="text-xs text-slate-500">{u.email}</div>
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '0.875rem 1rem' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{u.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{u.email}</div>
                     </td>
-                    <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-                        u.role === 'owner'
-                          ? 'bg-purple-100 text-purple-800'
-                          : u.role === 'manager'
-                          ? 'bg-blue-100 text-blue-800'
-                          : u.role === 'cashier'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}>
+                    <td style={{ padding: '0.875rem 1rem' }}>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          background: u.role === 'owner' ? '#f3e8ff' : u.role === 'manager' ? '#dbeafe' : u.role === 'cashier' ? '#dcfce7' : '#f1f5f9',
+                          color: u.role === 'owner' ? '#7e22ce' : u.role === 'manager' ? '#1d4ed8' : u.role === 'cashier' ? '#15803d' : '#475569',
+                        }}
+                      >
                         {u.role === 'owner' ? 'Super Admin' : u.role === 'manager' ? 'Store Manager' : u.role}
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-mono text-xs font-bold text-slate-700">
+                    <td style={{ padding: '0.875rem 1rem', fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>
                       {u.assignedLocation || 'MAIN'}
                     </td>
-                    <td className="py-3 px-3 font-mono text-xs text-slate-600">
+                    <td style={{ padding: '0.875rem 1rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#64748b' }}>
                       {u.assignedCounter || 'COUNTER-1'}
                     </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        u.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                      }`}>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          background: u.active ? '#ecfdf5' : '#f1f5f9',
+                          color: u.active ? '#047857' : '#64748b',
+                        }}
+                      >
                         {u.active ? 'Active' : 'Disabled'}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-right">
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
                       {u.id !== user.id && (
                         <button
+                          type="button"
                           onClick={() => handleToggleStaffActive(u)}
-                          className="px-2 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: '#475569',
+                            cursor: 'pointer',
+                          }}
                         >
                           {u.active ? 'Deactivate' : 'Activate'}
                         </button>
@@ -684,110 +885,138 @@ export function SuperAdminDashboard({
 
       {/* Add Branch Modal */}
       {showAddBranchModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">Add New Branch</h3>
-              <button onClick={() => setShowAddBranchModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowAddBranchModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Add New Branch</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddBranchModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94a3b8', cursor: 'pointer' }}
+              >
                 ✕
               </button>
             </div>
 
             {branchError && (
-              <div className="mt-3 p-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium">
+              <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '8px', fontSize: '0.8rem' }}>
                 {branchError}
               </div>
             )}
 
-            <form onSubmit={handleCreateBranch} className="space-y-4 mt-4 text-xs">
+            <form onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', marginTop: '1rem' }}>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Branch Code (Unique ID)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Branch Code (Unique Identifier)</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. BR-NORTH, T-NAGAR"
+                  placeholder="e.g. NORTH, VELACHERY"
                   value={newBranchCode}
                   onChange={(e) => setNewBranchCode(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500 uppercase"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.875rem', textTransform: 'uppercase', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Branch Name</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Branch Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. North City Outlet"
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Physical Address</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Physical Address</label>
                 <input
                   type="text"
-                  placeholder="Street, City, State"
+                  placeholder="Street, City, Pin"
                   value={newBranchAddress}
                   onChange={(e) => setNewBranchAddress(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Contact Phone</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Contact Phone</label>
                 <input
                   type="text"
                   placeholder="10-digit mobile number"
                   value={newBranchPhone}
                   onChange={(e) => setNewBranchPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Assign Store Manager (Optional)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assign Store Manager (Optional)</label>
                 <select
                   value={newBranchManagerId}
                   onChange={(e) => setNewBranchManagerId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box', background: '#ffffff' }}
                 >
                   <option value="">-- No Manager Assigned --</option>
-                  {usersList
-                    .filter((u) => u.role === 'manager' || u.role === 'owner')
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.email})
-                      </option>
-                    ))}
+                  {usersList.filter((u) => u.role === 'manager').map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Counters (Comma Separated)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Configured Billing Counters (Comma-separated)</label>
                 <input
                   type="text"
+                  placeholder="COUNTER-1, COUNTER-2, EXPRESS"
                   value={newBranchCounters}
                   onChange={(e) => setNewBranchCounters(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
                 <button
                   type="button"
                   onClick={() => setShowAddBranchModal(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors"
+                  style={{ padding: '0.6rem 1rem', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingBranch}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50"
+                  style={{ padding: '0.6rem 1.25rem', background: '#6d4aff', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, color: '#ffffff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)' }}
                 >
-                  {isSubmittingBranch ? 'Saving...' : 'Create Branch'}
+                  {isSubmittingBranch ? 'Creating...' : 'Create Branch Node'}
                 </button>
               </div>
             </form>
@@ -797,112 +1026,141 @@ export function SuperAdminDashboard({
 
       {/* Add Staff Modal */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scaleUp">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">Add Staff Account</h3>
-              <button onClick={() => setShowAddStaffModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowAddStaffModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '1.75rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Add New Staff Member</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddStaffModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94a3b8', cursor: 'pointer' }}
+              >
                 ✕
               </button>
             </div>
 
             {staffError && (
-              <div className="mt-3 p-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium">
+              <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '8px', fontSize: '0.8rem' }}>
                 {staffError}
               </div>
             )}
 
-            <form onSubmit={handleCreateStaff} className="space-y-4 mt-4 text-xs">
+            <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', marginTop: '1rem' }}>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Full Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="Staff member name"
+                  placeholder="e.g. Ramesh Kumar"
                   value={newStaffName}
                   onChange={(e) => setNewStaffName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Email (Sign-in ID)</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Email Address (Login Username)</label>
                 <input
                   type="email"
                   required
-                  placeholder="staff@store.com"
+                  placeholder="e.g. ramesh@store.local"
                   value={newStaffEmail}
                   onChange={(e) => setNewStaffEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Initial Password</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Login Password</label>
                 <input
                   type="password"
                   required
                   value={newStaffPassword}
                   onChange={(e) => setNewStaffPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Role</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>System Role</label>
                 <select
                   value={newStaffRole}
-                  onChange={(e: any) => setNewStaffRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
+                  onChange={(e) => setNewStaffRole(e.target.value as any)}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box', background: '#ffffff' }}
                 >
-                  <option value="cashier">Cashier (Billing & Shifts only)</option>
-                  <option value="manager">Store Manager (Assigned branch operations)</option>
-                  <option value="accountant">Accountant (Purchases, GST, Ledger)</option>
+                  <option value="cashier">Cashier (Counter Billing & Drawer Shifts)</option>
+                  <option value="manager">Store Manager (Branch Operations)</option>
+                  <option value="accountant">Accountant (Ledgers & GST)</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Assigned Branch</label>
-                  <select
-                    value={newStaffBranch}
-                    onChange={(e) => setNewStaffBranch(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.code} value={b.code}>
-                        {b.name} ({b.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Counter</label>
-                  <input
-                    type="text"
-                    value={newStaffCounter}
-                    onChange={(e) => setNewStaffCounter(e.target.value.toUpperCase())}
-                    placeholder="COUNTER-1"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500 uppercase"
-                  />
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Branch</label>
+                <select
+                  value={newStaffBranch}
+                  onChange={(e) => setNewStaffBranch(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box', background: '#ffffff' }}
+                >
+                  {branches.map((b) => (
+                    <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              {newStaffRole === 'cashier' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Billing Counter</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. COUNTER-1, COUNTER-2"
+                    value={newStaffCounter}
+                    onChange={(e) => setNewStaffCounter(e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
                 <button
                   type="button"
                   onClick={() => setShowAddStaffModal(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-bold hover:bg-slate-50 transition-colors"
+                  style={{ padding: '0.6rem 1rem', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingStaff}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50"
+                  style={{ padding: '0.6rem 1.25rem', background: '#6d4aff', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, color: '#ffffff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)' }}
                 >
-                  {isSubmittingStaff ? 'Creating...' : 'Create Account'}
+                  {isSubmittingStaff ? 'Saving...' : 'Add Staff Member'}
                 </button>
               </div>
             </form>

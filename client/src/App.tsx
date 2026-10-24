@@ -2879,12 +2879,16 @@ export function App() {
               <SuperAdminDashboard
                 user={user}
                 shop={shop}
+                report={report}
+                onRefreshReport={loadReports}
+                onNavigate={setActiveTab}
               />
             )}
             {user.role === 'manager' && (
               <StoreManagerDashboard
                 user={user}
                 shop={shop}
+                onNavigate={setActiveTab}
               />
             )}
             {user.role === 'cashier' && (
@@ -2899,6 +2903,9 @@ export function App() {
               <SuperAdminDashboard
                 user={user}
                 shop={shop}
+                report={report}
+                onRefreshReport={loadReports}
+                onNavigate={setActiveTab}
               />
             )}
           </div>
