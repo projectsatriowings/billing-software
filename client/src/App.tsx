@@ -57,6 +57,9 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
+import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
+import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
+import { CashierDashboard } from './components/dashboards/CashierDashboard';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -135,7 +138,7 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('pos');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -2630,8 +2633,8 @@ export function App() {
           <nav className="sidebar-nav">
             <button
               type="button"
-              className={`sidebar-nav-item`}
-              onClick={() => setActiveTab('pos')}
+              className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
             >
               <span className="nav-icon">🏠</span>
               <span className="nav-text">Dashboard</span>
@@ -2831,7 +2834,7 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && (
+        {activeTab !== 'pos' && activeTab !== 'dashboard' && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -2867,6 +2870,38 @@ export function App() {
               </div>
             </div>
           </header>
+        )}
+
+        {/* ROLE-BASED DASHBOARDS (SUPER ADMIN / STORE MANAGER / CASHIER) */}
+        {activeTab === 'dashboard' && (
+          <div className="role-dashboards-view">
+            {user.role === 'owner' && (
+              <SuperAdminDashboard
+                user={user}
+                shop={shop}
+              />
+            )}
+            {user.role === 'manager' && (
+              <StoreManagerDashboard
+                user={user}
+                shop={shop}
+              />
+            )}
+            {user.role === 'cashier' && (
+              <CashierDashboard
+                user={user}
+                shop={shop}
+                onNavigateToPos={() => setActiveTab('pos')}
+                onNavigateToShifts={() => setActiveTab('shifts')}
+              />
+            )}
+            {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+              <SuperAdminDashboard
+                user={user}
+                shop={shop}
+              />
+            )}
+          </div>
         )}
 
         {/* TAB 1: MODERN POS COUNTER (MATCHING IMAGE 2 LAYOUT) */}

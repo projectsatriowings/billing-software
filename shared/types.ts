@@ -34,9 +34,34 @@ export const PERMS = {
   backup: ['owner'],
   plan: ['owner'],
   support: ALL,
+  branches: ['owner', 'manager'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Perm = keyof typeof PERMS;
 export const can = (role: Role | undefined, perm: Perm): boolean => !!role && (PERMS[perm] as readonly Role[]).includes(role);
+
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active: boolean;
+  counters: string[];
+  managerId?: string | null;
+  managerName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BranchInput {
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active?: boolean;
+  counters?: string[];
+  managerId?: string | null;
+}
 
 export type FieldEntity = 'item' | 'customer' | 'invoice';
 export type FieldType = 'text' | 'number' | 'date' | 'select';

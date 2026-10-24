@@ -14,12 +14,31 @@ export function makeAuthenticator(secret: string) {
     if (!h || !h.startsWith('Bearer ')) return null;
     const p = verifyToken(h.slice(7).trim(), secret);
     if (!p) return null;
-    const u = await ctx.db.one<{ id: string; tenantId: string; name: string; email: string; role: AuthUser['role']; active: boolean; passwordHash: string }>(
-      'SELECT id, tenant_id, name, email, role, active, password_hash FROM users WHERE id = ? AND tenant_id = ?',
+    const u = await ctx.db.one<any>(
+      'SELECT * FROM users WHERE id = ? AND tenant_id = ?',
       [p.sub, p.tid],
     );
     if (!u || !u.active || passwordStamp(u.passwordHash) !== p.ph) return null;
-    return { id: u.id, tenantId: u.tenantId, name: u.name, role: u.role, email: u.email };
+    const parseAllowed = (v: any): string[] | null => {
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string') {
+        try { const parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : [v]; } catch { return [v]; }
+      }
+      return null;
+    };
+    const assignedLocation = u.assignedLocation || u.assigned_location || 'MAIN';
+    const assignedCounter = u.assignedCounter || u.assigned_counter || 'COUNTER-1';
+    const allowedLocations = parseAllowed(u.allowedLocations || u.allowed_locations) || [assignedLocation];
+    return {
+      id: u.id,
+      tenantId: u.tenantId,
+      name: u.name,
+      role: u.role,
+      email: u.email,
+      assignedLocation,
+      assignedCounter,
+      allowedLocations,
+    };
   };
 }
 

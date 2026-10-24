@@ -36,6 +36,63 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  assignedLocation?: string;
+  assignedCounter?: string;
+  allowedLocations?: string[];
+  active?: boolean;
+}
+
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active: boolean;
+  counters: string[];
+  managerId?: string | null;
+  managerName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BranchSummary {
+  branch: Branch;
+  todaySalesCount: number;
+  todaySalesTotalMinor: number;
+  todayCollectionsMinor: number;
+  activeShiftsCount: number;
+  activeShifts: {
+    id: string;
+    shiftNumber: string;
+    cashierName: string;
+    counter: string;
+    openedAt: string;
+    openingCashMinor: number;
+  }[];
+  pendingReviewShiftsCount: number;
+  pendingReviewShifts: {
+    id: string;
+    shiftNumber: string;
+    cashierName: string;
+    closedAt: string;
+    varianceMinor: number;
+  }[];
+  lowStockCount: number;
+  lowStock: {
+    id: string;
+    name: string;
+    sku: string;
+    stockMilli: number;
+  }[];
+  staff: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    active: boolean;
+    counter?: string;
+  }[];
 }
 
 export interface Shop {
@@ -314,6 +371,12 @@ export interface DashboardReport {
     totalCreditNotesMinor?: number;
     creditNotesCount?: number;
     returnRatePct?: number;
+    purchasesCount?: number;
+    purchasesTotalMinor?: number;
+    purchasesTaxableMinor?: number;
+    itcMinor?: number;
+    netGstPayableMinor?: number;
+    supplierPaymentsMinor?: number;
   };
   overall: {
     billCount: number;
@@ -322,12 +385,42 @@ export interface DashboardReport {
     totalCreditNotesMinor?: number;
     customerCount: number;
     itemCount: number;
+    totalSupplierPayablesMinor?: number;
+    stockValuationMinor?: number;
+  };
+  gstPosition?: {
+    outputGstMinor: number;
+    itcMinor: number;
+    netGstPayableMinor: number;
   };
   paymentBreakdown: { method: string; totalMinor: number }[];
   refundsPaid?: { mode: string; totalMinor: number }[];
   totalRefundsPaidMinor?: number;
   topItems: { name: string; qtyMilli: number; totalMinor: number }[];
   lowStock: { id: string; name: string; sku?: string; currentStockMilli: number }[];
+  branchesOverview?: {
+    totalBranches: number;
+    activeBranches: number;
+    totalCounters: number;
+  };
+  branchComparison?: {
+    id: string;
+    code: string;
+    name: string;
+    active: boolean;
+    countersCount: number;
+    counters: string[];
+    todaySalesCount: number;
+    todaySalesTotalMinor: number;
+    todayCollectionsMinor: number;
+    openShiftsCount: number;
+  }[];
+  shiftsSummary?: {
+    openShiftsCount: number;
+    pendingReviewShiftsCount: number;
+    discrepanciesCount: number;
+  };
+  outstandingDuesMinor?: number;
 }
 
 export interface PaymentAllocation {
@@ -633,7 +726,7 @@ export type {
 export const fetchActiveShift = () =>
   api<{ ok: boolean; activeShift: import('../../shared/types.ts').Shift | null }>('/api/shifts/active');
 
-export const openShift = (data: { openingCashMinor: number; location?: string; notes?: string }) =>
+export const openShift = (data: { openingCashMinor: number; location?: string; counter?: string; notes?: string }) =>
   api<{ ok: boolean; shift: import('../../shared/types.ts').Shift }>('/api/shifts', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -683,4 +776,13 @@ export const reviewShift = (id: string, data: { reviewNotes?: string }) =>
 
 export const fetchShiftReport = (id: string) =>
   api<{ ok: boolean; report: import('../../shared/types.ts').ShiftClosingReport }>(`/api/shifts/${id}/report`);
+
+// Multi-Branch Management APIs
+export const fetchBranches = () => api<{ branches: Branch[] }>('/api/branches');
+export const createBranch = (data: Partial<Branch>) =>
+  api<Branch>('/api/branches', { method: 'POST', body: JSON.stringify(data) });
+export const updateBranch = (id: string, data: Partial<Branch>) =>
+  api<Branch>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const fetchBranchSummary = (id: string) =>
+  api<BranchSummary>(`/api/branches/${id}/summary`);
 

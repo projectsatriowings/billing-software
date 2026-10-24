@@ -14,7 +14,16 @@ export const forbidden = (msg = 'You do not have permission to do this', code = 
 export const notFound = (what = 'Record') => new HttpError(404, 'NOT_FOUND', `${what} not found`);
 export const conflict = (msg: string, code = 'CONFLICT', details?: unknown) => new HttpError(409, code, msg, details);
 
-export interface AuthUser { id: string; tenantId: string; name: string; role: Role; email: string }
+export interface AuthUser {
+  id: string;
+  tenantId: string;
+  name: string;
+  role: Role;
+  email: string;
+  assignedLocation?: string;
+  assignedCounter?: string;
+  allowedLocations?: string[];
+}
 export interface Ctx {
   req: http.IncomingMessage;
   res: http.ServerResponse;

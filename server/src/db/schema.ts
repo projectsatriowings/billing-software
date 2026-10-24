@@ -515,6 +515,38 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS cash_movements_tenant_created ON cash_movements (tenant_id, created_at DESC)`,
     ],
   },
+  {
+    version: 14,
+    statements: [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_location TEXT NOT NULL DEFAULT 'MAIN'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_counter TEXT NOT NULL DEFAULT 'COUNTER-1'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_locations JSONB NOT NULL DEFAULT '["MAIN"]'`,
+      `CREATE TABLE IF NOT EXISTS branches (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        address TEXT,
+        phone TEXT,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        counters JSONB NOT NULL DEFAULT '["COUNTER-1"]',
+        manager_id TEXT REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (tenant_id, code)
+      )`,
+      `CREATE INDEX IF NOT EXISTS branches_tenant_code ON branches (tenant_id, code)`,
+      `CREATE INDEX IF NOT EXISTS branches_tenant_active ON branches (tenant_id, active)`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'MAIN'`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS counter TEXT DEFAULT 'COUNTER-1'`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'MAIN'`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS counter TEXT DEFAULT 'COUNTER-1'`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counter TEXT DEFAULT 'COUNTER-1'`,
+      `CREATE INDEX IF NOT EXISTS invoices_tenant_location ON invoices (tenant_id, location)`,
+      `CREATE INDEX IF NOT EXISTS payments_tenant_location ON payments (tenant_id, location)`,
+      `CREATE INDEX IF NOT EXISTS shifts_tenant_location ON shifts (tenant_id, location)`,
+    ],
+  },
 ];
 
 

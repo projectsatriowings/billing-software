@@ -7,6 +7,8 @@ interface OpenShiftModalProps {
   onSuccess: (shift: Shift) => void;
   userName: string;
   userRole: string;
+  defaultLocation?: string;
+  defaultCounter?: string;
 }
 
 export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
@@ -15,9 +17,12 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
   onSuccess,
   userName,
   userRole,
+  defaultLocation,
+  defaultCounter,
 }) => {
   const [openingRupees, setOpeningRupees] = useState<string>('1000');
-  const [location, setLocation] = useState<string>('MAIN');
+  const [location, setLocation] = useState<string>(defaultLocation || 'MAIN');
+  const [counter, setCounter] = useState<string>(defaultCounter || 'COUNTER-1');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +48,7 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
       const res = await openShift({
         openingCashMinor,
         location: location.trim() || 'MAIN',
+        counter: counter.trim() || undefined,
         notes: notes.trim() || undefined,
       });
       onSuccess(res.shift);
