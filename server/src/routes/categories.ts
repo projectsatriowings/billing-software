@@ -38,26 +38,68 @@ export function registerCategories(r: Router) {
 
     let rows = await ctx.db.query(sql, params);
 
-    // Auto-discovery backward compatibility: If categories table is empty, initialize from items.category
-    if (rows.length === 0) {
-      const distinctItemCats = await ctx.db.query<{ category: string }>(
-        'SELECT DISTINCT category FROM items WHERE tenant_id = ? AND category IS NOT NULL AND category <> \'\'',
-        [tenantId],
-      );
-      if (distinctItemCats.length > 0) {
-        for (const itemCat of distinctItemCats) {
-          const catName = itemCat.category.trim();
-          if (!catName) continue;
-          const catId = newId('cat');
-          try {
-            await ctx.db.exec(
+    // Auto-discovery from products: If products have categories not yet in the categories table, register them automatically
+    const distinctItemCats = await ctx.db.query<{ category: string }>(
+      'SELECT DISTINCT category FROM items WHERE tenant_id = ? AND category IS NOT NULL AND category <> \'\'',
+      [tenantId],
+    );
+    if (distinctItemCats.length > 0) {
+      let insertedNew = false;
+      for (const itemCat of distinctItemCats) {
+        const catName = itemCat.category.trim();
+        if (!catName) continue;
+
+        let parentName: string | null = null;
+        let leafName = catName;
+        for (const sep of ['→', '->', '>', '/']) {
+          if (catName.includes(sep)) {
+            const parts = catName.split(sep).map((s) => s.trim());
+            if (parts.length === 2 && parts[0] && parts[1]) {
+              parentName = parts[0];
+              leafName = parts[1];
+              break;
+            }
+          }
+        }
+
+        try {
+          if (parentName) {
+            // Ensure parent category exists
+            let parent = await ctx.db.one<{ id: string }>(
+              'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
+              [tenantId, parentName],
+            );
+            if (!parent) {
+              const pId = newId('cat');
+              await ctx.db.exec(
+                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
+                [pId, tenantId, parentName],
+              );
+              parent = await ctx.db.one<{ id: string }>(
+                'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
+                [tenantId, parentName],
+              );
+              insertedNew = true;
+            }
+            const catId = newId('cat');
+            const res = await ctx.db.exec(
+              'INSERT INTO categories (id, tenant_id, name, parent_id, active) VALUES (?, ?, ?, ?, true) ON CONFLICT DO NOTHING',
+              [catId, tenantId, leafName, parent?.id ?? null],
+            );
+            if (res) insertedNew = true;
+          } else {
+            const catId = newId('cat');
+            const res = await ctx.db.exec(
               'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
               [catId, tenantId, catName],
             );
-          } catch {
-            // ignore conflict
+            if (res) insertedNew = true;
           }
+        } catch {
+          // ignore duplicate
         }
+      }
+      if (insertedNew || rows.length === 0) {
         rows = await ctx.db.query(sql, params);
       }
     }
@@ -73,17 +115,28 @@ export function registerCategories(r: Router) {
     }
 
     return {
-      categories: rows.map((cat: any) => ({
-        id: cat.id,
-        tenantId: cat.tenantId ?? cat.tenant_id,
-        name: cat.name,
-        description: cat.description ?? null,
-        active: Boolean(cat.active),
-        parentId: cat.parentId ?? cat.parent_id ?? null,
-        parentName: cat.parentName ?? cat.parent_name ?? null,
-        createdAt: cat.createdAt ?? cat.created_at,
-        itemCount: countMap.get(String(cat.name).toLowerCase()) ?? 0,
-      })),
+      categories: rows.map((cat: any) => {
+        const nameLower = String(cat.name).toLowerCase();
+        const directCount = countMap.get(nameLower) ?? 0;
+        const pName = cat.parentName ?? cat.parent_name;
+        const hierarchyCount = pName
+          ? (countMap.get(`${pName} → ${cat.name}`.toLowerCase()) ??
+             countMap.get(`${pName} -> ${cat.name}`.toLowerCase()) ??
+             countMap.get(`${pName} > ${cat.name}`.toLowerCase()) ??
+             countMap.get(`${pName} / ${cat.name}`.toLowerCase()) ?? 0)
+          : 0;
+        return {
+          id: cat.id,
+          tenantId: cat.tenantId ?? cat.tenant_id,
+          name: cat.name,
+          description: cat.description ?? null,
+          active: Boolean(cat.active),
+          parentId: cat.parentId ?? cat.parent_id ?? null,
+          parentName: pName ?? null,
+          createdAt: cat.createdAt ?? cat.created_at,
+          itemCount: directCount + hierarchyCount,
+        };
+      }),
     };
   });
 

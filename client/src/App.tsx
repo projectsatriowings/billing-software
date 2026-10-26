@@ -7559,6 +7559,9 @@ export function App() {
                     onChange={(e) => setItemFormCategory(e.target.value)}
                   >
                     <option value="">— Select Category from Category Module —</option>
+                    {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
+                      <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
+                    )}
                     {categoriesList.filter((c) => c.active).map((c) => (
                       <option key={c.id} value={c.name}>
                         {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
