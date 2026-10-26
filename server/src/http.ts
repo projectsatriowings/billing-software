@@ -193,7 +193,13 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
       }
       if (!res.headersSent) send(code, { 'Content-Type': 'application/json; charset=utf-8' }, JSON.stringify(body));
     } finally {
-      if (opts.log !== false && url.pathname.startsWith('/api/')) {
+      const isHeartbeatPoll =
+        url.pathname === '/api/cfd/update' ||
+        url.pathname === '/api/cfd/state' ||
+        url.pathname === '/api/scanner/events' ||
+        url.pathname === '/api/health';
+
+      if (opts.log !== false && url.pathname.startsWith('/api/') && (!isHeartbeatPoll || status >= 400)) {
         console.log(JSON.stringify({ t: new Date().toISOString(), rid: requestId, m: req.method, p: url.pathname, s: status, ms: Date.now() - started, tenant: ctx.user?.tenantId, user: ctx.user?.id }));
       }
     }

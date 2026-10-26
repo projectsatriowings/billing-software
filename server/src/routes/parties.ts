@@ -51,6 +51,7 @@ function formatParty(p: any) {
     stateCode: p.stateCode ?? p.state_code ?? null,
     address: p.address ?? null,
     creditLimitMinor: Number(p.creditLimitMinor ?? p.credit_limit_minor ?? 0),
+    loyaltyPoints: Number(p.loyaltyPoints ?? p.loyalty_points ?? 0),
     advanceMinor,
     unpaidInvoicesMinor: unpaidMinor,
     duesMinor,
@@ -263,6 +264,7 @@ export function registerParties(r: Router) {
 
     const address = V.optStr(b.address, 'Address', 300);
     const creditLimitMinor = V.int(b.creditLimitMinor ?? 0, 'Credit limit (paise)', { min: 0 });
+    const loyaltyPoints = V.int(b.loyaltyPoints ?? 0, 'Loyalty points', { min: 0 });
     const custom = validateCustom(b.custom);
 
     const id = newId('p');
@@ -270,11 +272,11 @@ export function registerParties(r: Router) {
       await q.exec(
         `INSERT INTO parties (
           id, tenant_id, type, name, phone, email, gstin, state_code,
-          address, credit_limit_minor, custom, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
-        [id, tenantId, type, name, phone, email, gstin, stateCode, address, creditLimitMinor, JSON.stringify(custom)],
+          address, credit_limit_minor, loyalty_points, custom, active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
+        [id, tenantId, type, name, phone, email, gstin, stateCode, address, creditLimitMinor, loyaltyPoints, JSON.stringify(custom)],
       );
-      await audit(q, ctx, { action: 'party.create', entity: 'party', entityId: id, detail: { name, type, phone, gstin } });
+      await audit(q, ctx, { action: 'party.create', entity: 'party', entityId: id, detail: { name, type, phone, gstin, loyaltyPoints } });
     });
 
     const created = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [id, tenantId]);
@@ -325,6 +327,7 @@ export function registerParties(r: Router) {
 
     const address = b.address !== undefined ? V.optStr(b.address, 'Address', 300) : (party.address ?? null);
     const creditLimitMinor = b.creditLimitMinor !== undefined ? V.int(b.creditLimitMinor, 'Credit limit (paise)', { min: 0 }) : Number(party.creditLimitMinor ?? party.credit_limit_minor ?? 0);
+    const loyaltyPoints = b.loyaltyPoints !== undefined ? V.int(b.loyaltyPoints, 'Loyalty points', { min: 0 }) : Number(party.loyaltyPoints ?? party.loyalty_points ?? 0);
     const custom = b.custom !== undefined ? validateCustom(b.custom) : (typeof party.custom === 'string' ? JSON.parse(party.custom) : (party.custom ?? {}));
     const active = b.active !== undefined ? V.bool(b.active) : Boolean(party.active);
 
@@ -332,15 +335,46 @@ export function registerParties(r: Router) {
       await q.exec(
         `UPDATE parties SET
           name = ?, type = ?, phone = ?, email = ?, gstin = ?, state_code = ?,
-          address = ?, credit_limit_minor = ?, custom = ?::jsonb, active = ?
+          address = ?, credit_limit_minor = ?, loyalty_points = ?, custom = ?::jsonb, active = ?
          WHERE id = ? AND tenant_id = ?`,
-        [name, type, phone, email, gstin, stateCode, address, creditLimitMinor, JSON.stringify(custom ?? {}), active, party.id, tenantId],
+        [name, type, phone, email, gstin, stateCode, address, creditLimitMinor, loyaltyPoints, JSON.stringify(custom ?? {}), active, party.id, tenantId],
       );
-      await audit(q, ctx, { action: 'party.update', entity: 'party', entityId: party.id, detail: { name, type, active } });
+      await audit(q, ctx, { action: 'party.update', entity: 'party', entityId: party.id, detail: { name, type, active, loyaltyPoints } });
     });
 
     const updated = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [party.id, tenantId]);
     return { party: formatParty(updated) };
+  });
+
+  // Adjust loyalty points directly
+  r.post('/api/parties/:id/points', requirePerm('parties.write'), async (ctx) => {
+    const b = ctx.body ?? {};
+    const tenantId = ctx.user!.tenantId;
+    const delta = V.int(b.delta ?? 0, 'Points adjustment delta');
+    const reason = V.optStr(b.reason, 'Reason', 120) || 'Points adjustment';
+
+    const party = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    if (!party) throw notFound('Customer');
+
+    let updatedPoints = 0;
+    await ctx.db.tx(async (q) => {
+      const res = await q.one<{ loyalty_points: number }>(
+        `UPDATE parties
+         SET loyalty_points = GREATEST(0, loyalty_points + ?)
+         WHERE id = ? AND tenant_id = ?
+         RETURNING loyalty_points`,
+        [delta, party.id, tenantId]
+      );
+      updatedPoints = Number(res?.loyalty_points ?? 0);
+      await audit(q, ctx, {
+        action: 'party.points_adjust',
+        entity: 'party',
+        entityId: party.id,
+        detail: { delta, reason, newPoints: updatedPoints }
+      });
+    });
+
+    return { ok: true, party: formatParty({ ...party, loyalty_points: updatedPoints }), loyaltyPoints: updatedPoints };
   });
 
   // Deactivate party (instead of delete)

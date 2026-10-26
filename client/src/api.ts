@@ -157,6 +157,10 @@ export interface Shop {
   whatsappEnabled?: boolean;
   whatsappDefaultLang?: 'en' | 'hi' | 'ta';
   whatsappIncludeLink?: boolean;
+  loyaltyEnabled?: boolean;
+  loyaltyPointsPer100?: number;
+  loyaltyPointValueMinor?: number;
+  loyaltyMinPointsRedeem?: number;
 }
 
 export interface DemoBusiness {
@@ -227,6 +231,7 @@ export interface Party {
   stateCode?: string;
   address?: string;
   creditLimitMinor: number;
+  loyaltyPoints?: number;
   advanceMinor?: number;
   unpaidInvoicesMinor?: number;
   duesMinor?: number;

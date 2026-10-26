@@ -249,8 +249,21 @@ export function registerInvoices(r: Router) {
     const paymentsInput = V.arr(b.payments ?? [], 'Payments');
     const customerName = V.optStr(b.customerName, 'Customer name', 100);
     const customerPhone = V.optStr(b.customerPhone, 'Customer phone', 20);
-    const partyId = V.optStr(b.partyId, 'Customer party', 50);
+    let partyId = V.optStr(b.partyId, 'Customer party', 50);
+    const redeemedPoints = Math.max(0, V.int(b.redeemedPoints ?? 0, 'Redeemed points', { min: 0 }));
     const billDiscountMinor = V.int(b.billDiscountMinor ?? 0, 'Bill discount', { min: 0 });
+
+    const cleanPhoneDigits = customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '';
+    if (!partyId && cleanPhoneDigits) {
+      const match = await ctx.db.one<{ id: string }>(
+        `SELECT id FROM parties 
+         WHERE tenant_id = ? AND type = 'customer' 
+           AND (phone = ? OR REPLACE(phone, ' ', '') LIKE ? OR phone LIKE ?) 
+         LIMIT 1`,
+        [tenantId, customerPhone, `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
+      );
+      if (match) partyId = match.id;
+    }
 
     const tenderInput = b.tender;
     let tenderData: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
@@ -305,8 +318,28 @@ export function registerInvoices(r: Router) {
     let totalPaidMinor = 0;
     const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
     const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
+    let earnedLoyaltyPoints = 0;
+    let customerLoyaltyPoints: number | null = null;
+    let isNewCustomer = false;
 
     await ctx.db.tx(async (q) => {
+      // 0. Auto-enroll new customer if phone was given at counter and party does not exist yet
+      if (!partyId && cleanPhoneDigits && cleanPhoneDigits.length >= 7) {
+        isNewCustomer = true;
+        const newCustId = newId('p');
+        const assignedCustName = (customerName && customerName.trim() && !customerName.toLowerCase().includes('walk-in'))
+          ? customerName.trim()
+          : `Customer ${cleanPhoneDigits.slice(-4)}`;
+        
+        await q.exec(
+          `INSERT INTO parties (
+            id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
+          ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
+          [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.state_code || '33']
+        );
+        partyId = newCustId;
+      }
+
       // 1. Generate sequential invoice number
       const prefix = shop.invoice_prefix || 'INV';
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
@@ -444,11 +477,49 @@ export function registerInvoices(r: Router) {
         );
       }
 
+      // 6. Customer loyalty points calculation & update based on shop's custom rule
+      if (partyId) {
+        const isLoyaltyActive = Boolean(shop.loyalty_enabled ?? true);
+        const ptsPer100 = Number(shop.loyalty_points_per_100 ?? 10);
+        if (isLoyaltyActive && ptsPer100 > 0) {
+          // calculated.totalMinor is in paise (₹100 = 10,000 paise)
+          earnedLoyaltyPoints = Math.floor((calculated.totalMinor * ptsPer100) / 10000);
+        } else {
+          earnedLoyaltyPoints = 0;
+        }
+
+        if (redeemedPoints > 0) {
+          const custParty = await q.one<{ loyalty_points: number; loyaltyPoints: number }>(
+            'SELECT loyalty_points FROM parties WHERE id = ? AND tenant_id = ? FOR UPDATE',
+            [partyId, tenantId]
+          );
+          const currentPts = Number(custParty?.loyaltyPoints ?? custParty?.loyalty_points ?? 0);
+          if (currentPts < redeemedPoints) {
+            throw bad(`Insufficient loyalty points. Customer has ${currentPts} points, requested to redeem ${redeemedPoints}.`);
+          }
+        }
+
+        const updatedCust = await q.one<{ loyalty_points?: number; loyaltyPoints?: number }>(
+          `UPDATE parties
+           SET loyalty_points = GREATEST(0, loyalty_points - ? + ?)
+           WHERE id = ? AND tenant_id = ?
+           RETURNING loyalty_points`,
+          [redeemedPoints, earnedLoyaltyPoints, partyId, tenantId]
+        );
+        customerLoyaltyPoints = Number(updatedCust?.loyaltyPoints ?? updatedCust?.loyalty_points ?? 0);
+      }
+
       await audit(q, ctx, {
         action: 'invoice.create',
         entity: 'invoice',
         entityId: invoiceId,
-        detail: { number: assignedNumber, totalMinor: calculated.totalMinor, lines: formattedLines.length },
+        detail: {
+          number: assignedNumber,
+          totalMinor: calculated.totalMinor,
+          lines: formattedLines.length,
+          earnedLoyaltyPoints,
+          redeemedPoints,
+        },
       });
     });
 
@@ -463,6 +534,11 @@ export function registerInvoices(r: Router) {
       counter,
       shareToken,
       tender: tenderData,
+      earnedLoyaltyPoints,
+      redeemedLoyaltyPoints: redeemedPoints,
+      customerLoyaltyPoints,
+      partyId,
+      isNewCustomer,
     };
   });
 

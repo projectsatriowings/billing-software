@@ -64,6 +64,16 @@ export function getLocalIpAddress(): string {
 
 let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || 'https://books-strike-objectives-holdem.trycloudflare.com';
 
+// Keep Cloudflare Tunnel alive & prevent Wi-Fi router NAT connection timeouts
+setInterval(() => {
+  if (activeTunnelUrl && activeTunnelUrl.startsWith('https://')) {
+    fetch(`${activeTunnelUrl}/api/health`, {
+      headers: { 'User-Agent': 'Billing-Tunnel-KeepAlive/1.0' },
+      signal: AbortSignal.timeout(4000),
+    }).catch(() => {});
+  }
+}, 20_000);
+
 export function setTunnelUrl(url: string) {
   activeTunnelUrl = url.trim();
 }

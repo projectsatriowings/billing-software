@@ -21,6 +21,10 @@ export const MIGRATIONS: Migration[] = [
         timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
         language TEXT NOT NULL DEFAULT 'en',
         locations JSONB NOT NULL DEFAULT '["MAIN"]',
+        loyalty_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10,
+        loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10,
+        loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE TABLE users (
@@ -39,6 +43,7 @@ export const MIGRATIONS: Migration[] = [
         type TEXT NOT NULL CHECK (type IN ('customer','supplier')),
         name TEXT NOT NULL, phone TEXT, email TEXT, gstin TEXT, state_code TEXT, address TEXT,
         credit_limit_minor BIGINT NOT NULL DEFAULT 0,
+        loyalty_points INTEGER NOT NULL DEFAULT 0,
         custom JSONB NOT NULL DEFAULT '{}',
         active BOOLEAN NOT NULL DEFAULT TRUE,
         import_id TEXT,
@@ -555,6 +560,8 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS invoices_tenant_location ON invoices (tenant_id, location)`,
       `CREATE INDEX IF NOT EXISTS payments_tenant_location ON payments (tenant_id, location)`,
       `CREATE INDEX IF NOT EXISTS shifts_tenant_location ON shifts (tenant_id, location)`,
+      `ALTER TABLE parties ADD COLUMN IF NOT EXISTS loyalty_points INTEGER NOT NULL DEFAULT 0`,
+      `CREATE INDEX IF NOT EXISTS parties_loyalty_pts ON parties (tenant_id, loyalty_points DESC)`,
     ],
   },
   {
@@ -697,6 +704,15 @@ export const MIGRATIONS: Migration[] = [
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE INDEX IF NOT EXISTS gst_filing_history_lookup ON gst_filing_history (tenant_id, return_period DESC, return_type)`,
+    ],
+  },
+  {
+    version: 19,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_enabled BOOLEAN NOT NULL DEFAULT TRUE`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10`,
     ],
   },
 ];
