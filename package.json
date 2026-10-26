@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Configurable, India-first billing platform: React + Node.js + Neon Postgres",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build-client.mjs",
@@ -20,7 +22,8 @@
     "pg": "^8.13.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tsx": "^4.19.0"
+    "tsx": "^4.19.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -7,6 +7,7 @@ import { registerMeta } from './routes/meta.ts';
 import { registerShop } from './routes/shop.ts';
 import { registerUsers } from './routes/users.ts';
 import { registerItems } from './routes/items.ts';
+import { registerItemsBulk } from './routes/itemsBulk.ts';
 import { registerCategories } from './routes/categories.ts';
 import { registerParties } from './routes/parties.ts';
 import { registerInvoices } from './routes/invoices.ts';
@@ -25,6 +26,7 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerShop(r);
   registerUsers(r);
   registerItems(r);
+  registerItemsBulk(r);
   registerCategories(r);
   registerParties(r);
   registerCreditNotes(r);

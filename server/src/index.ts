@@ -25,3 +25,4 @@ main().catch((e) => {
   console.error(JSON.stringify({ level: 'fatal', msg: String(e?.message ?? e) }));
   process.exit(1);
 });
+

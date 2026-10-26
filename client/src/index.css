@@ -339,6 +339,143 @@ body {
   border-radius: 4px;
 }
 
+/* Sidebar Nav Group & Submenu Dropdown (Inventory Hub) */
+.sidebar-nav-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sidebar-nav-item.open-highlight {
+  background: rgba(109, 74, 255, 0.22);
+  color: #ffffff;
+  border-color: rgba(167, 139, 250, 0.4);
+}
+
+.sidebar-nav-item.has-active-child {
+  background: rgba(109, 74, 255, 0.28);
+  color: #ffffff;
+  border-color: rgba(167, 139, 250, 0.45);
+  box-shadow: 0 2px 10px rgba(109, 74, 255, 0.25);
+}
+
+.nav-dropdown-chevron {
+  font-size: 0.72rem;
+  color: #c7d2fe;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+  margin-left: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.sidebar-nav-item:hover .nav-dropdown-chevron,
+.sidebar-nav-item.active .nav-dropdown-chevron,
+.sidebar-nav-item.open-highlight .nav-dropdown-chevron,
+.sidebar-nav-item.has-active-child .nav-dropdown-chevron {
+  color: #ffffff;
+  opacity: 1;
+}
+
+.nav-dropdown-chevron.open {
+  transform: rotate(180deg);
+}
+
+.sidebar-submenu-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0.45rem 0.45rem 0.65rem;
+  margin-top: 0.3rem;
+  margin-left: 0.6rem;
+  margin-right: 0.2rem;
+  background: rgba(15, 12, 41, 0.65);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-left: 2px solid #a78bfa;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  animation: submenuSlideFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes submenuSlideFade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar-submenu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: transparent;
+  color: #e0e7ff;
+  border: 1px solid transparent;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  width: 100%;
+}
+
+.sidebar-submenu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.sidebar-submenu-item.active {
+  background: #6d4aff;
+  color: #ffffff;
+  font-weight: 800;
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 3px 12px rgba(109, 74, 255, 0.45);
+  transform: translateX(3px);
+}
+
+.sidebar-submenu-item .submenu-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sidebar-submenu-item .submenu-text {
+  flex: 1;
+  line-height: 1.3;
+}
+
+/* Collapsed sidebar popover flyout support */
+.app-sidebar.collapsed .sidebar-nav-group,
+.app-sidebar.is-collapsed .sidebar-nav-group {
+  position: relative;
+}
+
+.app-sidebar.collapsed .sidebar-submenu-dropdown,
+.app-sidebar.is-collapsed .sidebar-submenu-dropdown {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  width: 240px;
+  margin: 0;
+  background: #1e1b4b;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  padding: 0.5rem;
+  animation: submenuSlideFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Sidebar Footer */
 .sidebar-footer {
   margin-top: auto;
@@ -562,15 +699,27 @@ body {
 }
 
 .badge-emerald {
-  background: rgba(16, 185, 129, 0.2);
-  color: #a7f3d0;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
 }
 
-.badge-blue {
-  background: rgba(109, 74, 255, 0.25);
-  color: #ddd6fe;
-  border: 1px solid rgba(167, 139, 250, 0.4);
+.badge-blue, .badge-purple {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+}
+
+.badge-amber {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.badge-rose, .badge-red {
+  background: #fff1f2;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
 }
 
 /* Backward compatibility aliases */
@@ -2190,7 +2339,7 @@ body {
 
 .data-table th {
   background: var(--bg-main);
-  color: var(--text-muted);
+  color: #334155;
   text-align: left;
   padding: 0.75rem 0.95rem;
   font-size: 0.75rem;
@@ -9661,5 +9810,259 @@ body {
   font-weight: 600;
   color: #64748b;
 }
+
+/* ==========================================================================
+   BARCODE LABEL PRINTING STYLES
+   ========================================================================== */
+.barcode-print-portal {
+  display: none;
+}
+
+.barcode-svg-preview {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  background: #ffffff;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  max-width: 140px;
+  overflow: hidden;
+}
+
+.barcode-svg-preview svg {
+  display: block;
+  max-width: 125px;
+  height: 28px;
+}
+
+.btn-print-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 4px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-print-label:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+@media print {
+  body.printing-barcode-labels {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  body.printing-barcode-labels .app-sidebar,
+  body.printing-barcode-labels .app-header,
+  body.printing-barcode-labels .card-title,
+  body.printing-barcode-labels .data-table,
+  body.printing-barcode-labels .btn,
+  body.printing-barcode-labels button,
+  body.printing-barcode-labels input,
+  body.printing-barcode-labels select,
+  body.printing-barcode-labels nav,
+  body.printing-barcode-labels header,
+  body.printing-barcode-labels aside,
+  .modal-backdrop,
+  .print-barcode-dialog {
+    display: none !important;
+  }
+  body.printing-barcode-labels .barcode-print-portal {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
+
+/* Print Barcode Label Modal */
+.print-barcode-dialog {
+  max-width: 680px;
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .print-barcode-dialog {
+    max-width: 95vw;
+    margin: 0.5rem;
+  }
+}
+
+/* ==========================================================================
+   TABLE SCROLL INSIDE CONTAINERS (SECTIONS 2 & 3)
+   ========================================================================== */
+
+/* Horizontal bar: visible, slim, rounded */
+.table-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  background: #ffffff;
+  scrollbar-width: thin;                     /* Firefox */
+  scrollbar-color: #9ca3af transparent;      /* Firefox */
+}
+.table-scroll-x::-webkit-scrollbar { height: 8px; }
+.table-scroll-x::-webkit-scrollbar-track { background: transparent; margin: 0 14px; }
+.table-scroll-x::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 999px; }
+.table-scroll-x::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* Vertical: scrolls, but no visible scrollbar */
+.table-scroll-y {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: max-content;
+  min-width: 100%;
+  scrollbar-width: none;                     /* Firefox */
+  -ms-overflow-style: none;                  /* old Edge */
+}
+.table-scroll-y::-webkit-scrollbar { display: none; }   /* Chrome, Edge, Safari */
+
+/* Sticky header row */
+.table-scroll-y thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f8fafc;
+  box-shadow: 0 1px 0 var(--border, #e2e8f0);
+}
+
+/* Product Name column: may wrap, min/max width 200–240px */
+.table-scroll-y .col-product-name {
+  min-width: 200px;
+  max-width: 240px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Narrow columns: keep text on one line */
+.table-scroll-y .col-nowrap {
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   TOGGLE SWITCH COMPONENT
+   ========================================================================== */
+.toggle-switch {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  background-color: #ef4444;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.toggle-switch:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.toggle-switch.is-checked {
+  background-color: #10b981;
+}
+
+.toggle-switch.is-checked:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.toggle-switch:focus-visible {
+  outline: 2px solid var(--primary, #6d4aff);
+  outline-offset: 2px;
+}
+
+.toggle-switch:disabled,
+.toggle-switch.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-switch-knob {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: translateX(0);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.toggle-switch.is-checked .toggle-switch-knob {
+  transform: translateX(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-switch,
+  .toggle-switch-knob {
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   PRODUCT MOVEMENT ANALYSIS COMPONENT STYLES
+   ========================================================================== */
+.product-movement-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.product-movement-container .data-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.product-movement-container .data-table td {
+  padding: 0.65rem 0.95rem;
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.product-movement-container .data-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+@media (max-width: 900px) {
+  .product-movement-container .movement-analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+
+
 
 

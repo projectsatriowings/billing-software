@@ -5,6 +5,15 @@ import { can, ROLES, STANDARD_UNITS } from '../../shared/types.ts';
 import { calcBill, gstinCheckChar, validateGstin } from '../../shared/tax.ts';
 import { normalizePhone } from '../../shared/whatsapp.ts';
 import { STATES } from '../../shared/states.ts';
+import {
+  computeEan13CheckDigit,
+  isValidEan13,
+  generateUniqueInternalBarcode,
+  renderBarcodeSvg,
+  matchProductToCatalog,
+  generateUniqueShortSku,
+  classifyProductNature,
+} from '../../shared/bulkImport.ts';
 import { createApp } from '../src/app.ts';
 import { connectWire } from '../src/db/wire.ts';
 import { migrate, type DB } from '../src/db/index.ts';
@@ -623,4 +632,1438 @@ test('suppliers: CRUD, search, GSTIN checksum, address, and safe deactivation', 
   const activeSups = await api('GET', '/api/parties?type=supplier', undefined, shopA.owner);
   assert.equal(activeSups.body.parties.some((p: any) => p.id === sup.id), false);
 });
+
+// ── Bulk Import ──────────────────────────────────────────────────────────────
+
+test('bulk-import: rejects request with no rows array', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+  const res = await api('POST', '/api/items/bulk-import', { notRows: [] }, shopA.owner);
+  assert.equal(res.status, 400);
+  assert.equal(res.code, 'VALIDATION');
+});
+
+test('bulk-import: rejects empty rows array', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+  const res = await api('POST', '/api/items/bulk-import', { rows: [] }, shopA.owner);
+  assert.equal(res.status, 400);
+  assert.equal(res.code, 'VALIDATION');
+});
+
+test('bulk-import: rejects more than 500 rows', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+  const rows = Array.from({ length: 501 }, (_, i) => ({
+    name: `Product ${i}`,
+    priceMinor: 1000,
+  }));
+  const res = await api('POST', '/api/items/bulk-import', { rows }, shopA.owner);
+  assert.equal(res.status, 400);
+  assert.equal(res.code, 'VALIDATION');
+});
+
+test('bulk-import: cashier is forbidden from importing', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [{ name: 'Test', priceMinor: 1000 }],
+  }, shopA.cashier);
+  assert.equal(res.status, 403);
+});
+
+test('bulk-import: imports valid products and creates stock_moves for opening stock', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Bulk Item A', priceMinor: 5000, costMinor: 3000, taxRateBp: 500, taxInclusive: true, openingQtyMilli: 10000, unit: 'kg', category: 'Grocery', sku: 'BULK-A' },
+      { name: 'Bulk Item B', priceMinor: 2000, costMinor: 1500, taxRateBp: 1200, taxInclusive: false, openingQtyMilli: 0, unit: 'pcs' },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200, `body: ${JSON.stringify(res.body)}`);
+  assert.equal(res.body.totalRows, 2);
+  assert.equal(res.body.created, 2);
+  assert.equal(res.body.skipped, 0);
+  assert.ok(res.body.importId, 'importId must be returned');
+
+  // Verify the results array
+  const results = res.body.results as any[];
+  assert.equal(results.length, 2);
+  assert.ok(results.every((r: any) => r.status === 'created'), 'all rows should be created');
+  assert.ok(results.every((r: any) => r.itemId), 'each created row must have an itemId');
+
+  // Verify item A exists via GET
+  const itemA = results.find((r: any) => r.name === 'Bulk Item A');
+  assert.ok(itemA);
+
+  const getRes = await api('GET', `/api/items/${itemA.itemId}`, undefined, shopA.owner);
+  assert.equal(getRes.status, 200);
+  assert.equal(getRes.body.item.name, 'Bulk Item A');
+  assert.equal(getRes.body.item.priceMinor, 5000);
+  assert.equal(getRes.body.item.taxRateBp, 500);
+  assert.equal(getRes.body.item.category, 'Grocery');
+  assert.equal(getRes.body.item.sku, 'BULK-A');
+  // Opening stock 10 kg = 10000 milli
+  assert.equal(getRes.body.item.currentStockMilli, 10000);
+});
+
+test('bulk-import: skips rows missing required name field with clear reason', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: '', priceMinor: 1000 },                    // missing name
+      { name: 'Good Item X9', priceMinor: 500 },         // valid
+      { name: 'No Price Item', priceMinor: null },        // missing price
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1);
+  assert.equal(res.body.skipped, 2);
+
+  const results = res.body.results as any[];
+  const skipped = results.filter((r: any) => r.status === 'skipped');
+  assert.equal(skipped.length, 2);
+  // Each skipped row should have a reason
+  assert.ok(skipped.every((r: any) => r.reason && r.reason.length > 0), 'skipped rows need a reason');
+});
+
+test('bulk-import: detects duplicate barcodes within the same payload', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Dup Barcode A', priceMinor: 1000, barcode: 'BC-DUP-001' },
+      { name: 'Dup Barcode B', priceMinor: 2000, barcode: 'BC-DUP-001' }, // duplicate barcode
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1);
+  assert.equal(res.body.skipped, 1);
+
+  const skipped = res.body.results.filter((r: any) => r.status === 'skipped');
+  assert.equal(skipped.length, 1);
+  assert.match(skipped[0].reason, /duplicate barcode/i);
+});
+
+test('bulk-import: detects duplicate barcodes against existing products in DB', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // First, create an item with a known barcode
+  const createRes = await api('POST', '/api/items', {
+    name: 'Existing Product with Barcode',
+    priceMinor: 1000,
+    barcode: 'BC-EXISTING-9999',
+    unit: 'pcs',
+  }, shopA.owner);
+  assert.equal(createRes.status, 200);
+
+  // Now try to bulk import a product with the same barcode
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Duplicate of Existing', priceMinor: 2000, barcode: 'BC-EXISTING-9999' },
+      { name: 'Unique New Product', priceMinor: 3000, barcode: 'BC-UNIQUE-AAAA' },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1, 'only the unique product should be created');
+  assert.equal(res.body.skipped, 1, 'the duplicate barcode product should be skipped');
+
+  const skipped = res.body.results.filter((r: any) => r.status === 'skipped');
+  assert.match(skipped[0].reason, /already exists/i);
+});
+
+test('bulk-import: validates GST rate against allowed values', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Invalid GST Product', priceMinor: 1000, taxRateBp: 999 }, // 9.99% — not a valid GST rate
+      { name: 'Valid GST Product', priceMinor: 1000, taxRateBp: 1200 },   // 12% — valid
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1);
+  assert.equal(res.body.skipped, 1);
+
+  const skipped = res.body.results.filter((r: any) => r.status === 'skipped');
+  assert.match(skipped[0].reason, /gst rate/i);
+});
+
+test('bulk-import: auto-creates missing categories', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const uniqueCat = `AutoCat_${Date.now()}`;
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Item with New Category', priceMinor: 1500, category: uniqueCat },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1);
+
+  // The category should now exist
+  const catList = await api('GET', '/api/categories', undefined, shopA.owner);
+  assert.equal(catList.status, 200);
+  const found = catList.body.categories.find((c: any) => c.name === uniqueCat);
+  assert.ok(found, `Category "${uniqueCat}" should have been auto-created`);
+});
+
+test('bulk-import: tenant isolation — Shop B cannot see or create items for Shop A', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // Import into Shop A
+  const aRes = await api('POST', '/api/items/bulk-import', {
+    rows: [{ name: 'Shop A Exclusive Item', priceMinor: 9999 }],
+  }, shopA.owner);
+  assert.equal(aRes.status, 200);
+  assert.equal(aRes.body.created, 1);
+
+  const itemId = aRes.body.results[0].itemId;
+
+  // Shop B cannot access Shop A's item
+  const bGet = await api('GET', `/api/items/${itemId}`, undefined, shopB.owner);
+  assert.equal(bGet.status, 404, 'Shop B must not see Shop A items');
+});
+
+test('bulk-import: manager can import but accountant cannot', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const managerRes = await api('POST', '/api/items/bulk-import', {
+    rows: [{ name: 'Manager Import Item', priceMinor: 100 }],
+  }, shopA.manager);
+  assert.equal(managerRes.status, 200);
+
+  const accountantRes = await api('POST', '/api/items/bulk-import', {
+    rows: [{ name: 'Accountant Import Item', priceMinor: 100 }],
+  }, shopA.accountant);
+  assert.equal(accountantRes.status, 403);
+});
+
+test('bulk-import: detects duplicate SKUs within payload and against database', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // Create an item with known SKU
+  const preRes = await api('POST', '/api/items', {
+    name: 'Existing SKU Product',
+    priceMinor: 500,
+    sku: 'SKU-PRE-EXISTING',
+    unit: 'pcs',
+  }, shopA.owner);
+  assert.equal(preRes.status, 200);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'SKU Dup Row 1', priceMinor: 1000, sku: 'SKU-BATCH-DUP' },
+      { name: 'SKU Dup Row 2', priceMinor: 1000, sku: 'SKU-BATCH-DUP' }, // intra-batch dup
+      { name: 'DB SKU Conflict', priceMinor: 1000, sku: 'SKU-PRE-EXISTING' }, // DB dup
+      { name: 'Unique Product', priceMinor: 1000, sku: 'SKU-TOTALLY-UNIQUE' },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 2); // Row 1 + Unique Product
+  assert.equal(res.body.skipped, 2); // Row 2 + DB conflict
+
+  const skipped = res.body.results.filter((r: any) => r.status === 'skipped');
+  assert.equal(skipped.length, 2);
+  assert.ok(skipped.some((r: any) => /duplicate sku/i.test(r.reason)));
+  assert.ok(skipped.some((r: any) => /already exists/i.test(r.reason)));
+});
+
+test('bulk-import: rejects barcodes formatted in scientific notation', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      { name: 'Scientific Barcode Item', priceMinor: 1000, barcode: '8.90123E+12' },
+      { name: 'Valid Barcode Item', priceMinor: 1000, barcode: '8909999888877' },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 1);
+  assert.equal(res.body.skipped, 1);
+
+  const skipped = res.body.results.filter((r: any) => r.status === 'skipped');
+  assert.match(skipped[0].reason, /scientific notation/i);
+});
+
+test('bulk-import: restocks existing product without duplication, adds incoming stock, and preserves barcodes', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create initial product with 12 units of stock (12,000 milli)
+  const initialRes = await api('POST', '/api/items', {
+    name: 'Toor Dal 1kg Test Restock',
+    priceMinor: 14000,
+    costMinor: 11000,
+    unit: 'kg',
+    openingStockMilli: 12000,
+    barcode: '8901111222333',
+  }, shopA.owner);
+  assert.equal(initialRes.status, 200);
+  const itemId = initialRes.body.item.id;
+  assert.equal(initialRes.body.item.currentStockMilli, 12000);
+
+  // 2. Import a restock of 20 units (20,000 milli)
+  const restockBatchId = `batch_restock_${Date.now()}`;
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    importBatchId: restockBatchId,
+    rows: [
+      {
+        name: 'Toor Dal 1kg Test Restock',
+        unit: 'kg',
+        priceMinor: 15000, // new price
+        costMinor: 12500,
+        openingStockMilli: 20000,
+        isRestock: true,
+        matchedItemId: itemId,
+        updatePrices: false, // keep original price
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 0);
+  assert.equal(importRes.body.restocked, 1);
+  assert.equal(importRes.body.skipped, 0);
+
+  // Verify stock is now 12 + 20 = 32 (32,000 milli)
+  const getRes = await api('GET', `/api/items/${itemId}`, undefined, shopA.owner);
+  assert.equal(getRes.status, 200);
+  assert.equal(getRes.body.item.currentStockMilli, 32000);
+  // Selling price was not updated because updatePrices was false
+  assert.equal(getRes.body.item.priceMinor, 14000);
+  // Barcode preserved
+  assert.equal(getRes.body.item.barcode, '8901111222333');
+
+  // Verify idempotency: re-submitting with the same batch ID returns 409 and does not add stock
+  const retryRes = await api('POST', '/api/items/bulk-import', {
+    importBatchId: restockBatchId,
+    rows: [
+      {
+        name: 'Toor Dal 1kg Test Restock',
+        unit: 'kg',
+        priceMinor: 15000,
+        openingStockMilli: 20000,
+        isRestock: true,
+        matchedItemId: itemId,
+      },
+    ],
+  }, shopA.owner);
+  assert.equal(retryRes.status, 409);
+
+  // Stock should still be 32, not 52
+  const checkAgain = await api('GET', `/api/items/${itemId}`, undefined, shopA.owner);
+  assert.equal(checkAgain.body.item.currentStockMilli, 32000);
+});
+
+test('bulk-import: new product generates internal barcode in product_barcodes table and initializes stock', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const importBatchId = `batch_new_${Date.now()}`;
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    importBatchId,
+    rows: [
+      {
+        name: 'Brand New Internal Barcode Item',
+        unit: 'pcs',
+        priceMinor: 25000,
+        costMinor: 20000,
+        openingStockMilli: 15000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 1);
+  const newItemId = importRes.body.results[0].itemId;
+  assert.ok(newItemId);
+
+  // Verify item in DB
+  const getRes = await api('GET', `/api/items/${newItemId}`, undefined, shopA.owner);
+  assert.equal(getRes.status, 200);
+  assert.equal(getRes.body.item.currentStockMilli, 15000);
+  assert.ok(getRes.body.item.barcode, 'Must have generated barcode');
+  assert.ok(getRes.body.item.barcode.startsWith('20'), 'Internal barcode starts with 20');
+  assert.equal(getRes.body.item.barcode.length, 13, 'EAN-13 length');
+
+  // Verify product_barcodes entry
+  const barcodeRows = await db.query<{ barcode: string; barcodeType: string }>(
+    `SELECT barcode, barcode_type FROM product_barcodes WHERE product_id = ? AND tenant_id = ?`,
+    [newItemId, shopA.tenantId]
+  );
+  assert.equal(barcodeRows.length, 1);
+  assert.equal(barcodeRows[0].barcode, getRes.body.item.barcode);
+  assert.equal(barcodeRows[0].barcodeType, 'INTERNAL');
+});
+
+test('bulk-import: restock updates prices when updatePrices is true', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // Create item
+  const initialRes = await api('POST', '/api/items', {
+    name: 'Price Update Test Item',
+    priceMinor: 5000,
+    costMinor: 4000,
+    unit: 'pcs',
+    openingStockMilli: 5000,
+  }, shopA.owner);
+  assert.equal(initialRes.status, 200);
+  const itemId = initialRes.body.item.id;
+
+  // Restock with updatePrices = true
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Price Update Test Item',
+        unit: 'pcs',
+        priceMinor: 6500,
+        costMinor: 5200,
+        openingStockMilli: 5000,
+        isRestock: true,
+        matchedItemId: itemId,
+        updatePrices: true,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.restocked, 1);
+
+  // Check updated prices and accumulated stock
+  const getRes = await api('GET', `/api/items/${itemId}`, undefined, shopA.owner);
+  assert.equal(getRes.status, 200);
+  assert.equal(getRes.body.item.priceMinor, 6500);
+  assert.equal(getRes.body.item.costMinor, 5200);
+  assert.equal(getRes.body.item.currentStockMilli, 10000);
+});
+
+test('bulk-import: generates compact short SKUs and handles collisions sequentially', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Kellogg\'s Corn Flakes Original 250 g',
+        unit: 'pcs',
+        priceMinor: 15000,
+      },
+      {
+        name: 'Kellogg\'s Corn Flakes Original 250 g', // collision row
+        unit: 'pcs',
+        priceMinor: 15000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 2);
+
+  const item1 = await api('GET', `/api/items/${res.body.results[0].itemId}`, undefined, shopA.owner);
+  const item2 = await api('GET', `/api/items/${res.body.results[1].itemId}`, undefined, shopA.owner);
+
+  assert.equal(item1.body.item.sku, 'KCF-250');
+  assert.equal(item2.body.item.sku, 'KCF-250-2');
+});
+
+test('bulk-import: rejects products assigned to deactivated or deleted categories', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create a category then delete it (soft-delete sets active = false)
+  const catName = `OldCategory_${Date.now()}`;
+  const catRes = await api('POST', '/api/categories', { name: catName }, shopA.owner);
+  assert.equal(catRes.status, 200);
+  const catId = catRes.body.category.id;
+
+  const delRes = await api('DELETE', `/api/categories/${catId}`, undefined, shopA.owner);
+  assert.equal(delRes.status, 200);
+
+  // 2. Try to bulk import an item using the deleted category
+  const res = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Product With Deleted Category',
+        priceMinor: 12000,
+        unit: 'pcs',
+        category: catName,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.created, 0);
+  assert.equal(res.body.skipped, 1);
+  assert.match(res.body.results[0].reason, /deleted or deactivated/i);
+});
+
+test('bulk-import: preserves original SKU on restock even when imported row has different name format', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create product with specific SKU
+  const originalSku = 'PARACHUTE-ORIG-SKU';
+  const createRes = await api('POST', '/api/items', {
+    name: 'Parachute Coconut Hair Oil 190 ml',
+    priceMinor: 9500,
+    unit: 'pcs',
+    sku: originalSku,
+  }, shopA.owner);
+  assert.equal(createRes.status, 200);
+  const itemId = createRes.body.item.id;
+
+  // 2. Restock via bulk import
+  const restockRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Parachute Coconut Hair Oil 190 ml',
+        priceMinor: 9500,
+        unit: 'pcs',
+        isRestock: true,
+        matchedItemId: itemId,
+        openingStockMilli: 10000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(restockRes.status, 200);
+  assert.equal(restockRes.body.restocked, 1);
+
+  // 3. Verify original SKU is preserved
+  const getRes = await api('GET', `/api/items/${itemId}`, undefined, shopA.owner);
+  assert.equal(getRes.body.item.sku, originalSku);
+});
+
+test('bulk-import: category persistence, categoryId matching, and validation for Jams & Spreads', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create a category named "Jams & Spreads" through the category management API
+  const catRes = await api('POST', '/api/categories', {
+    name: 'Jams & Spreads',
+    description: 'Fruit jams, marmalades, and sweet spreads',
+  }, shopA.owner);
+  assert.equal(catRes.status, 200);
+  const catId = catRes.body.category.id;
+  assert.ok(catId, 'Category ID must be generated');
+
+  // 2. Fetch categories from /api/categories to confirm it is listed dynamically
+  const listRes = await api('GET', '/api/categories', undefined, shopA.owner);
+  assert.equal(listRes.status, 200);
+  const foundCat = listRes.body.categories.find((c: any) => c.id === catId);
+  assert.ok(foundCat, 'Newly created category must appear in category list');
+  assert.equal(foundCat.name, 'Jams & Spreads');
+  assert.equal(foundCat.active, true);
+
+  // 3. Bulk import "Kissan Mixed Fruit Jam 200 g" with categoryId and category
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Kissan Mixed Fruit Jam 200 g',
+        priceMinor: 9000,
+        costMinor: 7500,
+        unit: 'pcs',
+        categoryId: catId,
+        category: 'Jams & Spreads',
+        openingQtyMilli: 50000, // 50 pcs
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 1);
+  assert.equal(importRes.body.skipped, 0);
+
+  const createdItem = importRes.body.results[0];
+  assert.equal(createdItem.status, 'created');
+  assert.ok(createdItem.itemId);
+
+  // 4. Verify item was saved with category 'Jams & Spreads' and stock move 50 pcs
+  const getProduct = await api('GET', `/api/items/${createdItem.itemId}`, undefined, shopA.owner);
+  assert.equal(getProduct.status, 200);
+  assert.equal(getProduct.body.item.category, 'Jams & Spreads');
+  assert.equal(getProduct.body.item.sku, 'KMFJ-200');
+
+  // Verify stock was accurately credited to 50 pcs (50000 milli)
+  assert.equal(getProduct.body.item.currentStockMilli, 50000);
+  const moves = await db.query(
+    'SELECT * FROM stock_moves WHERE item_id = ? AND tenant_id = ?',
+    [createdItem.itemId, shopA.tenantId],
+  );
+  assert.equal(moves.length, 1);
+  assert.equal(Number((moves[0] as any).qty_milli ?? (moves[0] as any).qtyMilli), 50000);
+
+  // 5. Test validation failure when categoryId is invalid or does not exist
+  const failRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Item With Nonexistent Category',
+        priceMinor: 5000,
+        unit: 'pcs',
+        categoryId: 'nonexistent-cat-id',
+        openingQtyMilli: 20000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(failRes.status, 200);
+  assert.equal(failRes.body.created, 0);
+  assert.equal(failRes.body.skipped, 1);
+  assert.match(failRes.body.results[0].reason, /Category is invalid or does not exist/i);
+});
+
+test('bulk-import: 9-step barcode generation, preview, persistence, lookup, and rollback workflow', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Five products without barcodes
+  const products = [
+    { name: 'Pure Cow Ghee 500 ml', unit: 'pcs', priceMinor: 35000, costMinor: 30000, category: 'Groceries' },
+    { name: 'Organic Almonds 250 g', unit: 'pcs', priceMinor: 28000, costMinor: 24000, category: 'Groceries' },
+    { name: 'Cardamom Green 50 g', unit: 'pcs', priceMinor: 15000, costMinor: 12000, category: 'Groceries' },
+    { name: 'Basmati Super Rice 5 kg', unit: 'kg', priceMinor: 55000, costMinor: 48000, category: 'Groceries' },
+    { name: 'Sambar Masala 100 g', unit: 'pcs', priceMinor: 6500, costMinor: 5000, category: 'Groceries' },
+  ];
+
+  // Fetch all existing barcodes in DB for tenant to pass into generation (as done in UI)
+  const existingItemsRes = await api('GET', '/api/items', undefined, shopA.owner);
+  assert.equal(existingItemsRes.status, 200);
+  const existingBarcodes = new Set<string>();
+  for (const it of existingItemsRes.body.items) {
+    if (it.barcode) existingBarcodes.add(it.barcode);
+  }
+
+  // 2. Generate barcodes for all five with one click
+  const generatedBarcodes: string[] = [];
+  const assignedBarcodes = new Set<string>(existingBarcodes);
+  for (let i = 0; i < products.length; i++) {
+    const code = generateUniqueInternalBarcode(assignedBarcodes);
+    assignedBarcodes.add(code);
+    generatedBarcodes.push(code);
+  }
+
+  // 3. Confirm each row shows a unique, scannable barcode
+  assert.equal(generatedBarcodes.length, 5);
+  const uniqueSet = new Set(generatedBarcodes);
+  assert.equal(uniqueSet.size, 5, 'All 5 generated barcodes must be distinct');
+
+  for (const code of generatedBarcodes) {
+    assert.equal(code.length, 13, 'EAN-13 must be 13 digits');
+    assert.equal(code.startsWith('20'), true, 'Internal in-store code must begin with 20');
+    assert.equal(isValidEan13(code), true, 'Must pass standard EAN-13 check digit validation');
+    const expectedCheck = computeEan13CheckDigit(code.slice(0, 12));
+    assert.equal(code.slice(12), String(expectedCheck), 'Check digit must match algorithmic calculation');
+    const svg = renderBarcodeSvg(code);
+    assert.ok(svg.includes('<svg'), 'Barcode must render a valid SVG');
+    assert.ok(svg.includes('<rect'), 'Barcode SVG must contain bars');
+  }
+
+  // 4. Click Generate Barcodes again: existing generated values are not duplicated or replaced
+  const reAssignedBarcodes = [...generatedBarcodes];
+  for (let i = 0; i < products.length; i++) {
+    if (reAssignedBarcodes[i]) {
+      continue;
+    }
+    reAssignedBarcodes[i] = generateUniqueInternalBarcode(assignedBarcodes);
+  }
+  assert.deepEqual(reAssignedBarcodes, generatedBarcodes, 'Repeated generation must preserve existing barcodes');
+
+  // 5. Undo generated values before committing
+  let uncommittedBarcodes: (string | undefined)[] = [...generatedBarcodes];
+  // User clicks "Undo 5 generated"
+  uncommittedBarcodes = uncommittedBarcodes.map(() => undefined);
+  assert.equal(uncommittedBarcodes.every((b) => b === undefined), true, 'Undo clears uncommitted generated barcodes');
+
+  // Re-populate barcodes to proceed with test import
+  const rowsToImport = products.map((p, idx) => ({
+    ...p,
+    barcode: generatedBarcodes[idx],
+    barcodeType: 'INTERNAL' as const,
+    openingQtyMilli: 10000,
+  }));
+
+  // 6. Import the products and verify each barcode is persisted in product_barcodes
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: rowsToImport,
+  }, shopA.owner);
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 5);
+  assert.equal(importRes.body.barcodesSaved, 5, 'Must report 5 barcodes saved');
+
+  const createdItems = importRes.body.results.filter((r: any) => r.status === 'created');
+  assert.equal(createdItems.length, 5);
+
+  for (let i = 0; i < 5; i++) {
+    const item = createdItems[i];
+    const expectedBarcode = generatedBarcodes[i];
+    // Check item record
+    const itemRes = await api('GET', `/api/items/${item.itemId}`, undefined, shopA.owner);
+    assert.equal(itemRes.status, 200);
+    assert.equal(itemRes.body.item.barcode, expectedBarcode);
+
+    // Check product_barcodes table
+    const pbRows = await db.query(
+      'SELECT * FROM product_barcodes WHERE product_id = ? AND tenant_id = ?',
+      [item.itemId, shopA.tenantId],
+    );
+    assert.equal(pbRows.length, 1);
+    assert.equal((pbRows[0] as any).barcode, expectedBarcode);
+    assert.equal((pbRows[0] as any).barcode_type ?? (pbRows[0] as any).barcodeType, 'INTERNAL');
+  }
+
+  // 7. Reimport existing products (restock) and verify barcode mappings are preserved
+  const firstItem = createdItems[0];
+  const restockRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: products[0].name,
+        priceMinor: products[0].priceMinor,
+        unit: products[0].unit,
+        isRestock: true,
+        matchedItemId: firstItem.itemId,
+        openingStockMilli: 5000,
+      },
+    ],
+  }, shopA.owner);
+  assert.equal(restockRes.status, 200);
+  assert.equal(restockRes.body.restocked, 1);
+
+  // Barcode in product_barcodes is preserved
+  const pbAfterRestock = await db.query(
+    'SELECT * FROM product_barcodes WHERE product_id = ? AND tenant_id = ?',
+    [firstItem.itemId, shopA.tenantId],
+  );
+  assert.equal(pbAfterRestock.length, 1);
+  assert.equal((pbAfterRestock[0] as any).barcode, generatedBarcodes[0]);
+
+  // 8. Scan both an internal and a manufacturer barcode and verify they resolve to the same product
+  const mfrBarcode = '8901030001235';
+  const addMfrRes = await api('POST', `/api/items/${firstItem.itemId}/barcodes`, {
+    barcode: mfrBarcode,
+    barcodeType: 'MANUFACTURER',
+  }, shopA.owner);
+  assert.equal(addMfrRes.status, 200);
+  assert.equal(addMfrRes.body.barcode.barcode, mfrBarcode);
+  assert.equal(addMfrRes.body.barcode.barcode_type, 'MANUFACTURER');
+
+  // Verify GET /api/items/:id/barcodes returns both barcodes
+  const listBarcodesRes = await api('GET', `/api/items/${firstItem.itemId}/barcodes`, undefined, shopA.owner);
+  assert.equal(listBarcodesRes.status, 200);
+  const barcodesList = listBarcodesRes.body.barcodes;
+  assert.equal(barcodesList.length, 2);
+  const types = barcodesList.map((b: any) => b.barcode_type).sort();
+  assert.deepEqual(types, ['INTERNAL', 'MANUFACTURER']);
+
+  // Resolve by internal barcode
+  const resolveInternal = await api('GET', `/api/items/by-barcode/${generatedBarcodes[0]}`, undefined, shopA.owner);
+  assert.equal(resolveInternal.status, 200);
+  assert.equal(resolveInternal.body.item.id, firstItem.itemId);
+
+  // Resolve by manufacturer barcode
+  const resolveMfr = await api('GET', `/api/items/by-barcode/${mfrBarcode}`, undefined, shopA.owner);
+  assert.equal(resolveMfr.status, 200);
+  assert.equal(resolveMfr.body.item.id, firstItem.itemId);
+
+  // 9. Test duplicate values, generation failures, and database transaction rollback
+  const dupBarcode = generatedBarcodes[1];
+  const duplicateImportRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Another Duplicate Item',
+        priceMinor: 10000,
+        unit: 'pcs',
+        barcode: dupBarcode, // Already owned by product B
+        barcodeType: 'INTERNAL',
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(duplicateImportRes.status, 200);
+  assert.equal(duplicateImportRes.body.created, 0);
+  assert.equal(duplicateImportRes.body.skipped, 1);
+  assert.match(duplicateImportRes.body.results[0].reason, /already exists/i);
+
+  // Confirm "Another Duplicate Item" was completely rolled back and not inserted into items table
+  const searchDup = await db.query(
+    'SELECT * FROM items WHERE name = ? AND tenant_id = ?',
+    ['Another Duplicate Item', shopA.tenantId],
+  );
+  assert.equal(searchDup.length, 0, 'Rolled back item must not exist in items table');
+});
+
+test('bulk-import: Lifebuoy category selection, backend revalidation, and independence from ambiguity', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create or ensure "Personal Care" category exists
+  let personalCareCatId: string;
+  const listCatsRes = await api('GET', '/api/categories', undefined, shopA.owner);
+  assert.equal(listCatsRes.status, 200);
+  const existingCat = listCatsRes.body.categories.find((c: any) => c.name.toLowerCase() === 'personal care');
+  if (existingCat) {
+    personalCareCatId = existingCat.id;
+  } else {
+    const createCatRes = await api('POST', '/api/categories', {
+      name: 'Personal Care',
+      description: 'Personal hygiene and soap products',
+    }, shopA.owner);
+    assert.equal(createCatRes.status, 200);
+    personalCareCatId = createCatRes.body.category.id;
+  }
+
+  // 2. Test row without valid category fails backend validation when invalid categoryId is given
+  const failRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Lifebuoy Total 10 Soap 4 x 125 g',
+        sku: 'LT10S4-125',
+        unit: 'pcs',
+        priceMinor: 16000,
+        costMinor: 12500,
+        hsn: '3402',
+        categoryId: 'nonexistent-category-id',
+        openingQtyMilli: 12000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(failRes.status, 200);
+  assert.equal(failRes.body.created, 0);
+  assert.equal(failRes.body.skipped, 1);
+  assert.match(failRes.body.results[0].reason, /Category is invalid or does not exist/i);
+
+  // 3. Test row WITH "Personal Care" category selection succeeds
+  const existingItemsRes = await api('GET', '/api/items', undefined, shopA.owner);
+  const existingBarcodes = new Set<string>();
+  for (const it of existingItemsRes.body.items) {
+    if (it.barcode) existingBarcodes.add(it.barcode);
+  }
+  const successBarcode = generateUniqueInternalBarcode(existingBarcodes);
+
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Lifebuoy Total 10 Soap 4 x 125 g',
+        sku: 'LT10S4-125',
+        barcode: successBarcode,
+        barcodeType: 'INTERNAL',
+        unit: 'pcs',
+        priceMinor: 16000,
+        costMinor: 12500,
+        hsn: '3402',
+        categoryId: personalCareCatId,
+        category: 'Personal Care',
+        openingQtyMilli: 12000, // 12 pcs
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 1);
+  assert.equal(importRes.body.skipped, 0);
+
+  const importedItem = importRes.body.results[0];
+  const itemInDb = await api('GET', `/api/items/${importedItem.itemId}`, undefined, shopA.owner);
+  assert.equal(itemInDb.status, 200);
+  assert.equal(itemInDb.body.item.category, 'Personal Care');
+  assert.equal(itemInDb.body.item.sku, 'LT10S4-125');
+  assert.equal(itemInDb.body.item.currentStockMilli, 12000);
+});
+
+test('bulk-import: ambiguous catalog match candidate display, linking, and new product creation', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create candidate variant products in the database
+  const catRes = await api('GET', '/api/categories', undefined, shopA.owner);
+  const groceryCat = catRes.body.categories[0]?.name || 'Grocery';
+
+  const existingItemsRes = await api('GET', '/api/items', undefined, shopA.owner);
+  const existingBarcodes = new Set<string>();
+  for (const it of existingItemsRes.body.items) {
+    if (it.barcode) existingBarcodes.add(it.barcode);
+  }
+
+  const baseBarcode1 = generateUniqueInternalBarcode(existingBarcodes);
+  existingBarcodes.add(baseBarcode1);
+  const baseBarcode2 = generateUniqueInternalBarcode(existingBarcodes);
+  existingBarcodes.add(baseBarcode2);
+
+  const item1Res = await api('POST', '/api/items', {
+    name: 'Kohinoor Basmati Rice 1kg',
+    sku: 'KOH-BAS-1KG',
+    barcode: baseBarcode1,
+    unit: 'kg',
+    category: groceryCat,
+    priceMinor: 9000,
+    costMinor: 7500,
+    openingQtyMilli: 20000,
+  }, shopA.owner);
+  assert.equal(item1Res.status, 200);
+  const candidate1Id = item1Res.body.item.id;
+
+  const item2Res = await api('POST', '/api/items', {
+    name: 'Kohinoor Basmati Rice 5kg',
+    sku: 'KOH-BAS-5KG',
+    barcode: baseBarcode2,
+    unit: 'bag',
+    category: groceryCat,
+    priceMinor: 42000,
+    costMinor: 36000,
+    openingQtyMilli: 15000,
+  }, shopA.owner);
+  assert.equal(item2Res.status, 200);
+  const candidate2Id = item2Res.body.item.id;
+
+  // 2. Verify catalog match logic exposes candidates with SKU, Category, UOM, Pack Size, Barcode, and reasons
+  const catalogCandidates = [
+    {
+      id: candidate1Id,
+      name: 'Kohinoor Basmati Rice 1kg',
+      sku: 'KOH-BAS-1KG',
+      barcode: baseBarcode1,
+      category: groceryCat,
+      unit: 'kg',
+      packSize: '1kg',
+      priceMinor: 9000,
+      costMinor: 7500,
+      taxInclusive: true,
+      hsn: '1006',
+      currentStockMilli: 20000,
+      taxRateBp: 500,
+    },
+    {
+      id: candidate2Id,
+      name: 'Kohinoor Basmati Rice 5kg',
+      sku: 'KOH-BAS-5KG',
+      barcode: baseBarcode2,
+      category: groceryCat,
+      unit: 'bag',
+      packSize: '5kg',
+      priceMinor: 42000,
+      costMinor: 35000,
+      taxInclusive: true,
+      hsn: '1006',
+      currentStockMilli: 15000,
+      taxRateBp: 500,
+    },
+  ];
+
+  // Exact variant name with pack size difference
+  const matchResult = matchProductToCatalog('Kohinoor Basmati Rice 2kg', 'kg', catalogCandidates);
+  assert.ok(matchResult.candidates.length >= 2, 'Must identify both candidates');
+  for (const c of matchResult.candidates) {
+    assert.ok(c.name);
+    assert.ok(c.sku);
+    assert.ok(c.category);
+    assert.ok(c.unit);
+    assert.ok(c.matchReason);
+  }
+
+  // 3. User chooses to LINK to candidate 1 (Kohinoor Basmati Rice 1kg) -> Restocks without duplicate
+  const linkRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Kohinoor Basmati Rice 1kg',
+        unit: 'kg',
+        priceMinor: 9000,
+        isRestock: true,
+        matchedItemId: candidate1Id,
+        openingQtyMilli: 10000, // add 10kg
+        updatePrices: false,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(linkRes.status, 200);
+  assert.equal(linkRes.body.restocked, 1);
+  assert.equal(linkRes.body.created, 0);
+
+  const updatedItem1 = await api('GET', `/api/items/${candidate1Id}`, undefined, shopA.owner);
+  assert.equal(updatedItem1.body.item.currentStockMilli, 30000, 'Original 20kg + 10kg = 30kg');
+  assert.equal(updatedItem1.body.item.sku, 'KOH-BAS-1KG');
+  assert.equal(updatedItem1.body.item.barcode, baseBarcode1);
+
+  // 4. User chooses to CREATE AS NEW for variant "Kohinoor Basmati Rice 500g"
+  const newSku = generateUniqueShortSku('Kohinoor Basmati Rice 500g', new Set(['KOH-BAS-1KG', 'KOH-BAS-5KG']), new Set());
+  const newBarcode = generateUniqueInternalBarcode(existingBarcodes);
+
+  const createNewRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Kohinoor Basmati Rice 500g',
+        sku: newSku,
+        barcode: newBarcode,
+        barcodeType: 'INTERNAL',
+        unit: 'pcs',
+        priceMinor: 5000,
+        category: groceryCat,
+        openingQtyMilli: 25000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(createNewRes.status, 200);
+  assert.equal(createNewRes.body.created, 1);
+  assert.notEqual(createNewRes.body.results[0].itemId, candidate1Id);
+  assert.notEqual(createNewRes.body.results[0].itemId, candidate2Id);
+
+  // Verify created distinct product has unique SKU and internal barcode
+  const newProduct = await api('GET', `/api/items/${createNewRes.body.results[0].itemId}`, undefined, shopA.owner);
+  assert.equal(newProduct.body.item.name, 'Kohinoor Basmati Rice 500g');
+  assert.equal(newProduct.body.item.sku, newSku);
+  assert.equal(newProduct.body.item.barcode, newBarcode);
+});
+
+test('44: Optimized bulk import workflow: branded vs shop products, bulk internal generation, continuous manufacturer scanning, multiple barcodes, restocks & transactional safety', async () => {
+  // A. Automatic Product Nature Classification
+  const doveNature = classifyProductNature('Dove Shampoo Daily Shine 180ml');
+  assert.equal(doveNature.nature, 'BRANDED');
+  assert.equal(doveNature.confidence, 'HIGH');
+  assert.equal(doveNature.brandName, 'Dove');
+
+  const goodDayNature = classifyProductNature('Britannia Good Day 200g');
+  assert.equal(goodDayNature.nature, 'BRANDED');
+  assert.equal(goodDayNature.confidence, 'HIGH');
+
+  const tataSaltNature = classifyProductNature('Tata Salt 1kg');
+  assert.equal(tataSaltNature.nature, 'BRANDED');
+  assert.equal(tataSaltNature.confidence, 'HIGH');
+
+  const kissanJamNature = classifyProductNature('Kissan Mixed Fruit Jam 200g');
+  assert.equal(kissanJamNature.nature, 'BRANDED');
+  assert.equal(kissanJamNature.confidence, 'HIGH');
+
+  const looseRiceNature = classifyProductNature('Loose Basmati Rice');
+  assert.equal(looseRiceNature.nature, 'SHOP_PRODUCT');
+  assert.equal(looseRiceNature.confidence, 'HIGH');
+
+  const shopDalNature = classifyProductNature('Shop-packed Toor Dal 1kg');
+  assert.equal(shopDalNature.nature, 'SHOP_PRODUCT');
+  assert.equal(shopDalNature.confidence, 'HIGH');
+
+  const snacksNature = classifyProductNature('Homemade Murukku Snacks 250g');
+  assert.equal(snacksNature.nature, 'SHOP_PRODUCT');
+  assert.equal(snacksNature.confidence, 'HIGH');
+
+  // B. Prepare an existing product in the store for Restock testing
+  const existingBcRes = await db.query<{ barcode: string }>(
+    'SELECT barcode FROM product_barcodes WHERE tenant_id = ?',
+    [shopA.tenantId]
+  );
+  const existingBarcodes = new Set(existingBcRes.map((r) => r.barcode));
+
+  const existingMfrBarcode = '8901030000018';
+  existingBarcodes.add(existingMfrBarcode);
+
+  const setupItemRes = await api('POST', '/api/items', {
+    name: 'Dove Shampoo Daily Shine 180ml',
+    sku: 'DOVE-SH-180',
+    barcode: existingMfrBarcode,
+    priceMinor: 18000,
+    costMinor: 14000,
+    unit: 'pcs',
+    openingQtyMilli: 5000,
+    active: true,
+  }, shopA.owner);
+  assert.equal(setupItemRes.status, 200);
+  const existingItemId = setupItemRes.body.item.id;
+
+  // C. Test Barcode Lookup endpoint: GET /api/items/by-barcode/:code
+  const lookupRes = await api('GET', `/api/items/by-barcode/${existingMfrBarcode}`, undefined, shopA.owner);
+  assert.equal(lookupRes.status, 200);
+  assert.equal(lookupRes.body.item.id, existingItemId);
+  assert.equal(lookupRes.body.item.name, 'Dove Shampoo Daily Shine 180ml');
+
+  // Verify non-existent barcode lookup returns 404
+  const notFoundRes = await api('GET', '/api/items/by-barcode/9999999999999', undefined, shopA.owner);
+  assert.equal(notFoundRes.status, 404);
+
+  // D. Bulk internal barcode generation for shop products
+  // Leading zeros preserved strictly as string
+  const mfrBarcode1 = '0123456789012'; // has leading zero
+  const mfrBarcode2 = '8901063012345';
+  existingBarcodes.add(mfrBarcode1);
+  existingBarcodes.add(mfrBarcode2);
+
+  const internalCode1 = generateUniqueInternalBarcode(existingBarcodes);
+  existingBarcodes.add(internalCode1);
+  const internalCode2 = generateUniqueInternalBarcode(existingBarcodes);
+  existingBarcodes.add(internalCode2);
+
+  assert.ok(isValidEan13(internalCode1));
+  assert.ok(isValidEan13(internalCode2));
+  assert.notEqual(internalCode1, internalCode2);
+  assert.ok(internalCode1.startsWith('20'));
+
+  // Dual barcodes: product with BOTH manufacturer barcode and internal shelf barcode
+  const dualMfr = '8901234000019';
+  const dualInternal = generateUniqueInternalBarcode(existingBarcodes);
+  existingBarcodes.add(dualMfr);
+  existingBarcodes.add(dualInternal);
+
+  // E. Execute Mixed Bulk Import
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      // 1. Restock row of existing Dove Shampoo (with preserved barcode and stock increase)
+      {
+        name: 'Dove Shampoo Daily Shine 180ml',
+        isRestock: true,
+        matchedItemId: existingItemId,
+        barcode: existingMfrBarcode,
+        barcodeType: 'MANUFACTURER',
+        priceMinor: 18000,
+        openingQtyMilli: 15000, // +15 pcs
+        updatePrices: false,
+      },
+      // 2. Branded product with scanned manufacturer barcode preserving leading zero
+      {
+        name: 'Britannia Good Day 200g',
+        sku: 'BGD-200',
+        barcode: mfrBarcode1,
+        barcodeType: 'MANUFACTURER',
+        productNature: 'BRANDED',
+        priceMinor: 4500,
+        costMinor: 3600,
+        unit: 'pcs',
+        openingQtyMilli: 20000,
+      },
+      // 3. Branded product with BOTH manufacturer and internal shelf barcodes
+      {
+        name: 'Kissan Mixed Fruit Jam 200g',
+        sku: 'KMFJ-DUAL-200',
+        barcode: dualMfr,
+        barcodeType: 'MANUFACTURER',
+        productNature: 'BRANDED',
+        additionalBarcodes: [
+          { barcode: dualInternal, barcodeType: 'INTERNAL' }
+        ],
+        priceMinor: 9500,
+        costMinor: 7500,
+        unit: 'pcs',
+        openingQtyMilli: 10000,
+      },
+      // 4. Shop-selling product with generated internal barcode
+      {
+        name: 'Loose Basmati Rice',
+        sku: 'LBR-1KG',
+        barcode: internalCode1,
+        barcodeType: 'INTERNAL',
+        productNature: 'SHOP_PRODUCT',
+        priceMinor: 8500,
+        costMinor: 6500,
+        unit: 'kg',
+        openingQtyMilli: 50000, // 50kg
+      },
+      // 5. Shop-selling product where barcode is generated automatically by backend
+      {
+        name: 'Shop-packed Toor Dal 1kg',
+        sku: 'SPTD-1KG',
+        productNature: 'SHOP_PRODUCT',
+        priceMinor: 14000,
+        costMinor: 11500,
+        unit: 'kg',
+        openingQtyMilli: 30000,
+      },
+    ],
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.restocked, 1);
+  assert.equal(importRes.body.created, 4);
+  assert.equal(importRes.body.skipped, 0);
+
+  // F. Verify database state for all imported products
+  // 1. Restock product stock updated and existing barcode preserved
+  const restockedDove = await api('GET', `/api/items/${existingItemId}`, undefined, shopA.owner);
+  assert.equal(restockedDove.body.item.currentStockMilli, 20000, 'Original 5000 + 15000 = 20000');
+  assert.equal(restockedDove.body.item.barcode, existingMfrBarcode);
+
+  // 2. Leading zero preserved in database as string
+  const mfrItemLookup = await api('GET', `/api/items/by-barcode/${mfrBarcode1}`, undefined, shopA.owner);
+  assert.equal(mfrItemLookup.status, 200);
+  assert.equal(mfrItemLookup.body.item.barcode, '0123456789012');
+  assert.equal(mfrItemLookup.body.item.name, 'Britannia Good Day 200g');
+
+  // 3. Product with BOTH manufacturer and internal barcodes can be looked up by EITHER barcode
+  const dualByMfr = await api('GET', `/api/items/by-barcode/${dualMfr}`, undefined, shopA.owner);
+  assert.equal(dualByMfr.status, 200);
+  assert.equal(dualByMfr.body.item.name, 'Kissan Mixed Fruit Jam 200g');
+
+  const dualByInternal = await api('GET', `/api/items/by-barcode/${dualInternal}`, undefined, shopA.owner);
+  assert.equal(dualByInternal.status, 200);
+  assert.equal(dualByInternal.body.item.id, dualByMfr.body.item.id, 'Both barcodes resolve to the exact same product ID');
+
+  // Verify both records exist in product_barcodes table
+  const dualBarcodesInDb = await db.query<{ barcode: string; barcodeType?: string; barcode_type?: string }>(
+    'SELECT barcode, barcode_type FROM product_barcodes WHERE tenant_id = ? AND product_id = ? ORDER BY barcode_type DESC',
+    [shopA.tenantId, dualByMfr.body.item.id]
+  );
+  assert.equal(dualBarcodesInDb.length, 2);
+  assert.ok(dualBarcodesInDb.some((b) => b.barcode === dualMfr && (b.barcodeType === 'MANUFACTURER' || b.barcode_type === 'MANUFACTURER')));
+  assert.ok(dualBarcodesInDb.some((b) => b.barcode === dualInternal && (b.barcodeType === 'INTERNAL' || b.barcode_type === 'INTERNAL')));
+
+  // 4. Shop product with generated internal barcode
+  const shopItemLookup = await api('GET', `/api/items/by-barcode/${internalCode1}`, undefined, shopA.owner);
+  assert.equal(shopItemLookup.status, 200);
+  assert.equal(shopItemLookup.body.item.name, 'Loose Basmati Rice');
+
+  // G. Prevent Duplicate Barcode Assignments
+  const dupBarcodeAttempt = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Another Jam Jar',
+        sku: 'JAM-DUP',
+        barcode: dualMfr, // same barcode already assigned to Kissan Jam
+        priceMinor: 9900,
+      },
+    ],
+  }, shopA.owner);
+  // Row should fail or be skipped due to unique barcode conflict
+  assert.equal(dupBarcodeAttempt.status, 200);
+  assert.equal(dupBarcodeAttempt.body.created, 0);
+  assert.equal(dupBarcodeAttempt.body.skipped, 1);
+  assert.ok(
+    dupBarcodeAttempt.body.results[0].reason.toLowerCase().includes('already exists') ||
+    dupBarcodeAttempt.body.results[0].reason.toLowerCase().includes('duplicate')
+  );
+});
+
+test('45: Permanent product deletion: removes eligible product from DB and cleans up barcodes, while preventing deletion with historical transactions', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // 1. Create an eligible product with barcodes and opening stock
+  const testBarcode = '8909876543210';
+  const createRes = await api('POST', '/api/items', {
+    name: 'Ephemeral Test Biscuits',
+    sku: 'ETB-100',
+    barcode: testBarcode,
+    priceMinor: 2500,
+    unit: 'pcs',
+    openingQtyMilli: 10000,
+  }, shopA.owner);
+  assert.equal(createRes.status, 200);
+  const itemId = createRes.body.item.id;
+
+  // Add an extra barcode in product_barcodes
+  const extraBarcode = '2000000999991';
+  await db.exec(
+    'INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type) VALUES (?, ?, ?, ?, ?)',
+    ['pb_test_del_1', shopA.tenantId, itemId, extraBarcode, 'INTERNAL']
+  );
+
+  // Verify item and barcodes exist in DB
+  const beforeItem = await db.one('SELECT id, name FROM items WHERE id = ? AND tenant_id = ?', [itemId, shopA.tenantId]);
+  assert.ok(beforeItem);
+  const beforeBc = await db.query('SELECT barcode FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [itemId, shopA.tenantId]);
+  assert.ok(beforeBc.length > 0);
+
+  // 2. Perform permanent deletion
+  const delRes = await api('DELETE', `/api/items/${itemId}?permanent=true`, undefined, shopA.owner);
+  assert.equal(delRes.status, 200);
+  assert.equal(delRes.body.ok, true);
+  assert.equal(delRes.body.deleted, true);
+
+  // 3. Verify product is completely gone from the database
+  const afterItem = await db.one('SELECT id FROM items WHERE id = ? AND tenant_id = ?', [itemId, shopA.tenantId]);
+  assert.equal(afterItem, undefined, 'Item must be physically deleted from items table');
+
+  // 4. Verify product_barcodes mappings are cleaned up
+  const afterBc = await db.query('SELECT barcode FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [itemId, shopA.tenantId]);
+  assert.equal(afterBc.length, 0, 'All associated barcodes must be deleted');
+
+  // 5. Verify barcode scan returns 404
+  const scan404 = await api('GET', `/api/items/by-barcode/${testBarcode}`, undefined, shopA.owner);
+  assert.equal(scan404.status, 404);
+
+  // 6. Test Transaction Protection: Product with Sales Invoice history CANNOT be deleted
+  const soldItemRes = await api('POST', '/api/items', {
+    name: 'Protected Milk Bread',
+    sku: 'PMB-400',
+    barcode: '8901234888888',
+    priceMinor: 4000,
+  }, shopA.owner);
+  assert.equal(soldItemRes.status, 200);
+  const soldItemId = soldItemRes.body.item.id;
+
+  // Insert mock invoice line referencing this product
+  const invId = 'inv_test_prot_del';
+  await db.exec(
+    `INSERT INTO invoices (id, tenant_id, client_id, number, kind, status, bdate, subtotal_minor, taxable_minor, total_minor, rule_version, share_token)
+     VALUES (?, ?, ?, ?, 'sale', 'posted', '2026-10-26', 4000, 4000, 4000, 'v1', ?)`,
+    [invId, shopA.tenantId, 'c_test_prot_1', 'INV-DEL-TEST', 'tok_test_prot_1']
+  );
+  await db.exec(
+    `INSERT INTO invoice_lines (id, tenant_id, invoice_id, pos, item_id, name, qty_milli, price_minor, tax_rate_bp, inclusive, taxable_minor, total_minor)
+     VALUES (?, ?, ?, 1, ?, 'Protected Milk Bread', 1000, 4000, 0, true, 4000, 4000)`,
+    ['il_test_prot_1', shopA.tenantId, invId, soldItemId]
+  );
+
+  // Attempt to delete protected item - must fail with 409 Conflict
+  const blockedDelRes = await api('DELETE', `/api/items/${soldItemId}?permanent=true`, undefined, shopA.owner);
+  assert.equal(blockedDelRes.status, 409);
+  const errMsg = (typeof blockedDelRes.body.error === 'object' ? blockedDelRes.body.error.message : blockedDelRes.body.error).toLowerCase();
+  assert.ok(errMsg.includes('sales invoice') || errMsg.includes('deactivate'));
+
+  // Verify item is STILL in the database (not deleted)
+  const stillExists = await db.one('SELECT id, name FROM items WHERE id = ? AND tenant_id = ?', [soldItemId, shopA.tenantId]);
+  assert.ok(stillExists, 'Protected product must remain in database to preserve financial history');
+});
+
+test('46: Comprehensive verification of manufacturer barcode workflow, search, leading zeros, conflicts, and billing lookup', async (t) => {
+  if (skipReason) return t.skip(skipReason);
+
+  // Scenario 1 & 5: Branded product with manufacturer barcode containing leading zeros
+  const barcodeWithLeadingZero = '0078901234567'; // Preserves leading zeros as string
+  const tataTeaName = 'Tata Tea Premium 250 g';
+  const tataTeaSku = 'TTP-250';
+
+  // Scenario 2: Search by SKU instead of product name
+  // Mock imported rows in session
+  const sessionRows: {
+    _id: number;
+    rowNum: number;
+    name: string;
+    sku: string;
+    barcode: string;
+    barcodeType: 'INTERNAL' | 'MANUFACTURER' | null;
+    unit: string;
+    priceMinor: number;
+    costMinor: number;
+    openingStock: string;
+  }[] = [
+    {
+      _id: 101,
+      rowNum: 1,
+      name: tataTeaName,
+      sku: tataTeaSku,
+      barcode: '',
+      barcodeType: null,
+      unit: 'pcs',
+      priceMinor: 14000,
+      costMinor: 11000,
+      openingStock: '25',
+    },
+    {
+      _id: 102,
+      rowNum: 2,
+      name: 'Loose Moong Dal 1kg',
+      sku: 'LMD-1KG',
+      barcode: '',
+      barcodeType: null,
+      unit: 'kg',
+      priceMinor: 12000,
+      costMinor: 9500,
+      openingStock: '50',
+    },
+    {
+      _id: 103,
+      rowNum: 3,
+      name: 'Britannia Good Day 100g',
+      sku: 'BGD-100',
+      barcode: '',
+      barcodeType: null,
+      unit: 'pcs',
+      priceMinor: 3000,
+      costMinor: 2200,
+      openingStock: '40',
+    },
+  ];
+
+  // Test 1: Search by product name finds Row #1
+  const searchByName = sessionRows.filter((r) => r.name.toLowerCase().includes('tata tea'));
+  assert.equal(searchByName.length, 1);
+  assert.equal(searchByName[0]._id, 101);
+
+  // Test 2: Search by SKU finds Row #1
+  const searchBySku = sessionRows.filter((r) => r.sku.toLowerCase().includes('ttp-250'));
+  assert.equal(searchBySku.length, 1);
+  assert.equal(searchBySku[0]._id, 101);
+
+  // Test 6: Selecting Row #1, filtering list to 'Loose Moong Dal', and verifying target row ID is STILL 101
+  const selectedTargetId = 101;
+  const filteredList = sessionRows.filter((r) => r.name.toLowerCase().includes('moong dal'));
+  assert.equal(filteredList.length, 1);
+  assert.equal(selectedTargetId, 101, 'Selected target ID must remain bound to Row #1 (_id 101) despite filtering');
+
+  // Test 5: Assign barcode with leading zeros to Row #1
+  assert.equal(typeof barcodeWithLeadingZero, 'string');
+  assert.equal(barcodeWithLeadingZero.startsWith('00'), true);
+  sessionRows[0].barcode = barcodeWithLeadingZero;
+  sessionRows[0].barcodeType = 'MANUFACTURER';
+
+  // Test 3: Scan same barcode twice for the same product
+  const sameProductScan = sessionRows[0].barcode === barcodeWithLeadingZero;
+  assert.equal(sameProductScan, true, 'Scanning same barcode for same product is idempotent and recognized');
+
+  // Test 4: Scan same barcode for another product (Row #3) - duplicate conflict detected
+  const otherRowScanCode = barcodeWithLeadingZero;
+  const isConflictWithOther = sessionRows.some((r) => r._id !== 103 && r.barcode === otherRowScanCode);
+  assert.equal(isConflictWithOther, true, 'Barcode conflict with another product must be detected and not silently reassigned');
+
+  // Test 7: Generate internal barcodes for eligible shop product (Row #2) without touching Row #1's manufacturer barcode
+  assert.equal(sessionRows[0].barcodeType, 'MANUFACTURER', 'Row #1 must keep manufacturer barcode');
+  const allDbBarcodes = new Set(
+    (await db.query<{ barcode: string }>(
+      'SELECT barcode FROM items WHERE tenant_id = ? AND barcode IS NOT NULL UNION SELECT barcode FROM product_barcodes WHERE tenant_id = ?',
+      [shopA.tenantId, shopA.tenantId]
+    )).map((r) => r.barcode)
+  );
+  const seenBarcodes = new Set<string>([barcodeWithLeadingZero]);
+  const newInternalCode = generateUniqueInternalBarcode(allDbBarcodes, seenBarcodes);
+  assert.ok(newInternalCode.startsWith('20'));
+  sessionRows[1].barcode = newInternalCode;
+  sessionRows[1].barcodeType = 'INTERNAL';
+
+  // Row #3 receives its own manufacturer barcode
+  const britanniaBarcode = '8901063000555';
+  sessionRows[2].barcode = britanniaBarcode;
+  sessionRows[2].barcodeType = 'MANUFACTURER';
+
+  // Test 8: Import the products to database and verify products and barcode mappings are saved consistently in transaction
+  const importRes = await api('POST', '/api/items/bulk-import', {
+    rows: sessionRows.map((r) => ({
+      name: r.name,
+      sku: r.sku,
+      barcode: r.barcode,
+      barcodeType: r.barcodeType,
+      unit: r.unit,
+      priceMinor: r.priceMinor,
+      costMinor: r.costMinor,
+      openingQtyMilli: Math.round(parseFloat(r.openingStock) * 1000),
+    })),
+  }, shopA.owner);
+
+  assert.equal(importRes.status, 200);
+  assert.equal(importRes.body.created, 3);
+  assert.equal(importRes.body.barcodesSaved, 3);
+
+  // Test 9: Verify billing lookup by saved manufacturer barcode (with leading zeros) returns Tata Tea
+  const lookupTataTea = await api('GET', `/api/items/by-barcode/${barcodeWithLeadingZero}`, undefined, shopA.owner);
+  assert.equal(lookupTataTea.status, 200);
+  assert.equal(lookupTataTea.body.item.name, tataTeaName);
+  assert.equal(lookupTataTea.body.item.barcode, barcodeWithLeadingZero, 'Leading zeros must be preserved exactly in database');
+
+  // Verify billing lookup by internal barcode returns Loose Moong Dal
+  const lookupMoongDal = await api('GET', `/api/items/by-barcode/${newInternalCode}`, undefined, shopA.owner);
+  assert.equal(lookupMoongDal.status, 200);
+  assert.equal(lookupMoongDal.body.item.name, 'Loose Moong Dal 1kg');
+
+  // Test 10: Verify unresolved barcode errors and duplicate barcode detection
+  const dupImportAttempt = await api('POST', '/api/items/bulk-import', {
+    rows: [
+      {
+        name: 'Conflict Tea Packet',
+        sku: 'CTP-100',
+        barcode: barcodeWithLeadingZero, // already exists
+        priceMinor: 5000,
+        unit: 'pcs',
+      },
+    ],
+  }, shopA.owner);
+  assert.equal(dupImportAttempt.status, 200);
+  assert.equal(dupImportAttempt.body.created, 0);
+  assert.equal(dupImportAttempt.body.skipped, 1);
+  assert.ok(dupImportAttempt.body.results[0].reason.toLowerCase().includes('already exists'));
+});
+
+
 

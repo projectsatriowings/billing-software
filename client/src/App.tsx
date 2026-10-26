@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   api,
   setToken,
@@ -32,6 +32,7 @@ import {
   type SupplierLedger,
   type SupplierLedgerEntry,
   type SupplierPaymentRecord,
+  deleteProduct,
 } from './api';
 import { moneyInWords } from '../../shared/money.ts';
 import {
@@ -56,11 +57,194 @@ import { LoginPage } from './components/LoginPage';
 import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
+import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
+import { BulkImportModal } from './components/BulkImportModal';
+import { PrintBarcodeModal } from './components/PrintBarcodeModal';
+import { ToggleSwitch } from './components/ToggleSwitch';
+import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
   return '₹' + (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const escapeHtml = (str: string = ''): string => {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+const printBarcodeLabels = (
+  items: Array<{ name: string; sku?: string | null; barcode: string; priceMinor?: number }>,
+  shopName?: string,
+) => {
+  if (!items || items.length === 0) return;
+
+  const validItems = items.filter((it) => it.barcode && String(it.barcode).trim());
+  if (validItems.length === 0) return;
+
+  const labelsHtml = validItems
+    .map((item) => {
+      const code = String(item.barcode).trim();
+      const svgMarkup = renderBarcodeSvg(code);
+      const priceText = item.priceMinor ? formatRupees(item.priceMinor) : '';
+      return `
+        <div class="label-card">
+          ${shopName ? `<div class="store-name">${escapeHtml(shopName)}</div>` : ''}
+          <div class="product-name">${escapeHtml(item.name)}</div>
+          ${item.sku ? `<div class="sku-line">SKU: ${escapeHtml(item.sku)}</div>` : ''}
+          <div class="barcode-wrap">${svgMarkup}</div>
+          <div class="barcode-digits">${escapeHtml(code)}</div>
+          ${priceText ? `<div class="price-line">MRP: ${priceText}</div>` : ''}
+        </div>
+      `;
+    })
+    .join('');
+
+  let iframe = document.getElementById('barcode-print-iframe') as HTMLIFrameElement | null;
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'barcode-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+  }
+
+  const iframeDoc = iframe.contentWindow?.document;
+  if (!iframeDoc) return;
+
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Print Barcode Labels</title>
+        <style>
+          @page {
+            size: auto;
+            margin: 6mm;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 4mm;
+            background: #ffffff !important;
+            color: #000000 !important;
+          }
+          .labels-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6mm;
+            justify-content: ${validItems.length === 1 ? 'center' : 'flex-start'};
+            align-items: flex-start;
+          }
+          .label-card {
+            width: 62mm;
+            min-height: 40mm;
+            border: 1px dashed #94a3b8;
+            border-radius: 4px;
+            padding: 3mm 4mm;
+            text-align: center;
+            background: #ffffff !important;
+            color: #000000 !important;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+          }
+          .store-name {
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #475569;
+            margin-bottom: 2px;
+          }
+          .product-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: #000000;
+            line-height: 1.25;
+            max-height: 28px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+            word-break: break-word;
+          }
+          .sku-line {
+            font-family: monospace;
+            font-size: 8.5px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 2px;
+          }
+          .barcode-wrap {
+            margin: 3px 0 1px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          .barcode-wrap svg {
+            width: 145px;
+            height: 42px;
+            display: block;
+          }
+          .barcode-digits {
+            font-family: monospace;
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: #000000;
+            margin-top: 1px;
+          }
+          .price-line {
+            font-size: 10.5px;
+            font-weight: 800;
+            color: #000000;
+            margin-top: 2px;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+            .label-card {
+              border-color: #cbd5e1;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="labels-container">
+          ${labelsHtml}
+        </div>
+      </body>
+    </html>
+  `);
+  iframeDoc.close();
+
+  setTimeout(() => {
+    try {
+      iframe?.contentWindow?.focus();
+      iframe?.contentWindow?.print();
+    } catch {
+      window.print();
+    }
+  }, 250);
 };
 
 // WhatsApp Bill Sharing Helpers (Strictly adhering to specs/WhatsApp Bill Sharing Spec.md)
@@ -135,7 +319,7 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('pos');
+  const [activeTab, setActiveTab] = useState<'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('pos');
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -154,6 +338,64 @@ export function App() {
   const [myBusinesses, setMyBusinesses] = useState<DemoBusiness[]>([]);
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Inventory Hub dropdown & submenu state
+  const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
+  const [isInventoryHovered, setIsInventoryHovered] = useState(false);
+  const inventoryHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inventoryDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const handleInventoryMouseEnter = () => {
+    if (inventoryHoverTimeoutRef.current) {
+      clearTimeout(inventoryHoverTimeoutRef.current);
+      inventoryHoverTimeoutRef.current = null;
+    }
+    setIsInventoryHovered(true);
+  };
+
+  const handleInventoryMouseLeave = () => {
+    if (inventoryHoverTimeoutRef.current) {
+      clearTimeout(inventoryHoverTimeoutRef.current);
+    }
+    inventoryHoverTimeoutRef.current = setTimeout(() => {
+      setIsInventoryHovered(false);
+    }, 200);
+  };
+
+  const handleInventoryClick = () => {
+    setActiveTab('inventory');
+    setShowInventoryDropdown((prev) => !prev);
+  };
+
+  const isInventorySubmenuVisible =
+    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement';
+
+  // Close inventory dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (
+        inventoryDropdownRef.current &&
+        !inventoryDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowInventoryDropdown(false);
+        setIsInventoryHovered(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, []);
+
+  // Close submenu when navigating away to unrelated modules
+  useEffect(() => {
+    if (activeTab !== 'inventory' && activeTab !== 'product-movement') {
+      setShowInventoryDropdown(false);
+      setIsInventoryHovered(false);
+    }
+  }, [activeTab]);
 
   // Auth inputs
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -182,6 +424,10 @@ export function App() {
   const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank'>('cash');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [printModalInvoiceId, setPrintModalInvoiceId] = useState<string | null>(null);
+  const [activePrintLabels, setActivePrintLabels] = useState<Array<{ name: string; sku?: string | null; barcode: string; priceMinor?: number }> | null>(null);
+  const [printBarcodeItem, setPrintBarcodeItem] = useState<Item | null>(null);
+  const [showPrintBarcodeModal, setShowPrintBarcodeModal] = useState(false);
+  const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
 
   // Modern Image 2 POS State
   const [customerSearch, setCustomerSearch] = useState('');
@@ -354,7 +600,11 @@ export function App() {
 
   // Master Data: Item Form Modal (Add & Edit)
   const [showItemModal, setShowItemModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [deletingItem, setDeletingItem] = useState<Item | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [itemFormName, setItemFormName] = useState('');
   const [itemFormSku, setItemFormSku] = useState('');
   const [itemFormBarcode, setItemFormBarcode] = useState('');
@@ -1444,9 +1694,30 @@ export function App() {
     }
   };
 
-  const handleToggleItemActive = async (item: Item) => {
+  const handleToggleItemActive = async (item: Item, skipConfirm: boolean = false) => {
+    if (!can(user?.role as any, 'items.write')) {
+      alert("You don't have permission to change product status");
+      return;
+    }
+    if (togglingItemId === item.id) return;
+
+    const prevActive = item.active !== false;
+    const newActive = !prevActive;
+
+    // Turning off: ask for confirmation first
+    if (prevActive && !skipConfirm) {
+      const confirmed = window.confirm(`Deactivate "${item.name}"? It will be hidden from POS billing.`);
+      if (!confirmed) return;
+    }
+
+    setTogglingItemId(item.id);
+    // Optimistically update item in local items state so switch flips immediately
+    setItems((prevItems) =>
+      prevItems.map((it) => (it.id === item.id ? { ...it, active: newActive } : it))
+    );
+
     try {
-      if (item.active === false) {
+      if (newActive) {
         await api(`/api/items/${item.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ active: true }),
@@ -1458,9 +1729,31 @@ export function App() {
         });
         showToast(`Item "${item.name}" deactivated!`);
       }
+      await loadItems();
+    } catch (err: any) {
+      // Roll back on failure!
+      setItems((prevItems) =>
+        prevItems.map((it) => (it.id === item.id ? { ...it, active: prevActive } : it))
+      );
+      alert(err.message || 'Failed to change item status');
+    } finally {
+      setTogglingItemId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingItem || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteProduct(deletingItem.id);
+      showToast(`Product "${deletingItem.name}" deleted successfully!`);
+      setDeletingItem(null);
       loadItems();
     } catch (err: any) {
-      alert(err.message || 'Failed to change item status');
+      setDeleteError(err.message || 'Failed to delete product. It may be referenced by historical transactions.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -2671,22 +2964,56 @@ export function App() {
               <span className="nav-text">Products</span>
               <span className="nav-count-badge">{items.length}</span>
             </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
-              onClick={() => setActiveTab('inventory')}
+            {/* INVENTORY HUB WITH SUBMENU DROPDOWN */}
+            <div
+              ref={inventoryDropdownRef}
+              className={`sidebar-nav-group ${isInventorySubmenuVisible ? 'dropdown-open' : ''}`}
+              onMouseEnter={handleInventoryMouseEnter}
+              onMouseLeave={handleInventoryMouseLeave}
             >
-              <span className="nav-icon">🏬</span>
-              <span className="nav-text">Inventory Hub</span>
-              {totalStockAlerts > 0 && (
-                <span
-                  className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
-                  title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
-                >
-                  {totalStockAlerts}
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
+                  activeTab === 'product-movement' ? 'has-active-child' : ''
+                } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
+                onClick={handleInventoryClick}
+                aria-haspopup="true"
+                aria-expanded={isInventorySubmenuVisible}
+                title="Inventory Hub & Stock Operations"
+              >
+                <span className="nav-icon">🏬</span>
+                <span className="nav-text">Inventory Hub</span>
+                {totalStockAlerts > 0 && (
+                  <span
+                    className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
+                    title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
+                  >
+                    {totalStockAlerts}
+                  </span>
+                )}
+                <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
+                  ▾
                 </span>
+              </button>
+
+              {isInventorySubmenuVisible && (
+                <div className="sidebar-submenu-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('product-movement');
+                      setShowInventoryDropdown(true);
+                    }}
+                    title="Product Movement Analysis"
+                  >
+                    <span className="submenu-icon">🚀</span>
+                    <span className="submenu-text">Product Movement Analysis</span>
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
@@ -2838,6 +3165,7 @@ export function App() {
                 {activeTab === 'shifts' && '💵 Cashier Shifts & Day-End Closing'}
                 {activeTab === 'items' && '📦 Product & Stock Catalog'}
                 {activeTab === 'inventory' && '🏬 Inventory Hub & Stock Operations'}
+                {activeTab === 'product-movement' && '🚀 Product Movement Analysis'}
                 {activeTab === 'purchases' && '📥 Purchases & Stock Inward'}
                 {activeTab === 'invoices' && '🧾 Sales Invoices & Bills'}
                 {activeTab === 'customers' && '👥 Customer Directory & Khata'}
@@ -2849,6 +3177,7 @@ export function App() {
                 {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
                 {activeTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
                 {activeTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
+                {activeTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
                 {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                 {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
                 {activeTab === 'customers' && 'Manage customer accounts, GSTINs, and khata balances'}
@@ -3561,6 +3890,34 @@ export function App() {
             return matchesQ && matchesCat;
           });
 
+          const handlePrintSingleLabel = (item: Item) => {
+            setPrintBarcodeItem(item);
+            setShowPrintBarcodeModal(true);
+          };
+
+          const handlePrintAllLabels = () => {
+            const activeWithBarcodes = filteredMasterItems.filter(
+              (item) => item.active !== false && item.barcode && item.barcode.trim()
+            );
+            if (activeWithBarcodes.length === 0) {
+              alert('No active products with barcodes found to print in the current filtered list.');
+              return;
+            }
+            const labelData = activeWithBarcodes.map((item) => ({
+              name: item.name,
+              sku: item.sku,
+              barcode: item.barcode!.trim(),
+              priceMinor: item.priceMinor,
+            }));
+            setActivePrintLabels(labelData);
+            document.body.classList.add('printing-barcode-labels');
+            printBarcodeLabels(labelData, shop?.name);
+            setTimeout(() => {
+              document.body.classList.remove('printing-barcode-labels');
+              setActivePrintLabels(null);
+            }, 2000);
+          };
+
           return (
             <div className="card">
               <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
@@ -3575,7 +3932,7 @@ export function App() {
                     type="text"
                     className="form-input"
                     style={{ width: '180px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                    placeholder="Search items, SKU, HSN..."
+                    placeholder="Search items, SKU, HS..."
                     value={itemSearchMaster}
                     onChange={(e) => setItemSearchMaster(e.target.value)}
                   />
@@ -3593,98 +3950,232 @@ export function App() {
                   <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
                     🏷️ Categories
                   </button>
+                  <button
+                    id="bulk-import-open-btn"
+                    className="btn btn-secondary"
+                    onClick={() => setShowBulkImportModal(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      fontWeight: 600,
+                      padding: '0.45rem 0.85rem',
+                    }}
+                    title="Bulk import products from Excel or spreadsheet"
+                  >
+                    📥 Import Products
+                  </button>
+                  <button
+                    id="bulk-print-labels-btn"
+                    className="btn btn-secondary"
+                    onClick={handlePrintAllLabels}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      fontWeight: 600,
+                      padding: '0.45rem 0.85rem',
+                    }}
+                    title="Print labels for all active products in current list"
+                  >
+                    🖨️ Print Labels
+                  </button>
                   <button className="btn btn-primary" onClick={openAddItemModal}>
                     + Add New Item
                   </button>
                 </div>
               </div>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Product Name</th>
-                    <th>Category</th>
-                    <th>SKU / Code</th>
-                    <th>HSN / SAC</th>
-                    <th>Selling Price</th>
-                    {can(user?.role as any, 'purchases') && <th>Last Purchase Cost</th>}
-                    <th>GST Rate</th>
-                    <th>Current Stock</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMasterItems.map((i) => (
-                    <tr key={i.id} style={{ opacity: i.active === false ? 0.6 : 1 }}>
-                      <td style={{ fontWeight: 600 }}>
-                        {i.name}
-                        {i.barcode && (
-                          <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                            Barcode: {i.barcode}
-                          </div>
-                        )}
-                        {i.custom?.batch && (
-                          <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                            Batch: {i.custom.batch} | Exp: {i.custom.expiry} | {i.custom.rack}
-                          </div>
-                        )}
-                      </td>
-                      <td><span className="badge badge-blue">{i.category || 'General'}</span></td>
-                      <td className="mono" style={{ color: '#94a3b8' }}>{i.sku || '—'}</td>
-                      <td className="mono" style={{ color: '#94a3b8' }}>{i.hsn || '—'}</td>
-                      <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
-                      {can(user?.role as any, 'purchases') && (
-                        <td className="mono">{i.costMinor ? formatRupees(i.costMinor) : '—'}</td>
+              <div className="table-scroll-x">
+                <div className="table-scroll-y">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th className="col-product-name">Product Name</th>
+                        <th className="col-nowrap">Category</th>
+                        <th className="col-nowrap">SKU / Code</th>
+                        <th className="col-nowrap">Barcode</th>
+                        <th className="col-nowrap">HSN / SAC</th>
+                        <th className="col-nowrap">Selling Price</th>
+                        {can(user?.role as any, 'purchases') && <th className="col-nowrap">Last Purchase Cost</th>}
+                        <th className="col-nowrap">GST Rate</th>
+                        <th className="col-nowrap">Current Stock</th>
+                        <th className="col-nowrap">Status</th>
+                        <th className="col-nowrap" style={{ minWidth: '135px', textAlign: 'center' }}>Barcode Label</th>
+                        <th className="col-nowrap" style={{ minWidth: '220px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMasterItems.map((i) => (
+                        <tr key={i.id} style={{ opacity: i.active === false ? 0.75 : 1 }}>
+                          <td className="col-product-name" style={{ fontWeight: 600 }}>
+                            <div style={{ color: '#0f172a', fontWeight: 600 }}>{i.name}</div>
+                            {i.custom?.batch && (
+                              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '1px' }}>
+                                Batch: {i.custom.batch} | Exp: {i.custom.expiry} | {i.custom.rack}
+                              </div>
+                            )}
+                          </td>
+                          <td className="col-nowrap"><span className="badge badge-blue">{i.category || 'General'}</span></td>
+                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.sku || '—'}</td>
+                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.barcode || '—'}</td>
+                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.hsn || '—'}</td>
+                          <td className="mono col-nowrap" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
+                          {can(user?.role as any, 'purchases') && (
+                            <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 600 }}>{i.costMinor ? formatRupees(i.costMinor) : '—'}</td>
+                          )}
+                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.taxRateBp / 100}% {i.taxInclusive ? '(Incl)' : '(Excl)'}</td>
+                          <td className="col-nowrap">
+                            <span className={`badge ${i.currentStockMilli > 0 ? 'badge-emerald' : 'badge-amber'}`}>
+                              {i.currentStockMilli / 1000} {i.unit || 'pcs'}
+                            </span>
+                          </td>
+                          <td className="col-nowrap">
+                            {i.active !== false ? (
+                              <span className="badge badge-emerald">Active</span>
+                            ) : (
+                              <span className="badge badge-amber">Inactive</span>
+                            )}
+                          </td>
+                          <td className="col-nowrap" style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.4rem 0.5rem' }}>
+                            {i.barcode && i.barcode.trim() ? (
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+                                <div
+                                  className="barcode-svg-preview"
+                                  style={{
+                                    display: 'inline-flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    background: '#ffffff',
+                                    padding: '2px 4px',
+                                    borderRadius: '3px',
+                                    border: '1px solid #e2e8f0',
+                                    maxWidth: '140px',
+                                    overflow: 'hidden',
+                                  }}
+                                  dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(i.barcode) }}
+                                />
+                                <button
+                                  id={`print-barcode-btn-${i.id}`}
+                                  className="btn btn-secondary btn-print-label"
+                                  onClick={() => handlePrintSingleLabel(i)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.55rem',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    lineHeight: '1.2',
+                                    borderRadius: '4px',
+                                    background: '#f8fafc',
+                                    border: '1px solid #cbd5e1',
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                  }}
+                                  title={`Print barcode label for ${i.name}`}
+                                >
+                                  🖨️ Print
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                No barcode
+                              </span>
+                            )}
+                          </td>
+                          <td className="col-nowrap" style={{ verticalAlign: 'middle' }}>
+                            <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                onClick={() => openEditItemModal(i)}
+                                title="Edit product"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#2563eb' }}
+                                onClick={() => setActiveTab('inventory')}
+                                title="Open Inventory Hub"
+                              >
+                                🏬 Stock
+                              </button>
+                              <ToggleSwitch
+                                id={`toggle-item-active-${i.id}`}
+                                checked={i.active !== false}
+                                onChange={() => handleToggleItemActive(i)}
+                                disabled={!can(user?.role as any, 'items.write') || togglingItemId === i.id}
+                                loading={togglingItemId === i.id}
+                                title={
+                                  !can(user?.role as any, 'items.write')
+                                    ? "You don't have permission to change product status"
+                                    : i.active !== false
+                                    ? 'Active · click to deactivate'
+                                    : 'Inactive · click to activate'
+                                }
+                                ariaLabel={i.active !== false ? 'Active' : 'Inactive'}
+                              />
+                              <button
+                                className="btn btn-secondary btn-icon-delete"
+                                style={{
+                                  padding: '0.25rem 0.45rem',
+                                  fontSize: '0.75rem',
+                                  color: '#dc2626',
+                                  borderColor: '#fecaca',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                                onClick={() => {
+                                  setDeletingItem(i);
+                                  setDeleteError(null);
+                                }}
+                                title="Delete product"
+                                aria-label="Delete product"
+                              >
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 6h18"/>
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                  <line x1="10" y1="11" x2="10" y2="17"/>
+                                  <line x1="14" y1="11" x2="14" y2="17"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredMasterItems.length === 0 && (
+                        <tr>
+                          <td colSpan={can(user?.role as any, 'purchases') ? 12 : 11} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                            No products match your search or filter criteria.
+                          </td>
+                        </tr>
                       )}
-                      <td className="mono">{i.taxRateBp / 100}% {i.taxInclusive ? '(Incl)' : '(Excl)'}</td>
-                      <td>
-                        <span className={`badge ${i.currentStockMilli > 0 ? 'badge-emerald' : 'badge-amber'}`}>
-                          {i.currentStockMilli / 1000} {i.unit || 'pcs'}
-                        </span>
-                      </td>
-                      <td>
-                        {i.active !== false ? (
-                          <span className="badge badge-emerald">Active</span>
-                        ) : (
-                          <span className="badge badge-amber">Inactive</span>
-                        )}
-                      </td>
-                      <td style={{ display: 'flex', gap: '0.35rem' }}>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                          onClick={() => openEditItemModal(i)}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#60a5fa' }}
-                          onClick={() => setActiveTab('inventory')}
-                          title="Open Inventory Hub"
-                        >
-                          🏬 Stock
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: i.active !== false ? '#f87171' : '#34d399' }}
-                          onClick={() => handleToggleItemActive(i)}
-                          title={i.active !== false ? 'Deactivate this item' : 'Reactivate this item'}
-                        >
-                          {i.active !== false ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredMasterItems.length === 0 && (
-                    <tr>
-                      <td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                        No products match your search or filter criteria.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 0.25rem 0',
+                  fontSize: '0.8rem',
+                  color: '#64748b',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}
+              >
+                <div>
+                  Showing {filteredMasterItems.length} of {items.length} products
+                </div>
+                <div style={{ color: '#94a3b8' }}>
+                  Scroll inside the table ↔ ↕ to see every column
+                </div>
+              </div>
             </div>
           );
         })()}
@@ -3708,6 +4199,22 @@ export function App() {
             }}
             showToast={showToast}
             onReloadItems={loadItems}
+          />
+        )}
+
+        {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
+        {activeTab === 'product-movement' && (
+          <ProductMovementAnalysisView
+            categories={categories}
+            userRole={user?.role as any}
+            onNavigateToPurchases={(supplierId) => {
+              setActiveTab('purchases');
+              if (supplierId) {
+                openNewPurchaseModalForSupplier(supplierId);
+              } else {
+                openNewPurchaseModal();
+              }
+            }}
           />
         )}
 
@@ -5200,6 +5707,119 @@ export function App() {
       )}
 
 
+
+      {/* BULK IMPORT MODAL */}
+      {showBulkImportModal && (
+        <BulkImportModal
+          categories={categoriesList}
+          existingItems={items}
+          shopName={shop?.name}
+          onClose={() => setShowBulkImportModal(false)}
+          onImportDone={() => {
+            loadItems();
+            loadCategories();
+            showToast('Bulk import completed! Products updated.');
+          }}
+        />
+      )}
+
+      {/* PRINT BARCODE LABEL MODAL */}
+      {showPrintBarcodeModal && printBarcodeItem && (
+        <PrintBarcodeModal
+          isOpen={showPrintBarcodeModal}
+          item={printBarcodeItem}
+          shopName={shop?.name}
+          onClose={() => {
+            setShowPrintBarcodeModal(false);
+            setPrintBarcodeItem(null);
+          }}
+        />
+      )}
+
+      {/* DELETE PRODUCT CONFIRMATION MODAL */}
+      {deletingItem && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-content" style={{ maxWidth: '480px', borderRadius: '12px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid #fee2e2', background: '#fff1f2', borderRadius: '12px 12px 0 0', padding: '1rem 1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.25rem' }}>🗑️</span>
+                <h3 style={{ margin: 0, color: '#991b1b', fontSize: '1.1rem', fontWeight: 700 }}>
+                  Delete Product
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => { if (!isDeleting) { setDeletingItem(null); setDeleteError(null); } }}
+                disabled={isDeleting}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '1.25rem' }}>
+              <p style={{ margin: '0 0 0.75rem 0', color: '#1e293b', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                Are you sure you want to permanently delete <strong>"{deletingItem.name}"</strong>?
+              </p>
+
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4 }}>
+                ℹ️ Deleting this product may affect its associated barcode mappings and inventory records. Products with sales history or purchase records cannot be deleted and should be deactivated instead.
+              </div>
+
+              {deleteError && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ color: '#991b1b', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                    ⚠️ Cannot Delete Product
+                  </div>
+                  <div style={{ color: '#b91c1c', fontSize: '0.82rem', lineHeight: 1.4, marginBottom: '0.75rem' }}>
+                    {deleteError}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', fontSize: '0.8rem', color: '#b45309', borderColor: '#fde68a', background: '#fffbeb', fontWeight: 600 }}
+                    onClick={async () => {
+                      await handleToggleItemActive(deletingItem, true);
+                      setDeletingItem(null);
+                      setDeleteError(null);
+                    }}
+                  >
+                    Deactivate Instead (Recommended)
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setDeletingItem(null); setDeleteError(null); }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 600,
+                    padding: '0.5rem 1rem',
+                    opacity: isDeleting ? 0.7 : 1,
+                    cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  }}
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Product'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MASTER DATA: ADD / EDIT ITEM MODAL */}
       {showItemModal && (
@@ -10153,6 +10773,27 @@ export function App() {
                 <span>{cnWhatsAppSendState === 'sending' ? 'Opening...' : cnWhatsAppSendState === 'sent' ? 'Sent — Send Again' : 'Open WhatsApp'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* BARCODE PRINT PORTAL */}
+      {activePrintLabels && (
+        <div id="barcode-print-portal" className="barcode-print-portal">
+          <div className="labels-container">
+            {activePrintLabels.map((item, idx) => (
+              <div key={idx} className="label-card">
+                {shop?.name && <div className="store-name">{shop.name}</div>}
+                <div className="product-name">{item.name}</div>
+                {item.sku && <div className="sku-line">SKU: {item.sku}</div>}
+                <div
+                  className="barcode-wrap"
+                  dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(item.barcode) }}
+                />
+                <div className="barcode-digits">{item.barcode}</div>
+                {item.priceMinor ? <div className="price-line">MRP: {formatRupees(item.priceMinor)}</div> : null}
+              </div>
+            ))}
           </div>
         </div>
       )}
