@@ -690,8 +690,6 @@ export function App() {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
       setItems(res.items);
-      const cats = Array.from(new Set(res.items.map((i) => i.category).filter(Boolean))) as string[];
-      if (cats.length > 0) setCategories(cats);
     } catch (err) {
       console.error('Failed to load items', err);
     }
@@ -702,9 +700,7 @@ export function App() {
       const res = await api<{ categories: Category[] }>('/api/categories?includeInactive=1');
       setCategoriesList(res.categories || []);
       const activeCats = (res.categories || []).filter((c) => c.active).map((c) => c.name);
-      if (activeCats.length > 0) {
-        setCategories(activeCats);
-      }
+      setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
     }
@@ -7542,28 +7538,21 @@ export function App() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Category</label>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <select
-                      className="form-input"
-                      value={itemFormCategory}
-                      onChange={(e) => setItemFormCategory(e.target.value)}
-                    >
-                      <option value="">Select or Type Category...</option>
-                      {categoriesList.filter((c) => c.active).map((c) => (
-                        <option key={c.id} value={c.name}>
-                          {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <input
-                    type="text"
+                  <select
                     className="form-input"
-                    style={{ marginTop: '0.35rem', fontSize: '0.8rem' }}
-                    placeholder="Or type custom category name..."
                     value={itemFormCategory}
                     onChange={(e) => setItemFormCategory(e.target.value)}
-                  />
+                  >
+                    <option value="">— Select Category from Category Module —</option>
+                    {categoriesList.filter((c) => c.active).map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Categories are managed and imported in the <strong>🏷️ Categories</strong> module.
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unit of Measurement (UOM) *</label>
