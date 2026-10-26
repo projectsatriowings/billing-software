@@ -458,6 +458,7 @@ export function App() {
   const [editingCatDesc, setEditingCatDesc] = useState('');
   const [editingCatParentId, setEditingCatParentId] = useState('');
   const [catSearchTerm, setCatSearchTerm] = useState('');
+  const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
 
   // Bulk Category Import state
   const [showCatImportView, setShowCatImportView] = useState(false);
@@ -5303,7 +5304,10 @@ export function App() {
         {/* TAB 2b: CATEGORY MANAGEMENT MODULE */}
         {activeTab === 'categories' && (() => {
           const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
+          const subCategories = categoriesList.filter((c) => c.parentId && c.active);
           const filteredCategories = categoriesList.filter((cat) => {
+            if (catTypeFilter === 'main' && cat.parentId) return false;
+            if (catTypeFilter === 'sub' && !cat.parentId) return false;
             const q = catSearchTerm.trim().toLowerCase();
             if (!q) return true;
             return (
@@ -5314,20 +5318,22 @@ export function App() {
           });
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="category-module-container">
               {/* Category Management Hero Header */}
-              <div className="card">
+              <div className="card" style={{ borderTop: '3px solid #6366f1' }}>
                 <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '1.25rem' }}>🏷️</span>
                       <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
                         Category Management Module
                       </span>
-                      <span className="badge badge-blue">{categoriesList.length} Categories</span>
+                      <span className="badge badge-blue">{categoriesList.length} Total</span>
+                      <span className="badge badge-emerald">{mainCategories.length} Main</span>
+                      <span className="badge badge-blue">{subCategories.length} Sub</span>
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '3px' }}>
-                      Manage main categories, subcategories, bulk import, and synchronize catalog organization for {shop?.name}
+                      Manage main categories, subcategories, bulk CSV import, and synchronize catalog organization for {shop?.name}
                     </div>
                   </div>
 
@@ -5552,27 +5558,27 @@ export function App() {
                 )}
               </div>
 
-              {/* Add New Category Card */}
-              <div className="card">
-                <div className="card-title" style={{ fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-                  <span>+ Add New Category or Subcategory</span>
+              {/* Add New Category Card - Enhanced Responsive Grid & Proportional Button */}
+              <div className="category-add-card">
+                <div className="category-card-header">
+                  <div className="category-card-title">
+                    <span style={{ fontSize: '1.05rem', color: '#4f46e5' }}>➕</span>
+                    <span>Add New Category or Subcategory</span>
+                  </div>
+                  <div className="category-card-hint">
+                    <span>💡</span>
+                    <span>Leave parent empty for a Top-Level Main Category, or select a parent to create a Subcategory.</span>
+                  </div>
                 </div>
-                <form
-                  onSubmit={handleCreateCategory}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr)) auto',
-                    gap: '0.75rem',
-                    alignItems: 'end',
-                  }}
-                >
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      Category Name *
+
+                <form onSubmit={handleCreateCategory} className="category-form-grid">
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Category Name <span className="req">*</span>
                     </label>
                     <input
                       type="text"
-                      className="form-input"
+                      className="category-field-input"
                       required
                       placeholder="e.g. Beverages, Dairy, Pulses..."
                       value={newCatName}
@@ -5580,237 +5586,305 @@ export function App() {
                     />
                   </div>
 
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      Parent Category (Optional for Subcategory)
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Parent Category <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
                     </label>
                     <select
-                      className="form-input"
+                      className="category-field-input"
                       value={newCatParentId}
                       onChange={(e) => setNewCatParentId(e.target.value)}
                     >
-                      <option value="">None (Top-Level Main Category)</option>
+                      <option value="">📁 None (Top-Level Main Category)</option>
                       {mainCategories.map((c) => (
                         <option key={c.id} value={c.id}>
-                          📁 {c.name}
+                          ↳ Subcategory of {c.name}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      Description (Optional)
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Description <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
                     </label>
                     <input
                       type="text"
-                      className="form-input"
+                      className="category-field-input"
                       placeholder="Optional notes or shelf location..."
                       value={newCatDesc}
                       onChange={(e) => setNewCatDesc(e.target.value)}
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ height: '38px', whiteSpace: 'nowrap', padding: '0 1.25rem' }}
-                  >
-                    + Add Category
-                  </button>
+                  <div className="category-field-group">
+                    <button
+                      type="submit"
+                      className="category-submit-btn"
+                    >
+                      <span>➕</span>
+                      <span>Add Category</span>
+                    </button>
+                  </div>
                 </form>
               </div>
 
               {/* Category Catalog Table Card */}
               <div className="card">
                 <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span>Store Category Hierarchy</span>
-                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400 }}>
-                      ({filteredCategories.length} listed)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b' }}>Store Category Hierarchy</span>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontWeight: 600 }}>
+                      {filteredCategories.length} listed
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ width: '220px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                      placeholder="Search categories..."
-                      value={catSearchTerm}
-                      onChange={(e) => setCatSearchTerm(e.target.value)}
-                    />
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Quick Filter Pills */}
+                    <div className="category-filter-pills">
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('all')}
+                      >
+                        All ({categoriesList.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'main' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('main')}
+                      >
+                        📁 Main ({mainCategories.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'sub' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('sub')}
+                      >
+                        ↳ Sub ({subCategories.length})
+                      </button>
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ width: '220px', padding: '0.42rem 0.75rem 0.42rem 2rem', fontSize: '0.84rem' }}
+                        placeholder="Search categories..."
+                        value={catSearchTerm}
+                        onChange={(e) => setCatSearchTerm(e.target.value)}
+                      />
+                      <span style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        🔍
+                      </span>
+                      {catSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setCatSearchTerm('')}
+                          style={{
+                            position: 'absolute',
+                            right: '0.5rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Category Name & Hierarchy</th>
-                      <th>Type</th>
-                      <th>Description</th>
-                      <th>Live Catalog Items</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCategories.map((cat) => (
-                      <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
-                        <td>
-                          {editingCatId === cat.id ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Category Name & Hierarchy</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Live Catalog Items</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCategories.map((cat) => (
+                        <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
+                          <td>
+                            {editingCatId === cat.id ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                  value={editingCatName}
+                                  onChange={(e) => setEditingCatName(e.target.value)}
+                                  placeholder="Category name..."
+                                />
+                                <select
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                  value={editingCatParentId}
+                                  onChange={(e) => setEditingCatParentId(e.target.value)}
+                                >
+                                  <option value="">📁 None (Top-Level Main Category)</option>
+                                  {categoriesList
+                                    .filter((c) => c.id !== cat.id && !c.parentId && c.active)
+                                    .map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        ↳ Subcategory of {c.name}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="cat-hierarchy-tree">
+                                {cat.parentName ? (
+                                  <>
+                                    <span className="cat-parent-tag">📁 {cat.parentName}</span>
+                                    <span className="cat-tree-branch">→</span>
+                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                  </>
+                                ) : (
+                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          <td>
+                            {cat.parentId ? (
+                              <span className="badge badge-blue">Subcategory</span>
+                            ) : (
+                              <span className="badge badge-emerald">Main Category</span>
+                            )}
+                          </td>
+
+                          <td style={{ color: '#64748b' }}>
+                            {editingCatId === cat.id ? (
                               <input
                                 type="text"
                                 className="form-input"
                                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
-                                value={editingCatName}
-                                onChange={(e) => setEditingCatName(e.target.value)}
-                                placeholder="Category name..."
+                                value={editingCatDesc}
+                                onChange={(e) => setEditingCatDesc(e.target.value)}
+                                placeholder="Description..."
                               />
-                              <select
-                                className="form-input"
-                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
-                                value={editingCatParentId}
-                                onChange={(e) => setEditingCatParentId(e.target.value)}
-                              >
-                                <option value="">None (Top-Level Main Category)</option>
-                                {categoriesList
-                                  .filter((c) => c.id !== cat.id && !c.parentId && c.active)
-                                  .map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      📁 {c.name}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                              {cat.parentName ? (
+                            ) : (
+                              cat.description || '—'
+                            )}
+                          </td>
+
+                          <td>
+                            <span
+                              className="cat-item-pill"
+                              onClick={() => {
+                                setItemCatFilterMaster(cat.name);
+                                setActiveTab('items');
+                              }}
+                              title="Click to view products in this category"
+                            >
+                              📦 {cat.itemCount || 0} Products ↗
+                            </span>
+                          </td>
+
+                          <td>
+                            {cat.active ? (
+                              <span className="badge badge-emerald">Active</span>
+                            ) : (
+                              <span className="badge badge-amber">Inactive</span>
+                            )}
+                          </td>
+
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                              {editingCatId === cat.id ? (
                                 <>
-                                  <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>📁 {cat.parentName}</span>
-                                  <span style={{ color: '#6366f1', fontWeight: 800 }}>→</span>
-                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => handleUpdateCategory(cat.id)}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      setEditingCatId(null);
+                                      setEditingCatParentId('');
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
                                 </>
                               ) : (
-                                <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      setEditingCatId(cat.id);
+                                      setEditingCatName(cat.name);
+                                      setEditingCatDesc(cat.description || '');
+                                      setEditingCatParentId(cat.parentId || '');
+                                    }}
+                                  >
+                                    ✏️ Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{
+                                      padding: '0.25rem 0.6rem',
+                                      fontSize: '0.75rem',
+                                      color: cat.active ? '#ef4444' : '#10b981',
+                                    }}
+                                    onClick={() => handleToggleCategoryActive(cat)}
+                                  >
+                                    {cat.active ? 'Deactivate' : 'Activate'}
+                                  </button>
+                                </>
                               )}
                             </div>
-                          )}
-                        </td>
+                          </td>
+                        </tr>
+                      ))}
 
-                        <td>
-                          {cat.parentId ? (
-                            <span className="badge badge-blue">Subcategory</span>
-                          ) : (
-                            <span className="badge badge-emerald">Main Category</span>
-                          )}
-                        </td>
-
-                        <td style={{ color: '#64748b' }}>
-                          {editingCatId === cat.id ? (
-                            <input
-                              type="text"
-                              className="form-input"
-                              style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
-                              value={editingCatDesc}
-                              onChange={(e) => setEditingCatDesc(e.target.value)}
-                              placeholder="Description..."
-                            />
-                          ) : (
-                            cat.description || '—'
-                          )}
-                        </td>
-
-                        <td>
-                          <span
-                            className="badge badge-blue"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setItemCatFilterMaster(cat.name);
-                              setActiveTab('items');
-                            }}
-                            title="Click to view products in this category"
-                          >
-                            {cat.itemCount || 0} products ↗
-                          </span>
-                        </td>
-
-                        <td>
-                          {cat.active ? (
-                            <span className="badge badge-emerald">Active</span>
-                          ) : (
-                            <span className="badge badge-amber">Inactive</span>
-                          )}
-                        </td>
-
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
-                            {editingCatId === cat.id ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn btn-primary"
-                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
-                                  onClick={() => handleUpdateCategory(cat.id)}
-                                >
-                                  Save
-                                </button>
+                      {filteredCategories.length === 0 && (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.5rem' }}>🔍</span>
+                              <span>No categories found matching your search / filter.</span>
+                              {(catSearchTerm || catTypeFilter !== 'all') && (
                                 <button
                                   type="button"
                                   className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                  style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}
                                   onClick={() => {
-                                    setEditingCatId(null);
-                                    setEditingCatParentId('');
+                                    setCatSearchTerm('');
+                                    setCatTypeFilter('all');
                                   }}
                                 >
-                                  Cancel
+                                  Reset Filters
                                 </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
-                                  onClick={() => {
-                                    setEditingCatId(cat.id);
-                                    setEditingCatName(cat.name);
-                                    setEditingCatDesc(cat.description || '');
-                                    setEditingCatParentId(cat.parentId || '');
-                                  }}
-                                >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{
-                                    padding: '0.25rem 0.6rem',
-                                    fontSize: '0.75rem',
-                                    color: cat.active ? '#ef4444' : '#10b981',
-                                  }}
-                                  onClick={() => handleToggleCategoryActive(cat)}
-                                >
-                                  {cat.active ? 'Deactivate' : 'Activate'}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-
-                    {filteredCategories.length === 0 && (
-                      <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
-                          No categories found matching your search.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           );
