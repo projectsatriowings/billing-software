@@ -207,7 +207,21 @@ export interface Category {
   name: string;
   description?: string | null;
   active: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
   itemCount?: number;
+}
+
+export interface CategoryImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{
+    row: number;
+    name?: string;
+    error: string;
+  }>;
 }
 
 export interface InvoiceCreditNoteSummary {

@@ -564,15 +564,16 @@ body {
 }
 
 .badge-emerald {
-  background: rgba(16, 185, 129, 0.2);
-  color: #a7f3d0;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
 }
 
 .badge-blue {
-  background: rgba(109, 74, 255, 0.25);
-  color: #ddd6fe;
-  border: 1px solid rgba(167, 139, 250, 0.4);
+  background: #f5f3ff;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  font-weight: 700;
 }
 
 /* Backward compatibility aliases */

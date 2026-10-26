@@ -151,7 +151,7 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'categories' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -452,9 +452,35 @@ export function App() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatParentId, setNewCatParentId] = useState('');
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
   const [editingCatDesc, setEditingCatDesc] = useState('');
+  const [editingCatParentId, setEditingCatParentId] = useState('');
+  const [catSearchTerm, setCatSearchTerm] = useState('');
+
+  // Bulk Category Import state
+  const [showCatImportView, setShowCatImportView] = useState(false);
+  const [catImportCsv, setCatImportCsv] = useState('');
+  const [catImportFileName, setCatImportFileName] = useState('');
+  const [catImportLoading, setCatImportLoading] = useState(false);
+  const [catImportPreview, setCatImportPreview] = useState<{
+    valid: boolean;
+    total: number;
+    mainCategoriesCount: number;
+    subcategoriesCount: number;
+    duplicateCount: number;
+    errorCount: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
+  const [catImportUpdateExisting, setCatImportUpdateExisting] = useState(false);
+  const [catImportResult, setCatImportResult] = useState<{
+    total: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
 
   // Master Data Search & Filters
   const [itemSearchMaster, setItemSearchMaster] = useState('');
@@ -2737,10 +2763,12 @@ export function App() {
         body: JSON.stringify({
           name: newCatName.trim(),
           description: newCatDesc.trim() || undefined,
+          parentId: newCatParentId.trim() || undefined,
         }),
       });
       setNewCatName('');
       setNewCatDesc('');
+      setNewCatParentId('');
       loadCategories();
       showToast('Category created!');
     } catch (err: any) {
@@ -2756,9 +2784,11 @@ export function App() {
         body: JSON.stringify({
           name: editingCatName.trim(),
           description: editingCatDesc.trim() || null,
+          parentId: editingCatParentId.trim() || null,
         }),
       });
       setEditingCatId(null);
+      setEditingCatParentId('');
       loadCategories();
       loadItems();
       showToast('Category updated!');
@@ -2785,6 +2815,109 @@ export function App() {
     } catch (err: any) {
       alert(err.message || 'Failed to update category status');
     }
+  };
+
+  const handleDownloadCategoryTemplate = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch('/api/categories/template', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to download template');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'categories_sample_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Sample template downloaded!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to download category template');
+    }
+  };
+
+  const handleCategoryFileChange = async (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Please select a valid CSV file (.csv).');
+      return;
+    }
+    setCatImportFileName(file.name);
+    setCatImportLoading(true);
+    setCatImportResult(null);
+    setCatImportPreview(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = String(evt.target?.result || '');
+      setCatImportCsv(text);
+      try {
+        const preview = await api<any>('/api/categories/import', {
+          method: 'POST',
+          body: JSON.stringify({ csvContent: text, dryRun: true }),
+        });
+        setCatImportPreview(preview);
+      } catch (err: any) {
+        alert(err.message || 'Failed to parse category file');
+        setCatImportPreview(null);
+      } finally {
+        setCatImportLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      alert('Failed to read file content.');
+      setCatImportLoading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCommitCategoryImport = async () => {
+    if (!catImportCsv) return;
+    setCatImportLoading(true);
+    try {
+      const res = await api<{
+        success: boolean;
+        total: number;
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: Array<{ row: number; name?: string; error: string }>;
+      }>('/api/categories/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          csvContent: catImportCsv,
+          dryRun: false,
+          updateExisting: catImportUpdateExisting,
+        }),
+      });
+      setCatImportResult(res);
+      setCatImportPreview(null);
+      loadCategories();
+      loadItems();
+      showToast(`Import completed: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped`);
+    } catch (err: any) {
+      alert(err.message || 'Category import failed');
+    } finally {
+      setCatImportLoading(false);
+    }
+  };
+
+  const handleDownloadImportErrors = () => {
+    const errors = catImportPreview?.errors || catImportResult?.errors || [];
+    if (errors.length === 0) return;
+    const csvContent = 'Row,Category Name,Error\r\n' + errors.map((e) => `${e.row},"${(e.name || '').replace(/"/g, '""')}","${(e.error || '').replace(/"/g, '""')}"`).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'category_import_errors.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -3152,6 +3285,19 @@ export function App() {
                 <span className="nav-icon">📦</span>
                 <span className="nav-text">Products</span>
                 <span className="nav-count-badge">{items.length}</span>
+              </button>
+            )}
+
+            {/* 4b. Categories: Dedicated Module */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
+                onClick={() => setActiveTab('categories')}
+              >
+                <span className="nav-icon">🏷️</span>
+                <span className="nav-text">Categories</span>
+                <span className="nav-count-badge">{categoriesList.length}</span>
               </button>
             )}
 
@@ -5041,7 +5187,9 @@ export function App() {
                   >
                     <option value="ALL">All Categories</option>
                     {categoriesList.filter((c) => c.active).map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
                     ))}
                   </select>
                   <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
@@ -5139,6 +5287,522 @@ export function App() {
                   )}
                 </tbody>
               </table>
+            </div>
+          );
+        })()}
+
+        {/* TAB 2b: CATEGORY MANAGEMENT MODULE */}
+        {activeTab === 'categories' && (() => {
+          const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
+          const filteredCategories = categoriesList.filter((cat) => {
+            const q = catSearchTerm.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              cat.name.toLowerCase().includes(q) ||
+              (cat.parentName && cat.parentName.toLowerCase().includes(q)) ||
+              (cat.description && cat.description.toLowerCase().includes(q))
+            );
+          });
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {/* Category Management Hero Header */}
+              <div className="card">
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>🏷️</span>
+                      <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
+                        Category Management Module
+                      </span>
+                      <span className="badge badge-blue">{categoriesList.length} Categories</span>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '3px' }}>
+                      Manage main categories, subcategories, bulk import, and synchronize catalog organization for {shop?.name}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleDownloadCategoryTemplate}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📄</span> Download Sample Template
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setShowCatImportView(!showCatImportView)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📥</span> {showCatImportView ? 'Close Import Drawer' : 'Import Categories (CSV)'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bulk Import Drawer */}
+                {showCatImportView && (
+                  <div
+                    style={{
+                      marginTop: '1.25rem',
+                      padding: '1.25rem',
+                      background: '#f8fafc',
+                      borderRadius: '10px',
+                      border: '1.5px dashed #cbd5e1',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>📥</span> Bulk Category CSV Import
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                          Supports 1,000+ categories. Subcategories can appear anywhere in the file.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCatImportView(false)}
+                        style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+                      <label
+                        className="btn btn-secondary"
+                        style={{
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.45rem',
+                          padding: '0.55rem 1rem',
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>{catImportFileName || 'Choose CSV File to Upload...'}</span>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCategoryFileChange(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer', color: '#334155' }}>
+                        <input
+                          type="checkbox"
+                          checked={catImportUpdateExisting}
+                          onChange={(e) => setCatImportUpdateExisting(e.target.checked)}
+                        />
+                        <span>Update existing categories if found (overwrite description/parent)</span>
+                      </label>
+                    </div>
+
+                    {catImportLoading && (
+                      <div style={{ padding: '1rem', color: '#6366f1', fontWeight: 600, fontSize: '0.88rem' }}>
+                        Processing category file... Please wait.
+                      </div>
+                    )}
+
+                    {/* Pre-flight Import Preview Card */}
+                    {catImportPreview && (
+                      <div
+                        style={{
+                          background: '#ffffff',
+                          padding: '1rem',
+                          borderRadius: '8px',
+                          border: `1.5px solid ${catImportPreview.errorCount > 0 ? '#fca5a5' : '#86efac'}`,
+                          marginBottom: '1rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                            Pre-flight Import Preview: {catImportFileName}
+                          </span>
+                          <span className={`badge ${catImportPreview.errorCount > 0 ? 'badge-amber' : 'badge-emerald'}`}>
+                            {catImportPreview.errorCount > 0 ? `${catImportPreview.errorCount} Errors Found` : 'Ready to Import'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Total Rows</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{catImportPreview.total}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Main Categories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{catImportPreview.mainCategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Subcategories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{catImportPreview.subcategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Existing in Store</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{catImportPreview.duplicateCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Errors</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: catImportPreview.errorCount > 0 ? '#dc2626' : '#16a34a' }}>
+                              {catImportPreview.errorCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {catImportPreview.errors.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>
+                                Validation Errors ({catImportPreview.errors.length}) — Fix before importing:
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                onClick={handleDownloadImportErrors}
+                              >
+                                📥 Download Error Report CSV
+                              </button>
+                            </div>
+                            <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #fee2e2', borderRadius: '6px' }}>
+                              <table className="data-table" style={{ fontSize: '0.78rem' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '60px' }}>Row</th>
+                                    <th>Category Name</th>
+                                    <th>Error Message</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {catImportPreview.errors.map((e, idx) => (
+                                    <tr key={idx}>
+                                      <td className="mono" style={{ color: '#dc2626', fontWeight: 700 }}>#{e.row}</td>
+                                      <td>{e.name || '—'}</td>
+                                      <td style={{ color: '#dc2626' }}>{e.error}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setCatImportPreview(null);
+                              setCatImportCsv('');
+                              setCatImportFileName('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={catImportPreview.errorCount > 0 || catImportLoading}
+                            onClick={handleCommitCategoryImport}
+                          >
+                            {catImportLoading ? 'Importing...' : `Confirm & Import ${catImportPreview.total} Categories`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Final Import Result Card */}
+                    {catImportResult && (
+                      <div
+                        style={{
+                          background: '#ecfdf5',
+                          border: '1.5px solid #a7f3d0',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem', marginBottom: '0.4rem' }}>
+                          ✓ Bulk Category Import Successful!
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#047857', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <span><strong>{catImportResult.created}</strong> new categories created</span>
+                          <span><strong>{catImportResult.updated}</strong> updated</span>
+                          <span><strong>{catImportResult.skipped}</strong> skipped (already existing)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Category Card */}
+              <div className="card">
+                <div className="card-title" style={{ fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+                  <span>+ Add New Category or Subcategory</span>
+                </div>
+                <form
+                  onSubmit={handleCreateCategory}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr)) auto',
+                    gap: '0.75rem',
+                    alignItems: 'end',
+                  }}
+                >
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      Category Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      required
+                      placeholder="e.g. Beverages, Dairy, Pulses..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      Parent Category (Optional for Subcategory)
+                    </label>
+                    <select
+                      className="form-input"
+                      value={newCatParentId}
+                      onChange={(e) => setNewCatParentId(e.target.value)}
+                    >
+                      <option value="">None (Top-Level Main Category)</option>
+                      {mainCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          📁 {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      Description (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Optional notes or shelf location..."
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ height: '38px', whiteSpace: 'nowrap', padding: '0 1.25rem' }}
+                  >
+                    + Add Category
+                  </button>
+                </form>
+              </div>
+
+              {/* Category Catalog Table Card */}
+              <div className="card">
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>Store Category Hierarchy</span>
+                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400 }}>
+                      ({filteredCategories.length} listed)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: '220px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
+                      placeholder="Search categories..."
+                      value={catSearchTerm}
+                      onChange={(e) => setCatSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Category Name & Hierarchy</th>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Live Catalog Items</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCategories.map((cat) => (
+                      <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
+                        <td>
+                          {editingCatId === cat.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                value={editingCatName}
+                                onChange={(e) => setEditingCatName(e.target.value)}
+                                placeholder="Category name..."
+                              />
+                              <select
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                value={editingCatParentId}
+                                onChange={(e) => setEditingCatParentId(e.target.value)}
+                              >
+                                <option value="">None (Top-Level Main Category)</option>
+                                {categoriesList
+                                  .filter((c) => c.id !== cat.id && !c.parentId && c.active)
+                                  .map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      📁 {c.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              {cat.parentName ? (
+                                <>
+                                  <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>📁 {cat.parentName}</span>
+                                  <span style={{ color: '#6366f1', fontWeight: 800 }}>→</span>
+                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                </>
+                              ) : (
+                                <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        <td>
+                          {cat.parentId ? (
+                            <span className="badge badge-blue">Subcategory</span>
+                          ) : (
+                            <span className="badge badge-emerald">Main Category</span>
+                          )}
+                        </td>
+
+                        <td style={{ color: '#64748b' }}>
+                          {editingCatId === cat.id ? (
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                              value={editingCatDesc}
+                              onChange={(e) => setEditingCatDesc(e.target.value)}
+                              placeholder="Description..."
+                            />
+                          ) : (
+                            cat.description || '—'
+                          )}
+                        </td>
+
+                        <td>
+                          <span
+                            className="badge badge-blue"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              setItemCatFilterMaster(cat.name);
+                              setActiveTab('items');
+                            }}
+                            title="Click to view products in this category"
+                          >
+                            {cat.itemCount || 0} products ↗
+                          </span>
+                        </td>
+
+                        <td>
+                          {cat.active ? (
+                            <span className="badge badge-emerald">Active</span>
+                          ) : (
+                            <span className="badge badge-amber">Inactive</span>
+                          )}
+                        </td>
+
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            {editingCatId === cat.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                  onClick={() => handleUpdateCategory(cat.id)}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                  onClick={() => {
+                                    setEditingCatId(null);
+                                    setEditingCatParentId('');
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                  onClick={() => {
+                                    setEditingCatId(cat.id);
+                                    setEditingCatName(cat.name);
+                                    setEditingCatDesc(cat.description || '');
+                                    setEditingCatParentId(cat.parentId || '');
+                                  }}
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{
+                                    padding: '0.25rem 0.6rem',
+                                    fontSize: '0.75rem',
+                                    color: cat.active ? '#ef4444' : '#10b981',
+                                  }}
+                                  onClick={() => handleToggleCategoryActive(cat)}
+                                >
+                                  {cat.active ? 'Deactivate' : 'Activate'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {filteredCategories.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
+                          No categories found matching your search.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         })()}
@@ -6886,7 +7550,9 @@ export function App() {
                     >
                       <option value="">Select or Type Category...</option>
                       {categoriesList.filter((c) => c.active).map((c) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
+                        <option key={c.id} value={c.name}>
+                          {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                        </option>
                       ))}
                     </select>
                   </div>

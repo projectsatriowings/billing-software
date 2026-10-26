@@ -547,6 +547,13 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS shifts_tenant_location ON shifts (tenant_id, location)`,
     ],
   },
+  {
+    version: 15,
+    statements: [
+      `ALTER TABLE categories ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL`,
+      `CREATE INDEX IF NOT EXISTS categories_parent ON categories (tenant_id, parent_id)`,
+    ],
+  },
 ];
 
 

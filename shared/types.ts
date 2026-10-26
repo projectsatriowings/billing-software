@@ -214,8 +214,29 @@ export interface Category {
   name: string;
   description?: string | null;
   active: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
   createdAt?: string;
   itemCount?: number;
+}
+
+export interface CategoryImportRow {
+  name: string;
+  parentCategory?: string | null;
+  description?: string | null;
+  status?: string | null;
+}
+
+export interface CategoryImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{
+    row: number;
+    name?: string;
+    error: string;
+  }>;
 }
 
 export type PurchaseStatus = 'draft' | 'posted' | 'voided' | 'cancelled';
