@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   api,
   setToken,
@@ -35,6 +35,7 @@ import {
   deleteProduct,
 } from './api';
 import { moneyInWords } from '../../shared/money.ts';
+import { qrSvg } from '../../shared/qr.ts';
 import {
   normalizePhone,
   whatsappLink,
@@ -63,6 +64,7 @@ import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
+import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -247,6 +249,17 @@ const printBarcodeLabels = (
   }, 250);
 };
 
+// Compute MRP for item (reads custom.mrpMinor, or mrpMinor, or defaults to 15% above selling price)
+export const getItemMrp = (item: Item): number => {
+  if (item.custom?.mrpMinor && typeof item.custom.mrpMinor === 'number' && item.custom.mrpMinor > 0) {
+    return item.custom.mrpMinor;
+  }
+  if ((item as any).mrpMinor && typeof (item as any).mrpMinor === 'number' && (item as any).mrpMinor > 0) {
+    return (item as any).mrpMinor;
+  }
+  return Math.max(item.priceMinor, Math.ceil((item.priceMinor * 1.15) / 100) * 100);
+};
+
 // WhatsApp Bill Sharing Helpers (Strictly adhering to specs/WhatsApp Bill Sharing Spec.md)
 export const validateIndianPhone = (raw: string): { valid: boolean; normalized: string | null } => {
   if (!raw || !raw.trim()) return { valid: false, normalized: null };
@@ -421,20 +434,71 @@ export function App() {
   const [cart, setCart] = useState<{ item: Item; qty: number }[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [selectedPartyId, setSelectedPartyId] = useState<string>('');
-  const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank'>('cash');
+  const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'credit' | 'split'>('cash');
+  const [cashReceived, setCashReceived] = useState<string>('');
+  const [splitMethod1, setSplitMethod1] = useState<'cash' | 'upi' | 'card' | 'bank'>('cash');
+  const [splitAmount1, setSplitAmount1] = useState<string>('');
+  const [splitMethod2, setSplitMethod2] = useState<'cash' | 'upi' | 'card' | 'bank'>('upi');
+  const [splitAmount2, setSplitAmount2] = useState<string>('');
+  const [splitCashTendered, setSplitCashTendered] = useState<string>('');
+  const lastSplitEditedRef = useRef<1 | 2>(1);
+  const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [printModalInvoiceId, setPrintModalInvoiceId] = useState<string | null>(null);
+
+  // Barcode Label Printing & Toggle State
   const [activePrintLabels, setActivePrintLabels] = useState<Array<{ name: string; sku?: string | null; barcode: string; priceMinor?: number }> | null>(null);
   const [printBarcodeItem, setPrintBarcodeItem] = useState<Item | null>(null);
   const [showPrintBarcodeModal, setShowPrintBarcodeModal] = useState(false);
   const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
+
+  // Wireless Mobile Barcode Scanner State
+  const [scannerSessionId] = useState<string>(() => {
+    try {
+      const stored = sessionStorage.getItem('pos_scanner_session');
+      if (stored) return stored;
+      const newId = 'pos-' + Math.random().toString(36).substring(2, 7);
+      sessionStorage.setItem('pos_scanner_session', newId);
+      return newId;
+    } catch {
+      return 'pos-' + Math.random().toString(36).substring(2, 7);
+    }
+  });
+  const [showMobileScannerModal, setShowMobileScannerModal] = useState(false);
+  const [isPhoneScannerConnected, setIsPhoneScannerConnected] = useState(false);
+  const [scannerNetworkInfo, setScannerNetworkInfo] = useState<{ localIp: string; httpPort: number; httpsPort: number; tunnelUrl?: string } | null>(null);
+  const [scannerProtocol, setScannerProtocol] = useState<'tunnel' | 'https' | 'http'>('tunnel');
+  const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true);
+  const [customTunnelUrl, setCustomTunnelUrl] = useState('');
 
   // Modern Image 2 POS State
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
   const [showDiscountPicker, setShowDiscountPicker] = useState(false);
-  const [heldOrders, setHeldOrders] = useState<{ id: string; cart: { item: Item; qty: number }[]; timestamp: Date }[]>([]);
+  const [showPosOpenShiftModal, setShowPosOpenShiftModal] = useState(false);
+  const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [customItemForm, setCustomItemForm] = useState({ name: 'Custom Charge', price: '50', taxRateBp: 1800 });
+  const [heldOrders, setHeldOrders] = useState<{ id: string; cart: { item: Item; qty: number }[]; timestamp: Date }[]>(() => {
+    try {
+      const saved = localStorage.getItem('pos_held_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((o: any) => ({ ...o, timestamp: new Date(o.timestamp) }));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_held_orders', JSON.stringify(heldOrders));
+    } catch {}
+  }, [heldOrders]);
 
   // Specialized Business Fields
   // Restaurant:
@@ -482,6 +546,8 @@ export function App() {
     balanceMinor: number;
     shareToken?: string;
     partyId?: string;
+    tender?: { cashReceivedMinor: number; changeReturnedMinor: number } | null;
+    payments?: { method: string; amountMinor: number }[];
   } | null>(null);
   const [successPhone, setSuccessPhone] = useState('');
   const [successLang, setSuccessLang] = useState<'en' | 'hi' | 'ta'>('en');
@@ -1371,6 +1437,128 @@ export function App() {
     );
   };
 
+  // Play authentic POS supermarket checkout beep tone
+  const playSupermarketBeep = () => {
+    if (!scannerSoundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1760, ctx.currentTime);
+      gain.gain.setValueAtTime(0.22, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {}
+  };
+
+  const playAlertTone = () => {
+    if (!scannerSoundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.19);
+    } catch {}
+  };
+
+  // Barcode scanned from phone or physical USB barcode gun
+  const handleBarcodeScanned = (barcode: string) => {
+    const clean = barcode.trim();
+    if (!clean) return;
+
+    // Match item in catalog by barcode or SKU
+    const matched = items.find(
+      (it) => (it.barcode && it.barcode.trim() === clean) ||
+              (it.sku && it.sku.trim().toLowerCase() === clean.toLowerCase())
+    );
+
+    if (matched) {
+      addToCart(matched);
+      playSupermarketBeep();
+      showToast(`Scanned: ${matched.name} (+1 in cart)`);
+    } else {
+      playAlertTone();
+      showToast(`⚠️ Barcode "${clean}" not found in catalog`);
+    }
+  };
+
+  // Fetch local LAN network info when opening mobile scanner modal
+  useEffect(() => {
+    if (!showMobileScannerModal) return;
+
+    const fetchInfo = () => {
+      fetch('/api/scanner/network-info')
+        .then((r) => r.json())
+        .then((data) => {
+          setScannerNetworkInfo(data);
+          if (data?.tunnelUrl && !customTunnelUrl) {
+            setScannerProtocol('tunnel');
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchInfo();
+    const timer = setInterval(fetchInfo, 3000);
+    return () => clearInterval(timer);
+  }, [showMobileScannerModal, customTunnelUrl]);
+
+  // Real-time listener: receives barcodes scanned from mobile phone instantly
+  useEffect(() => {
+    let active = true;
+    let lastScanId = '';
+
+    const listenForScans = async () => {
+      while (active) {
+        try {
+          const url = `/api/scanner/events?session=${encodeURIComponent(scannerSessionId)}${lastScanId ? `&after=${encodeURIComponent(lastScanId)}` : ''}`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            await new Promise((r) => setTimeout(r, 2000));
+            continue;
+          }
+          const data = await res.json();
+          if (!active) break;
+
+          if (data.phoneConnected !== undefined) {
+            setIsPhoneScannerConnected(Boolean(data.phoneConnected));
+          }
+
+          if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+            for (const ev of data.events) {
+              lastScanId = ev.id;
+              handleBarcodeScanned(ev.barcode);
+            }
+          }
+        } catch {
+          if (active) {
+            await new Promise((r) => setTimeout(r, 2500));
+          }
+        }
+      }
+    };
+
+    listenForScans();
+    return () => {
+      active = false;
+    };
+  }, [scannerSessionId, items, scannerSoundEnabled]);
+
   // Cart Totals
   const cartSubtotalMinor = cart.reduce((acc, c) => acc + c.item.priceMinor * c.qty, 0);
   const cartTaxMinor = cart.reduce((acc, c) => {
@@ -1384,6 +1572,126 @@ export function App() {
   const cartTotalMinor = cartSubtotalMinor;
   const discountMinor = Math.round((cartTotalMinor * appliedDiscountPercent) / 100);
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
+
+  // Cash Tender & Change Return calculation
+  const cashReceivedValMinor = cashReceived.trim() !== ''
+    ? Math.round(parseFloat(cashReceived) * 100) || 0
+    : finalPayableMinor;
+  const changeDueMinor = Math.max(0, cashReceivedValMinor - finalPayableMinor);
+  const remainingDueMinor = Math.max(0, finalPayableMinor - cashReceivedValMinor);
+
+  const suggestedDenominations = useMemo(() => {
+    const base = Math.ceil(finalPayableMinor / 100);
+    if (base <= 0) return [100, 200, 500, 2000];
+    const s = new Set<number>();
+    s.add(base);
+    if (base % 50 !== 0 && base < 500) s.add(Math.ceil(base / 50) * 50);
+    if (base % 100 !== 0 && base < 1000) s.add(Math.ceil(base / 100) * 100);
+    if (base < 500) s.add(500);
+    if (base < 1000) s.add(1000);
+    if (base < 2000) s.add(2000);
+    return Array.from(s).sort((a, b) => a - b).slice(0, 5);
+  }, [finalPayableMinor]);
+
+  // Split Payment (Multi-Tender) Calculations
+  const split1Minor = splitAmount1.trim() !== '' ? Math.round(parseFloat(splitAmount1) * 100) || 0 : 0;
+  const split2Minor = splitAmount2.trim() !== '' ? Math.round(parseFloat(splitAmount2) * 100) || 0 : 0;
+  const splitTotalMinor = split1Minor + split2Minor;
+  const splitRemainingMinor = Math.max(0, finalPayableMinor - splitTotalMinor);
+  const splitOverMinor = Math.max(0, splitTotalMinor - finalPayableMinor);
+
+  const hasCashInSplit = splitMethod1 === 'cash' || splitMethod2 === 'cash';
+  const splitAllocatedCashMinor = splitMethod1 === 'cash' ? split1Minor : (splitMethod2 === 'cash' ? split2Minor : 0);
+  const splitCashGivenMinor = splitCashTendered.trim() !== ''
+    ? Math.round(parseFloat(splitCashTendered) * 100) || 0
+    : splitAllocatedCashMinor;
+  const splitCashChangeMinor = Math.max(0, splitCashGivenMinor - splitAllocatedCashMinor);
+  const splitCashShortMinor = Math.max(0, splitAllocatedCashMinor - splitCashGivenMinor);
+
+  const handleSplitFiftyFifty = () => {
+    const totalRupees = Math.round(finalPayableMinor / 100);
+    const half1 = Math.floor(totalRupees / 2);
+    const half2 = totalRupees - half1;
+    setSplitMethod1('cash');
+    setSplitMethod2('upi');
+    setSplitAmount1(half1.toString());
+    setSplitAmount2(half2.toString());
+    setSplitCashTendered('');
+  };
+
+  const handleSplit1Change = (val: string) => {
+    lastSplitEditedRef.current = 1;
+    setSplitAmount1(val);
+    if (val.trim() === '') {
+      setSplitAmount2('');
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      const totalRupees = finalPayableMinor / 100;
+      const remaining = Math.max(0, +(totalRupees - num).toFixed(2));
+      setSplitAmount2(remaining.toString());
+    }
+  };
+
+  const handleSplit2Change = (val: string) => {
+    lastSplitEditedRef.current = 2;
+    setSplitAmount2(val);
+    if (val.trim() === '') {
+      setSplitAmount1('');
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      const totalRupees = finalPayableMinor / 100;
+      const remaining = Math.max(0, +(totalRupees - num).toFixed(2));
+      setSplitAmount1(remaining.toString());
+    }
+  };
+
+  // Keep split balance automatically updated whenever total or mode changes
+  useEffect(() => {
+    if (selectedPayMode === 'split' && cart.length > 0) {
+      const totalRupees = finalPayableMinor / 100;
+      if (lastSplitEditedRef.current === 1 && splitAmount1.trim() !== '') {
+        const num1 = parseFloat(splitAmount1);
+        if (!isNaN(num1)) {
+          const rem = Math.max(0, +(totalRupees - num1).toFixed(2));
+          setSplitAmount2(rem.toString());
+        }
+      } else if (lastSplitEditedRef.current === 2 && splitAmount2.trim() !== '') {
+        const num2 = parseFloat(splitAmount2);
+        if (!isNaN(num2)) {
+          const rem = Math.max(0, +(totalRupees - num2).toFixed(2));
+          setSplitAmount1(rem.toString());
+        }
+      }
+    }
+  }, [finalPayableMinor, selectedPayMode, cart.length]);
+
+  const handleFillSplitRemaining = (targetField: 1 | 2) => {
+    const totalRupees = finalPayableMinor / 100;
+    if (targetField === 1) {
+      const amt2 = parseFloat(splitAmount2) || 0;
+      setSplitAmount1(Math.max(0, +(totalRupees - amt2).toFixed(2)).toString());
+    } else {
+      const amt1 = parseFloat(splitAmount1) || 0;
+      setSplitAmount2(Math.max(0, +(totalRupees - amt1).toFixed(2)).toString());
+    }
+  };
+
+  // Cart MRP, Savings, and Category Breakdown
+  const cartTotalMrpMinor = cart.reduce((acc, c) => acc + getItemMrp(c.item) * c.qty, 0);
+  const totalMrpSavingsMinor = Math.max(0, cartTotalMrpMinor - cartSubtotalMinor) + discountMinor;
+  const cartCategoryBreakdown = cart.reduce((acc: { [cat: string]: { name: string; count: number; totalMinor: number } }, c) => {
+    const cat = c.item.category?.trim() || 'General';
+    if (!acc[cat]) {
+      acc[cat] = { name: cat, count: 0, totalMinor: 0 };
+    }
+    acc[cat].count += c.qty;
+    acc[cat].totalMinor += c.item.priceMinor * c.qty;
+    return acc;
+  }, {});
 
   const handleHoldOrder = () => {
     if (cart.length === 0) {
@@ -1402,11 +1710,123 @@ export function App() {
     showToast('Order held successfully! Click "Hold Order" anytime to restore.');
   };
 
+  const handleReprintLastBill = () => {
+    if (!invoices || invoices.length === 0) {
+      showToast('No past bills available to reprint');
+      return;
+    }
+    const lastInvoice = invoices[0];
+    setPrintModalInvoiceId(lastInvoice.id);
+  };
+
+  const handleAddCustomItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = parseFloat(customItemForm.price);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      showToast('Please enter a valid price');
+      return;
+    }
+    const priceMinor = Math.round(priceNum * 100);
+    const customItem: Item = {
+      id: 'custom-' + Date.now(),
+      name: customItemForm.name.trim() || 'Custom Charge',
+      sku: 'CUSTOM',
+      barcode: undefined,
+      category: 'Service',
+      priceMinor,
+      costMinor: 0,
+      taxRateBp: Number(customItemForm.taxRateBp) || 0,
+      taxInclusive: true,
+      hsn: '9983',
+      unit: 'unit',
+      currentStockMilli: 999999000,
+      favorite: false,
+      active: true,
+    };
+    addToCart(customItem);
+    setShowCustomItemModal(false);
+    showToast(`Added ${customItem.name} (${formatRupees(priceMinor)}) to cart`);
+  };
+
+  // Global POS Hotkeys listener (F1, F4, F8, Alt+P, Alt+O, Alt+M, / or F2)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'pos') return;
+
+      const activeTag = document.activeElement?.tagName;
+      const isInputActive = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable;
+
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        handleHoldOrder();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        setShowDiscountPicker(true);
+      } else if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        handleReprintLastBill();
+      } else if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        setShowCustomItemModal(true);
+      } else if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        setShowMobileScannerModal(true);
+      } else if ((e.key === '/' || ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) || e.key === 'F2') && !isInputActive) {
+        e.preventDefault();
+        catalogSearchInputRef.current?.focus();
+        catalogSearchInputRef.current?.select();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, cart, heldOrders, invoices]);
+
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
+
+    // Shift check for cash collection
+    if (selectedPayMode === 'cash' && !activeShiftNumber) {
+      const proceed = window.confirm(
+        '⚠️ Cash Drawer Shift is Closed!\n\n' +
+        'Your shift register is currently closed. If you proceed, this cash payment will NOT be linked to a drawer register for day-end reconciliation.\n\n' +
+        '• Click OK to proceed anyway (Manager override)\n' +
+        '• Click Cancel to open your cash drawer shift first.'
+      );
+      if (!proceed) {
+        setShowPosOpenShiftModal(true);
+        return;
+      }
+    }
+
+    // Credit payment check
+    const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
+    if (selectedPayMode === 'credit') {
+      if (!selectedCustomer) {
+        alert('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.');
+        return;
+      }
+      if (selectedCustomer.creditLimitMinor && selectedCustomer.creditLimitMinor > 0) {
+        const currentBal = (selectedCustomer as any).balanceMinor || (selectedCustomer as any).duesMinor || 0;
+        if (currentBal + finalPayableMinor > selectedCustomer.creditLimitMinor) {
+          const proceed = window.confirm(
+            `⚠️ Customer Credit Limit Warning!\n\n` +
+            `Customer: ${selectedCustomer.name}\n` +
+            `Credit Limit: ₹${(selectedCustomer.creditLimitMinor / 100).toFixed(2)}\n` +
+            `Current Outstanding: ₹${(currentBal / 100).toFixed(2)}\n` +
+            `This Bill: ₹${(finalPayableMinor / 100).toFixed(2)}\n\n` +
+            `This invoice exceeds their assigned credit limit. Proceed anyway?`
+          );
+          if (!proceed) return;
+        }
+      }
+    }
+
     setIsCheckingOut(true);
     try {
-      const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
       const lines = cart.map((c) => ({
         itemId: c.item.id,
         name: c.item.name,
@@ -1431,6 +1851,42 @@ export function App() {
         custName = `${custName || 'Client'} [Ref: ${jobRef}]`;
       }
 
+      let paymentsPayload: { method: string; amountMinor: number }[] = [];
+      let tenderPayload: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
+
+      if (selectedPayMode === 'credit') {
+        paymentsPayload = [];
+        tenderPayload = null;
+      } else if (selectedPayMode === 'split') {
+        if (splitTotalMinor === 0) {
+          showToast('Please enter split payment amounts');
+          setIsCheckingOut(false);
+          return;
+        }
+        if (splitTotalMinor < finalPayableMinor && !selectedPartyId) {
+          showToast(`₹${((finalPayableMinor - splitTotalMinor) / 100).toFixed(2)} remaining. Allocate remaining or select a Customer for Khata.`);
+          setIsCheckingOut(false);
+          return;
+        }
+
+        if (split1Minor > 0) {
+          paymentsPayload.push({ method: splitMethod1, amountMinor: split1Minor });
+        }
+        if (split2Minor > 0) {
+          paymentsPayload.push({ method: splitMethod2, amountMinor: split2Minor });
+        }
+
+        tenderPayload = null;
+      } else {
+        paymentsPayload = [{ method: selectedPayMode, amountMinor: finalPayableMinor }];
+        if (selectedPayMode === 'cash') {
+          tenderPayload = {
+            cashReceivedMinor: cashReceivedValMinor,
+            changeReturnedMinor: changeDueMinor,
+          };
+        }
+      }
+
       const res = await api<{
         invoiceId: string;
         number: string;
@@ -1438,11 +1894,14 @@ export function App() {
         paidMinor: number;
         balanceMinor: number;
         shareToken?: string;
+        tender?: { cashReceivedMinor: number; changeReturnedMinor: number } | null;
       }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
           lines,
-          payments: [{ method: selectedPayMode, amountMinor: finalPayableMinor }],
+          billDiscountMinor: discountMinor,
+          payments: paymentsPayload,
+          tender: tenderPayload,
           customerName: custName,
           customerPhone: selectedCustomer ? selectedCustomer.phone : undefined,
           partyId: selectedPartyId || undefined,
@@ -1451,6 +1910,10 @@ export function App() {
 
       const itemsInBillCount = cart.reduce((acc, c) => acc + c.qty, 0);
       setCart([]);
+      setCashReceived('');
+      setSplitAmount1('');
+      setSplitAmount2('');
+      setSplitCashTendered('');
       loadInvoices();
       loadReports();
       loadItems(); // refresh stock
@@ -1469,6 +1932,8 @@ export function App() {
           balanceMinor: res.balanceMinor,
           shareToken: res.shareToken,
           partyId: selectedPartyId || undefined,
+          tender: res.tender || tenderPayload,
+          payments: paymentsPayload,
         });
         setSuccessPhone(selectedCustomer?.phone || '');
         setSuccessLang((shop?.whatsappDefaultLang as any) || 'en');
@@ -2734,13 +3199,14 @@ export function App() {
       (selectedCategory === 'Dairy' && /dairy|milk|butter|cheese|paneer|ghee/i.test(item.category || item.name)) ||
       (selectedCategory === 'Others' && !/grocery|flour|grain|oil|sugar|salt|pulse|produce|fruit|veg|fresh|beverage|tea|coffee|snack|biscuit|bakery|household|personal|dairy/i.test(item.category || item.name));
 
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      !searchQuery ||
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.barcode && item.barcode.includes(searchQuery)) ||
-      (item.sku && item.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.hsn && item.hsn.includes(searchQuery)) ||
-      (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      item.name.toLowerCase().includes(q) ||
+      (item.barcode && item.barcode.toLowerCase().includes(q)) ||
+      (item.sku && item.sku.toLowerCase().includes(q)) ||
+      (item.hsn && item.hsn.toLowerCase().includes(q)) ||
+      (item.category && item.category.toLowerCase().includes(q));
 
     return matchesCat && matchesSearch;
   });
@@ -2760,6 +3226,7 @@ export function App() {
   const selectedParty = parties.find((p) => p.id === selectedPartyId);
 
   const filteredParties = parties.filter((p) => {
+    if (p.type !== 'customer') return false;
     if (!customerSearch) return true;
     const q = customerSearch.toLowerCase();
     return (
@@ -3198,670 +3665,1567 @@ export function App() {
           </header>
         )}
 
-        {/* TAB 1: MODERN POS COUNTER (MATCHING IMAGE 2 LAYOUT) */}
+        {/* TAB 1: BENTO POS BILLING TERMINAL */}
         {activeTab === 'pos' && (
-          <div className="pos-page-wrapper">
-            {/* Header with Blue Cart Icon & Title */}
-            <div className="pos-page-header">
-              <div className="pos-header-title-wrap">
-                <div className="pos-header-cart-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="9" cy="21" r="1"></circle>
-                    <circle cx="20" cy="21" r="1"></circle>
-                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                  </svg>
+          <div className="bento-pos-root">
+            {/* 1. TOP BENTO BAR: Store & Shift Status, Shortcuts, Alerts */}
+            <div className="bento-top-bar">
+              <div className="bento-top-left">
+                <div className="bento-pos-badge">
+                  <span className="bento-badge-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                  </span>
+                  <div>
+                    <div className="bento-badge-title">POS Billing Counter</div>
+                    <div className="bento-badge-sub">High-Speed Bento Billing Terminal</div>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="pos-page-title">POS Billing Counter</h1>
-                  <p className="pos-page-subtitle">Fast barcode scanning, dynamic cart calculation, and instant GST checkout</p>
-                </div>
+
+                {/* Shift Indicator Pill */}
+                {activeShiftNumber ? (
+                  <div className="bento-shift-pill open">
+                    <span className="bento-pulse-dot green"></span>
+                    <span>Register #{activeShiftNumber} Active</span>
+                  </div>
+                ) : (
+                  <div className="bento-shift-pill closed" onClick={() => setShowPosOpenShiftModal(true)}>
+                    <span className="bento-pulse-dot amber"></span>
+                    <span>Register Closed • Click to Open Shift</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="bento-top-right">
+                {/* Inventory Alert Trigger */}
+                {totalStockAlerts > 0 && (
+                  <button
+                    type="button"
+                    className="bento-alert-pill"
+                    onClick={() => setActiveTab('inventory')}
+                    title={`${totalStockAlerts} items have stock warnings`}
+                  >
+                    <span className="alert-ping">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      </svg>
+                    </span>
+                    <span>{totalStockAlerts} Stock Alerts</span>
+                    <span className="alert-arrow">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                      </svg>
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Blinking Low Stock & Out of Stock Alert Banner */}
-            {totalStockAlerts > 0 && (
-              <div className={`dashboard-stock-alert-banner ${outOfStockItems.length === 0 ? 'amber-only' : ''}`}>
-                <div className="alert-banner-left">
-                  <div className={`alert-banner-pulse-icon ${outOfStockItems.length === 0 ? 'amber' : ''}`}>
-                    {outOfStockItems.length > 0 ? '🚨' : '⚠️'}
-                  </div>
-                  <div className="alert-banner-content">
-                    <div className={`alert-banner-title ${outOfStockItems.length === 0 ? 'amber' : ''}`}>
-                      <span className={`blinking-dot ${outOfStockItems.length > 0 ? 'red' : 'amber'}`}></span>
-                      {outOfStockItems.length > 0 ? 'CRITICAL STOCK ALERT' : 'LOW STOCK WARNING'}
-                    </div>
-                    <div className={`alert-banner-desc ${outOfStockItems.length === 0 ? 'amber' : ''}`}>
-                      {outOfStockItems.length > 0 && (
-                        <span>
-                          <strong>{outOfStockItems.length}</strong> {outOfStockItems.length === 1 ? 'product is' : 'products are'} completely <strong>Out of Stock</strong>
-                        </span>
-                      )}
-                      {outOfStockItems.length > 0 && lowStockItems.length > 0 && <span> and </span>}
-                      {lowStockItems.length > 0 && (
-                        <span>
-                          <strong>{lowStockItems.length}</strong> {lowStockItems.length === 1 ? 'product is' : 'products are'} running <strong>Low on Stock</strong>
-                        </span>
-                      )}
-                      . Restock immediately to prevent missed sales at checkout.
-                    </div>
+            {/* Shift Closed Banner Warning */}
+            {!activeShiftNumber && (
+              <div className="bento-shift-warning-banner">
+                <div className="bento-warning-text">
+                  <span className="warning-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.4">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                  </span>
+                  <div>
+                    <strong>Cashier Register Shift is Closed.</strong> Cash collections will not be tracked to a drawer register. Open a shift to record initial cash float.
                   </div>
                 </div>
                 <button
                   type="button"
-                  className={`alert-banner-btn ${outOfStockItems.length === 0 ? 'amber' : ''}`}
-                  onClick={() => setActiveTab('inventory')}
+                  className="bento-open-shift-btn"
+                  onClick={() => setShowPosOpenShiftModal(true)}
                 >
-                  <span>Resolve in Inventory Hub</span>
-                  <span>→</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <path d="M12 12h.01M6 16h12M10 8h4"></path>
+                  </svg>
+                  <span>Open Cash Drawer</span>
                 </button>
               </div>
             )}
 
-            {/* Top Cards Row: Scan Barcode + 3 Badges */}
-            <div className="pos-feature-row">
-              {/* Scan Barcode Card */}
-              <div className="scan-barcode-card">
-                <div className="scan-barcode-left">
-                  <div className="barcode-icon-box">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 5v4M3 5h4M21 5v4M21 5h-4M3 19v-4M3 19h4M21 19v-4M21 19h-4M7 9v6M10 9v6M14 9v6M17 9v6" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="scan-card-title">Scan Barcode</h4>
-                    <p className="scan-card-subtitle">Scan product barcode to add items</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-scan-action"
-                  onClick={() => {
-                    const el = document.getElementById('pos-product-search-input');
-                    if (el) el.focus();
-                    showToast('Ready for barcode input');
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                    <circle cx="12" cy="13" r="4"></circle>
-                  </svg>
-                  <span>Scan</span>
-                </button>
-              </div>
+            {/* MAIN BENTO GRID */}
+            <div className="bento-pos-grid">
+              {/* ================= LEFT BENTO COLUMN: Catalog & Operations ================= */}
+              <div className="bento-left-col">
+                {/* ROW 1: Customer Card & Barcode Scanner in a 2-Card Bento Row */}
+                <div className="bento-subgrid-2">
+                  {/* BENTO CARD: Customer Desk & Khata */}
+                  <div className="bento-card bento-customer-card">
+                    <div className="bento-card-header">
+                      <div className="bento-header-label">
+                        <span className="bento-icon-circle blue">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                          </svg>
+                        </span>
+                        <div>
+                          <h3 className="bento-card-title">Customer & Khata</h3>
+                          <span className="bento-card-subtitle">Walk-in or Registered Account</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="bento-add-btn"
+                        onClick={() => setShowPartyModal(true)}
+                        title="Add New Customer"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Customer</span>
+                      </button>
+                    </div>
 
-              {/* Badge 1: Fast Billing */}
-              <div className="pos-feature-card">
-                <div className="feature-icon-circle purple">
-                  ⚡
-                </div>
-                <div className="feature-card-texts">
-                  <span className="feature-title">Fast Billing</span>
-                  <span className="feature-subtitle">Quick & Easy</span>
-                </div>
-              </div>
+                    <div className="bento-customer-body">
+                      <div className="customer-input-wrap">
+                        <input
+                          type="text"
+                          className="bento-input"
+                          placeholder="Search customer by name, phone or GSTIN..."
+                          value={customerSearch}
+                          onChange={(e) => {
+                            setCustomerSearch(e.target.value);
+                            setShowCustomerDropdown(true);
+                          }}
+                          onFocus={() => setShowCustomerDropdown(true)}
+                        />
+                        {selectedParty && (
+                          <div className="selected-customer-pill">
+                            <span className="customer-name-tag">{selectedParty.name}</span>
+                            <button
+                              type="button"
+                              className="clear-pill-btn"
+                              onClick={() => {
+                                setSelectedPartyId('');
+                                setCustomerSearch('');
+                              }}
+                              title="Switch to Walk-in"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
 
-              {/* Badge 2: GST Ready */}
-              <div className="pos-feature-card">
-                <div className="feature-icon-circle cyan">
-                  🛡️
-                </div>
-                <div className="feature-card-texts">
-                  <span className="feature-title">GST Ready</span>
-                  <span className="feature-subtitle">Automatic Tax</span>
-                </div>
-              </div>
+                        {showCustomerDropdown && (
+                          <div className="customer-dropdown-list">
+                            <div
+                              className="customer-dropdown-item walkin"
+                              onClick={() => {
+                                setSelectedPartyId('');
+                                setCustomerSearch('');
+                                setShowCustomerDropdown(false);
+                              }}
+                            >
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="7" r="4"></circle>
+                                  <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2"></path>
+                                </svg>
+                                <span>Walk-in Customer (Standard Retail)</span>
+                              </span>
+                            </div>
+                            {filteredParties.map((p) => (
+                              <div
+                                key={p.id}
+                                className="customer-dropdown-item"
+                                onClick={() => {
+                                  setSelectedPartyId(p.id);
+                                  setCustomerSearch(p.name);
+                                  setShowCustomerDropdown(false);
+                                }}
+                              >
+                                <div className="cust-item-main">
+                                  <span className="cust-item-name">{p.name}</span>
+                                  <span className="cust-item-phone">{p.phone || 'No phone'}</span>
+                                </div>
+                                {p.gstin && <span className="cust-item-gstin">{p.gstin}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-              {/* Badge 3: Secure */}
-              <div className="pos-feature-card">
-                <div className="feature-icon-circle lavender">
-                  🔒
-                </div>
-                <div className="feature-card-texts">
-                  <span className="feature-title">Secure</span>
-                  <span className="feature-subtitle">Your Data is Safe</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Main Two-Column POS Layout */}
-            <div className="pos-main-grid">
-              {/* LEFT COLUMN: Controls & Catalog */}
-              <div className="pos-left-panel">
-                {/* 1. Customer Card */}
-                <div className="pos-section-card">
-                  <div className="pos-card-header">
-                    <span className="card-header-icon blue">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                      </svg>
-                    </span>
-                    <span className="pos-card-heading">Customer</span>
-                  </div>
-
-                  <div className="customer-input-row">
-                    <div className="customer-input-wrap">
-                      <input
-                        type="text"
-                        className="pos-input"
-                        placeholder="Search customer by name, phone or ID..."
-                        value={customerSearch}
-                        onChange={(e) => {
-                          setCustomerSearch(e.target.value);
-                          setShowCustomerDropdown(true);
-                        }}
-                        onFocus={() => setShowCustomerDropdown(true)}
-                      />
-                      {selectedParty && (
-                        <div className="selected-customer-pill">
-                          <span>{selectedParty.name}</span>
+                      {/* Customer Info Highlights */}
+                      {selectedParty ? (
+                        <div className="bento-customer-meta">
+                          <div className="meta-item">
+                            <span className="meta-label">Phone:</span>
+                            <span className="meta-val">{selectedParty.phone || 'N/A'}</span>
+                          </div>
+                          {selectedParty.gstin && (
+                            <div className="meta-item">
+                              <span className="meta-label">GSTIN:</span>
+                              <span className="meta-val mono">{selectedParty.gstin}</span>
+                            </div>
+                          )}
+                          <div className="meta-item">
+                            <span className="meta-label">Credit Limit:</span>
+                            <span className="meta-val mono">{formatRupees(selectedParty.creditLimitMinor || 0)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bento-customer-quick-row">
+                          <div className="bento-walkin-pill">
+                            <span className="walkin-dot"></span>
+                            <span>Walk-in Customer</span>
+                            <span className="walkin-tag">Default</span>
+                          </div>
                           <button
                             type="button"
-                            className="clear-pill-btn"
-                            onClick={() => {
-                              setSelectedPartyId('');
-                              setCustomerSearch('');
-                            }}
-                            title="Switch to Walk-in"
+                            className="bento-cust-count-badge"
+                            onClick={() => setShowPartyModal(true)}
+                            title="Open Customer Accounts Directory"
                           >
-                            ✕
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="9" cy="7" r="4"></circle>
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <span>{parties.length} Saved</span>
                           </button>
                         </div>
                       )}
 
-                      {showCustomerDropdown && (
-                        <div className="customer-dropdown-list">
-                          <div
-                            className="customer-dropdown-item walkin"
-                            onClick={() => {
-                              setSelectedPartyId('');
-                              setCustomerSearch('');
-                              setShowCustomerDropdown(false);
-                            }}
-                          >
-                            <span>🚶 Walk-in Customer</span>
-                          </div>
-                          {filteredParties.map((p) => (
-                            <div
-                              key={p.id}
-                              className="customer-dropdown-item"
-                              onClick={() => {
-                                setSelectedPartyId(p.id);
-                                setCustomerSearch(p.name);
-                                setShowCustomerDropdown(false);
-                              }}
-                            >
-                              <div className="cust-item-main">
-                                <span className="cust-item-name">{p.name}</span>
-                                <span className="cust-item-phone">{p.phone || 'No phone'}</span>
-                              </div>
-                              {p.gstin && <span className="cust-item-gstin">{p.gstin}</span>}
-                            </div>
-                          ))}
+                      {/* Pharmacy Doctor Field */}
+                      {shop?.businessType === 'pharmacy' && (
+                        <div className="bento-pharmacy-row">
+                          <label className="bento-sublabel">Doctor / Prescription:</label>
+                          <input
+                            type="text"
+                            className="bento-input compact"
+                            value={doctorName}
+                            onChange={(e) => setDoctorName(e.target.value)}
+                            placeholder="Dr. Name & Reg No."
+                          />
                         </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="btn-add-customer"
-                      onClick={() => setShowPartyModal(true)}
-                      title="Add New Customer"
-                    >
-                      +
-                    </button>
                   </div>
 
-                  {/* Contextual Wholesale Credit Alert */}
-                  {shop?.businessType === 'wholesale' && selectedParty && (
-                    <div className="wholesale-credit-alert">
-                      <span>Credit Limit: <strong>{formatRupees(selectedParty.creditLimitMinor)}</strong></span>
-                      {selectedParty.gstin && <span> • GSTIN: {selectedParty.gstin}</span>}
+                  {/* BENTO CARD: Fast Barcode Scanner Hub */}
+                  <div className="bento-card bento-scanner-card">
+                    <div className="bento-card-header">
+                      <div className="bento-header-label">
+                        <span className="bento-icon-circle purple">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14" />
+                          </svg>
+                        </span>
+                        <div>
+                          <h3 className="bento-card-title">Barcode Scanner</h3>
+                          <span className="bento-card-subtitle">Instant SKU & Barcode Lookup</span>
+                        </div>
+                      </div>
+                      <span className={`bento-status-pill ${isPhoneScannerConnected ? 'emerald' : 'green'}`}>
+                        <span className="scanner-ready-dot"></span>
+                        {isPhoneScannerConnected ? 'Phone Active' : 'Ready'}
+                      </span>
                     </div>
-                  )}
 
-                  {/* Contextual Pharmacy Doctor */}
-                  {shop?.businessType === 'pharmacy' && (
-                    <div style={{ marginTop: '0.65rem' }}>
-                      <label style={{ fontSize: '0.72rem', color: '#be185d', fontWeight: 700 }}>Doctor / Prescription:</label>
-                      <input
-                        type="text"
-                        className="pos-input"
-                        style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', marginTop: '0.2rem' }}
-                        value={doctorName}
-                        onChange={(e) => setDoctorName(e.target.value)}
-                        placeholder="Dr. Name & Registration No."
-                      />
+                    <div className="bento-scanner-body">
+                      <div className="scanner-input-container">
+                        <span className="scanner-laser-icon">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                          </svg>
+                        </span>
+                        <input
+                          id="pos-product-search-input"
+                          type="text"
+                          className="bento-input scanner-input"
+                          placeholder="Scan barcode or enter product SKU..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && searchQuery.trim()) {
+                              e.preventDefault();
+                              handleBarcodeScanned(searchQuery.trim());
+                              setSearchQuery('');
+                            }
+                          }}
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            className="bento-input-clear-btn"
+                            onClick={() => setSearchQuery('')}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="scanner-action-row">
+                        <button
+                          type="button"
+                          className="bento-trigger-scan-btn"
+                          onClick={() => {
+                            const el = document.getElementById('pos-product-search-input');
+                            if (el) el.focus();
+                            showToast('Ready for barcode scanner input');
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                          </svg>
+                          <span>Focus Scanner</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`bento-mobile-scanner-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
+                          onClick={() => setShowMobileScannerModal(true)}
+                          title="Use your phone camera as a wireless barcode scanner"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                          </svg>
+                          <span>{isPhoneScannerConnected ? 'Phone Active ✓' : 'Phone as Scanner'}</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* 2. Product Search Card */}
-                <div className="pos-section-card">
-                  <div className="pos-card-header">
-                    <span className="card-header-icon blue">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-                        <path d="M7 8v8M10 8v8M14 8v8M17 8v8"></path>
-                      </svg>
-                    </span>
-                    <span className="pos-card-heading">Product Search</span>
-                  </div>
-                  <div className="product-search-input-wrap">
-                    <input
-                      id="pos-product-search-input"
-                      type="text"
-                      className="pos-input"
-                      placeholder="Search product by name, barcode or category..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <span className="search-input-right-icon">🔍</span>
-                  </div>
-                </div>
-
-                {/* 3. Quick Categories (4x2 Grid Matching Image 2) */}
-                <div className="pos-section-card">
-                  <div className="pos-card-header space-between">
-                    <span className="pos-card-heading">Quick Categories</span>
+                {/* ROW 2: Bento Quick Categories Grid */}
+                <div className="bento-card bento-categories-card">
+                  <div className="bento-card-header">
+                    <div className="bento-header-label">
+                      <span className="bento-icon-circle emerald">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                          <circle cx="7" cy="7" r="1.5" fill="currentColor"></circle>
+                        </svg>
+                      </span>
+                      <div>
+                        <h3 className="bento-card-title">Quick Categories</h3>
+                        <span className="bento-card-subtitle">Filter product inventory by department</span>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      className="btn-view-all"
+                      className={`bento-all-cats-btn ${selectedCategory === 'ALL' ? 'active' : ''}`}
                       onClick={() => {
                         setSelectedCategory('ALL');
                         setSearchQuery('');
                       }}
                     >
-                      View All
+                      All Items ({items.length})
                     </button>
                   </div>
 
-                  <div className="quick-categories-grid">
-                    {/* 1: Groceries */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Groceries' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Groceries' ? 'ALL' : 'Groceries')}
-                    >
-                      <div className="cat-icon-box green">
-                        🛒
-                      </div>
-                      <span className="cat-label">Groceries</span>
-                    </button>
-
-                    {/* 2: Fresh Produce */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Fresh Produce' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Fresh Produce' ? 'ALL' : 'Fresh Produce')}
-                    >
-                      <div className="cat-icon-box mint">
-                        🍃
-                      </div>
-                      <span className="cat-label">Fresh Produce</span>
-                    </button>
-
-                    {/* 3: Beverages */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Beverages' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Beverages' ? 'ALL' : 'Beverages')}
-                    >
-                      <div className="cat-icon-box blue">
-                        🍾
-                      </div>
-                      <span className="cat-label">Beverages</span>
-                    </button>
-
-                    {/* 4: Snacks */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Snacks' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Snacks' ? 'ALL' : 'Snacks')}
-                    >
-                      <div className="cat-icon-box red">
-                        🍿
-                      </div>
-                      <span className="cat-label">Snacks</span>
-                    </button>
-
-                    {/* 5: Household */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Household' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Household' ? 'ALL' : 'Household')}
-                    >
-                      <div className="cat-icon-box purple">
-                        🏠
-                      </div>
-                      <span className="cat-label">Household</span>
-                    </button>
-
-                    {/* 6: Personal Care */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Personal Care' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Personal Care' ? 'ALL' : 'Personal Care')}
-                    >
-                      <div className="cat-icon-box lavender">
-                        👤
-                      </div>
-                      <span className="cat-label">Personal Care</span>
-                    </button>
-
-                    {/* 7: Dairy */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Dairy' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Dairy' ? 'ALL' : 'Dairy')}
-                    >
-                      <div className="cat-icon-box cyan">
-                        🥛
-                      </div>
-                      <span className="cat-label">Dairy</span>
-                    </button>
-
-                    {/* 8: Others */}
-                    <button
-                      type="button"
-                      className={`quick-cat-btn ${selectedCategory === 'Others' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(selectedCategory === 'Others' ? 'ALL' : 'Others')}
-                    >
-                      <div className="cat-icon-box indigo">
-                        🔲
-                      </div>
-                      <span className="cat-label">Others</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 4. Product Catalog Quick-Add Grid */}
-                <div className="pos-section-card product-catalog-card">
-                  <div className="pos-card-header space-between">
-                    <span className="pos-card-heading">
-                      Matching Products ({filteredItems.length})
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-add-item-link"
-                      onClick={() => setShowItemModal(true)}
-                    >
-                      + Add Item
-                    </button>
-                  </div>
-
-                  <div className="pos-quick-items-grid">
-                    {filteredItems.slice(0, 10).map((item) => (
-                      <div
-                        key={item.id}
-                        className="quick-item-card"
-                        onClick={() => addToCart(item)}
-                        title={`Click to add ${item.name} to cart`}
-                      >
-                        <div className="quick-item-top">
-                          <span className="quick-item-name">{item.name}</span>
-                          <span className="quick-item-cat">{item.category || 'General'}</span>
-                        </div>
-                        <div className="quick-item-bottom">
-                          <span className="quick-item-price mono">{formatRupees(item.priceMinor)}</span>
-                          <button
-                            type="button"
-                            className="quick-add-badge"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              addToCart(item);
-                            }}
-                          >
-                            + Add
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 5. Apply Discount Card */}
-                <div
-                  className="pos-section-card apply-discount-card"
-                  onClick={() => setShowDiscountPicker(!showDiscountPicker)}
-                >
-                  <div className="discount-card-left">
-                    <div className="discount-tag-icon">
-                      🏷️
-                    </div>
-                    <div>
-                      <h4 className="discount-card-title">Apply Discount</h4>
-                      <p className="discount-card-subtitle">
-                        {appliedDiscountPercent > 0
-                          ? `${appliedDiscountPercent}% discount applied (${formatRupees(discountMinor)} off)`
-                          : 'Add discounts, offers or loyalty points'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="discount-chevron">
-                    {showDiscountPicker ? '▲' : '›'}
-                  </span>
-                </div>
-
-                {showDiscountPicker && (
-                  <div className="discount-picker-popover">
-                    <div className="discount-pills-row">
-                      {[0, 5, 10, 15, 20].map((pct) => (
-                        <button
-                          key={pct}
-                          type="button"
-                          className={`discount-pill ${appliedDiscountPercent === pct ? 'active' : ''}`}
-                          onClick={() => {
-                            setAppliedDiscountPercent(pct);
-                            setShowDiscountPicker(false);
-                            showToast(pct > 0 ? `${pct}% discount applied!` : 'Discount cleared');
-                          }}
-                        >
-                          {pct === 0 ? 'None' : `${pct}% OFF`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* RIGHT COLUMN: Current Cart & Payment */}
-              <div className="pos-right-panel">
-                <div className="current-cart-card">
-                  {/* Cart Header */}
-                  <div className="current-cart-header">
-                    <div className="current-cart-title-wrap">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="9" cy="21" r="1"></circle>
-                        <circle cx="20" cy="21" r="1"></circle>
-                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                      </svg>
-                      <span className="current-cart-title">
-                        Current Cart ({cart.reduce((a, b) => a + b.qty, 0)})
-                      </span>
-                    </div>
-                    <div className="cart-header-actions">
-                      <button
-                        type="button"
-                        className="btn-clear-cart"
-                        disabled={cart.length === 0}
-                        onClick={() => setCart([])}
-                        title="Remove all items from current cart"
-                      >
-                        🗑️ Clear Cart
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-hold-order"
-                        onClick={handleHoldOrder}
-                        title="Hold or restore pending bill"
-                      >
-                        ⏸️ {heldOrders.length > 0 ? `Hold Order (${heldOrders.length})` : 'Hold Order'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Cart Body */}
-                  <div className="current-cart-body">
-                    {cart.length === 0 ? (
-                      <div className="empty-cart-state">
-                        <div className="empty-cart-icon-wrapper">
-                          <svg width="74" height="74" viewBox="0 0 24 24" fill="none" stroke="#6d4aff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="bento-category-grid">
+                    {[
+                      {
+                        id: 'Groceries',
+                        label: 'Groceries',
+                        color: 'cat-groceries',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                             <circle cx="9" cy="21" r="1"></circle>
                             <circle cx="20" cy="21" r="1"></circle>
                             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                           </svg>
-                          <div className="empty-cart-badge-plus">+</div>
+                        ),
+                      },
+                      {
+                        id: 'Fresh Produce',
+                        label: 'Produce',
+                        color: 'cat-produce',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+                            <path d="M2 21c0-3 1.85-5.36 5.08-6"></path>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Beverages',
+                        label: 'Beverages',
+                        color: 'cat-beverages',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                            <line x1="6" y1="1" x2="6" y2="4"></line>
+                            <line x1="10" y1="1" x2="10" y2="4"></line>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Snacks',
+                        label: 'Snacks',
+                        color: 'cat-snacks',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                            <path d="M2 17l10 5 10-5"></path>
+                            <path d="M2 12l10 5 10-5"></path>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Household',
+                        label: 'Household',
+                        color: 'cat-household',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Personal Care',
+                        label: 'Personal Care',
+                        color: 'cat-care',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Dairy',
+                        label: 'Dairy',
+                        color: 'cat-dairy',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="M8 2h8v3H8z"></path>
+                            <path d="M6 5h12l2 16H4L6 5z"></path>
+                          </svg>
+                        ),
+                      },
+                      {
+                        id: 'Others',
+                        label: 'Others',
+                        color: 'cat-others',
+                        icon: (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                          </svg>
+                        ),
+                      },
+                    ].map((cat) => {
+                      const count = items.filter(
+                        (i) => (i.category || '').toLowerCase() === cat.id.toLowerCase()
+                      ).length;
+                      const isSelected = selectedCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          className={`bento-cat-tile ${cat.color} ${isSelected ? 'active' : ''}`}
+                          onClick={() => setSelectedCategory(isSelected ? 'ALL' : cat.id)}
+                        >
+                          <span className="cat-tile-icon">{cat.icon}</span>
+                          <span className="cat-tile-label">{cat.label}</span>
+                          <span className="cat-tile-count">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ROW 3: Bento Product Catalog Showcase */}
+                <div className="bento-card bento-catalog-card">
+                  <div className="bento-card-header">
+                    <div className="bento-header-label">
+                      <span className="bento-icon-circle indigo">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                      </span>
+                      <div>
+                        <h3 className="bento-card-title">Product Catalog</h3>
+                        <span className="bento-card-subtitle">
+                          Showing {filteredItems.length} available items {selectedCategory !== 'ALL' && `in ${selectedCategory}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Fast Product Catalog Search & Actions */}
+                    <div className="bento-catalog-header-actions">
+                      <div className="bento-catalog-search-wrap">
+                        <div className="bento-catalog-search-box">
+                          <svg className="bento-catalog-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                          <input
+                            ref={catalogSearchInputRef}
+                            type="text"
+                            className="bento-catalog-search-input"
+                            placeholder="Fast product search by name, barcode, SKU..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setSearchQuery('');
+                                catalogSearchInputRef.current?.blur();
+                              } else if (e.key === 'Enter') {
+                                if (filteredItems.length === 1) {
+                                  addToCart(filteredItems[0]);
+                                  playSupermarketBeep();
+                                  showToast(`Added ${filteredItems[0].name} to cart`);
+                                }
+                              }
+                            }}
+                          />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              className="bento-catalog-search-clear"
+                              onClick={() => {
+                                setSearchQuery('');
+                                catalogSearchInputRef.current?.focus();
+                              }}
+                              title="Clear search"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                              </svg>
+                            </button>
+                          )}
                         </div>
-                        <h3 className="empty-cart-title">Your cart is empty</h3>
-                        <p className="empty-cart-subtitle">Scan a product or search to add items to your cart</p>
+                        {searchQuery && (
+                          <span className="bento-search-badge">
+                            {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="bento-new-item-btn"
+                        onClick={() => setShowItemModal(true)}
+                      >
+                        + New Item
+                      </button>
+                    </div>
+                  </div>
+
+                  {filteredItems.length === 0 ? (
+                    <div className="bento-empty-catalog">
+                      <span className="empty-catalog-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                      </span>
+                      <h4>No products found</h4>
+                      <p>Try searching with another keyword or barcode</p>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setSelectedCategory('ALL');
+                        }}
+                      >
+                        Reset Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bento-products-grid">
+                      {filteredItems.slice(0, 48).map((item) => {
+                        const mrp = getItemMrp(item);
+                        const storePrice = item.priceMinor;
+                        const savings = Math.max(0, mrp - storePrice);
+                        const discountPercent = mrp > storePrice && mrp > 0 ? Math.round((savings / mrp) * 100) : 0;
+                        const inCartCount = cart.find((c) => c.item.id === item.id)?.qty || 0;
+                        const isOutOfStock = item.currentStockMilli <= 0;
+                        // Clean up raw timestamps in demo item names if present
+                        const displayName = item.name.replace(/\s+\d{10,15}$/, '');
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''}`}
+                            onClick={() => {
+                              if (!isOutOfStock) addToCart(item);
+                            }}
+                            title={`Click to add ${displayName} to cart`}
+                          >
+                            {/* Top Badges Row */}
+                            <div className="bento-tile-top">
+                              <span className="bento-tile-cat" title={item.category || 'General'}>
+                                {item.category || 'General'}
+                              </span>
+                              {item.stockStatus === 'out_of_stock' || isOutOfStock ? (
+                                <span className="bento-stock-tag out">
+                                  <span className="stock-dot"></span> Out of Stock
+                                </span>
+                              ) : item.stockStatus === 'low_stock' ? (
+                                <span className="bento-stock-tag low">
+                                  <span className="stock-dot"></span> Low Stock
+                                </span>
+                              ) : (
+                                <span className="bento-stock-tag in">
+                                  <span className="stock-dot"></span> In Stock
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Product Title */}
+                            <div className="bento-tile-title" title={item.name}>
+                              {displayName}
+                            </div>
+
+                            {/* Clean Pricing Section - Completely Guaranteed Zero Overflow */}
+                            <div className="bento-tile-pricing">
+                              <div className="pricing-store-row">
+                                <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
+                                {mrp > storePrice && (
+                                  <span className="mrp-strikethrough mono">MRP {formatRupees(mrp)}</span>
+                                )}
+                              </div>
+                              <div className="pricing-sub-row">
+                                {savings > 0 ? (
+                                  <span className="pricing-save-badge">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Save {formatRupees(savings)}</span>
+                                    {discountPercent > 0 && <span className="save-pct">({discountPercent}% OFF)</span>}
+                                  </span>
+                                ) : (
+                                  <span className="pricing-standard-tag">Inclusive of All Taxes</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Card Action Footer */}
+                            <div className="bento-tile-footer">
+                              <div className="bento-tile-sku mono" title={item.barcode || item.sku || ''}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                  <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14" />
+                                </svg>
+                                <span>{item.barcode ? (item.barcode.length > 10 ? `...${item.barcode.slice(-8)}` : item.barcode) : (item.sku || `GST ${item.taxRateBp / 100}%`)}</span>
+                              </div>
+
+                              {inCartCount > 0 ? (
+                                <div className="bento-tile-stepper" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="tile-stepper-btn minus"
+                                    onClick={() => updateCartQty(item.id, -1)}
+                                    title="Decrease quantity"
+                                  >
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                  </button>
+                                  <span className="tile-stepper-qty mono">{inCartCount}</span>
+                                  <button
+                                    type="button"
+                                    className="tile-stepper-btn plus"
+                                    onClick={() => updateCartQty(item.id, 1)}
+                                    title="Increase quantity"
+                                  >
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="bento-quick-add-btn"
+                                  disabled={isOutOfStock}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isOutOfStock) addToCart(item);
+                                  }}
+                                  title={isOutOfStock ? "Out of stock" : "Add to cart"}
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                  </svg>
+                                  <span>Add</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ================= RIGHT BENTO COLUMN: Master Billing Terminal ================= */}
+              <div className="bento-right-col">
+                <div className="bento-card bento-billing-terminal">
+                  {/* Terminal Header */}
+                  <div className="bento-terminal-header">
+                    <div className="terminal-title-group">
+                      <div className="terminal-icon-box">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="9" cy="21" r="1"></circle>
+                          <circle cx="20" cy="21" r="1"></circle>
+                          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                        </svg>
+                      </div>
+                      <div>
+                        <h2 className="terminal-heading">Billing Terminal</h2>
+                        <span className="terminal-subheading">
+                          {cart.length} item{cart.length === 1 ? '' : 's'} • {cart.reduce((a, b) => a + b.qty, 0)} units
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="terminal-actions">
+                      <button
+                        type="button"
+                        className="bento-clear-cart-btn"
+                        disabled={cart.length === 0}
+                        onClick={() => {
+                          setCart([]);
+                          setCashReceived('');
+                          setSplitAmount1('');
+                          setSplitAmount2('');
+                          setSplitCashTendered('');
+                        }}
+                        title="Clear all cart items"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        <span>Clear</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bento-hold-cart-btn"
+                        onClick={handleHoldOrder}
+                        title="Hold or restore order"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                          <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                        </svg>
+                        <span>{heldOrders.length > 0 ? `Held (${heldOrders.length})` : 'Hold'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RESTAURANT SPECIAL: Table & Order Type */}
+                  {shop?.businessType === 'restaurant' && (
+                    <div className="bento-restaurant-strip">
+                      <div className="strip-field">
+                        <label>Table:</label>
+                        <select
+                          className="form-input"
+                          value={restaurantTable}
+                          onChange={(e) => setRestaurantTable(e.target.value)}
+                        >
+                          {['Table 1', 'Table 2', 'Table 3', 'Table 4 (Family AC)', 'Table 5', 'Takeaway / Parcel'].map((tbl) => (
+                            <option key={tbl} value={tbl}>{tbl}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="strip-field">
+                        <label>Order Type:</label>
+                        <select
+                          className="form-input"
+                          value={restaurantOrderType}
+                          onChange={(e) => setRestaurantOrderType(e.target.value as any)}
+                        >
+                          <option value="Dine-in">Dine-in</option>
+                          <option value="Takeaway">Takeaway</option>
+                          <option value="Delivery">Delivery</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. CATEGORY TOTAL PRODUCT PRICE STRIP */}
+                  {cart.length > 0 && (
+                    <div className="bento-category-strip-container">
+                      <div className="bento-category-strip-title">
+                        <span>Category Breakdown:</span>
+                      </div>
+                      <div className="bento-category-strip">
+                        {Object.values(cartCategoryBreakdown).map((cat) => (
+                          <div key={cat.name} className="bento-cat-summary-pill">
+                            <span className="cat-pill-name">{cat.name}</span>
+                            <span className="cat-pill-count">({cat.count} pcs)</span>
+                            <span className="cat-pill-total mono">{formatRupees(cat.totalMinor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. CART ITEMS TABLE / LIST */}
+                  <div className="bento-cart-body">
+                    {cart.length === 0 ? (
+                      <div className="bento-empty-cart">
+                        <div className="bento-empty-icon-wrap">
+                          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="9" cy="21" r="1"></circle>
+                            <circle cx="20" cy="21" r="1"></circle>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                          </svg>
+                          <div className="empty-cart-ping">+</div>
+                        </div>
+                        <h4 className="empty-title">Cart is Empty</h4>
+                        <p className="empty-desc">Scan a barcode or click products to build the bill</p>
                         <button
                           type="button"
-                          className="btn-start-shopping"
+                          className="bento-start-add-btn"
                           onClick={() => {
                             const el = document.getElementById('pos-product-search-input');
                             if (el) el.focus();
                           }}
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="9" cy="21" r="1"></circle>
-                            <circle cx="20" cy="21" r="1"></circle>
-                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                           </svg>
-                          <span>Start Shopping</span>
+                          <span>Find Products</span>
                         </button>
                       </div>
                     ) : (
-                      <div className="cart-items-scroll-list">
-                        {/* Specialized Restaurant Controls */}
-                        {shop?.businessType === 'restaurant' && (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.65rem', padding: '0.55rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fef3c7' }}>
-                            <div>
-                              <label style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 700 }}>Table:</label>
-                              <select
-                                className="form-input"
-                                style={{ fontSize: '0.8rem', padding: '0.35rem', marginTop: '0.15rem' }}
-                                value={restaurantTable}
-                                onChange={(e) => setRestaurantTable(e.target.value)}
-                              >
-                                {['Table 1', 'Table 2', 'Table 3', 'Table 4 (Family AC)', 'Table 5', 'Takeaway / Parcel'].map((tbl) => (
-                                  <option key={tbl} value={tbl}>{tbl}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label style={{ fontSize: '0.72rem', color: '#b45309', fontWeight: 700 }}>Order Type:</label>
-                              <select
-                                className="form-input"
-                                style={{ fontSize: '0.8rem', padding: '0.35rem', marginTop: '0.15rem' }}
-                                value={restaurantOrderType}
-                                onChange={(e) => setRestaurantOrderType(e.target.value as any)}
-                              >
-                                <option value="Dine-in">Dine-in</option>
-                                <option value="Takeaway">Takeaway</option>
-                                <option value="Delivery">Delivery</option>
-                              </select>
-                            </div>
-                          </div>
-                        )}
+                      <div className="bento-cart-table-wrapper">
+                        {/* Table Header Bar */}
+                        <div className="bento-cart-table-header">
+                          <span className="th-item" title="Product & Category">Product</span>
+                          <span className="th-qty" title="Quantity">Qty</span>
+                          <span className="th-mrp" title="Maximum Retail Price">MRP</span>
+                          <span className="th-price" title="Store Selling Price">Store Price</span>
+                          <span className="th-total" title="Total Product Price">Total Price</span>
+                          <span className="th-action"></span>
+                        </div>
 
-                        {/* Cart Item Rows */}
-                        {cart.map(({ item, qty }) => (
-                          <div key={item.id} className="current-cart-row">
-                            <div className="cart-row-info">
-                              <div className="cart-row-name">{item.name}</div>
-                              <div className="cart-row-unit-price mono">
-                                {formatRupees(item.priceMinor)} × {qty} ({item.taxRateBp / 100}% GST)
+                        {/* Cart Rows: NO SEPARATE GST ON PRODUCT; SHOWS QTY, MRP, STORE PRICE, TOTAL PRICE, CATEGORY */}
+                        <div className="bento-cart-rows-scroll">
+                          {cart.map(({ item, qty }) => {
+                            const mrp = getItemMrp(item);
+                            const storePrice = item.priceMinor;
+                            const lineTotal = storePrice * qty;
+                            const lineSavings = Math.max(0, (mrp - storePrice) * qty);
+
+                            return (
+                              <div key={item.id} className="bento-cart-row">
+                                {/* Col 1: Product Name & Category Badge */}
+                                <div className="bento-row-item-col">
+                                  <div className="bento-cart-item-name" title={item.name}>
+                                    {item.name}
+                                  </div>
+                                  <div className="bento-cart-item-meta">
+                                    <span className="bento-cart-cat-badge">
+                                      {item.category || 'General'}
+                                    </span>
+                                    {lineSavings > 0 && (
+                                      <span className="bento-cart-savings-tag">
+                                        Save {formatRupees(lineSavings)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Col 2: Quantity Stepper */}
+                                <div className="bento-row-qty-col">
+                                  <div className="bento-qty-stepper">
+                                    <button
+                                      type="button"
+                                      className="bento-qty-btn"
+                                      onClick={() => updateCartQty(item.id, -1)}
+                                      title="Decrease quantity"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="bento-qty-value mono">{qty}</span>
+                                    <button
+                                      type="button"
+                                      className="bento-qty-btn"
+                                      onClick={() => updateCartQty(item.id, 1)}
+                                      title="Increase quantity"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Col 3: MRP */}
+                                <div className="bento-row-mrp-col">
+                                  <span className="bento-mrp-val mono">
+                                    {formatRupees(mrp)}
+                                  </span>
+                                </div>
+
+                                {/* Col 4: Store Price */}
+                                <div className="bento-row-store-col">
+                                  <span className="bento-store-val mono">
+                                    {formatRupees(storePrice)}
+                                  </span>
+                                </div>
+
+                                {/* Col 5: Total Product Price */}
+                                <div className="bento-row-total-col">
+                                  <span className="bento-total-val mono">
+                                    {formatRupees(lineTotal)}
+                                  </span>
+                                </div>
+
+                                {/* Col 6: Remove Action */}
+                                <div className="bento-row-action-col">
+                                  <button
+                                    type="button"
+                                    className="bento-row-remove-btn"
+                                    onClick={() => updateCartQty(item.id, -qty)}
+                                    title="Remove item"
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            <div className="cart-row-qty-ctrl">
-                              <button
-                                type="button"
-                                className="cart-qty-btn"
-                                onClick={() => updateCartQty(item.id, -1)}
-                              >
-                                -
-                              </button>
-                              <span className="cart-qty-num mono">{qty}</span>
-                              <button
-                                type="button"
-                                className="cart-qty-btn"
-                                onClick={() => updateCartQty(item.id, 1)}
-                              >
-                                +
-                              </button>
-                            </div>
-                            <div className="cart-row-total mono">
-                              {formatRupees(item.priceMinor * qty)}
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Cart Summary Card Matching Image 2 */}
-                  <div className="current-cart-summary">
-                    <div className="summary-line-item">
-                      <span>Subtotal</span>
-                      <span className="mono">{formatRupees(cartTaxableMinor)}</span>
-                    </div>
-                    <div className="summary-line-item">
-                      <span>Discount</span>
-                      <span className="mono" style={{ color: appliedDiscountPercent > 0 ? '#10b981' : undefined }}>
-                        {appliedDiscountPercent > 0 ? `-${formatRupees(discountMinor)}` : '₹0.00'}
+                  {/* 4. OVERALL TOTAL & CONSOLIDATED GST SUMMARY */}
+                  <div className="bento-cart-footer">
+                    {/* Discount Quick Selector Pills */}
+                    <div className="bento-discount-bar">
+                      <span className="discount-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                          <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                        </svg>
+                        Bill Discount:
                       </span>
-                    </div>
-                    <div className="summary-line-item">
-                      <span>Tax (GST)</span>
-                      <span className="mono">{formatRupees(cartTaxMinor)}</span>
+                      <div className="bento-discount-pills">
+                        {[0, 5, 10, 15, 20].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            className={`bento-disc-pill ${appliedDiscountPercent === pct ? 'active' : ''}`}
+                            onClick={() => {
+                              setAppliedDiscountPercent(pct);
+                              showToast(pct > 0 ? `${pct}% bill discount applied!` : 'Discount cleared');
+                            }}
+                          >
+                            {pct === 0 ? '0%' : `${pct}%`}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Payment Mode Selector */}
-                    <div className="cart-payment-modes">
-                      {(['cash', 'upi', 'card', 'bank'] as const).map((mode) => (
+                    {/* Overall Summary Breakdown */}
+                    <div className="bento-summary-box">
+                      <div className="bento-summary-row">
+                        <span className="summary-label">Items / Total Units</span>
+                        <span className="summary-val mono">
+                          {cart.length} items ({cart.reduce((a, b) => a + b.qty, 0)} units)
+                        </span>
+                      </div>
+
+                      {cartTotalMrpMinor > 0 && (
+                        <div className="bento-summary-row">
+                          <span className="summary-label">Total MRP Value</span>
+                          <span className="summary-val mono">{formatRupees(cartTotalMrpMinor)}</span>
+                        </div>
+                      )}
+
+                      <div className="bento-summary-row">
+                        <span className="summary-label">Taxable Subtotal</span>
+                        <span className="summary-val mono">{formatRupees(cartTaxableMinor)}</span>
+                      </div>
+
+                      {appliedDiscountPercent > 0 && (
+                        <div className="bento-summary-row discount-row">
+                          <span className="summary-label">Bill Discount ({appliedDiscountPercent}%)</span>
+                          <span className="summary-val mono text-success">-{formatRupees(discountMinor)}</span>
+                        </div>
+                      )}
+
+                      {/* CONSOLIDATED OVERALL GST WITH TAX BREAKDOWN */}
+                      <div className="bento-summary-row tax-row">
+                        <div className="tax-label-group">
+                          <span className="summary-label">Consolidated GST Tax</span>
+                          <span className="tax-sub-breakdown">
+                            (CGST: {formatRupees(cartCgstMinor)} + SGST: {formatRupees(cartSgstMinor)})
+                          </span>
+                        </div>
+                        <span className="summary-val mono tax-val">{formatRupees(cartTaxMinor)}</span>
+                      </div>
+
+                      {/* Overall Customer Savings Celebration */}
+                      {totalMrpSavingsMinor > 0 && (
+                        <div className="bento-savings-alert">
+                          <span className="savings-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.2">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                          </span>
+                          <span>Total Customer Savings: <strong>{formatRupees(totalMrpSavingsMinor)}</strong></span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Payment Tender Modes with Stylized Vector Icons */}
+                    <div className="bento-payment-modes">
+                      {[
+                        {
+                          id: 'cash',
+                          label: 'Cash',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="2" y="6" width="20" height="12" rx="2" />
+                              <circle cx="12" cy="12" r="3.5" />
+                              <path d="M6 12h.01M18 12h.01" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'upi',
+                          label: 'UPI',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="5" y="2" width="14" height="20" rx="3" />
+                              <path d="M12 18h.01M9 6h6M9 9h6" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'card',
+                          label: 'Card',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="2" y="5" width="20" height="14" rx="2" />
+                              <line x1="2" y1="10" x2="22" y2="10" />
+                              <line x1="6" y1="15" x2="10" y2="15" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'bank',
+                          label: 'Bank',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 21h18M3 10h18M5 10v11M9 10v11M15 10v11M19 10v11M12 3l9 7H3l9-7z" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'credit',
+                          label: 'Khata',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'split',
+                          label: 'Split',
+                          icon: (
+                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="18" cy="18" r="3" />
+                              <circle cx="6" cy="6" r="3" />
+                              <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                              <line x1="6" y1="9" x2="6" y2="21" />
+                            </svg>
+                          ),
+                        },
+                      ].map(({ id, label, icon }) => (
                         <button
-                          key={mode}
+                          key={id}
                           type="button"
-                          className={`cart-pay-mode-btn ${selectedPayMode === mode ? 'active' : ''}`}
-                          onClick={() => setSelectedPayMode(mode)}
+                          className={`bento-pay-mode-btn ${selectedPayMode === id ? 'active' : ''}`}
+                          onClick={() => {
+                            setSelectedPayMode(id as any);
+                            if (id === 'split' && !splitAmount1 && !splitAmount2) {
+                              handleSplitFiftyFifty();
+                            }
+                          }}
                         >
-                          {mode === 'cash' && '💵 Cash'}
-                          {mode === 'upi' && '📱 UPI'}
-                          {mode === 'card' && '💳 Card'}
-                          {mode === 'bank' && '🏦 Bank'}
+                          {icon}
+                          <span>{label}</span>
                         </button>
                       ))}
                     </div>
 
-                    <div className="summary-total-checkout-row">
-                      <div className="total-display-col">
-                        <span className="total-label">Total</span>
-                        <span className="total-amount-val mono">{formatRupees(finalPayableMinor)}</span>
+                    {/* CASH TENDER & CHANGE RETURN ASSISTANT */}
+                    {selectedPayMode === 'cash' && cart.length > 0 && (
+                      <div className="bento-cash-tender-card">
+                        <div className="bento-tender-header">
+                          <div className="bento-tender-title">
+                            <span className="tender-icon-box">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                                <rect x="2" y="6" width="20" height="12" rx="2" />
+                                <circle cx="12" cy="12" r="3.5" />
+                                <path d="M6 12h.01M18 12h.01" />
+                              </svg>
+                            </span>
+                            <span>Cash Tender & Change</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="bento-tender-exact-btn"
+                            onClick={() => setCashReceived(Math.ceil(finalPayableMinor / 100).toString())}
+                            title="Set to exact bill amount"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Exact (₹{Math.ceil(finalPayableMinor / 100)})</span>
+                          </button>
+                        </div>
+
+                        <div className="bento-tender-grid">
+                          <div className="bento-tender-field">
+                            <label className="bento-tender-label">Customer Gave (Cash)</label>
+                            <div className="bento-tender-input-wrap">
+                              <span className="bento-tender-symbol">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                className="bento-tender-input"
+                                placeholder="0"
+                                value={cashReceived}
+                                onChange={(e) => setCashReceived(e.target.value)}
+                              />
+                              {cashReceived && (
+                                <button
+                                  type="button"
+                                  className="bento-tender-clear-btn"
+                                  onClick={() => setCashReceived('')}
+                                  title="Clear amount"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="bento-tender-field">
+                            <label className="bento-tender-label">
+                              {cashReceivedValMinor >= finalPayableMinor ? 'Change to Return' : 'Short / Remaining'}
+                            </label>
+                            <div className={`bento-tender-change-box ${cashReceivedValMinor >= finalPayableMinor ? 'is-return' : 'is-short'}`}>
+                              <span className="change-icon">
+                                {cashReceivedValMinor >= finalPayableMinor ? (
+                                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="9 14 4 9 9 4"></polyline>
+                                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                                  </svg>
+                                ) : (
+                                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                  </svg>
+                                )}
+                              </span>
+                              <span className="change-amount mono">
+                                {formatRupees(cashReceivedValMinor >= finalPayableMinor ? changeDueMinor : remainingDueMinor)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Tender Chip Buttons */}
+                        <div className="bento-tender-chips-row">
+                          <span className="chips-hint">Quick Tender:</span>
+                          <div className="chips-list">
+                            {suggestedDenominations.map((denom) => {
+                              const isSelected = cashReceivedValMinor === denom * 100;
+                              return (
+                                <button
+                                  key={denom}
+                                  type="button"
+                                  className={`tender-chip-btn ${isSelected ? 'active' : ''}`}
+                                  onClick={() => setCashReceived(denom.toString())}
+                                >
+                                  ₹{denom}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '0.4rem', flex: 1, justifyContent: 'flex-end' }}>
+                    )}
+
+                    {/* SPLIT TENDER ASSISTANT CARD (MULTI-TENDER: HALF UPI / HALF CASH / CUSTOM) */}
+                    {selectedPayMode === 'split' && cart.length > 0 && (
+                      <div className="bento-split-tender-card">
+                        <div className="split-tender-header">
+                          <div className="split-tender-title">
+                            <span className="split-icon-box">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="18" cy="18" r="3" />
+                                <circle cx="6" cy="6" r="3" />
+                                <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                                <line x1="6" y1="9" x2="6" y2="21" />
+                              </svg>
+                            </span>
+                            <span>Split Payment (Multi-Tender)</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="split-quick-half-btn"
+                            onClick={handleSplitFiftyFifty}
+                            title="Split 50% Cash and 50% UPI"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="5" y1="19" x2="19" y2="5"></line>
+                              <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                              <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                            </svg>
+                            <span>50% Cash + 50% UPI</span>
+                          </button>
+                        </div>
+
+                        {/* Split Allocation Rows */}
+                        <div className="split-rows-grid">
+                          {/* Split Row 1 */}
+                          <div className="split-row-box">
+                            <div className="split-row-header">
+                              <select
+                                className="split-method-select"
+                                value={splitMethod1}
+                                onChange={(e) => setSplitMethod1(e.target.value as any)}
+                              >
+                                <option value="cash">Cash</option>
+                                <option value="upi">UPI</option>
+                                <option value="card">Card</option>
+                                <option value="bank">Bank</option>
+                              </select>
+                              <button
+                                type="button"
+                                className="split-fill-btn"
+                                onClick={() => handleFillSplitRemaining(1)}
+                                title="Fill remaining balance into this mode"
+                              >
+                                Fill Balance
+                              </button>
+                            </div>
+                            <div className="bento-tender-input-wrap">
+                              <span className="bento-tender-symbol">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                className="bento-tender-input"
+                                placeholder="0"
+                                value={splitAmount1}
+                                onChange={(e) => handleSplit1Change(e.target.value)}
+                              />
+                              {splitAmount1 && (
+                                <button
+                                  type="button"
+                                  className="bento-tender-clear-btn"
+                                  onClick={() => handleSplit1Change('')}
+                                  title="Clear"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Split Row 2 */}
+                          <div className="split-row-box">
+                            <div className="split-row-header">
+                              <select
+                                className="split-method-select"
+                                value={splitMethod2}
+                                onChange={(e) => setSplitMethod2(e.target.value as any)}
+                              >
+                                <option value="upi">UPI</option>
+                                <option value="cash">Cash</option>
+                                <option value="card">Card</option>
+                                <option value="bank">Bank</option>
+                              </select>
+                              <button
+                                type="button"
+                                className="split-fill-btn"
+                                onClick={() => handleFillSplitRemaining(2)}
+                                title="Fill remaining balance into this mode"
+                              >
+                                Fill Balance
+                              </button>
+                            </div>
+                            <div className="bento-tender-input-wrap">
+                              <span className="bento-tender-symbol">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                className="bento-tender-input"
+                                placeholder="0"
+                                value={splitAmount2}
+                                onChange={(e) => handleSplit2Change(e.target.value)}
+                              />
+                              {splitAmount2 && (
+                                <button
+                                  type="button"
+                                  className="bento-tender-clear-btn"
+                                  onClick={() => handleSplit2Change('')}
+                                  title="Clear"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Live Allocation Summary Strip */}
+                        <div className="split-summary-strip">
+                          <div className="split-summary-left">
+                            <span className="split-sum-label">Allocated:</span>
+                            <span className="split-sum-val mono">{formatRupees(splitTotalMinor)}</span>
+                            <span className="split-sum-divider">/</span>
+                            <span className="split-sum-target mono">{formatRupees(finalPayableMinor)}</span>
+                          </div>
+                          <div className="split-summary-right">
+                            {splitTotalMinor === finalPayableMinor && (
+                              <span className="split-status-badge success">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                Exact Match
+                              </span>
+                            )}
+                            {splitTotalMinor < finalPayableMinor && (
+                              <span className="split-status-badge warning">
+                                Remaining: {formatRupees(splitRemainingMinor)}
+                              </span>
+                            )}
+                            {splitTotalMinor > finalPayableMinor && (
+                              <span className="split-status-badge error">
+                                Exceeds by {formatRupees(splitOverMinor)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bottom Grand Total & Proceed Button */}
+                    <div className="bento-checkout-row">
+                      <div className="bento-grand-total">
+                        <span className="grand-total-label">Grand Total Amount</span>
+                        <span className="grand-total-val mono">{formatRupees(finalPayableMinor)}</span>
+                      </div>
+
+                      <div className="bento-checkout-actions">
                         {shop?.businessType === 'restaurant' && (
                           <button
                             type="button"
-                            className="btn btn-secondary"
-                            style={{ padding: '0.65rem 0.85rem', fontSize: '0.8rem', fontWeight: 700 }}
+                            className="bento-kot-btn"
                             disabled={cart.length === 0 || isCheckingOut}
                             onClick={() => handleCheckout(true)}
                           >
-                            🍳 KOT
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M6 13.8V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9.8"></path>
+                              <path d="M6 18h12"></path>
+                              <rect x="3" y="10" width="18" height="11" rx="2"></rect>
+                            </svg>
+                            <span>Print KOT</span>
                           </button>
                         )}
                         <button
                           type="button"
-                          className="btn-proceed-payment"
+                          className="bento-checkout-btn"
                           disabled={cart.length === 0 || isCheckingOut}
                           onClick={() => handleCheckout(false)}
                         >
-                          {isCheckingOut ? 'Processing...' : 'Proceed to Payment ›'}
+                          {isCheckingOut ? (
+                            <span>Processing...</span>
+                          ) : (
+                            <>
+                              <span>Proceed to Payment</span>
+                              <span className="checkout-arrow">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+                                  <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                              </span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* ================= BOTTOM POS POWER DOCK ================= */}
+            <div className="bento-pos-dock">
+              {/* Left: Live Register & Shift Status */}
+              <div className="pos-dock-status">
+                <div className="dock-status-item">
+                  <span className="dock-status-dot online"></span>
+                  <div>
+                    <span className="dock-status-title">Register #1 • Live Synced</span>
+                    <span className="dock-status-sub">{user?.name || 'Cashier'} • Neon DB</span>
+                  </div>
+                </div>
+
+                <div className="dock-divider"></div>
+
+                <div className="dock-metrics-item">
+                  <span className="dock-metric-label">Today's Counter Bills</span>
+                  <span className="dock-metric-val mono">
+                    {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length} Bills
+                  </span>
+                </div>
+
+                <div className="dock-divider"></div>
+
+                <div className="dock-metrics-item">
+                  <span className="dock-metric-label">Today's Register Sales</span>
+                  <span className="dock-metric-val mono text-success">
+                    {formatRupees(
+                      invoices
+                        .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
+                        .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Operational Tool Actions */}
+              <div className="pos-dock-actions">
+                <button
+                  type="button"
+                  className="dock-action-btn park-btn"
+                  onClick={handleHoldOrder}
+                  title="Hold current cart or recall last held order"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                  </svg>
+                  <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall Order (${heldOrders.length})` : 'Hold Order')}</span>
+                  {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
+                </button>
+
+                {heldOrders.length > 0 && (
+                  <button
+                    type="button"
+                    className="dock-action-btn secondary"
+                    onClick={() => setShowHeldOrdersModal(true)}
+                    title="View all currently held parked orders"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Parked ({heldOrders.length})</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="dock-action-btn"
+                  onClick={() => setShowCustomItemModal(true)}
+                  title="Add open item custom charge (Carry bag, delivery, etc.)"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>+ Custom Charge</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="dock-action-btn"
+                  onClick={handleReprintLastBill}
+                  disabled={!invoices || invoices.length === 0}
+                  title="Reprint the most recently issued thermal invoice"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  <span>Reprint Last Bill</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="dock-action-btn"
+                  onClick={() => setShowDiscountPicker(true)}
+                  title="Apply bill percentage or flat rupee discount"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <line x1="19" y1="5" x2="5" y2="19"></line>
+                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                  </svg>
+                  <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`dock-action-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
+                  onClick={() => setShowMobileScannerModal(true)}
+                  title="Connect mobile phone as a wireless barcode scanner"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                  </svg>
+                  <span>{isPhoneScannerConnected ? 'Phone Paired ✓' : 'Mobile Scanner'}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -5649,11 +7013,11 @@ export function App() {
                 </div>
               </div>
             </div>
+
+            {/* Strict Multi-Tenant Data Isolation Banner (Settings Tab Only) */}
+            <StrictIsolationBanner />
           </div>
         )}
-
-        {/* Strict Multi-Tenant Data Isolation Banner (Screen 9 Footer inside main content) */}
-        <StrictIsolationBanner />
       </main>
 
       {/* PRINT RECEIPT MODAL */}
@@ -5705,6 +7069,170 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* HELD ORDERS MODAL */}
+      {showHeldOrdersModal && (
+        <div className="modal-overlay" onClick={() => setShowHeldOrdersModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="modal-icon-badge indigo">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="modal-title">Parked / Held Orders</h3>
+                  <span className="modal-subtitle">{heldOrders.length} parked cart{heldOrders.length === 1 ? '' : 's'} waiting</span>
+                </div>
+              </div>
+              <button type="button" className="modal-close-btn" onClick={() => setShowHeldOrdersModal(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '420px', overflowY: 'auto', padding: '1rem' }}>
+              {heldOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                  No orders currently on hold.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {heldOrders.map((order, idx) => {
+                    const total = order.cart.reduce((sum, c) => sum + (c.item.priceMinor * c.qty), 0);
+                    return (
+                      <div key={order.id} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.85rem', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
+                            Order #{idx + 1} • {order.cart.reduce((s, c) => s + c.qty, 0)} items
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+                            Held at {order.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Total: <strong className="mono text-success">{formatRupees(total)}</strong>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                            {order.cart.slice(0, 3).map(c => `${c.qty}x ${c.item.name}`).join(', ')}{order.cart.length > 3 ? '...' : ''}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                            onClick={() => {
+                              if (cart.length > 0) {
+                                const replace = window.confirm('Your active cart has items. Replace active cart with this held order?');
+                                if (!replace) return;
+                              }
+                              setCart(order.cart);
+                              setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+                              setShowHeldOrdersModal(false);
+                              showToast(`Restored Order #${idx + 1} to active cart`);
+                            }}
+                          >
+                            Restore
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem', color: '#dc2626' }}
+                            onClick={() => {
+                              if (window.confirm('Discard this held order?')) {
+                                setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+                                showToast('Held order discarded');
+                              }
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM OPEN ITEM CHARGE MODAL */}
+      {showCustomItemModal && (
+        <div className="modal-overlay" onClick={() => setShowCustomItemModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="modal-icon-badge emerald">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="modal-title">Add Custom / Open Charge</h3>
+                  <span className="modal-subtitle">Non-catalog item (Bag, delivery, tailoring, etc.)</span>
+                </div>
+              </div>
+              <button type="button" className="modal-close-btn" onClick={() => setShowCustomItemModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAddCustomItem} className="modal-body" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.3rem' }}>Item Description / Title</label>
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  placeholder="e.g. Carry Bag, Delivery Fee, Gift Wrap"
+                  value={customItemForm.name}
+                  onChange={(e) => setCustomItemForm({ ...customItemForm, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.3rem' }}>Price (₹)</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 700, color: '#94a3b8' }}>₹</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="1"
+                    required
+                    style={{ paddingLeft: '28px' }}
+                    className="form-input mono"
+                    placeholder="0"
+                    value={customItemForm.price}
+                    onChange={(e) => setCustomItemForm({ ...customItemForm, price: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.3rem' }}>Applicable GST Rate</label>
+                <select
+                  className="form-input"
+                  value={customItemForm.taxRateBp}
+                  onChange={(e) => setCustomItemForm({ ...customItemForm, taxRateBp: Number(e.target.value) })}
+                >
+                  <option value={0}>0% (Exempt)</option>
+                  <option value={500}>5% GST</option>
+                  <option value={1200}>12% GST</option>
+                  <option value={1800}>18% GST (Standard)</option>
+                  <option value={2800}>28% GST</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowCustomItemModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  Add to Cart
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
 
 
 
@@ -6066,6 +7594,279 @@ export function App() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* WIRELESS MOBILE SCANNER PAIRING MODAL */}
+      {showMobileScannerModal && (
+        <div className="modal-overlay" onClick={() => setShowMobileScannerModal(false)}>
+          <div className="modal-content mobile-scanner-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-left">
+                <span className="bento-icon-circle purple">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                    <line x1="12" y1="18" x2="12.01" y2="18" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="card-title" style={{ margin: 0 }}>Wireless Mobile Barcode Scanner</h3>
+                  <div className="modal-subtitle">
+                    Turn any smartphone into a supermarket handheld barcode reader
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-icon-btn"
+                onClick={() => setShowMobileScannerModal(false)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="scanner-modal-body">
+              {/* Status Banner */}
+              <div className={`scanner-pairing-status-banner ${isPhoneScannerConnected ? 'connected' : 'waiting'}`}>
+                <div className="status-indicator-dot"></div>
+                <div>
+                  <div className="status-main-text">
+                    {isPhoneScannerConnected ? 'Phone Scanner Connected & Active' : 'Waiting for Phone to Connect...'}
+                  </div>
+                  <div className="status-sub-text">
+                    {isPhoneScannerConnected
+                      ? 'Aim your phone camera at product barcodes to instantly add them to the counter bill.'
+                      : 'Scan the QR code below using your phone camera (both devices must be on the same Wi-Fi).'}
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code and Instructions Grid */}
+              <div className="scanner-modal-grid">
+                <div className="scanner-qr-column">
+                  <div className="scanner-qr-box">
+                    {(() => {
+                      const localIp = scannerNetworkInfo?.localIp || window.location.hostname;
+                      const port = scannerProtocol === 'https'
+                        ? (scannerNetworkInfo?.httpsPort || 3443)
+                        : (scannerNetworkInfo?.httpPort || 3001);
+                      const pairingUrl = customTunnelUrl.trim()
+                        ? `${customTunnelUrl.trim().replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
+                        : scannerProtocol === 'tunnel' && scannerNetworkInfo?.tunnelUrl
+                        ? `${scannerNetworkInfo.tunnelUrl.replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
+                        : `${scannerProtocol}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
+                      const svgString = qrSvg(pairingUrl, { size: 210, margin: 2 });
+                      return (
+                        <div
+                          className="scanner-qr-svg-wrap"
+                          dangerouslySetInnerHTML={{ __html: svgString }}
+                        />
+                      );
+                    })()}
+                    <div className="scanner-qr-caption">
+                      <span>Point Phone Camera Here</span>
+                    </div>
+                  </div>
+
+                  {/* Protocol Selector Tabs */}
+                  <div className="scanner-protocol-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.65rem' }}>
+                    {scannerNetworkInfo?.tunnelUrl && (
+                      <button
+                        type="button"
+                        className={`proto-btn ${scannerProtocol === 'tunnel' && !customTunnelUrl ? 'active' : ''}`}
+                        onClick={() => { setScannerProtocol('tunnel'); setCustomTunnelUrl(''); }}
+                        style={{
+                          background: scannerProtocol === 'tunnel' ? 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' : '#eef2ff',
+                          color: scannerProtocol === 'tunnel' ? '#ffffff' : '#4338ca',
+                          fontWeight: 700,
+                          border: '1px solid #c7d2fe',
+                          padding: '0.45rem 0.6rem',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          fontSize: '0.76rem'
+                        }}
+                      >
+                        <span>🌐 Public Tunnel (Works on Hotspot & 5G)</span>
+                      </button>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                      <button
+                        type="button"
+                        className={`proto-btn ${scannerProtocol === 'https' && !customTunnelUrl ? 'active' : ''}`}
+                        onClick={() => { setScannerProtocol('https'); setCustomTunnelUrl(''); }}
+                        style={{ padding: '0.45rem 0.4rem', fontSize: '0.74rem' }}
+                      >
+                        <span>🔒 Local HTTPS</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`proto-btn ${scannerProtocol === 'http' && !customTunnelUrl ? 'active' : ''}`}
+                        onClick={() => { setScannerProtocol('http'); setCustomTunnelUrl(''); }}
+                        style={{ padding: '0.45rem 0.4rem', fontSize: '0.74rem' }}
+                      >
+                        <span>⚡ Local HTTP</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="scanner-details-column">
+                  {/* Step-by-Step Guide */}
+                  <div className="scanner-step-list">
+                    <div className="scanner-step-item">
+                      <span className="step-num">1</span>
+                      <div>
+                        <strong>Connect to Same Wi-Fi</strong>
+                        <p>Ensure phone & PC share the same Wi-Fi router or phone's Mobile Hotspot.</p>
+                      </div>
+                    </div>
+
+                    <div className="scanner-step-item">
+                      <span className="step-num">2</span>
+                      <div>
+                        <strong>Scan the Pairing QR</strong>
+                        <p>Open phone camera, tap the link that pops up. No app download needed!</p>
+                      </div>
+                    </div>
+
+                    <div className="scanner-step-item">
+                      <span className="step-num">3</span>
+                      <div>
+                        <strong>Scan Products Freely</strong>
+                        <p>Aim at barcode stickers. Hear the supermarket beep as items jump straight into cart!</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Troubleshooting Helper Box */}
+                  <div className="scanner-troubleshoot-box">
+                    <span className="troubleshoot-tag">💡 Phone Testing Tips:</span>
+                    <ul className="troubleshoot-list">
+                      <li><strong>Using Mobile Hotspot or 5G?</strong> Tap <strong>🌐 Public Tunnel</strong> above for instant 1-tap connection with camera permission!</li>
+                      <li>If phone browser shows <em>"Connection not private"</em> on Local HTTPS, tap <strong>Advanced ➔ Proceed to site</strong> once.</li>
+                      <li>Click the <strong>Open</strong> button below to test the mobile scanner directly on this PC screen.</li>
+                    </ul>
+                  </div>
+
+                  {/* Direct Link Row with Copy */}
+                  {(() => {
+                    const localIp = scannerNetworkInfo?.localIp || window.location.hostname;
+                    const port = scannerProtocol === 'https'
+                      ? (scannerNetworkInfo?.httpsPort || 3443)
+                      : (scannerNetworkInfo?.httpPort || 3001);
+                    const pairingUrl = customTunnelUrl.trim()
+                      ? `${customTunnelUrl.trim().replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
+                      : scannerProtocol === 'tunnel' && scannerNetworkInfo?.tunnelUrl
+                      ? `${scannerNetworkInfo.tunnelUrl.replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
+                      : `${scannerProtocol}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
+
+                    return (
+                      <div className="scanner-link-box">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label className="scanner-link-label" style={{ margin: 0 }}>Direct Phone Link:</label>
+                          <span style={{ fontSize: '0.72rem', color: '#6366f1', cursor: 'pointer' }} onClick={() => {
+                            const val = prompt('Optional: Paste public tunnel URL (e.g. from ngrok or localtunnel):', customTunnelUrl);
+                            if (val !== null) setCustomTunnelUrl(val.trim());
+                          }}>
+                            {customTunnelUrl ? '✓ Custom Tunnel Active (Edit)' : '+ Use Public Tunnel'}
+                          </span>
+                        </div>
+                        <div className="scanner-link-input-row">
+                          <input
+                            type="text"
+                            readOnly
+                            className="scanner-url-input"
+                            value={pairingUrl}
+                          />
+                          <button
+                            type="button"
+                            className="scanner-copy-btn"
+                            onClick={() => {
+                              navigator.clipboard.writeText(pairingUrl);
+                              showToast('Scanner link copied to clipboard!');
+                            }}
+                          >
+                            Copy Link
+                          </button>
+                          <button
+                            type="button"
+                            className="scanner-open-btn"
+                            onClick={() => window.open(pairingUrl, '_blank')}
+                            title="Open in new window to test"
+                          >
+                            Open
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Simulator & Settings Row */}
+                  <div className="scanner-tools-row">
+                    <button
+                      type="button"
+                      className="scanner-simulate-btn"
+                      onClick={() => {
+                        const itemWithBarcode = items.find((i) => i.barcode) || items[0];
+                        if (itemWithBarcode) {
+                          handleBarcodeScanned(itemWithBarcode.barcode || itemWithBarcode.sku || itemWithBarcode.id);
+                          showToast(`Test scan simulated: ${itemWithBarcode.name}`);
+                        } else {
+                          showToast('⚠️ No items in catalog to simulate test scan');
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                      </svg>
+                      <span>Simulate Test Scan</span>
+                    </button>
+
+                    <label className="scanner-sound-toggle">
+                      <input
+                        type="checkbox"
+                        checked={scannerSoundEnabled}
+                        onChange={(e) => setScannerSoundEnabled(e.target.checked)}
+                      />
+                      <span>Supermarket Beep Audio</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="scanner-session-pill">Session ID: {scannerSessionId}</span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowMobileScannerModal(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POS QUICK OPEN SHIFT MODAL */}
+      {showPosOpenShiftModal && user && (
+        <OpenShiftModal
+          isOpen={showPosOpenShiftModal}
+          onClose={() => setShowPosOpenShiftModal(false)}
+          onSuccess={(shift) => {
+            setActiveShiftNumber(shift.shiftNumber || 'ACTIVE');
+            setShowPosOpenShiftModal(false);
+            showToast(`Cash drawer shift ${shift.shiftNumber || 'ACTIVE'} opened with float ₹${(shift.openingCashMinor / 100).toFixed(2)}!`);
+          }}
+          userName={user.name}
+          userRole={user.role}
+        />
       )}
 
       {/* MASTER DATA: ADD / EDIT PARTY MODAL (CUSTOMERS & SUPPLIERS) */}
@@ -7892,14 +9693,20 @@ export function App() {
                   background: 'none',
                   border: 'none',
                   color: '#065f46',
-                  fontSize: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  padding: '4px 8px',
+                  padding: '6px',
                   lineHeight: 1,
+                  borderRadius: '6px',
                 }}
                 title="Close (Esc)"
               >
-                ✕
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
 
@@ -7915,11 +9722,20 @@ export function App() {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                    👤 {checkoutSuccess.customerName || 'Walk-in Customer'}
+                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    {checkoutSuccess.customerName || 'Walk-in Customer'}
                   </span>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                    📦 {checkoutSuccess.itemCount} {checkoutSuccess.itemCount === 1 ? 'item' : 'items'}
+                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                      <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    {checkoutSuccess.itemCount} {checkoutSuccess.itemCount === 1 ? 'item' : 'items'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.4rem', borderTop: '1px dashed #cbd5e1' }}>
@@ -7928,6 +9744,57 @@ export function App() {
                     {formatRupees(checkoutSuccess.totalMinor)}
                   </span>
                 </div>
+
+                {/* Multiple / Split Payments Breakdown */}
+                {checkoutSuccess.payments && checkoutSuccess.payments.length > 1 && (
+                  <div className="checkout-split-pills">
+                    {checkoutSuccess.payments.map((p, idx) => (
+                      <span key={idx} className="checkout-split-pill">
+                        <strong>{p.method.toUpperCase()}:</strong> {formatRupees(p.amountMinor)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Cash Tender & Change Returned banner */}
+                {checkoutSuccess.tender && checkoutSuccess.tender.cashReceivedMinor > 0 && (
+                  <div
+                    style={{
+                      background: '#ecfdf5',
+                      border: '1.5px solid #a7f3d0',
+                      borderRadius: '8px',
+                      padding: '0.65rem 0.85rem',
+                      marginTop: '0.65rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.25rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#065f46' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <rect x="2" y="6" width="20" height="12" rx="2" />
+                          <circle cx="12" cy="12" r="3.5" />
+                          <path d="M6 12h.01M18 12h.01" />
+                        </svg>
+                        Cash Tendered by Customer:
+                      </span>
+                      <strong className="mono">{formatRupees(checkoutSuccess.tender.cashReceivedMinor)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.92rem', color: '#047857', borderTop: '1px dashed #6ee7b7', paddingTop: '0.3rem', marginTop: '0.1rem' }}>
+                      <span style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 14 4 9 9 4"></polyline>
+                          <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                        </svg>
+                        Change to Customer:
+                      </span>
+                      <strong className="mono" style={{ fontSize: '1.12rem', fontWeight: 900, color: '#047857' }}>
+                        {formatRupees(checkoutSuccess.tender.changeReturnedMinor)}
+                      </strong>
+                    </div>
+                  </div>
+                )}
 
                 {/* Balance Line (shown ONLY when balanceMinor > 0) */}
                 {checkoutSuccess.balanceMinor > 0 && (
@@ -7961,8 +9828,11 @@ export function App() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <span style={{ fontSize: '1.1rem' }}>💬</span> Share on WhatsApp
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                      </svg>
+                      Share on WhatsApp
                     </span>
 
                     {/* Language Selector (en / hi / ta) */}
@@ -8045,8 +9915,10 @@ export function App() {
                       transition: 'background 0.2s ease',
                     }}
                   >
-                    <span>💬</span>
-                    {successSendState === 'sent' ? 'Sent — Send Again' : 'Send Bill on WhatsApp'}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                    </svg>
+                    <span>{successSendState === 'sent' ? 'Sent — Send Again' : 'Send Bill on WhatsApp'}</span>
                   </button>
                 </div>
               )}
@@ -8062,14 +9934,19 @@ export function App() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '0.4rem',
+                    gap: '0.45rem',
                     padding: '0.6rem 0.75rem',
                     fontSize: '0.85rem',
                     textDecoration: 'none',
                     fontWeight: 600,
                   }}
                 >
-                  🖨️ Print Thermal Slip
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  <span>Print Thermal Slip</span>
                 </a>
                 <a
                   href={`/api/invoices/${checkoutSuccess.invoiceId}/print?paper=a4`}
@@ -8080,14 +9957,21 @@ export function App() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '0.4rem',
+                    gap: '0.45rem',
                     padding: '0.6rem 0.75rem',
                     fontSize: '0.85rem',
                     textDecoration: 'none',
                     fontWeight: 600,
                   }}
                 >
-                  📄 View A4 GST PDF
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                  <span>View A4 GST PDF</span>
                 </a>
               </div>
 
@@ -9650,6 +11534,22 @@ export function App() {
                         {formatRupees(invoiceDetailData.invoice.balanceMinor)}
                       </div>
                     </div>
+                    {invoiceDetailData.invoice.tender && invoiceDetailData.invoice.tender.cashReceivedMinor > 0 && (
+                      <>
+                        <div>
+                          <div style={{ color: '#64748b' }}>Cash Tendered</div>
+                          <div style={{ fontWeight: 700, color: '#334155' }}>
+                            {formatRupees(invoiceDetailData.invoice.tender.cashReceivedMinor)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color: '#047857' }}>Change Returned</div>
+                          <div style={{ fontWeight: 800, color: '#047857' }}>
+                            {formatRupees(invoiceDetailData.invoice.tender.changeReturnedMinor)}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Returns & Credit Notes Zone (Section 4.2) */}

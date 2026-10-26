@@ -115,7 +115,7 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
                 min="0"
                 step="0.01"
                 className="form-input rupee-input"
-                placeholder="0.00"
+                placeholder="0"
                 value={openingRupees}
                 onChange={(e) => setOpeningRupees(e.target.value)}
                 autoFocus

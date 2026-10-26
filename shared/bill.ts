@@ -30,6 +30,7 @@ export interface PrintableBill {
     roundOffMinor: number; totalMinor: number; paidMinor: number; balanceMinor: number;
   };
   payments: { method: string; amountMinor: number }[];
+  tender?: { cashReceivedMinor: number; changeReturnedMinor: number } | null;
   customFields: { label: string; value: string }[];
   note?: string | null;
   linkedNumber?: string | null;
@@ -37,9 +38,9 @@ export interface PrintableBill {
 }
 
 export const LABELS: Record<Lang, Record<string, string>> = {
-  en: { invoice: 'Invoice', credit_note: 'Credit Note', billNo: 'Bill No', date: 'Date', customer: 'Customer', item: 'Item', qty: 'Qty', rate: 'Rate', disc: 'Disc', taxable: 'Taxable', gst: 'GST', amount: 'Amount', subtotal: 'Subtotal', discount: 'Discount', cgst: 'CGST', sgst: 'SGST', igst: 'IGST', roundOff: 'Round off', total: 'TOTAL', paid: 'Paid', balance: 'Balance due', thanks: 'Thank you! Visit again.', duplicate: 'DUPLICATE COPY', gstin: 'GSTIN', hsn: 'HSN', scanPay: 'Scan to pay', viewBill: 'View bill online', original: 'Original', copy2: 'Duplicate', copy3: 'Triplicate', cancelled: 'CANCELLED', against: 'Against bill', cash: 'Cash', upi: 'UPI', card: 'Card', bank: 'Bank', credit: 'On credit', payment: 'Payment', taxSummary: 'Tax summary', phone: 'Ph' },
-  ta: { invoice: 'பில்', credit_note: 'கிரெடிட் நோட்', billNo: 'பில் எண்', date: 'தேதி', customer: 'வாடிக்கையாளர்', item: 'பொருள்', qty: 'எண்', rate: 'விலை', disc: 'தள்ளுபடி', taxable: 'வரிக்குட்பட்ட தொகை', gst: 'ஜிஎஸ்டி', amount: 'தொகை', subtotal: 'துணை மொத்தம்', discount: 'தள்ளுபடி', cgst: 'சிஜிஎஸ்டி', sgst: 'எஸ்ஜிஎஸ்டி', igst: 'ஐஜிஎஸ்டி', roundOff: 'முழுமைப்படுத்தல்', total: 'மொத்தம்', paid: 'செலுத்தியது', balance: 'நிலுவை', thanks: 'நன்றி! மீண்டும் வருக.', duplicate: 'நகல்', gstin: 'ஜிஎஸ்டிஎன்', hsn: 'எச்எஸ்என்', scanPay: 'செலுத்த ஸ்கேன் செய்யவும்', viewBill: 'பில்லை ஆன்லைனில் பார்க்க', original: 'அசல்', copy2: 'நகல்', copy3: 'மூன்றாம் நகல்', cancelled: 'ரத்து செய்யப்பட்டது', against: 'பில் எண்', cash: 'ரொக்கம்', upi: 'யுபிஐ', card: 'கார்டு', bank: 'வங்கி', credit: 'கடன்', payment: 'கட்டணம்', taxSummary: 'வரி சுருக்கம்', phone: 'தொ.பே' },
-  hi: { invoice: 'बिल', credit_note: 'क्रेडिट नोट', billNo: 'बिल नं.', date: 'दिनांक', customer: 'ग्राहक', item: 'सामान', qty: 'मात्रा', rate: 'दर', disc: 'छूट', taxable: 'कर योग्य', gst: 'जीएसटी', amount: 'राशि', subtotal: 'उप-योग', discount: 'छूट', cgst: 'सीजीएसटी', sgst: 'एसजीएसटी', igst: 'आईजीएसटी', roundOff: 'पूर्णांकन', total: 'कुल', paid: 'भुगतान', balance: 'बकाया', thanks: 'धन्यवाद! फिर पधारें।', duplicate: 'डुप्लिकेट कॉपी', gstin: 'जीएसटीआईएन', hsn: 'एचएसएन', scanPay: 'भुगतान के लिए स्कैन करें', viewBill: 'बिल ऑनलाइन देखें', original: 'मूल', copy2: 'डुप्लिकेट', copy3: 'ट्रिप्लिकेट', cancelled: 'रद्द', against: 'बिल नं.', cash: 'नकद', upi: 'यूपीआई', card: 'कार्ड', bank: 'बैंक', credit: 'उधार', payment: 'भुगतान', taxSummary: 'कर सारांश', phone: 'फ़ोन' },
+  en: { invoice: 'Invoice', credit_note: 'Credit Note', billNo: 'Bill No', date: 'Date', customer: 'Customer', item: 'Item', qty: 'Qty', rate: 'Rate', disc: 'Disc', taxable: 'Taxable', gst: 'GST', amount: 'Amount', subtotal: 'Subtotal', discount: 'Discount', cgst: 'CGST', sgst: 'SGST', igst: 'IGST', roundOff: 'Round off', total: 'TOTAL', paid: 'Paid', balance: 'Balance due', thanks: 'Thank you! Visit again.', duplicate: 'DUPLICATE COPY', gstin: 'GSTIN', hsn: 'HSN', scanPay: 'Scan to pay', viewBill: 'View bill online', original: 'Original', copy2: 'Duplicate', copy3: 'Triplicate', cancelled: 'CANCELLED', against: 'Against bill', cash: 'Cash', upi: 'UPI', card: 'Card', bank: 'Bank', credit: 'On credit', payment: 'Payment', taxSummary: 'Tax summary', phone: 'Ph', cashReceived: 'Cash Tendered', changeReturn: 'Change Return' },
+  ta: { invoice: 'பில்', credit_note: 'கிரெடிட் நோட்', billNo: 'பில் எண்', date: 'தேதி', customer: 'வாடிக்கையாளர்', item: 'பொருள்', qty: 'எண்', rate: 'விலை', disc: 'தள்ளுபடி', taxable: 'வரிக்குட்பட்ட தொகை', gst: 'ஜிஎஸ்டி', amount: 'தொகை', subtotal: 'துணை மொத்தம்', discount: 'தள்ளுபடி', cgst: 'சிஜிஎஸ்டி', sgst: 'எஸ்ஜிஎஸ்டி', igst: 'ஐஜிஎஸ்டி', roundOff: 'முழுமைப்படுத்தல்', total: 'மொத்தம்', paid: 'செலுத்தியது', balance: 'நிலுவை', thanks: 'நன்றி! மீண்டும் வருக.', duplicate: 'நகல்', gstin: 'ஜிஎஸ்டிஎன்', hsn: 'எச்எஸ்என்', scanPay: 'செலுத்த ஸ்கேன் செய்யவும்', viewBill: 'பில்லை ஆன்லைனில் பார்க்க', original: 'அசல்', copy2: 'நகல்', copy3: 'மூன்றாம் நகல்', cancelled: 'ரத்து செய்யப்பட்டது', against: 'பில் எண்', cash: 'ரொக்கம்', upi: 'யுபிஐ', card: 'கார்டு', bank: 'வங்கி', credit: 'கடன்', payment: 'கட்டணம்', taxSummary: 'வரி சுருக்கம்', phone: 'தொ.பே', cashReceived: 'ரொக்கம் பெறப்பட்டது', changeReturn: 'மீதி தொகை' },
+  hi: { invoice: 'बिल', credit_note: 'क्रेडिट नोट', billNo: 'बिल नं.', date: 'दिनांक', customer: 'ग्राहक', item: 'सामान', qty: 'मात्रा', rate: 'दर', disc: 'छूट', taxable: 'कर योग्य', gst: 'जीएसटी', amount: 'राशि', subtotal: 'उप-योग', discount: 'छूट', cgst: 'सीजीएसटी', sgst: 'एसजीएसटी', igst: 'आईजीएसटी', roundOff: 'पूर्णांकन', total: 'कुल', paid: 'भुगतान', balance: 'बकाया', thanks: 'धन्यवाद! फिर पधारें।', duplicate: 'डुप्लिकेट कॉपी', gstin: 'जीएसटीआईएन', hsn: 'एचएसएन', scanPay: 'भुगतान के लिए स्कैन करें', viewBill: 'बिल ऑनलाइन देखें', original: 'मूल', copy2: 'डुप्लिकेट', copy3: 'ट्रिप्लिकेट', cancelled: 'रद्द', against: 'बिल नं.', cash: 'नकद', upi: 'यूपीआई', card: 'कार्ड', bank: 'बैंक', credit: 'उधार', payment: 'भुगतान', taxSummary: 'कर सारांश', phone: 'फ़ोन', cashReceived: 'नकद प्राप्त', changeReturn: 'वापसी शेष' },
 };
 
 export const esc = (s: unknown): string =>
@@ -108,6 +109,10 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
   ${t.roundOffMinor !== 0 ? `<div class="rw"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}${money(Math.abs(t.roundOffMinor))}</span></div>` : ''}
   <div class="rw tot"><span>${L.total}</span><span>₹${money(t.totalMinor)}</span></div>
   ${pays}
+  ${bill.tender && bill.tender.cashReceivedMinor > 0 ? `
+    <div class="rw"><span>${L.cashReceived}</span><span>₹${money(bill.tender.cashReceivedMinor)}</span></div>
+    <div class="rw b"><span>${L.changeReturn}</span><span>₹${money(bill.tender.changeReturnedMinor)}</span></div>
+  ` : ''}
   ${t.balanceMinor > 0 ? `<div class="rw b"><span>${L.balance}</span><span>₹${money(t.balanceMinor)}</span></div>` : ''}
   ${opts.qrSvg ? `<div class="qr">${opts.qrSvg}<div class="sm">${esc(opts.qrCaption ?? '')}</div></div>` : ''}
   <hr/>
@@ -160,6 +165,10 @@ function a4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, strin
       ${t.roundOffMinor !== 0 ? `<div class="rw"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}${money(Math.abs(t.roundOffMinor))}</span></div>` : ''}
       <div class="rw tot"><span>${L.total}</span><span>₹${money(t.totalMinor)}</span></div>
       ${pays}
+      ${bill.tender && bill.tender.cashReceivedMinor > 0 ? `
+        <div class="rw"><span>${L.cashReceived}:</span><span>₹${money(bill.tender.cashReceivedMinor)}</span></div>
+        <div class="rw b"><span>${L.changeReturn}:</span><span>₹${money(bill.tender.changeReturnedMinor)}</span></div>
+      ` : ''}
       ${t.balanceMinor > 0 ? `<div class="rw b"><span>${L.balance}</span><span>₹${money(t.balanceMinor)}</span></div>` : ''}
     </div>
   </div>

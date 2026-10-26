@@ -13,7 +13,7 @@ if (!jwtSecret) {
 
 export const env = {
   production,
-  port: Number(process.env.PORT ?? 3000),
+  port: Number(process.env.PORT ?? 3001),
   databaseUrl: process.env.DATABASE_URL ?? '',
   jwtSecret,
   jwtTtlSeconds: Number(process.env.JWT_TTL_SECONDS ?? 60 * 60 * 24 * 7),
