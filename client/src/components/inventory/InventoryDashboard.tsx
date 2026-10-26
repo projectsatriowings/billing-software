@@ -784,6 +784,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         <div className="inv-subview-content">
           <PhysicalStockCountView
             categories={categories}
+            categoriesList={categoriesList}
             userRole={userRole}
             onInventoryUpdated={handleRefreshAll}
             showToast={showToast}
