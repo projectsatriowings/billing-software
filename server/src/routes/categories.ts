@@ -325,25 +325,38 @@ export function registerCategories(r: Router) {
     };
   });
 
-  // 5. Safe deactivate category (and any children)
+  // 5. Permanent Delete category (and unlink from items/child categories)
   r.delete('/api/categories/:id', requirePerm('items.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const cat = await ctx.db.one(
-      'SELECT * FROM categories WHERE id = ? AND tenant_id = ?',
+    const cat = await ctx.db.one<{ id: string; name: string }>(
+      'SELECT id, name FROM categories WHERE id = ? AND tenant_id = ?',
       [ctx.params.id, tenantId],
     );
     if (!cat) throw notFound('Category');
 
     await ctx.db.tx(async (q) => {
-      // Deactivate target category and its child categories
+      // 1. Unlink any products using this category or hierarchy string
       await q.exec(
-        'UPDATE categories SET active = false WHERE tenant_id = ? AND (id = ? OR parent_id = ?)',
-        [tenantId, cat.id, cat.id],
+        "UPDATE items SET category = '' WHERE tenant_id = ? AND (lower(category) = lower(?) OR category LIKE ? OR category LIKE ?)",
+        [tenantId, cat.name, `%→ ${cat.name}`, `${cat.name} →%`],
       );
-      await audit(q, ctx, { action: 'category.deactivate', entity: 'category', entityId: cat.id });
+
+      // 2. Unlink any child categories (set their parent_id = NULL so they become top-level)
+      await q.exec(
+        'UPDATE categories SET parent_id = NULL WHERE tenant_id = ? AND parent_id = ?',
+        [tenantId, cat.id],
+      );
+
+      // 3. Delete the category record
+      await q.exec(
+        'DELETE FROM categories WHERE id = ? AND tenant_id = ?',
+        [cat.id, tenantId],
+      );
+
+      await audit(q, ctx, { action: 'category.delete', entity: 'category', entityId: cat.id, detail: { name: cat.name } });
     });
 
-    return { ok: true };
+    return { ok: true, deleted: cat.id };
   });
 
   // 6. Bulk Category Import & Preview (handles 1,000+ rows safely)

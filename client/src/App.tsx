@@ -2796,21 +2796,31 @@ export function App() {
 
   const handleToggleCategoryActive = async (cat: Category) => {
     try {
-      if (!cat.active) {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active: true }),
-        });
-        showToast(`Category "${cat.name}" reactivated!`);
-      } else {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'DELETE',
-        });
-        showToast(`Category "${cat.name}" deactivated!`);
-      }
+      const nextActive = !cat.active;
+      await api(`/api/categories/${cat.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: nextActive }),
+      });
+      showToast(`Category "${cat.name}" ${nextActive ? 'activated (ON)' : 'deactivated (OFF)'}!`);
       loadCategories();
     } catch (err: any) {
       alert(err.message || 'Failed to update category status');
+    }
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    const confirmMsg = `Are you sure you want to permanently delete category "${cat.name}"? Products assigned to this category will have their category cleared.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api(`/api/categories/${cat.id}`, {
+        method: 'DELETE',
+      });
+      showToast(`Category "${cat.name}" permanently deleted!`);
+      loadCategories();
+      loadItems();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete category');
     }
   };
 
@@ -5794,15 +5804,21 @@ export function App() {
                           </td>
 
                           <td>
-                            {cat.active ? (
-                              <span className="badge badge-emerald">Active</span>
-                            ) : (
-                              <span className="badge badge-amber">Inactive</span>
-                            )}
+                            <button
+                              type="button"
+                              className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                              onClick={() => handleToggleCategoryActive(cat)}
+                              title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                            >
+                              <span className="cat-toggle-track">
+                                <span className="cat-toggle-thumb" />
+                              </span>
+                              <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                            </button>
                           </td>
 
                           <td>
-                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
                               {editingCatId === cat.id ? (
                                 <>
                                   <button
@@ -5829,28 +5845,24 @@ export function App() {
                                 <>
                                   <button
                                     type="button"
-                                    className="btn btn-secondary"
-                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    className="cat-edit-btn"
                                     onClick={() => {
                                       setEditingCatId(cat.id);
                                       setEditingCatName(cat.name);
                                       setEditingCatDesc(cat.description || '');
                                       setEditingCatParentId(cat.parentId || '');
                                     }}
+                                    title="Edit Category Name, Parent, or Description"
                                   >
                                     ✏️ Edit
                                   </button>
                                   <button
                                     type="button"
-                                    className="btn btn-secondary"
-                                    style={{
-                                      padding: '0.25rem 0.6rem',
-                                      fontSize: '0.75rem',
-                                      color: cat.active ? '#ef4444' : '#10b981',
-                                    }}
-                                    onClick={() => handleToggleCategoryActive(cat)}
+                                    className="cat-delete-btn"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                    title={`Delete "${cat.name}" category`}
                                   >
-                                    {cat.active ? 'Deactivate' : 'Activate'}
+                                    🗑️
                                   </button>
                                 </>
                               )}
@@ -8292,14 +8304,20 @@ export function App() {
                           </span>
                         </td>
                         <td>
-                          {cat.active ? (
-                            <span className="badge badge-emerald">Active</span>
-                          ) : (
-                            <span className="badge badge-amber">Inactive</span>
-                          )}
+                          <button
+                            type="button"
+                            className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                            onClick={() => handleToggleCategoryActive(cat)}
+                            title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                          >
+                            <span className="cat-toggle-track">
+                              <span className="cat-toggle-thumb" />
+                            </span>
+                            <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                          </button>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                             {editingCatId === cat.id ? (
                               <>
                                 <button
@@ -8330,16 +8348,18 @@ export function App() {
                                     setEditingCatName(cat.name);
                                     setEditingCatDesc(cat.description || '');
                                   }}
+                                  title="Edit Category"
                                 >
                                   ✏️
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: cat.active ? '#f87171' : '#34d399' }}
-                                  onClick={() => handleToggleCategoryActive(cat)}
+                                  className="cat-delete-btn"
+                                  style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}
+                                  onClick={() => handleDeleteCategory(cat)}
+                                  title={`Delete "${cat.name}" category`}
                                 >
-                                  {cat.active ? 'Deactivate' : 'Activate'}
+                                  🗑️
                                 </button>
                               </>
                             )}
