@@ -613,6 +613,23 @@ export const updateItemReorder = (
 export const fetchInventoryInsights = () =>
   api<{ insights: import('../../shared/types.ts').InventoryInsights }>('/api/inventory/insights');
 
+export const fetchProductMovementAnalysis = (params: {
+  range?: string;
+  from?: string;
+  to?: string;
+  fastMinUnits?: number;
+  fastMinTxns?: number;
+} = {}) => {
+  const sp = new URLSearchParams();
+  if (params.range) sp.set('range', params.range);
+  if (params.from) sp.set('from', params.from);
+  if (params.to) sp.set('to', params.to);
+  if (params.fastMinUnits !== undefined) sp.set('fastMinUnits', String(params.fastMinUnits));
+  if (params.fastMinTxns !== undefined) sp.set('fastMinTxns', String(params.fastMinTxns));
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<import('../../shared/types.ts').ProductMovementAnalysisData>(`/api/inventory/movement-analysis${qs}`);
+};
+
 export type {
   InventoryInsights,
   StockoutRiskItem,
@@ -620,6 +637,10 @@ export type {
   InventoryDuplicateWarning,
   AuditVarianceHistory,
   BatchExpiryWarning,
+  ProductMovementStatus,
+  ProductMovementItem,
+  ProductMovementSummary,
+  ProductMovementAnalysisData,
   Shift,
   ShiftStatus,
   CashMovement,
@@ -684,3 +705,70 @@ export const reviewShift = (id: string, data: { reviewNotes?: string }) =>
 export const fetchShiftReport = (id: string) =>
   api<{ ok: boolean; report: import('../../shared/types.ts').ShiftClosingReport }>(`/api/shifts/${id}/report`);
 
+// ── Bulk Product Import ──────────────────────────────────────────────────────
+
+export interface AdditionalBarcode {
+  barcode: string;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+}
+
+export interface BulkImportRow {
+  name: string;
+  sku?: string | null;
+  barcode?: string | null;
+  hsn?: string | null;
+  unit?: string | null;
+  categoryId?: string | null;
+  category?: string | null;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+  additionalBarcodes?: (string | AdditionalBarcode)[] | null;
+  productNature?: 'BRANDED' | 'SHOP_PRODUCT' | null;
+  /** Selling price in paise (integer). */
+  priceMinor: number;
+  /** Cost price in paise (integer). */
+  costMinor?: number | null;
+  /** GST tax rate in basis points (e.g. 500 = 5%). */
+  taxRateBp?: number | null;
+  /** Whether selling price already includes GST. */
+  taxInclusive?: boolean | null;
+  /** Opening / incoming stock in milli-units (e.g. 5000 = 5 pieces). */
+  openingQtyMilli?: number | null;
+  /** Whether this row is an identified restock of an existing product */
+  isRestock?: boolean;
+  /** The existing product ID being restocked */
+  matchedItemId?: string | null;
+  /** Whether to update the existing product price details */
+  updatePrices?: boolean;
+}
+
+export interface BulkImportRowResult {
+  rowIndex: number;
+  status: 'created' | 'restocked' | 'skipped';
+  name?: string;
+  itemId?: string;
+  reason?: string;
+}
+
+export interface BulkImportResult {
+  importId: string;
+  totalRows: number;
+  created: number;
+  restocked: number;
+  skipped: number;
+  barcodesSaved: number;
+  results: BulkImportRowResult[];
+}
+
+export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string) =>
+  api<BulkImportResult>('/api/items/bulk-import', {
+    method: 'POST',
+    body: JSON.stringify({ rows, importBatchId }),
+  });
+
+export const fetchItemByBarcode = (code: string) =>
+  api<{ item: Item }>(`/api/items/by-barcode/${encodeURIComponent(code)}`);
+
+export const deleteProduct = (id: string) =>
+  api<{ ok: boolean; deleted: boolean; itemId: string; message: string }>(`/api/items/${encodeURIComponent(id)}?permanent=true`, {
+    method: 'DELETE',
+  });

@@ -78,11 +78,11 @@ export function registerItems(r: Router) {
     }
 
     if (barcode) {
-      sql += ' AND i.barcode = ?';
-      params.push(barcode);
+      sql += ' AND (i.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes pb WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND pb.barcode = ?))';
+      params.push(barcode, barcode);
     } else if (q) {
-      sql += ' AND (lower(i.name) LIKE ? OR lower(COALESCE(i.sku, \'\')) LIKE ? OR lower(COALESCE(i.barcode, \'\')) LIKE ?)';
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      sql += ' AND (lower(i.name) LIKE ? OR lower(COALESCE(i.sku, \'\')) LIKE ? OR lower(COALESCE(i.barcode, \'\')) LIKE ? OR EXISTS (SELECT 1 FROM product_barcodes pb WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND lower(pb.barcode) LIKE ?))';
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     if (category) {
@@ -120,7 +120,7 @@ export function registerItems(r: Router) {
     return { item: formatItem(row) };
   });
 
-  // Get single item by exact barcode (for barcode scanners)
+  // Get single item by exact barcode (for barcode scanners) — checks both primary and product_barcodes
   r.get('/api/items/by-barcode/:code', requirePerm('items.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const code = (ctx.params.code ?? '').trim();
@@ -130,11 +130,85 @@ export function registerItems(r: Router) {
       `SELECT i.*,
               COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0) AS current_stock_milli
        FROM items i
-       WHERE i.tenant_id = ? AND i.barcode = ? AND i.active = true`,
-      [tenantId, code],
+       WHERE i.tenant_id = ? AND i.active = true
+         AND (
+           i.barcode = ?
+           OR EXISTS (
+             SELECT 1 FROM product_barcodes pb
+             WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND pb.barcode = ?
+           )
+         )`,
+      [tenantId, code, code],
     );
     if (!row) throw notFound('Item');
     return { item: formatItem(row) };
+  });
+
+  // Get all registered barcodes for an item
+  r.get('/api/items/:id/barcodes', requirePerm('items.view'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const item = await ctx.db.one('SELECT id FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    if (!item) throw notFound('Item');
+
+    const rows = await ctx.db.query(
+      `SELECT id, barcode, barcode_type, created_at FROM product_barcodes WHERE tenant_id = ? AND product_id = ? ORDER BY created_at ASC`,
+      [tenantId, item.id],
+    );
+    const barcodes = rows.map((r: any) => ({
+      id: r.id,
+      barcode: r.barcode,
+      barcodeType: r.barcodeType ?? r.barcode_type,
+      barcode_type: r.barcodeType ?? r.barcode_type,
+      createdAt: r.createdAt ?? r.created_at,
+    }));
+    return { barcodes };
+  });
+
+  // Add a new barcode (INTERNAL or MANUFACTURER) to an existing product
+  r.post('/api/items/:id/barcodes', requirePerm('items.write'), async (ctx) => {
+    const b = ctx.body ?? {};
+    const tenantId = ctx.user!.tenantId;
+    const item = await ctx.db.one<{ id: string; name: string }>('SELECT id, name FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    if (!item) throw notFound('Item');
+
+    const barcode = V.str(b.barcode, 'Barcode', { required: true, max: 60 }).trim();
+    const rawType = (b.barcodeType || '').toString().toUpperCase();
+    const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL' ? 'INTERNAL' : 'MANUFACTURER';
+
+    // Verify barcode uniqueness against other items
+    const existingItem = await ctx.db.one<{ id: string; name: string }>(
+      'SELECT id, name FROM items WHERE tenant_id = ? AND barcode = ? AND id <> ?',
+      [tenantId, barcode, item.id],
+    );
+    if (existingItem) {
+      throw conflict(`Barcode "${barcode}" is already used by item "${existingItem.name}".`);
+    }
+
+    const existingMapping = await ctx.db.one<{ productId: string }>(
+      'SELECT product_id FROM product_barcodes WHERE tenant_id = ? AND barcode = ? AND product_id <> ?',
+      [tenantId, barcode, item.id],
+    );
+    if (existingMapping) {
+      throw conflict(`Barcode "${barcode}" is already registered to another item.`);
+    }
+
+    const bcId = newId('bc');
+    await ctx.db.exec(
+      `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, barcode) DO NOTHING`,
+      [bcId, tenantId, item.id, barcode, barcodeType],
+    );
+
+    const barcodeRecord = { id: bcId, barcode, barcode_type: barcodeType, barcodeType };
+    return {
+      ok: true,
+      id: bcId,
+      barcode: barcodeRecord,
+      barcodeRecord,
+      barcodeType,
+      barcode_type: barcodeType,
+    };
   });
 
   // Create item
@@ -192,6 +266,15 @@ export function registerItems(r: Router) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
         [id, tenantId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom)],
       );
+
+      if (barcode) {
+        await q.exec(
+          `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
+           VALUES (?, ?, ?, ?, 'MANUFACTURER')
+           ON CONFLICT (tenant_id, barcode) DO NOTHING`,
+          [newId('bc'), tenantId, id, barcode],
+        );
+      }
 
       if (openingQtyMilli > 0) {
         await q.exec(
@@ -276,17 +359,153 @@ export function registerItems(r: Router) {
     return { item: formatItem(updated) };
   });
 
-  // Deactivate item (instead of delete)
+  // Deactivate or permanently delete item
   r.delete('/api/items/:id', requirePerm('items.write'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const isPermanent = ctx.query.permanent === 'true' || ctx.query.hard === 'true' || ctx.query.force === 'true';
+
+    const item = await ctx.db.one('SELECT * FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    if (!item) throw notFound('Item');
+
+    if (!isPermanent) {
+      // Deactivate item (soft delete)
+      await ctx.db.tx(async (q) => {
+        await q.exec('UPDATE items SET active = false, updated_at = now() WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
+        await audit(q, ctx, { action: 'item.deactivate', entity: 'item', entityId: item.id });
+      });
+      return { ok: true, active: false };
+    }
+
+    // ── Actual Database Deletion (Permanent) ─────────────────────────────────
+    // Check 1: Invoices / Sales lines
+    const invRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM invoice_lines WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const invCount = Number(invRes?.cnt || 0);
+    if (invCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by ${invCount} sales invoice record(s). Deactivate this product instead to preserve sales and tax records.`
+      );
+    }
+
+    // Check 2: Purchase lines
+    const purRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM purchase_lines WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const purCount = Number(purRes?.cnt || 0);
+    if (purCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by ${purCount} purchase bill record(s). Deactivate this product instead to preserve accounting and supplier records.`
+      );
+    }
+
+    // Check 3: Transactional stock moves (sales, purchases, returns, transfers, adjustments)
+    const stockRes = await ctx.db.one<{ cnt: string | number }>(
+      `SELECT COUNT(*) as cnt FROM stock_moves WHERE item_id = ? AND tenant_id = ? AND kind IN ('sale', 'purchase', 'return', 'transfer', 'adjust')`,
+      [item.id, tenantId]
+    );
+    const stockCount = Number(stockRes?.cnt || 0);
+    if (stockCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it has ${stockCount} transactional stock movement(s). Deactivate this product instead to retain inventory audit logs.`
+      );
+    }
+
+    // Check 4: Stock adjustments
+    const adjRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const adjCount = Number(adjRes?.cnt || 0);
+    if (adjCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by inventory stock adjustment records. Deactivate this product instead.`
+      );
+    }
+
+    // Safe to delete! Perform transactional cleanup of associated barcodes and opening stock moves
+    await ctx.db.tx(async (q) => {
+      await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await audit(q, ctx, {
+        action: 'item.delete',
+        entity: 'item',
+        entityId: item.id,
+        detail: { name: item.name, sku: item.sku, barcode: item.barcode },
+      });
+    });
+
+    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" deleted successfully` };
+  });
+
+  // Dedicated permanent delete route alias
+  r.delete('/api/items/:id/permanent', requirePerm('items.write'), async (ctx) => {
+    ctx.query.permanent = 'true';
     const tenantId = ctx.user!.tenantId;
     const item = await ctx.db.one('SELECT * FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
     if (!item) throw notFound('Item');
 
+    const invRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM invoice_lines WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const invCount = Number(invRes?.cnt || 0);
+    if (invCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by ${invCount} sales invoice record(s). Deactivate this product instead to preserve sales and tax records.`
+      );
+    }
+
+    const purRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM purchase_lines WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const purCount = Number(purRes?.cnt || 0);
+    if (purCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by ${purCount} purchase bill record(s). Deactivate this product instead to preserve accounting and supplier records.`
+      );
+    }
+
+    const stockRes = await ctx.db.one<{ cnt: string | number }>(
+      `SELECT COUNT(*) as cnt FROM stock_moves WHERE item_id = ? AND tenant_id = ? AND kind IN ('sale', 'purchase', 'return', 'transfer', 'adjust')`,
+      [item.id, tenantId]
+    );
+    const stockCount = Number(stockRes?.cnt || 0);
+    if (stockCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it has ${stockCount} transactional stock movement(s). Deactivate this product instead to retain inventory audit logs.`
+      );
+    }
+
+    const adjRes = await ctx.db.one<{ cnt: string | number }>(
+      'SELECT COUNT(*) as cnt FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?',
+      [item.id, tenantId]
+    );
+    const adjCount = Number(adjRes?.cnt || 0);
+    if (adjCount > 0) {
+      throw conflict(
+        `Cannot delete "${item.name}": it is referenced by inventory stock adjustment records. Deactivate this product instead.`
+      );
+    }
+
     await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE items SET active = false, updated_at = now() WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
-      await audit(q, ctx, { action: 'item.deactivate', entity: 'item', entityId: item.id });
+      await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await audit(q, ctx, {
+        action: 'item.delete',
+        entity: 'item',
+        entityId: item.id,
+        detail: { name: item.name, sku: item.sku, barcode: item.barcode },
+      });
     });
 
-    return { ok: true };
+    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" deleted successfully` };
   });
 }

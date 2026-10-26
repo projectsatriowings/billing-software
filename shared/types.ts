@@ -573,3 +573,69 @@ export interface ShiftClosingReport {
   }[];
 }
 
+// ── PRODUCT MOVEMENT ANALYSIS (FAST / SLOW / NON-MOVING) ───────────────────
+export type ProductMovementStatus = 'fast_moving' | 'slow_moving' | 'non_moving';
+
+export interface ProductMovementItem {
+  id: string;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  category: string | null;
+  unit: string;
+  currentStockUnits: number;
+  unitsSold: number;
+  salesTxns: number;
+  lastSoldAt: string | null;
+  movementStatus: ProductMovementStatus;
+  suggestedAction: string;
+}
+
+export interface ProductMovementSummary {
+  fastMovingCount: number;
+  slowMovingCount: number;
+  nonMovingCount: number;
+  totalTrackedProducts: number;
+  totalUnitsSold: number;
+  totalSalesBills: number;
+  rangeDays: number;
+  startDate: string;
+  endDate: string;
+  fastMinUnits: number;
+  fastMinTxns: number;
+  slowMinUnits: number;
+}
+
+export interface ProductMovementAnalysisData {
+  summary: ProductMovementSummary;
+  topSellers: {
+    id: string;
+    name: string;
+    unit: string;
+    unitsSold: number;
+  }[];
+  insights: {
+    bestSeller?: {
+      name: string;
+      unitsSold: number;
+      unit: string;
+      salesTxns: number;
+      currentStockUnits: number;
+      runwayDays?: number | null;
+    } | null;
+    slowingProduct?: {
+      name: string;
+      unitsSold: number;
+      unit: string;
+      currentStockUnits: number;
+      message: string;
+    } | null;
+    nonMovingSummary: {
+      count: number;
+      tiedCapitalMinor: number;
+      days: number;
+    };
+  };
+  products: ProductMovementItem[];
+}
+

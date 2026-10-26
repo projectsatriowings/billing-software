@@ -515,6 +515,21 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS cash_movements_tenant_created ON cash_movements (tenant_id, created_at DESC)`,
     ],
   },
+  {
+    version: 14,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS product_barcodes (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        product_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        barcode TEXT NOT NULL,
+        barcode_type TEXT NOT NULL DEFAULT 'INTERNAL' CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_barcodes_uq ON product_barcodes (tenant_id, barcode)`,
+      `CREATE INDEX IF NOT EXISTS product_barcodes_product ON product_barcodes (tenant_id, product_id)`,
+    ],
+  },
 ];
 
 
