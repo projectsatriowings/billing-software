@@ -19,6 +19,7 @@ interface InventoryDashboardProps {
   businessType?: string;
   allowNegativeStock?: boolean;
   onNavigateToPurchases?: (supplierId?: string, itemId?: string) => void;
+  onNavigateToCategories?: () => void;
   showToast: (msg: string) => void;
   onReloadItems: () => void;
 }
@@ -31,6 +32,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   businessType = 'retail',
   allowNegativeStock = false,
   onNavigateToPurchases,
+  onNavigateToCategories,
   showToast,
   onReloadItems,
 }) => {
@@ -165,7 +167,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           </p>
         </div>
 
-        <div className="title-actions">
+        <div className="title-actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {onNavigateToCategories && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              onClick={onNavigateToCategories}
+              title="Open Category Management Module"
+            >
+              <span>🏷️</span> Categories ({categories.length})
+            </button>
+          )}
           {isOwnerOrManager && (
             <button
               type="button"

@@ -5812,6 +5812,7 @@ export function App() {
             userRole={user?.role as any}
             businessType={shop?.businessType}
             allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
+            onNavigateToCategories={() => setActiveTab('categories')}
             onNavigateToPurchases={(supplierId) => {
               setActiveTab('purchases');
               if (supplierId) {
