@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights } from '../../api.ts';
+import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights, Category } from '../../api.ts';
 import {
   fetchInventoryDashboard,
   fetchInventoryItems,
@@ -14,6 +14,7 @@ import { ReorderConfigModal } from './ReorderConfigModal.tsx';
 interface InventoryDashboardProps {
   items: Item[];
   categories: string[];
+  categoriesList?: Category[];
   suppliers: Party[];
   userRole?: Role;
   businessType?: string;
@@ -27,6 +28,7 @@ interface InventoryDashboardProps {
 export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   items,
   categories,
+  categoriesList = [],
   suppliers,
   userRole,
   businessType = 'retail',
@@ -512,11 +514,19 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                 }}
               >
                 <option value="ALL">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
+                {categoriesList && categoriesList.length > 0
+                  ? categoriesList
+                      .filter((c) => c.active)
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                        </option>
+                      ))
+                  : categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
               </select>
 
               {/* Status Filter */}
@@ -602,7 +612,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           </div>
                         </td>
                         <td>
-                          <span className="category-pill">{item.category || 'General'}</span>
+                          {(() => {
+                            const matched = categoriesList?.find((c) => c.name.toLowerCase() === (item.category || '').toLowerCase());
+                            if (matched && matched.parentName) {
+                              return (
+                                <span className="category-pill" title={`${matched.parentName} → ${item.category}`}>
+                                  <span style={{ opacity: 0.65 }}>{matched.parentName} → </span>
+                                  {item.category}
+                                </span>
+                              );
+                            }
+                            return <span className="category-pill">{item.category || 'General'}</span>;
+                          })()}
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <span

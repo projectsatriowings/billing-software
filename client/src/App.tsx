@@ -5227,7 +5227,20 @@ export function App() {
                           </div>
                         )}
                       </td>
-                      <td><span className="badge badge-blue">{i.category || 'General'}</span></td>
+                      <td>
+                        {(() => {
+                          const matchedCat = categoriesList.find((c) => c.name.toLowerCase() === (i.category || '').toLowerCase());
+                          if (matchedCat && matchedCat.parentName) {
+                            return (
+                              <span className="badge badge-blue" title={`${matchedCat.parentName} → ${i.category}`}>
+                                <span style={{ opacity: 0.65 }}>{matchedCat.parentName} → </span>
+                                {i.category}
+                              </span>
+                            );
+                          }
+                          return <span className="badge badge-blue">{i.category || 'General'}</span>;
+                        })()}
+                      </td>
                       <td className="mono" style={{ color: '#94a3b8' }}>{i.sku || '—'}</td>
                       <td className="mono" style={{ color: '#94a3b8' }}>{i.hsn || '—'}</td>
                       <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
@@ -5808,6 +5821,7 @@ export function App() {
           <InventoryDashboard
             items={items}
             categories={categories}
+            categoriesList={categoriesList}
             suppliers={parties.filter((p) => p.type === 'supplier')}
             userRole={user?.role as any}
             businessType={shop?.businessType}
