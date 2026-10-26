@@ -173,7 +173,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
                 min="0"
                 step="0.01"
                 className="form-input rupee-input large"
-                placeholder="0.00"
+                placeholder="0"
                 value={countedRupees}
                 onChange={(e) => setCountedRupees(e.target.value)}
                 autoFocus

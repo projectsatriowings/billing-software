@@ -174,7 +174,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
                 min="0.01"
                 step="0.01"
                 className="form-input rupee-input"
-                placeholder="0.00"
+                placeholder="0"
                 value={amountRupees}
                 onChange={(e) => setAmountRupees(e.target.value)}
                 autoFocus

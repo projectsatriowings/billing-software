@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Configurable, India-first billing platform: React + Node.js + Neon Postgres",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build-client.mjs",
@@ -13,13 +15,16 @@
     "seed:demo": "node --import tsx server/src/seed-demo.ts",
     "test": "node --import tsx --test --test-concurrency=1 \"shared/test/*.test.ts\" \"server/test/*.test.ts\"",
     "backup": "node scripts/backup-db.mjs",
-    "typecheck": "tsc -p server/tsconfig.json && tsc -p client/tsconfig.json"
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p client/tsconfig.json",
+    "tunnel": "npx -y cloudflared tunnel --url http://localhost:3001"
   },
   "dependencies": {
+    "html5-qrcode": "^2.3.8",
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "selfsigned": "^5.5.0",
     "tsx": "^4.19.0"
   },
   "devDependencies": {
@@ -27,6 +32,7 @@
     "@types/pg": "^8.11.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/selfsigned": "^2.0.4",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
   }

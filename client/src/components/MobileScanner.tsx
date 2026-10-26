@@ -1,0 +1,565 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+
+interface MobileScannerProps {
+  sessionId: string;
+}
+
+interface ScannedHistoryItem {
+  id: string;
+  barcode: string;
+  time: string;
+  status: 'sent' | 'error';
+}
+
+export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
+  const isSecure = typeof window !== 'undefined' && (Boolean(window.isSecureContext) || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const [activeMode, setActiveMode] = useState<'live' | 'snap' | 'manual'>(isSecure ? 'live' : 'snap');
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [flashSuccess, setFlashSuccess] = useState(false);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [history, setHistory] = useState<ScannedHistoryItem[]>([]);
+  const [manualCode, setManualCode] = useState('');
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<any[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lastScanTimeRef = useRef<{ [code: string]: number }>({});
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Play crisp POS checkout beep sound
+  const playBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1850, ctx.currentTime);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {}
+  };
+
+  // Heartbeat to POS server
+  useEffect(() => {
+    let timer: any;
+    const sendHeartbeat = async () => {
+      try {
+        const res = await fetch('/api/scanner/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            deviceInfo: `${navigator.platform || ''} ${navigator.userAgent.slice(0, 50)}`,
+          }),
+        });
+        if (res.ok) {
+          setIsConnected(true);
+        } else {
+          setIsConnected(false);
+        }
+      } catch {
+        setIsConnected(false);
+      }
+    };
+
+    sendHeartbeat();
+    timer = setInterval(sendHeartbeat, 5000);
+    return () => clearInterval(timer);
+  }, [sessionId]);
+
+  // Dispatch scanned barcode to POS terminal
+  const dispatchBarcode = async (code: string) => {
+    const clean = code.trim();
+    if (!clean) return;
+
+    // Debounce duplicate scans within 1.5 seconds
+    const now = Date.now();
+    if (lastScanTimeRef.current[clean] && now - lastScanTimeRef.current[clean] < 1500) {
+      return;
+    }
+    lastScanTimeRef.current[clean] = now;
+
+    playBeep();
+    if (window.navigator?.vibrate) {
+      try {
+        window.navigator.vibrate(120);
+      } catch {}
+    }
+
+    setFlashSuccess(true);
+    setTimeout(() => setFlashSuccess(false), 600);
+    setLastScanned(clean);
+
+    try {
+      const res = await fetch('/api/scanner/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          barcode: clean,
+          deviceInfo: navigator.userAgent.slice(0, 40),
+        }),
+      });
+
+      const newItem: ScannedHistoryItem = {
+        id: String(now),
+        barcode: clean,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        status: res.ok ? 'sent' : 'error',
+      };
+      setHistory((prev) => [newItem, ...prev.slice(0, 24)]);
+    } catch {
+      const newItem: ScannedHistoryItem = {
+        id: String(now),
+        barcode: clean,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        status: 'error',
+      };
+      setHistory((prev) => [newItem, ...prev.slice(0, 24)]);
+    }
+  };
+
+  // Start continuous live camera stream
+  useEffect(() => {
+    if (activeMode !== 'live') {
+      if (scannerRef.current && isScanning) {
+        scannerRef.current.stop().catch(() => {});
+        setIsScanning(false);
+      }
+      return;
+    }
+
+    let isMounted = true;
+
+    async function initCamera() {
+      try {
+        setCameraError(null);
+        if (!isSecure) {
+          setCameraError('Live video stream requires HTTPS. You can use Camera Snap mode below, or connect via the secure tunnel.');
+          setActiveMode('snap');
+          return;
+        }
+        const cameras = await Html5Qrcode.getCameras();
+        if (!isMounted) return;
+
+        if (!cameras || cameras.length === 0) {
+          setCameraError('No camera found on this device. Switch to Snapshot or Manual mode.');
+          setActiveMode('snap');
+          return;
+        }
+
+        setAvailableCameras(cameras);
+        // Prefer back / environment facing camera
+        const backCam = cameras.find((c) =>
+          c.label.toLowerCase().includes('back') ||
+          c.label.toLowerCase().includes('environment') ||
+          c.label.toLowerCase().includes('rear')
+        );
+        const targetId = selectedCameraId || (backCam ? backCam.id : cameras[0].id);
+
+        if (!scannerRef.current) {
+          scannerRef.current = new Html5Qrcode('qr-reader-interactive', {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.QR_CODE,
+            ],
+            verbose: false,
+          });
+        }
+
+        await scannerRef.current.start(
+          targetId,
+          {
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const width = Math.min(300, Math.floor(viewfinderWidth * 0.85));
+              const height = Math.min(180, Math.floor(viewfinderHeight * 0.55));
+              return { width, height };
+            },
+            aspectRatio: 1.333,
+          },
+          (decodedText) => {
+            dispatchBarcode(decodedText);
+          },
+          () => {
+            // Frame parsed with no barcode: ignore
+          }
+        );
+
+        if (isMounted) {
+          setIsScanning(true);
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        const msg = String(err?.message || err);
+        console.warn('Camera stream error:', msg);
+        if (msg.includes('NotSupportedError') || msg.includes('secure context') || !window.isSecureContext) {
+          setCameraError('Live video stream requires HTTPS. Use the Snapshot (Camera Shutter) mode below.');
+          setActiveMode('snap');
+        } else {
+          setCameraError('Camera access denied or busy. You can use Snapshot or Manual entry.');
+          setActiveMode('snap');
+        }
+      }
+    }
+
+    const t = setTimeout(() => {
+      initCamera();
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(t);
+      if (scannerRef.current && isScanning) {
+        scannerRef.current.stop().catch(() => {});
+        setIsScanning(false);
+      }
+    };
+  }, [activeMode, selectedCameraId]);
+
+  // Handle Snapshot image decode
+  const handleSnapFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const tempScanner = new Html5Qrcode('file-scanner-temp');
+      const decodedResult = await tempScanner.scanFileV2(file, false);
+      if (decodedResult?.decodedText) {
+        dispatchBarcode(decodedResult.decodedText);
+      } else {
+        alert('Could not detect barcode in that image. Please try aiming closer to the barcode sticker.');
+      }
+    } catch (err: any) {
+      alert('Could not detect barcode. Please hold the barcode flat in good lighting and try again.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  // Toggle Torch / Flashlight
+  const toggleTorch = async () => {
+    if (!scannerRef.current || !isScanning) return;
+    try {
+      const apply = !torchOn;
+      await scannerRef.current.applyVideoConstraints({
+        advanced: [{ torch: apply } as any],
+      });
+      setTorchOn(apply);
+    } catch {
+      alert('Torch is not supported by this camera hardware.');
+    }
+  };
+
+  // Switch between available cameras
+  const cycleCamera = () => {
+    if (availableCameras.length <= 1) return;
+    const currentIdx = availableCameras.findIndex((c) => c.id === selectedCameraId);
+    const nextIdx = (currentIdx + 1) % availableCameras.length;
+    setSelectedCameraId(availableCameras[nextIdx].id);
+  };
+
+  // Submit manual barcode
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualCode.trim()) return;
+    setIsSubmittingManual(true);
+    dispatchBarcode(manualCode.trim());
+    setManualCode('');
+    setIsSubmittingManual(false);
+  };
+
+  return (
+    <div className={`mobile-scanner-viewport ${flashSuccess ? 'flash-active' : ''}`}>
+      {/* Top Mobile App Header */}
+      <header className="mobile-scanner-header">
+        <div className="mobile-brand-row">
+          <div className="mobile-brand-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="mobile-brand-title">AtrioWings Mobile Scanner</h1>
+            <div className="mobile-session-tag">
+              <span>Terminal #{sessionId}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mobile-header-status">
+          <div className={`mobile-status-pill ${isConnected ? 'online' : 'connecting'}`}>
+            <span className="mobile-status-dot"></span>
+            <span>{isConnected ? 'POS Connected' : 'Connecting...'}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Mode Selector Tabs */}
+      <nav className="mobile-mode-tabs">
+        <button
+          type="button"
+          className={`mobile-tab-btn ${activeMode === 'live' ? 'active' : ''}`}
+          onClick={() => setActiveMode('live')}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+          <span>Live Video</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-tab-btn ${activeMode === 'snap' ? 'active' : ''}`}
+          onClick={() => setActiveMode('snap')}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+          <span>Camera Snap</span>
+        </button>
+
+        <button
+          type="button"
+          className={`mobile-tab-btn ${activeMode === 'manual' ? 'active' : ''}`}
+          onClick={() => setActiveMode('manual')}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <line x1="6" y1="8" x2="6" y2="8" />
+            <line x1="10" y1="8" x2="10" y2="8" />
+            <line x1="14" y1="8" x2="14" y2="8" />
+            <line x1="18" y1="8" x2="18" y2="8" />
+            <line x1="6" y1="12" x2="18" y2="12" />
+          </svg>
+          <span>Keypad</span>
+        </button>
+      </nav>
+
+      {/* Main View Area */}
+      <main className="mobile-scanner-main">
+        {/* MODE 1: LIVE CONTINUOUS STREAM */}
+        {activeMode === 'live' && (
+          <div className="mobile-live-container">
+            <div className="mobile-viewfinder-card">
+              <div id="qr-reader-interactive" className="mobile-interactive-viewport"></div>
+
+              {/* Viewfinder Overlays: Laser Bar & Reticle Corners */}
+              <div className="scanner-laser-bar"></div>
+              <div className="reticle-corner top-left"></div>
+              <div className="reticle-corner top-right"></div>
+              <div className="reticle-corner bottom-left"></div>
+              <div className="reticle-corner bottom-right"></div>
+
+              {/* Quick Camera Bar (Torch & Flip) */}
+              <div className="mobile-camera-controls">
+                <button
+                  type="button"
+                  className={`camera-tool-btn ${torchOn ? 'active' : ''}`}
+                  onClick={toggleTorch}
+                  title="Toggle Flashlight / Torch"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span>{torchOn ? 'Torch On' : 'Torch'}</span>
+                </button>
+
+                {availableCameras.length > 1 && (
+                  <button
+                    type="button"
+                    className="camera-tool-btn"
+                    onClick={cycleCamera}
+                    title="Switch Camera"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                      <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                    </svg>
+                    <span>Flip</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="mobile-guide-hint">
+              Position product barcode sticker inside the rectangle. Auto-scans continuously.
+            </p>
+          </div>
+        )}
+
+        {/* MODE 2: INSTANT CAMERA SHUTTER SNAP */}
+        {activeMode === 'snap' && (
+          <div className="mobile-snap-container">
+            {cameraError && (
+              <div className="mobile-camera-alert">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            <div className="snap-shutter-card">
+              <div className="snap-hero-icon">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+              <h3 className="snap-title">Point & Shoot Barcode</h3>
+              <p className="snap-desc">
+                Opens your phone's native camera immediately. Works over Wi-Fi, HTTP, and HTTPS without restrictions.
+              </p>
+
+              <label className="mobile-big-shutter-btn">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleSnapFile}
+                  style={{ display: 'none' }}
+                />
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="4" fill="currentColor" />
+                </svg>
+                <span>Tap to Scan Barcode</span>
+              </label>
+            </div>
+            <div id="file-scanner-temp" style={{ display: 'none' }}></div>
+          </div>
+        )}
+
+        {/* MODE 3: MANUAL NUMERIC KEYPAD */}
+        {activeMode === 'manual' && (
+          <form className="mobile-manual-card" onSubmit={handleManualSubmit}>
+            <div className="manual-header">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14" />
+              </svg>
+              <div>
+                <h3 className="manual-title">Manual Barcode / SKU</h3>
+                <span className="manual-sub">Type numbers if sticker is scratched</span>
+              </div>
+            </div>
+
+            <div className="manual-input-wrap">
+              <input
+                type="text"
+                className="manual-barcode-input"
+                placeholder="0"
+                value={manualCode}
+                onChange={(e) => setManualCode(e.target.value)}
+                autoFocus
+              />
+              {manualCode && (
+                <button
+                  type="button"
+                  className="manual-clear-btn"
+                  onClick={() => setManualCode('')}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="manual-submit-btn"
+              disabled={!manualCode.trim() || isSubmittingManual}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>Send to Cart</span>
+            </button>
+          </form>
+        )}
+
+        {/* Last Scanned Banner */}
+        {lastScanned && (
+          <div className="mobile-last-scanned-card">
+            <span className="last-scan-label">Last Dispatched:</span>
+            <span className="last-scan-val mono">{lastScanned}</span>
+            <span className="last-scan-badge">✓ Cart Updated</span>
+          </div>
+        )}
+
+        {/* Live Scanned History Feed */}
+        <section className="mobile-history-section">
+          <div className="mobile-history-header">
+            <h4 className="history-title">Session Scans ({history.length})</h4>
+            {history.length > 0 && (
+              <button
+                type="button"
+                className="history-clear-btn"
+                onClick={() => setHistory([])}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <div className="history-empty">
+              <span>Ready. Barcodes scanned on this phone will appear here in real-time.</span>
+            </div>
+          ) : (
+            <div className="history-list">
+              {history.map((item) => (
+                <div key={item.id} className="history-item">
+                  <div className="history-item-left">
+                    <span className="history-code mono">{item.barcode}</span>
+                    <span className="history-time">{item.time}</span>
+                  </div>
+                  <div className="history-item-right">
+                    {item.status === 'sent' ? (
+                      <span className="history-badge sent">Sent ✓</span>
+                    ) : (
+                      <span className="history-badge err">Retry</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      {/* Floating Bottom Bar: Return to Desktop note */}
+      <footer className="mobile-scanner-footer">
+        <span>Keep this tab open while scanning counter items</span>
+      </footer>
+    </div>
+  );
+};
