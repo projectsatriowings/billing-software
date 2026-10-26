@@ -13852,6 +13852,38 @@ body {
   color: #94a3b8;
 }
 
+/* Category Action Buttons: Edit and Delete */
+.cat-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.cat-edit-btn:hover {
+  background: #f8fafc;
+  border-color: #6366f1;
+  color: #4f46e5;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.18);
+}
+
+.cat-edit-btn:active {
+  transform: scale(0.97);
+}
+
 /* Delete Icon Button */
 .cat-delete-btn {
   display: inline-flex;
@@ -13859,6 +13891,7 @@ body {
   justify-content: center;
   width: 30px;
   height: 30px;
+  min-width: 30px;
   border-radius: 6px;
   border: 1px solid #fecaca;
   background: #fff5f5;
@@ -13867,17 +13900,18 @@ body {
   font-size: 0.92rem;
   transition: all 0.15s ease;
   padding: 0;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .cat-delete-btn:hover {
   background: #fee2e2;
   border-color: #f87171;
   color: #b91c1c;
-  transform: scale(1.08);
-  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.2);
 }
 
 .cat-delete-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 

@@ -5854,7 +5854,8 @@ export function App() {
                                     }}
                                     title="Edit Category Name, Parent, or Description"
                                   >
-                                    ✏️ Edit
+                                    <span style={{ fontSize: '0.85rem' }}>✏️</span>
+                                    <span>Edit</span>
                                   </button>
                                   <button
                                     type="button"
@@ -8341,8 +8342,7 @@ export function App() {
                               <>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                  className="cat-edit-btn"
                                   onClick={() => {
                                     setEditingCatId(cat.id);
                                     setEditingCatName(cat.name);
