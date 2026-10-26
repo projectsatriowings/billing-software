@@ -211,6 +211,7 @@ export function registerInvoices(r: Router) {
         whatsappLastLanguage: inv.whatsappLastLanguage ?? inv.whatsapp_last_language,
         whatsappLastSentBy: inv.whatsappLastSentBy ?? inv.whatsapp_last_sent_by,
         shareToken: inv.shareToken ?? inv.share_token,
+        tender: (typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {}))?.tender || null,
       },
       lines: lines.map((l: any) => ({
         id: l.id,
@@ -248,6 +249,18 @@ export function registerInvoices(r: Router) {
     const customerPhone = V.optStr(b.customerPhone, 'Customer phone', 20);
     const partyId = V.optStr(b.partyId, 'Customer party', 50);
     const billDiscountMinor = V.int(b.billDiscountMinor ?? 0, 'Bill discount', { min: 0 });
+
+    const tenderInput = b.tender;
+    let tenderData: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
+    if (tenderInput && typeof tenderInput === 'object') {
+      const cashRec = V.int(tenderInput.cashReceivedMinor ?? 0, 'Cash received', { min: 0 });
+      if (cashRec > 0) {
+        tenderData = {
+          cashReceivedMinor: cashRec,
+          changeReturnedMinor: Math.max(0, cashRec - (b.totalMinor ?? 0)),
+        };
+      }
+    }
 
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [tenantId]);
     if (!shop) throw notFound('Shop');
@@ -310,13 +323,17 @@ export function registerInvoices(r: Router) {
       const balanceMinor = Math.max(0, calculated.totalMinor - totalPaidMinor);
 
       // 3. Insert invoice
+      if (tenderData) {
+        tenderData.changeReturnedMinor = Math.max(0, tenderData.cashReceivedMinor - calculated.totalMinor);
+      }
+
       await q.exec(
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
-          paid_minor, balance_minor, rule_version, calc, share_token, created_by
-        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?)`,
+          paid_minor, balance_minor, rule_version, calc, share_token, created_by, custom
+        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?::jsonb)`,
         [
           invoiceId,
           tenantId,
@@ -341,6 +358,7 @@ export function registerInvoices(r: Router) {
           j(calculated),
           shareToken,
           ctx.user!.id,
+          j(tenderData ? { tender: tenderData } : {}),
         ],
       );
 
@@ -437,6 +455,7 @@ export function registerInvoices(r: Router) {
       paidMinor: totalPaidMinor,
       balanceMinor: Math.max(0, calculated.totalMinor - totalPaidMinor),
       shareToken,
+      tender: tenderData,
     };
   });
 
@@ -457,6 +476,8 @@ export function registerInvoices(r: Router) {
     const custName = inv.customerName ?? inv.customer_name;
     const custPhone = inv.customerPhone ?? inv.customer_phone;
     const createdAt = inv.createdAt ?? inv.created_at;
+    const customObj = typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {});
+    const tender = customObj?.tender || null;
 
     const printable: PrintableBill = {
       number: inv.number,
@@ -497,6 +518,7 @@ export function registerInvoices(r: Router) {
         balanceMinor: Number(inv.balanceMinor ?? inv.balance_minor),
       },
       payments: payments.map((p: any) => ({ method: p.method, amountMinor: Number(p.amountMinor ?? p.amount_minor) })),
+      tender,
       customFields: [],
       intra: true,
     };
@@ -589,6 +611,8 @@ export function registerInvoices(r: Router) {
     const custName = inv.customerName ?? inv.customer_name;
     const custPhone = inv.customerPhone ?? inv.customer_phone;
     const createdAt = inv.createdAt ?? inv.created_at;
+    const customObj = typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {});
+    const tender = customObj?.tender || null;
 
     const printable: PrintableBill = {
       number: inv.number,
@@ -629,6 +653,7 @@ export function registerInvoices(r: Router) {
         balanceMinor: Number(inv.balanceMinor ?? inv.balance_minor),
       },
       payments: payments.map((p: any) => ({ method: p.method, amountMinor: Number(p.amountMinor ?? p.amount_minor) })),
+      tender,
       customFields: [],
       intra: true,
     };
