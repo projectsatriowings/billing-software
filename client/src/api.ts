@@ -768,6 +768,23 @@ export const updateItemReorder = (
 export const fetchInventoryInsights = () =>
   api<{ insights: import('../../shared/types.ts').InventoryInsights }>('/api/inventory/insights');
 
+export const fetchProductMovementAnalysis = (params: {
+  range?: string;
+  from?: string;
+  to?: string;
+  fastMinUnits?: number;
+  fastMinTxns?: number;
+} = {}) => {
+  const sp = new URLSearchParams();
+  if (params.range) sp.set('range', params.range);
+  if (params.from) sp.set('from', params.from);
+  if (params.to) sp.set('to', params.to);
+  if (params.fastMinUnits !== undefined) sp.set('fastMinUnits', String(params.fastMinUnits));
+  if (params.fastMinTxns !== undefined) sp.set('fastMinTxns', String(params.fastMinTxns));
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<import('../../shared/types.ts').ProductMovementAnalysisData>(`/api/inventory/movement-analysis${qs}`);
+};
+
 export type {
   InventoryInsights,
   StockoutRiskItem,
@@ -775,6 +792,10 @@ export type {
   InventoryDuplicateWarning,
   AuditVarianceHistory,
   BatchExpiryWarning,
+  ProductMovementStatus,
+  ProductMovementItem,
+  ProductMovementSummary,
+  ProductMovementAnalysisData,
   Shift,
   ShiftStatus,
   CashMovement,
@@ -892,29 +913,39 @@ export const fetchExpenses = (params: Record<string, string> = {}) => {
 export const fetchExpenseCategories = () =>
   api<{ categories: typeof import('../../shared/gst.ts').STANDARD_EXPENSE_CATEGORIES }>('/api/expenses/categories');
 
-export const createExpense = (data: any) =>
-  api<{ expense: import('../../shared/types.ts').Expense }>('/api/expenses', {
+export const createExpense = (data: Partial<import('../../shared/types.ts').Expense>) =>
+  api<{ ok?: boolean; expense: import('../../shared/types.ts').Expense }>('/api/expenses', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 
-export const fetchExpense = (id: string) =>
-  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`);
-
-export const updateExpense = (id: string, data: any) =>
-  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`, {
+export const updateExpense = (id: string, data: Partial<import('../../shared/types.ts').Expense>) =>
+  api<{ ok?: boolean; expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 
-export const voidExpense = (id: string, reason: string) =>
-  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}/void`, {
+export const voidExpense = (id: string, voidReason?: string) =>
+  api<{ ok: boolean; expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}/void`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ voidReason }),
   });
 
+export const fetchExpenseSummary = (params: Record<string, string> = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return api<{
+    totalMinor: number;
+    taxableMinor: number;
+    totalGstMinor: number;
+    itcMinor: number;
+    paidMinor: number;
+    balanceMinor: number;
+    byCategory: { category: string; count: number; totalMinor: number }[];
+  }>(`/api/expenses/summary${query ? '?' + query : ''}`);
+};
+
 // --------------------------------------------------------------------------
-// GST Filing, ITC Register & Reconciliation APIs
+// GST Module APIs
 // --------------------------------------------------------------------------
 export const fetchGstOverview = (period?: string, gstin?: string) => {
   const q = new URLSearchParams();
@@ -923,8 +954,13 @@ export const fetchGstOverview = (period?: string, gstin?: string) => {
   return api<import('../../shared/types.ts').GstOverviewMetrics>(`/api/gst/overview?${q.toString()}`);
 };
 
-export const fetchGstSalesRegister = (period?: string) => {
-  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+export const fetchGstSalesRegister = (params?: string | Record<string, string>) => {
+  let query = '';
+  if (typeof params === 'string') {
+    query = `?period=${encodeURIComponent(params)}`;
+  } else if (params) {
+    query = `?${new URLSearchParams(params).toString()}`;
+  }
   return api<{
     period: string;
     invoices: any[];
@@ -936,11 +972,16 @@ export const fetchGstSalesRegister = (period?: string) => {
       totalGstMinor: number;
       totalAmountMinor: number;
     };
-  }>(`/api/gst/sales-register${q}`);
+  }>(`/api/gst/sales-register${query}`);
 };
 
-export const fetchGstPurchaseRegister = (period?: string) => {
-  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+export const fetchGstPurchaseRegister = (params?: string | Record<string, string>) => {
+  let query = '';
+  if (typeof params === 'string') {
+    query = `?period=${encodeURIComponent(params)}`;
+  } else if (params) {
+    query = `?${new URLSearchParams(params).toString()}`;
+  }
   return api<{
     period: string;
     items: any[];
@@ -953,7 +994,25 @@ export const fetchGstPurchaseRegister = (period?: string) => {
       totalItcMinor: number;
       totalAmountMinor: number;
     };
-  }>(`/api/gst/purchase-register${q}`);
+  }>(`/api/gst/purchase-register${query}`);
+};
+
+export const fetchGstr1Summary = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<{
+    period: string;
+    gstin: string;
+    status: 'ready' | 'pending';
+    b2b: { count: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number; invoices: any[] };
+    b2cl: { count: number; taxableMinor: number; igstMinor: number; totalMinor: number; invoices: any[] };
+    b2cs: { count: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number };
+    hsnSummary: { hsn: string; description: string; uqc: string; totalQty: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number }[];
+    docsIssued: { type: string; from: string; to: string; totalNumber: number; cancelledNumber: number; netNumber: number }[];
+    totalTaxableMinor: number;
+    totalGstMinor: number;
+  }>(`/api/gst/gstr1?${q.toString()}`);
 };
 
 export const fetchItcRegister = (period?: string) => {
@@ -1094,4 +1153,71 @@ export const fetchFinancePayables = () =>
     }[];
   }>('/api/finance/payables');
 
+// ── Bulk Product Import ──────────────────────────────────────────────────────
+
+export interface AdditionalBarcode {
+  barcode: string;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+}
+
+export interface BulkImportRow {
+  name: string;
+  sku?: string | null;
+  barcode?: string | null;
+  hsn?: string | null;
+  unit?: string | null;
+  categoryId?: string | null;
+  category?: string | null;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+  additionalBarcodes?: (string | AdditionalBarcode)[] | null;
+  productNature?: 'BRANDED' | 'SHOP_PRODUCT' | null;
+  /** Selling price in paise (integer). */
+  priceMinor: number;
+  /** Cost price in paise (integer). */
+  costMinor?: number | null;
+  /** GST tax rate in basis points (e.g. 500 = 5%). */
+  taxRateBp?: number | null;
+  /** Whether selling price already includes GST. */
+  taxInclusive?: boolean | null;
+  /** Opening / incoming stock in milli-units (e.g. 5000 = 5 pieces). */
+  openingQtyMilli?: number | null;
+  /** Whether this row is an identified restock of an existing product */
+  isRestock?: boolean;
+  /** The existing product ID being restocked */
+  matchedItemId?: string | null;
+  /** Whether to update the existing product price details */
+  updatePrices?: boolean;
+}
+
+export interface BulkImportRowResult {
+  rowIndex: number;
+  status: 'created' | 'restocked' | 'skipped';
+  name?: string;
+  itemId?: string;
+  reason?: string;
+}
+
+export interface BulkImportResult {
+  importId: string;
+  totalRows: number;
+  created: number;
+  restocked: number;
+  skipped: number;
+  barcodesSaved: number;
+  results: BulkImportRowResult[];
+}
+
+export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string) =>
+  api<BulkImportResult>('/api/items/bulk-import', {
+    method: 'POST',
+    body: JSON.stringify({ rows, importBatchId }),
+  });
+
+export const fetchItemByBarcode = (code: string) =>
+  api<{ item: Item }>(`/api/items/by-barcode/${encodeURIComponent(code)}`);
+
+export const deleteProduct = (id: string) =>
+  api<{ ok: boolean; deleted: boolean; itemId: string; message: string }>(`/api/items/${encodeURIComponent(id)}?permanent=true`, {
+    method: 'DELETE',
+  });
 

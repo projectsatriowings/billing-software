@@ -518,6 +518,16 @@ export const MIGRATIONS: Migration[] = [
   {
     version: 14,
     statements: [
+      `CREATE TABLE IF NOT EXISTS product_barcodes (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        product_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        barcode TEXT NOT NULL,
+        barcode_type TEXT NOT NULL DEFAULT 'INTERNAL' CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_barcodes_uq ON product_barcodes (tenant_id, barcode)`,
+      `CREATE INDEX IF NOT EXISTS product_barcodes_product ON product_barcodes (tenant_id, product_id)`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_location TEXT NOT NULL DEFAULT 'MAIN'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_counter TEXT NOT NULL DEFAULT 'COUNTER-1'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_locations JSONB NOT NULL DEFAULT '["MAIN"]'`,

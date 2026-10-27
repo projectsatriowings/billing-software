@@ -1603,5 +1603,278 @@ export function registerInventory(r: Router) {
       },
     };
   });
+
+  // 8. Product Movement Analysis (Fast, Slow, and Non-Moving Products)
+  r.get('/api/inventory/movement-analysis', requirePerm('stock.view'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+
+    const range = (ctx.query.range ?? '30d').trim().toLowerCase();
+    const fromStr = (ctx.query.from ?? '').trim();
+    const toStr = (ctx.query.to ?? '').trim();
+
+    let startDate: Date;
+    let endDate: Date = new Date();
+
+    if (range === '7d') {
+      startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    } else if (range === '90d') {
+      startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    } else if (range === 'custom' && fromStr && toStr) {
+      const parsedStart = new Date(fromStr.includes('T') ? fromStr : `${fromStr}T00:00:00.000Z`);
+      const parsedEnd = new Date(toStr.includes('T') ? toStr : `${toStr}T23:59:59.999Z`);
+      if (!isNaN(parsedStart.getTime()) && !isNaN(parsedEnd.getTime())) {
+        startDate = parsedStart;
+        endDate = parsedEnd;
+      } else {
+        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      // Default 30 days
+      startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const rangeDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
+
+    const fastMinUnitsInput = ctx.query.fastMinUnits ? Number(ctx.query.fastMinUnits) : undefined;
+    const fastMinTxnsInput = ctx.query.fastMinTxns ? Number(ctx.query.fastMinTxns) : undefined;
+
+    const fastMinUnits = fastMinUnitsInput !== undefined && fastMinUnitsInput > 0
+      ? fastMinUnitsInput
+      : Math.max(1, Math.round((20 * rangeDays) / 30));
+
+    const fastMinTxns = fastMinTxnsInput !== undefined && fastMinTxnsInput > 0
+      ? fastMinTxnsInput
+      : Math.max(1, Math.round((15 * rangeDays) / 30));
+
+    const slowMinUnits = 1;
+
+    // Total distinct sales bills in period
+    const totalBillsRow = await ctx.db.one<any>(
+      `SELECT COUNT(DISTINCT inv.id)::int AS total_bills
+       FROM invoices inv
+       WHERE inv.tenant_id = ?
+         AND inv.kind = 'sale'
+         AND inv.status = 'posted'
+         AND inv.created_at >= ?::timestamptz
+         AND inv.created_at <= ?::timestamptz`,
+      [tenantId, startDate.toISOString(), endDate.toISOString()],
+    );
+    const totalSalesBills = Number(totalBillsRow?.total_bills ?? totalBillsRow?.totalBills ?? 0);
+
+    // Query item sales, returns, all-time last sold, and current stock
+    const rows = await ctx.db.query(
+      `WITH sales_period AS (
+         SELECT
+           il.item_id,
+           COALESCE(SUM(il.qty_milli), 0)::bigint AS gross_sold_milli,
+           COUNT(DISTINCT inv.id)::int AS txns_count,
+           MAX(inv.created_at) AS last_sold_at
+         FROM invoice_lines il
+         JOIN invoices inv ON inv.id = il.invoice_id AND inv.tenant_id = il.tenant_id
+         WHERE il.tenant_id = ?
+           AND inv.kind = 'sale'
+           AND inv.status = 'posted'
+           AND inv.created_at >= ?::timestamptz
+           AND inv.created_at <= ?::timestamptz
+           AND il.item_id IS NOT NULL
+         GROUP BY il.item_id
+       ),
+       returns_period AS (
+         SELECT
+           cl.item_id,
+           COALESCE(SUM(cl.qty_milli), 0)::bigint AS returned_milli
+         FROM invoice_lines cl
+         JOIN invoices cn ON cn.id = cl.invoice_id AND cn.tenant_id = cl.tenant_id
+         WHERE cl.tenant_id = ?
+           AND cn.kind = 'credit_note'
+           AND cn.status = 'posted'
+           AND cn.created_at >= ?::timestamptz
+           AND cn.created_at <= ?::timestamptz
+           AND cl.item_id IS NOT NULL
+         GROUP BY cl.item_id
+       ),
+       all_time_last_sold AS (
+         SELECT
+           il_all.item_id,
+           MAX(inv_all.created_at) AS historical_last_sold_at
+         FROM invoice_lines il_all
+         JOIN invoices inv_all ON inv_all.id = il_all.invoice_id AND inv_all.tenant_id = il_all.tenant_id
+         WHERE il_all.tenant_id = ?
+           AND inv_all.kind = 'sale'
+           AND inv_all.status = 'posted'
+           AND il_all.item_id IS NOT NULL
+         GROUP BY il_all.item_id
+       ),
+       item_stock AS (
+         SELECT
+           i.id,
+           i.name,
+           i.sku,
+           i.barcode,
+           i.category,
+           i.unit,
+           i.cost_minor,
+           i.price_minor,
+           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS current_stock_milli
+         FROM items i
+         WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+       )
+       SELECT
+         s.id,
+         s.name,
+         s.sku,
+         s.barcode,
+         s.category,
+         s.unit,
+         s.cost_minor,
+         s.price_minor,
+         s.current_stock_milli,
+         COALESCE(sp.gross_sold_milli, 0)::bigint AS gross_sold_milli,
+         COALESCE(rp.returned_milli, 0)::bigint AS returned_milli,
+         GREATEST(0, COALESCE(sp.gross_sold_milli, 0) - COALESCE(rp.returned_milli, 0))::bigint AS net_sold_milli,
+         COALESCE(sp.txns_count, 0)::int AS txns_count,
+         COALESCE(sp.last_sold_at, atl.historical_last_sold_at) AS last_sold_at
+       FROM item_stock s
+       LEFT JOIN sales_period sp ON sp.item_id = s.id
+       LEFT JOIN returns_period rp ON rp.item_id = s.id
+       LEFT JOIN all_time_last_sold atl ON atl.item_id = s.id
+       ORDER BY net_sold_milli DESC, txns_count DESC, s.name ASC`,
+      [
+        tenantId, startDate.toISOString(), endDate.toISOString(),
+        tenantId, startDate.toISOString(), endDate.toISOString(),
+        tenantId,
+        tenantId,
+      ],
+    );
+
+    let totalUnitsSold = 0;
+    let fastMovingCount = 0;
+    let slowMovingCount = 0;
+    let nonMovingCount = 0;
+    let nonMovingTiedCapitalMinor = 0;
+
+    const products = rows.map((r: any) => {
+      const netSoldMilli = Number(r.netSoldMilli ?? r.net_sold_milli ?? 0);
+      const unitsSold = netSoldMilli / 1000;
+      const salesTxns = Number(r.txnsCount ?? r.txns_count ?? 0);
+      const currentStockMilli = Number(r.currentStockMilli ?? r.current_stock_milli ?? 0);
+      const currentStockUnits = currentStockMilli / 1000;
+      const costMinor = Number(r.costMinor ?? r.cost_minor ?? 0);
+
+      totalUnitsSold += unitsSold;
+
+      let movementStatus: 'fast_moving' | 'slow_moving' | 'non_moving';
+      let suggestedAction: string;
+
+      if (unitsSold >= fastMinUnits || salesTxns >= fastMinTxns) {
+        movementStatus = 'fast_moving';
+        suggestedAction = 'Consider restocking';
+        fastMovingCount++;
+      } else if (unitsSold >= slowMinUnits) {
+        movementStatus = 'slow_moving';
+        suggestedAction = 'Review purchase qty & pricing';
+        slowMovingCount++;
+      } else {
+        movementStatus = 'non_moving';
+        suggestedAction = 'Review demand before buying';
+        nonMovingCount++;
+        if (currentStockUnits > 0) {
+          nonMovingTiedCapitalMinor += Math.round((currentStockMilli * costMinor) / 1000);
+        }
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        sku: r.sku || null,
+        barcode: r.barcode || null,
+        category: r.category || 'General',
+        unit: r.unit || 'pcs',
+        currentStockUnits,
+        unitsSold,
+        salesTxns,
+        lastSoldAt: r.lastSoldAt ?? r.last_sold_at ?? null,
+        movementStatus,
+        suggestedAction,
+      };
+    });
+
+    const topSellers = products
+      .filter((p) => p.unitsSold > 0)
+      .slice(0, 10)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        unit: p.unit,
+        unitsSold: p.unitsSold,
+      }));
+
+    // Generate insights
+    const topSeller = products.find((p) => p.unitsSold > 0);
+    let bestSellerInsight: any = null;
+    if (topSeller) {
+      const dailyVelocity = rangeDays > 0 ? topSeller.unitsSold / rangeDays : 0;
+      const runwayDays = dailyVelocity > 0 ? Math.round(topSeller.currentStockUnits / dailyVelocity) : null;
+      bestSellerInsight = {
+        name: topSeller.name,
+        unitsSold: topSeller.unitsSold,
+        unit: topSeller.unit,
+        salesTxns: topSeller.salesTxns,
+        currentStockUnits: topSeller.currentStockUnits,
+        runwayDays,
+      };
+    }
+
+    const negStockItem = products.find((p) => p.currentStockUnits < 0);
+    const slowTopItem = products.find((p) => p.movementStatus === 'slow_moving');
+    let slowingProductInsight: any = null;
+
+    if (negStockItem) {
+      slowingProductInsight = {
+        name: negStockItem.name,
+        unitsSold: negStockItem.unitsSold,
+        unit: negStockItem.unit,
+        currentStockUnits: negStockItem.currentStockUnits,
+        message: `${negStockItem.unitsSold} ${negStockItem.unit} sold in period. Stock is negative (${negStockItem.currentStockUnits}) — check the last stock entry.`,
+      };
+    } else if (slowTopItem) {
+      slowingProductInsight = {
+        name: slowTopItem.name,
+        unitsSold: slowTopItem.unitsSold,
+        unit: slowTopItem.unit,
+        currentStockUnits: slowTopItem.currentStockUnits,
+        message: `${slowTopItem.unitsSold} ${slowTopItem.unit} sold across ${slowTopItem.salesTxns} bills. Stock is ${slowTopItem.currentStockUnits} ${slowTopItem.unit} — review purchase quantity and pricing.`,
+      };
+    }
+
+    return {
+      summary: {
+        fastMovingCount,
+        slowMovingCount,
+        nonMovingCount,
+        totalTrackedProducts: products.length,
+        totalUnitsSold: Math.round(totalUnitsSold * 100) / 100,
+        totalSalesBills,
+        rangeDays,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        fastMinUnits,
+        fastMinTxns,
+        slowMinUnits,
+      },
+      topSellers,
+      insights: {
+        bestSeller: bestSellerInsight,
+        slowingProduct: slowingProductInsight,
+        nonMovingSummary: {
+          count: nonMovingCount,
+          tiedCapitalMinor: isAuthorizedForCost ? nonMovingTiedCapitalMinor : 0,
+          days: rangeDays,
+        },
+      },
+      products,
+    };
+  });
 }
 
