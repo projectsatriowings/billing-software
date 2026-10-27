@@ -200,29 +200,45 @@ export function searchHsnSac(query: string, limit = 20): HsnItem[] {
  */
 export function suggestHsnForProduct(productName: string, category?: string): HsnItem[] {
   loadHsnData();
-  const rawTerms = [productName, category].filter(Boolean).join(' ');
-  const keywords = extractSearchKeywords(rawTerms);
+  const nameKeywords = extractSearchKeywords(productName || '');
+  if (nameKeywords.length === 0) {
+    if (!category) return [];
+    return searchHsnSac(category, 5);
+  }
 
-  if (keywords.length === 0) return [];
+  // 1. Search full product name phrase
+  const phraseSearch = searchHsnSac(nameKeywords.join(' '), 6);
+  if (phraseSearch.length >= 4) return phraseSearch;
 
-  // Search full phrase first
-  const fullSearch = searchHsnSac(keywords.join(' '), 6);
-  if (fullSearch.length >= 3) return fullSearch;
+  const combined = [...phraseSearch];
+  const seen = new Set(phraseSearch.map((s) => s.code));
 
-  // Search individual primary keywords
-  const combined = [...fullSearch];
-  const seen = new Set(fullSearch.map((s) => s.code));
-
-  for (const kw of keywords) {
-    const hits = searchHsnSac(kw, 4);
+  // 2. Search individual product name keywords
+  for (const kw of nameKeywords) {
+    const hits = searchHsnSac(kw, 5);
     for (const h of hits) {
       if (!seen.has(h.code)) {
         seen.add(h.code);
         combined.push(h);
       }
     }
-    if (combined.length >= 8) break;
+    if (combined.length >= 6) break;
   }
 
-  return combined.slice(0, 8);
+  // 3. Only if very few matches, supplement with category
+  if (combined.length < 3 && category) {
+    const catKeywords = extractSearchKeywords(category);
+    for (const ckw of catKeywords) {
+      const catHits = searchHsnSac(ckw, 3);
+      for (const ch of catHits) {
+        if (!seen.has(ch.code)) {
+          seen.add(ch.code);
+          combined.push(ch);
+        }
+      }
+      if (combined.length >= 6) break;
+    }
+  }
+
+  return combined.slice(0, 6);
 }

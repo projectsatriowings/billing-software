@@ -2219,22 +2219,25 @@ export function App() {
     setShowItemModal(true);
   };
 
-  // Auto-suggest HSN codes when typing Product Name or Category in Item Modal
+  // Auto-suggest HSN codes when typing Product Name or Category in Item Modal (only if HSN not yet selected)
   useEffect(() => {
-    if (!showItemModal || !itemFormName.trim()) {
+    if (!showItemModal || !itemFormName.trim() || itemFormHsn.trim()) {
       setHsnSuggestions([]);
       return;
     }
     const timer = setTimeout(async () => {
       try {
         const res = await suggestHsnForProduct(itemFormName, itemFormCategory);
-        setHsnSuggestions(res.suggestions || []);
+        // Only set if user hasn't selected an HSN in the meantime
+        if (!itemFormHsn.trim()) {
+          setHsnSuggestions(res.suggestions || []);
+        }
       } catch (err) {
         console.warn('Failed to fetch HSN suggestions', err);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [itemFormName, itemFormCategory, showItemModal]);
+  }, [itemFormName, itemFormCategory, showItemModal, itemFormHsn]);
 
   // Live search when typing inside HSN / SAC field
   useEffect(() => {
@@ -8615,46 +8618,62 @@ export function App() {
                   onChange={(e) => setItemFormName(e.target.value)}
                   placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
                 />
-                {hsnSuggestions.length > 0 && (
+                {!itemFormHsn && hsnSuggestions.length > 0 && (
                   <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>💡 Suggested HSN for "{itemFormName}":</span>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
+                        <button
+                          type="button"
+                          onClick={() => setHsnSuggestions([])}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', padding: '0 3px', lineHeight: 1 }}
+                          title="Dismiss"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      {hsnSuggestions.map((sug) => {
-                        const isSelected = itemFormHsn === sug.code;
-                        return (
-                          <button
-                            key={sug.code}
-                            type="button"
-                            onClick={() => {
-                              setItemFormHsn(sug.code);
-                              setSelectedHsnDesc(sug.desc);
-                              setShowHsnDropdown(false);
-                            }}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem',
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '5px',
-                              fontSize: '0.76rem',
-                              cursor: 'pointer',
-                              border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
-                              background: isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(30, 41, 59, 0.95)',
-                              color: isSelected ? '#38bdf8' : '#e2e8f0',
-                            }}
-                            title={sug.desc}
-                          >
-                            <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{sug.code}</span>
-                            <span style={{ color: '#94a3b8', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {sug.desc}
-                            </span>
-                            {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
-                          </button>
-                        );
-                      })}
+                      {hsnSuggestions.map((sug) => (
+                        <button
+                          key={sug.code}
+                          type="button"
+                          onClick={() => {
+                            setItemFormHsn(sug.code);
+                            setSelectedHsnDesc(sug.desc);
+                            setShowHsnDropdown(false);
+                            setHsnSuggestions([]); // Instantly closes this box upon selection!
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '5px',
+                            fontSize: '0.76rem',
+                            cursor: 'pointer',
+                            border: '1px solid #334155',
+                            background: 'rgba(30, 41, 59, 0.95)',
+                            color: '#e2e8f0',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#38bdf8';
+                            e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#334155';
+                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.95)';
+                          }}
+                          title={sug.desc}
+                        >
+                          <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
+                          <span style={{ color: '#cbd5e1', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {sug.desc}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
