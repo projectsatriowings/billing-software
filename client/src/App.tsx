@@ -6940,21 +6940,6 @@ export function App() {
                     📥 Import Products
                   </button>
                   <button
-                    id="bulk-print-labels-btn"
-                    className="btn btn-secondary"
-                    onClick={handlePrintAllLabels}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      fontWeight: 600,
-                      padding: '0.45rem 0.85rem',
-                    }}
-                    title="Print labels for all active products in current list"
-                  >
-                    🖨️ Print Labels
-                  </button>
-                  <button
                     id="bulk-print-custom-labels-btn"
                     className="btn btn-secondary"
                     onClick={() => setShowBulkBarcodeModal(true)}
@@ -6983,7 +6968,6 @@ export function App() {
                         <th className="col-product-name">Product Name</th>
                         <th className="col-nowrap">Category</th>
                         <th className="col-nowrap">SKU / Code</th>
-                        <th className="col-nowrap">Barcode</th>
                         <th className="col-nowrap">HSN / SAC</th>
                         <th className="col-nowrap">Selling Price</th>
                         {can(user?.role as any, 'purchases') && <th className="col-nowrap">Last Purchase Cost</th>}
@@ -7007,7 +6991,6 @@ export function App() {
                           </td>
                           <td className="col-nowrap"><span className="badge badge-blue">{i.category || 'General'}</span></td>
                           <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.sku || '—'}</td>
-                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.barcode || '—'}</td>
                           <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.hsn || '—'}</td>
                           <td className="mono col-nowrap" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
                           {can(user?.role as any, 'purchases') && (
@@ -7028,7 +7011,7 @@ export function App() {
                           </td>
                           <td className="col-nowrap" style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.4rem 0.5rem' }}>
                             {i.barcode && i.barcode.trim() ? (
-                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+                              <div style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
                                 <div
                                   className="barcode-svg-preview"
                                   style={{
@@ -7044,28 +7027,6 @@ export function App() {
                                   }}
                                   dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(i.barcode) }}
                                 />
-                                <button
-                                  id={`print-barcode-btn-${i.id}`}
-                                  className="btn btn-secondary btn-print-label"
-                                  onClick={() => handlePrintSingleLabel(i)}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    padding: '0.15rem 0.55rem',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 600,
-                                    lineHeight: '1.2',
-                                    borderRadius: '4px',
-                                    background: '#f8fafc',
-                                    border: '1px solid #cbd5e1',
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                  }}
-                                  title={`Print barcode label for ${i.name}`}
-                                >
-                                  🖨️ Print
-                                </button>
                               </div>
                             ) : (
                               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
