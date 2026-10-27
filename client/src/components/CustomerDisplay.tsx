@@ -442,7 +442,7 @@ export const CustomerDisplay: React.FC<CustomerDisplayProps> = ({ counterId = 'c
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <span className="cfd-mrp-strike cfd-num">
+                          <span className="cfd-mrp-val cfd-num">
                             {formatCurrency(mrp)}
                           </span>
                         </td>
