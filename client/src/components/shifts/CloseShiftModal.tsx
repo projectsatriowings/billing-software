@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { closeShift, type Shift, type ShiftSummary } from '../../api.ts';
+import React, { useState, useEffect } from 'react';
+import { closeShift, fetchActiveShift, fetchShiftDetails, type Shift, type ShiftSummary } from '../../api.ts';
 import { formatMoney } from '../../../../shared/shifts.ts';
 
 interface CloseShiftModalProps {
@@ -17,19 +17,93 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
   activeShift,
   summary,
 }) => {
+  const [liveSummary, setLiveSummary] = useState<ShiftSummary>(summary);
+  const [loadingLive, setLoadingLive] = useState<boolean>(false);
+  const [userHasEditedCount, setUserHasEditedCount] = useState<boolean>(false);
   const [countedRupees, setCountedRupees] = useState<string>(
-    (summary.expectedCashMinor / 100).toFixed(2)
+    ((summary?.expectedCashMinor ?? 0) / 100).toFixed(2)
   );
   const [varianceReason, setVarianceReason] = useState<string>('');
   const [closingNote, setClosingNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Authoritative live data fetching & real-time synchronization
+  useEffect(() => {
+    if (!isOpen) {
+      setUserHasEditedCount(false);
+      return;
+    }
+
+    if (summary) {
+      setLiveSummary(summary);
+      if (!userHasEditedCount) {
+        setCountedRupees(((summary.expectedCashMinor ?? 0) / 100).toFixed(2));
+      }
+    }
+
+    let mounted = true;
+    const fetchFreshTotals = async () => {
+      setLoadingLive(true);
+      try {
+        let freshSummary: ShiftSummary | null = null;
+        if (activeShift?.id) {
+          try {
+            const det = await fetchShiftDetails(activeShift.id);
+            if (det?.shift?.summary) {
+              freshSummary = det.shift.summary;
+            }
+          } catch (detErr) {
+            console.warn('Could not fetch shift details by id:', detErr);
+          }
+        }
+        if (!freshSummary) {
+          const res = await fetchActiveShift();
+          if (res?.activeShift?.summary) {
+            freshSummary = res.activeShift.summary;
+          }
+        }
+        if (mounted && freshSummary) {
+          setLiveSummary(freshSummary);
+          if (!userHasEditedCount) {
+            setCountedRupees(((freshSummary.expectedCashMinor ?? 0) / 100).toFixed(2));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not refresh live shift summary:', err);
+      } finally {
+        if (mounted) setLoadingLive(false);
+      }
+    };
+
+    fetchFreshTotals();
+
+    const handleSync = (e?: any) => {
+      if (e?.detail?.summary) {
+        setLiveSummary(e.detail.summary);
+        if (!userHasEditedCount) {
+          setCountedRupees(((e.detail.summary.expectedCashMinor ?? 0) / 100).toFixed(2));
+        }
+      }
+      fetchFreshTotals();
+    };
+
+    window.addEventListener('shift_status_changed', handleSync);
+    window.addEventListener('cash_movement_recorded', handleSync);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('shift_status_changed', handleSync);
+      window.removeEventListener('cash_movement_recorded', handleSync);
+    };
+  }, [isOpen, activeShift?.id, summary]);
+
   if (!isOpen) return null;
 
+  const activeSummary = liveSummary || summary;
   const parsedCounted = parseFloat(countedRupees);
   const countedMinor = isNaN(parsedCounted) || parsedCounted < 0 ? 0 : Math.round(parsedCounted * 100);
-  const expectedMinor = summary.expectedCashMinor;
+  const expectedMinor = activeSummary?.expectedCashMinor ?? 0;
   const varianceMinor = countedMinor - expectedMinor;
 
   const isBalanced = varianceMinor === 0;
@@ -61,6 +135,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
         varianceReason: varianceReason.trim() || undefined,
         note: closingNote.trim() || undefined,
       });
+      window.dispatchEvent(new Event('shift_status_changed'));
       onSuccess(res.shift);
       onClose();
     } catch (err: any) {
@@ -68,6 +143,25 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const formatShiftOpenedAt = (openedAtStr?: string | null) => {
+    if (!openedAtStr) return 'Opening time unavailable';
+    const date = new Date(openedAtStr);
+    if (isNaN(date.getTime())) return 'Opening time unavailable';
+
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (isToday) return timeStr;
+    if (isYesterday) return `Yesterday · ${timeStr}`;
+    const dateStr = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return `${dateStr} · ${timeStr}`;
   };
 
   return (
@@ -89,6 +183,9 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               <p className="modal-subtitle">
                 Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span> • Cashier:{' '}
                 <span className="cashier-pill-tag">👤 {activeShift.userName || 'Current Cashier'}</span>
+                {activeShift.openedAt && (
+                  <> • Opened: <span>{formatShiftOpenedAt(activeShift.openedAt)}</span></>
+                )}
               </p>
             </div>
           </div>
@@ -100,7 +197,8 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="shift-modal-body">
+        <form onSubmit={handleSubmit} className="shift-modal-form">
+          <div className="shift-modal-body">
           {error && (
             <div className="shift-modal-alert error">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -114,31 +212,47 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
 
           {/* Expected Drawer Cash Breakdown Panel */}
           <div className="shift-reconciliation-panel">
-            <h4 className="panel-subheading">Authoritative Drawer Cash Balance</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h4 className="panel-subheading" style={{ margin: 0 }}>Authoritative Drawer Cash Balance</h4>
+              {loadingLive && (
+                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>
+                  ↻ Refreshing live totals...
+                </span>
+              )}
+            </div>
             <div className="recon-formula-grid">
               <div className="recon-term">
                 <span className="term-label">Opening Float</span>
-                <span className="term-val">{formatMoney(summary.openingCashMinor)}</span>
+                <span className="term-val">{formatMoney(activeSummary.openingCashMinor)}</span>
               </div>
               <span className="recon-op">+</span>
               <div className="recon-term">
                 <span className="term-label">Cash Sales</span>
-                <span className="term-val">{formatMoney(summary.cashSalesMinor)}</span>
+                <span className="term-val">{formatMoney(activeSummary.cashSalesMinor)}</span>
               </div>
+              {activeSummary.cashPaymentsMinor > 0 && (
+                <>
+                  <span className="recon-op">+</span>
+                  <div className="recon-term">
+                    <span className="term-label">Khata Collections</span>
+                    <span className="term-val text-success">+{formatMoney(activeSummary.cashPaymentsMinor)}</span>
+                  </div>
+                </>
+              )}
               <span className="recon-op">+</span>
               <div className="recon-term">
                 <span className="term-label">Cash-In</span>
-                <span className="term-val text-success">+{formatMoney(summary.cashInMinor)}</span>
+                <span className="term-val text-success">+{formatMoney(activeSummary.cashInMinor)}</span>
               </div>
               <span className="recon-op">-</span>
               <div className="recon-term">
                 <span className="term-label">Cash-Out</span>
-                <span className="term-val text-warning">-{formatMoney(summary.cashOutMinor)}</span>
+                <span className="term-val text-warning">-{formatMoney(activeSummary.cashOutMinor)}</span>
               </div>
               <span className="recon-op">-</span>
               <div className="recon-term">
                 <span className="term-label">Cash Refunds</span>
-                <span className="term-val text-danger">-{formatMoney(summary.cashRefundsMinor)}</span>
+                <span className="term-val text-danger">-{formatMoney(activeSummary.cashRefundsMinor)}</span>
               </div>
               <span className="recon-op">=</span>
               <div className="recon-term expected-term">
@@ -155,7 +269,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               </svg>
               <span>
                 <strong>Non-Cash Collections:</strong> UPI, Card, and Bank payments total{' '}
-                <strong>{formatMoney(summary.nonCashPaymentsMinor)}</strong> and are safely excluded from the physical cash drawer.
+                <strong>{formatMoney(activeSummary.nonCashPaymentsMinor)}</strong> and are safely excluded from the physical cash drawer.
               </span>
             </div>
           </div>
@@ -175,7 +289,10 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
                 className="form-input rupee-input large"
                 placeholder="0"
                 value={countedRupees}
-                onChange={(e) => setCountedRupees(e.target.value)}
+                onChange={(e) => {
+                  setCountedRupees(e.target.value);
+                  setUserHasEditedCount(true);
+                }}
                 autoFocus
                 required
               />
@@ -184,7 +301,10 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               <button
                 type="button"
                 className="quick-pill active"
-                onClick={() => setCountedRupees((expectedMinor / 100).toFixed(2))}
+                onClick={() => {
+                  setCountedRupees((expectedMinor / 100).toFixed(2));
+                  setUserHasEditedCount(false);
+                }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
@@ -214,14 +334,14 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               </div>
               <div>
                 <span className="variance-title">
-                  {isBalanced && 'Cash Drawer Perfectly Balanced (₹0.00 Variance)'}
-                  {isShortage && `Cash Shortage: ${formatMoney(Math.abs(varianceMinor))} Deficit`}
-                  {isExcess && `Cash Excess: +${formatMoney(varianceMinor)} Surplus`}
+                  {isBalanced && 'Status: Matched • Cash Drawer Balanced (₹0.00 Variance)'}
+                  {isShortage && `Status: Short • Cash Shortage (${formatMoney(Math.abs(varianceMinor))} Deficit)`}
+                  {isExcess && `Status: Over • Cash Excess (+${formatMoney(varianceMinor)} Surplus)`}
                 </span>
                 <p className="variance-subtitle">
-                  {isBalanced && 'Physical counted cash matches expected calculations to the exact paisa.'}
-                  {isShortage && 'Counted cash is less than expected. An explanation note is mandatory.'}
-                  {isExcess && 'Counted cash exceeds expected. An explanation note is mandatory.'}
+                  {isBalanced && `Actual Cash (${formatMoney(countedMinor)}) = Expected Cash (${formatMoney(expectedMinor)}). Exact match.`}
+                  {isShortage && `Cash Difference = Actual (${formatMoney(countedMinor)}) - Expected (${formatMoney(expectedMinor)}) = -${formatMoney(Math.abs(varianceMinor))}. Explanation required.`}
+                  {isExcess && `Cash Difference = Actual (${formatMoney(countedMinor)}) - Expected (${formatMoney(expectedMinor)}) = +${formatMoney(varianceMinor)}. Explanation required.`}
                 </p>
               </div>
             </div>
@@ -262,6 +382,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               onChange={(e) => setClosingNote(e.target.value)}
               maxLength={250}
             />
+          </div>
           </div>
 
           <div className="modal-actions">

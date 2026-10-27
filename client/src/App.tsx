@@ -59,12 +59,14 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
+import { TodayDashboardView } from './components/dashboard/TodayDashboardView.tsx';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -332,7 +334,7 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('pos');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'sales-analysis' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -342,6 +344,9 @@ export function App() {
 
   const navigateTo = (newView: 'landing' | 'login' | 'register' | 'selector' | 'dashboard') => {
     setView(newView);
+    if (newView === 'dashboard') {
+      setActiveTab('dashboard');
+    }
     window.location.hash = newView;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -515,6 +520,7 @@ export function App() {
 
   // Invoices list state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceFilterDate, setInvoiceFilterDate] = useState<string>('');
 
   // Analytics state
   const [report, setReport] = useState<DashboardReport | null>(null);
@@ -1918,6 +1924,7 @@ export function App() {
       loadReports();
       loadItems(); // refresh stock
       showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!`);
+      window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
       if (!isKot) {
@@ -2870,6 +2877,7 @@ export function App() {
       });
 
       showToast(`Credit Note ${res.creditNoteNumber} issued!`);
+      window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
       loadInvoices();
       loadParties();
       loadDuesSummary();
@@ -3390,8 +3398,8 @@ export function App() {
           <nav className="sidebar-nav">
             <button
               type="button"
-              className={`sidebar-nav-item`}
-              onClick={() => setActiveTab('pos')}
+              className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
             >
               <span className="nav-icon">🏠</span>
               <span className="nav-text">Dashboard</span>
@@ -3450,21 +3458,25 @@ export function App() {
               >
                 <span className="nav-icon">🏬</span>
                 <span className="nav-text">Inventory Hub</span>
-                {totalStockAlerts > 0 && (
-                  <span
-                    className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
-                    title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
-                  >
-                    {totalStockAlerts}
+                <div className="nav-trailing">
+                  {totalStockAlerts > 0 && (
+                    <span
+                      className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
+                      title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
+                    >
+                      {totalStockAlerts}
+                    </span>
+                  )}
+                  <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </span>
-                )}
-                <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
-                  ▾
-                </span>
+                </div>
               </button>
 
               {isInventorySubmenuVisible && (
-                <div className="sidebar-submenu-dropdown" role="menu">
+                <div className="sidebar-submenu-list" role="menu">
                   <button
                     type="button"
                     role="menuitem"
@@ -3473,10 +3485,10 @@ export function App() {
                       setActiveTab('product-movement');
                       setShowInventoryDropdown(true);
                     }}
-                    title="Product Movement Analysis"
+                    title="Product Analysis"
                   >
-                    <span className="submenu-icon">🚀</span>
-                    <span className="submenu-text">Product Movement Analysis</span>
+                    <span className="submenu-icon" aria-hidden="true">🚀</span>
+                    <span className="submenu-text">Product Analysis</span>
                   </button>
                 </div>
               )}
@@ -3488,6 +3500,15 @@ export function App() {
             >
               <span className="nav-icon">📄</span>
               <span className="nav-text">Bills & Invoices</span>
+            </button>
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sales-analysis')}
+            >
+              <span className="nav-icon">💰</span>
+              <span className="nav-text">Sales Analysis</span>
+              <span className="nav-badge-new">NEW</span>
             </button>
             <button
               type="button"
@@ -3625,7 +3646,7 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && (
+        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -3663,6 +3684,27 @@ export function App() {
               </div>
             </div>
           </header>
+        )}
+
+        {/* TAB 0: TODAY'S OVERVIEW DASHBOARD */}
+        {activeTab === 'dashboard' && user && (
+          <TodayDashboardView
+            user={user}
+            shop={shop}
+            onNavigateToPos={() => setActiveTab('pos')}
+            onNavigateToShifts={() => setActiveTab('shifts')}
+            onNavigateToInventory={() => setActiveTab('inventory')}
+            onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+            onNavigateToPurchases={() => {
+              setActiveTab('purchases');
+              loadPurchases();
+            }}
+            onOpenAddProductModal={() => {
+              setEditingItem(null);
+              setShowItemModal(true);
+            }}
+            showToast={showToast}
+          />
         )}
 
         {/* TAB 1: BENTO POS BILLING TERMINAL */}
@@ -5583,26 +5625,43 @@ export function App() {
         )}
 
         {/* TAB 3: BILLS & INVOICES */}
-        {activeTab === 'invoices' && (
-          <div className="card">
-            <div className="card-title">
-              <span>Past Sales Invoices ({invoices.length} bills)</span>
-            </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Invoice No</th>
-                  <th>Date & Time</th>
-                  <th>Customer / Reference</th>
-                  <th>Total Amount</th>
-                  <th>Taxable</th>
-                  <th>GST</th>
-                  <th>Payment Method</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
+        {activeTab === 'invoices' && (() => {
+          const displayedInvoices = invoices.filter((inv) => {
+            if (!invoiceFilterDate) return true;
+            return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+          });
+          return (
+            <div className="card">
+              <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <span>Past Sales Invoices ({displayedInvoices.length} bills)</span>
+                  {invoiceFilterDate && (
+                    <span
+                      className="badge badge-emerald"
+                      style={{ marginLeft: '10px', cursor: 'pointer', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 }}
+                      onClick={() => setInvoiceFilterDate('')}
+                      title="Click to clear date filter"
+                    >
+                      📅 Filtered: {invoiceFilterDate} ✕
+                    </span>
+                  )}
+                </div>
+              </div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice No</th>
+                    <th>Date & Time</th>
+                    <th>Customer / Reference</th>
+                    <th>Total Amount</th>
+                    <th>Taxable</th>
+                    <th>GST</th>
+                    <th>Payment Method</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedInvoices.map((inv) => (
                   <tr key={inv.id}>
                     <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>
                       <button
@@ -5824,7 +5883,21 @@ export function App() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          );
+        })()}
+
+        {/* TAB: SALES ANALYSIS */}
+        {activeTab === 'sales-analysis' && (
+          <SalesAnalysisView
+            userRole={user?.role}
+            shopName={shop?.name}
+            onNavigateToInvoices={(searchDate) => {
+              setInvoiceFilterDate(searchDate || '');
+              setActiveTab('invoices');
+            }}
+            showToast={showToast}
+          />
         )}
 
         {/* TAB 4: CUSTOMERS */}

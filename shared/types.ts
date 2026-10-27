@@ -639,3 +639,162 @@ export interface ProductMovementAnalysisData {
   products: ProductMovementItem[];
 }
 
+export interface SalesSummaryMetrics {
+  netSalesMinor: number;
+  grossSalesMinor: number;
+  returnsMinor: number;
+  billsCount: number;
+  avgBillValueMinor: number;
+  grossProfitMinor: number;
+  cogsMinor: number;
+  marginPct: number;
+  returnsCount: number;
+  returnRatePct: number;
+  cgstMinor: number;
+  sgstMinor: number;
+  igstMinor: number;
+  totalGstMinor: number;
+  avgBillsPerDay: number;
+  costEstimated: boolean;
+}
+
+export interface SalesComparisonDiff {
+  netSalesChangePct: number;
+  billsCountChangePct: number;
+  avgBillChangePct: number;
+  grossProfitChangePct: number;
+  marginPointDiff: number;
+}
+
+export interface SalesOverviewPoint {
+  date: string;
+  label: string;
+  weekday: string;
+  salesMinor: number;
+  billsCount: number;
+  grossProfitMinor: number;
+  avgBillMinor: number;
+}
+
+export interface CategorySalesItem {
+  category: string;
+  netSalesMinor: number;
+  sharePct: number;
+  billsCount: number;
+  color: string;
+}
+
+export interface HeatmapCell {
+  weekday: number;
+  weekdayName: string;
+  hour: number;
+  hourLabel: string;
+  salesMinor: number;
+  billsCount: number;
+}
+
+export interface PaymentModeBreakdown {
+  mode: string;
+  label: string;
+  totalMinor: number;
+  sharePct: number;
+  color: string;
+}
+
+export interface TopCustomerItem {
+  id: string;
+  name: string;
+  phone?: string;
+  netSalesMinor: number;
+  billsCount: number;
+  isB2B: boolean;
+  isKhata: boolean;
+  creditDuesMinor?: number;
+}
+
+export interface SalesInsight {
+  id: string;
+  type: 'growth' | 'peak' | 'returns' | 'credit' | 'info';
+  title: string;
+  description: string;
+  tag?: string;
+  icon: string;
+  theme: 'emerald' | 'amber' | 'purple' | 'blue' | 'rose';
+}
+
+export interface DaywiseSalesRow {
+  date: string;
+  formattedDate: string;
+  weekday: string;
+  billsCount: number;
+  grossSalesMinor: number;
+  returnsMinor: number;
+  netSalesMinor: number;
+  discountMinor: number;
+  gstMinor: number;
+  grossProfitMinor: number;
+  marginPct: number;
+  prevWeekSameDayChangePct: number | null;
+}
+
+export interface CashierPerformanceRow {
+  userId: string;
+  userName: string;
+  counterName: string;
+  salesMinor: number;
+  billsCount: number;
+  avgBillMinor: number;
+}
+
+export interface CashierSummaryStrip {
+  voidedBillsCount: number;
+  voidedTotalMinor: number;
+  discountsGivenMinor: number;
+  billsOnCreditCount: number;
+  billsOnCreditMinor: number;
+}
+
+export interface SalesAnalysisData {
+  filters: {
+    from: string;
+    to: string;
+    compare: 'previous_period' | 'same_period_last_month' | 'none';
+    counterId: string;
+    categoryId: string;
+    userId: string;
+    rangeDays: number;
+  };
+  filterOptions: {
+    counters: { id: string; name: string }[];
+    categories: string[];
+    cashiers: { id: string; name: string; role: string }[];
+  };
+  summary: SalesSummaryMetrics;
+  comparison: {
+    hasComparison: boolean;
+    periodLabel: string;
+    summary: SalesSummaryMetrics;
+    diff: SalesComparisonDiff;
+  } | null;
+  series: SalesOverviewPoint[];
+  grouping: 'day' | 'week';
+  categories: CategorySalesItem[];
+  heatmap: {
+    matrix: HeatmapCell[];
+    peakSlot: string;
+    maxCellSalesMinor: number;
+  };
+  payments: {
+    modes: PaymentModeBreakdown[];
+    totalPaidMinor: number;
+  };
+  topCustomers: TopCustomerItem[];
+  insights: SalesInsight[];
+  daywise: DaywiseSalesRow[];
+  cashierPerformance: {
+    rows: CashierPerformanceRow[];
+    summaryStrip: CashierSummaryStrip;
+  } | null;
+}
+
+
