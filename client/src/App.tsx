@@ -68,6 +68,7 @@ import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashb
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
+import { BulkBarcodeModal } from './components/BulkBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
@@ -530,6 +531,7 @@ export function App() {
   const [activePrintLabels, setActivePrintLabels] = useState<Array<{ name: string; sku?: string | null; barcode: string; priceMinor?: number }> | null>(null);
   const [printBarcodeItem, setPrintBarcodeItem] = useState<Item | null>(null);
   const [showPrintBarcodeModal, setShowPrintBarcodeModal] = useState(false);
+  const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
 
   // Wireless Mobile Barcode Scanner State
@@ -6952,6 +6954,21 @@ export function App() {
                   >
                     🖨️ Print Labels
                   </button>
+                  <button
+                    id="bulk-print-custom-labels-btn"
+                    className="btn btn-secondary"
+                    onClick={() => setShowBulkBarcodeModal(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      fontWeight: 600,
+                      padding: '0.45rem 0.85rem',
+                    }}
+                    title="Select multiple products and set custom label quantities for each"
+                  >
+                    🏷️ Bulk Print Labels
+                  </button>
                   <button className="btn btn-primary" onClick={openAddItemModal}>
                     + Add New Item
                   </button>
@@ -9468,6 +9485,16 @@ export function App() {
             setShowPrintBarcodeModal(false);
             setPrintBarcodeItem(null);
           }}
+        />
+      )}
+
+      {/* BULK PRINT BARCODE LABELS MODAL */}
+      {showBulkBarcodeModal && (
+        <BulkBarcodeModal
+          isOpen={showBulkBarcodeModal}
+          items={items}
+          shopName={shop?.name}
+          onClose={() => setShowBulkBarcodeModal(false)}
         />
       )}
 
