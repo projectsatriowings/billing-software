@@ -184,7 +184,19 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
         body = { error: { code: err.code, message: err.message, details: err.details, requestId } };
       } else if (err?.code === '23505') {
         code = 409;
-        body = { error: { code: 'DUPLICATE', message: 'This record already exists', constraint: err.constraint, requestId } };
+        let duplicateMsg = 'This record already exists';
+        if (err.constraint === 'invoices_number_uq') {
+          duplicateMsg = 'An invoice with this number already exists. Please retry.';
+        } else if (err.constraint === 'users_email_uq') {
+          duplicateMsg = 'A user with this email address already exists.';
+        } else if (err.constraint === 'items_barcode_uq') {
+          duplicateMsg = 'A product with this barcode already exists in your catalog.';
+        } else if (err.constraint === 'categories_name_uq') {
+          duplicateMsg = 'A category with this name already exists.';
+        } else if (err.constraint === 'branches_tenant_id_code_key') {
+          duplicateMsg = 'A branch with this code already exists.';
+        }
+        body = { error: { code: 'DUPLICATE', message: duplicateMsg, constraint: err.constraint, requestId } };
       } else if (err?.code === '23503') {
         code = 409;
         body = { error: { code: 'IN_USE', message: 'This record is linked to other records', requestId } };

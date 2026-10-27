@@ -110,6 +110,7 @@ export function compileShiftSummary(params: {
 
   for (const p of params.payments) {
     if (p.status === 'reversed') continue;
+    if (p.kind && p.kind !== 'receipt') continue;
     const rawMethod = (p.mode || p.method || 'cash').toLowerCase();
     const amt = Math.max(0, Math.floor(p.amountMinor || 0));
     if (amt <= 0) continue;

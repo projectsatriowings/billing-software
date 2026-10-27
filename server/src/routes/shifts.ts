@@ -25,19 +25,57 @@ export async function computeShiftFinancials(
   shift: any,
   tenantId: string,
   countedCashMinor?: number | null,
+  targetBdate?: string | null,
 ): Promise<{
   summary: ShiftSummary;
   cashMovements: CashMovement[];
   recentTransactions: any[];
+  refundsRows: any[];
 }> {
   const shiftId = shift.id;
   const shiftUserId = shift.userId ?? shift.user_id;
-  const openedAt = shift.openedAt ?? shift.opened_at;
+  const openedAt = shift.openedAt ?? shift.opened_at ?? new Date(0).toISOString();
   const closedAt = shift.closedAt ?? shift.closed_at ?? new Date().toISOString();
   const openingCashMinor = Number(shift.openingCashMinor ?? shift.opening_cash_minor ?? 0);
 
+  // Authoritative shop/tenant timezone determination
+  const tenant = await q.one<any>(
+    'SELECT timezone FROM tenants WHERE id = ?',
+    [tenantId],
+  );
+  const tz = tenant?.timezone || 'Asia/Kolkata';
+
+  let businessDate = targetBdate;
+  if (!businessDate) {
+    if (shift.status === 'closed' && (shift.closedAt || shift.closed_at)) {
+      const closedAtDate = new Date(shift.closedAt ?? shift.closed_at);
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      businessDate = formatter.format(closedAtDate);
+    } else {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      businessDate = formatter.format(now);
+    }
+  }
+
   // 1. Fetch eligible payments (both POS checkouts and Khata collections)
-  // Attributed either explicitly by shift_id OR by cashier user within shift open window
+  // Authoritative filtering rules:
+  // - Tenant isolation strictly enforced
+  // - Scoped to this active cashier shift and cashier user
+  // - Completed/posted payments only (exclude reversed)
+  // - Completed/posted sales invoices only (exclude cancelled or non-sale)
+  // - Scoped to the current business day (bdate / shop timezone) to prevent leakage of past days
+  // - Split payments cleanly handled: each cash payment line item counted accurately
   const paymentsRows = await q.query<any>(
     `SELECT 
       p.id,
@@ -56,10 +94,15 @@ export async function computeShiftFinancials(
      LEFT JOIN parties c ON c.id = p.customer_id
      WHERE p.tenant_id = ?
        AND (p.status IS NULL OR p.status = 'posted')
-       AND (p.invoice_id IS NULL OR i.status = 'posted')
+       AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
        AND COALESCE(p.kind, 'receipt') = 'receipt'
        AND (
-         p.shift_id = ?
+         (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
+         OR
+         (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+       )
+       AND (
+         (p.shift_id = ? AND (p.created_by = ? OR p.created_by IS NULL))
          OR (
            p.shift_id IS NULL
            AND p.created_by = ?
@@ -68,7 +111,16 @@ export async function computeShiftFinancials(
          )
        )
      ORDER BY p.created_at DESC`,
-    [tenantId, shiftId, shiftUserId, openedAt, closedAt],
+    [
+      tenantId,
+      businessDate, tz, businessDate,
+      businessDate, tz, businessDate,
+      shiftId,
+      shiftUserId,
+      shiftUserId,
+      openedAt,
+      closedAt,
+    ],
   );
 
   const rawPayments: RawPaymentItem[] = paymentsRows.map((r: any) => ({
@@ -80,6 +132,7 @@ export async function computeShiftFinancials(
   }));
 
   // 2. Fetch cash movements (Cash-In & Cash-Out)
+  // Scoped strictly to this active shift and tenant without destructive timestamp/date filtering
   const cashMovesRows = await q.query<any>(
     `SELECT 
       cm.id,
@@ -103,15 +156,15 @@ export async function computeShiftFinancials(
   let cashOutMinor = 0;
   const cashMovements: CashMovement[] = cashMovesRows.map((cm: any) => {
     const amt = Number(cm.amountMinor ?? cm.amount_minor ?? 0);
-    const mType = cm.movementType ?? cm.movement_type;
-    if (mType === 'cash_in') cashInMinor += amt;
-    else if (mType === 'cash_out') cashOutMinor += amt;
+    const mType = (cm.movementType ?? cm.movement_type ?? '').toLowerCase();
+    if (mType === 'cash_in' || mType === 'in') cashInMinor += amt;
+    else if (mType === 'cash_out' || mType === 'out') cashOutMinor += amt;
 
     return {
       id: cm.id,
       tenantId: cm.tenantId ?? cm.tenant_id,
       shiftId: cm.shiftId ?? cm.shift_id,
-      movementType: mType,
+      movementType: mType === 'cash_out' || mType === 'out' ? 'cash_out' : 'cash_in',
       amountMinor: amt,
       reason: cm.reason,
       notes: cm.notes ?? null,
@@ -122,6 +175,7 @@ export async function computeShiftFinancials(
   });
 
   // 3. Fetch cash refunds paid from the drawer on credit notes
+  // Scoped to the business day and active cashier
   const refundsRows = await q.query<any>(
     `SELECT 
       cn.id,
@@ -136,11 +190,10 @@ export async function computeShiftFinancials(
        AND cn.status = 'posted'
        AND cn.refund_amount_minor > 0
        AND COALESCE(cn.refund_mode, 'cash') = 'cash'
-       AND cn.created_by = ?
-       AND cn.created_at >= ?
-       AND cn.created_at <= ?
+       AND (cn.bdate = ? OR (cn.created_at AT TIME ZONE ?)::date = ?::date)
+       AND (cn.created_by = ? OR cn.created_by IS NULL)
      ORDER BY cn.created_at DESC`,
-    [tenantId, shiftUserId, openedAt, closedAt],
+    [tenantId, businessDate, tz, businessDate, shiftUserId],
   );
 
   let cashRefundsMinor = 0;
@@ -148,7 +201,7 @@ export async function computeShiftFinancials(
     cashRefundsMinor += Number(rf.refundAmountMinor ?? rf.refund_amount_minor ?? 0);
   }
 
-  // 4. Invoices and credit sales stats created during this shift
+  // 4. Invoices and credit sales stats created during this shift on this business day
   const salesStatsRow = await q.one<any>(
     `SELECT 
       COUNT(*)::int AS invoices_count,
@@ -158,10 +211,9 @@ export async function computeShiftFinancials(
      WHERE tenant_id = ?
        AND kind = 'sale'
        AND status = 'posted'
-       AND created_by = ?
-       AND created_at >= ?
-       AND created_at <= ?`,
-    [tenantId, shiftUserId, openedAt, closedAt],
+       AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
+       AND (created_by = ? OR created_by IS NULL)`,
+    [tenantId, businessDate, tz, businessDate, shiftUserId],
   );
 
   const totalSalesBilledMinor = Number(salesStatsRow?.totalSalesBilledMinor ?? salesStatsRow?.total_sales_billed_minor ?? 0);
@@ -194,7 +246,7 @@ export async function computeShiftFinancials(
     createdAt: p.createdAt ?? p.created_at,
   }));
 
-  return { summary, cashMovements, recentTransactions };
+  return { summary, cashMovements, recentTransactions, refundsRows };
 }
 
 export function registerShifts(r: Router) {
@@ -283,27 +335,52 @@ export function registerShifts(r: Router) {
     });
   });
 
-  // 2. Get active shift for current cashier
+  // 2. Get active shift for current cashier (with owner/manager fallback)
   r.get('/api/shifts/active', requirePerm('shift'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const userId = ctx.user!.id;
+    const isManagerOrOwner = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const counterParam = (ctx.query.counter as string || ctx.query.location as string || '').trim();
 
-    const shift = await ctx.db.one<any>(
-      `SELECT s.*, u.name AS user_name, u.email AS user_email, u.role AS user_role
+    let sql = `SELECT s.*, u.name AS user_name, u.email AS user_email, u.role AS user_role
        FROM shifts s
        JOIN users u ON u.id = s.user_id
-       WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`,
-      [tenantId, userId],
-    );
+       WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`;
+    const params: any[] = [tenantId, userId];
+
+    if (counterParam) {
+      sql += ' AND (s.location = ? OR s.location = ?)';
+      params.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+    }
+    sql += ' ORDER BY s.opened_at DESC LIMIT 1';
+
+    let shift = await ctx.db.one<any>(sql, params);
+
+    // If an owner, manager, or accountant doesn't have an active shift opened by themselves, find the open shift for this tenant
+    if (!shift && isManagerOrOwner) {
+      let fallbackSql = `SELECT s.*, u.name AS user_name, u.email AS user_email, u.role AS user_role
+         FROM shifts s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.tenant_id = ? AND s.status = 'open'`;
+      const fallbackParams: any[] = [tenantId];
+      if (counterParam) {
+        fallbackSql += ' AND (s.location = ? OR s.location = ?)';
+        fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+      }
+      fallbackSql += ' ORDER BY s.opened_at DESC LIMIT 1';
+
+      shift = await ctx.db.one<any>(fallbackSql, fallbackParams);
+    }
 
     if (!shift) {
-      return { activeShift: null };
+      return { ok: true, activeShift: null };
     }
 
     // Compute live real-time totals
     const { summary, cashMovements } = await computeShiftFinancials(ctx.db, shift, tenantId);
 
     return {
+      ok: true,
       activeShift: {
         id: shift.id,
         shiftNumber: shift.shiftNumber ?? shift.shift_number,
@@ -458,7 +535,7 @@ export function registerShifts(r: Router) {
       ? (typeof shift.summary === 'string' ? JSON.parse(shift.summary) : shift.summary)
       : null;
 
-    const { summary, cashMovements, recentTransactions } = await computeShiftFinancials(
+    const { summary, cashMovements, recentTransactions, refundsRows } = await computeShiftFinancials(
       ctx.db,
       shift,
       tenantId,
@@ -466,6 +543,7 @@ export function registerShifts(r: Router) {
     );
 
     return {
+      ok: true,
       shift: {
         id: shift.id,
         shiftNumber: shift.shiftNumber ?? shift.shift_number,
@@ -496,6 +574,9 @@ export function registerShifts(r: Router) {
         cashMovements,
         recentTransactions,
       },
+      movements: cashMovements,
+      payments: recentTransactions,
+      returns: refundsRows || [],
     };
   });
 
@@ -504,7 +585,7 @@ export function registerShifts(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const shiftId = ctx.params.id;
-    const isManagerOrOwner = ['owner', 'manager'].includes(ctx.user!.role);
+    const isManagerOrOwner = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
 
     const movementType = V.oneOf(b.movementType ?? b.type, 'Movement type', ['cash_in', 'cash_out'] as const);
     const amountMinor = V.int(b.amountMinor, 'Movement amount (paise)', { min: 1 });
@@ -514,7 +595,7 @@ export function registerShifts(r: Router) {
     return ctx.db.tx(async (q) => {
       // 1. Lock shift row to check status
       const shift = await q.one<any>(
-        'SELECT id, status, user_id, shift_number FROM shifts WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        'SELECT s.* FROM shifts s WHERE s.id = ? AND s.tenant_id = ? FOR UPDATE',
         [shiftId, tenantId],
       );
       if (!shift) throw notFound('Shift');
@@ -562,6 +643,9 @@ export function registerShifts(r: Router) {
         },
       });
 
+      // Compute authoritative updated summary immediately inside transaction
+      const { summary } = await computeShiftFinancials(q, shift, tenantId);
+
       return {
         ok: true,
         movement: {
@@ -575,6 +659,7 @@ export function registerShifts(r: Router) {
           createdByName: ctx.user!.name,
           createdAt: now,
         },
+        summary,
       };
     });
   });

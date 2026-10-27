@@ -19,6 +19,8 @@ import { registerInventory } from './routes/inventory.ts';
 import { registerShifts } from './routes/shifts.ts';
 import { registerBranches } from './routes/branches.ts';
 import { registerScannerBridge } from './routes/scannerBridge.ts';
+import { registerSalesAnalysis } from './routes/salesAnalysis.ts';
+import { registerDashboard } from './routes/dashboard.ts';
 import { registerExpenses } from './routes/expenses.ts';
 import { registerGst } from './routes/gst.ts';
 import { registerHsn } from './routes/hsn.ts';
@@ -48,6 +50,8 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerGst(r);
   registerHsn(r);
   registerCfdBridge(r);
+  registerSalesAnalysis(r);
+  registerDashboard(r);
   return r;
 }
 

@@ -715,6 +715,21 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10`,
     ],
   },
+  {
+    version: 15,
+    statements: [
+      `CREATE INDEX IF NOT EXISTS invoices_sales_analysis ON invoices (tenant_id, status, kind, bdate)`,
+      `CREATE INDEX IF NOT EXISTS invoices_user_date ON invoices (tenant_id, created_by, bdate)`,
+      `CREATE INDEX IF NOT EXISTS invoice_lines_analysis ON invoice_lines (tenant_id, invoice_id, item_id)`,
+    ],
+  },
+  {
+    version: 16,
+    statements: [
+      `CREATE INDEX IF NOT EXISTS invoices_today_covering ON invoices (tenant_id, bdate, status, kind, created_at)`,
+    ],
+  },
 ];
+
 
 

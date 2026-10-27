@@ -445,10 +445,12 @@
   white-space: nowrap;
 }
 
-.cfd-mrp-strike {
-  color: #94a3b8;
+.cfd-mrp-strike,
+.cfd-mrp-val {
+  color: #64748b;
   font-size: 0.88rem;
-  text-decoration: line-through;
+  font-weight: 500;
+  text-decoration: none !important;
 }
 
 .cfd-rate-text {
@@ -673,44 +675,50 @@
   color: #047857;
 }
 
-/* GRAND TOTAL CARD (ELEGANT DEEP NAVY / INDIGO WITH LUMINOUS TOTAL) */
+/* GRAND TOTAL PAYOUT CARD (REFINED MODERN TYPOGRAPHY & BALANCED THICKNESS) */
 .cfd-root .cfd-grand-card {
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  border: 1px solid #312e81;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
   border-radius: 14px;
   padding: 1.15rem 1.35rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.25);
-  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  color: #0f172a;
 }
 
 .cfd-root .cfd-grand-label-wrap {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .cfd-root .cfd-grand-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #c7d2fe;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .cfd-root .cfd-grand-sub {
-  font-size: 0.74rem;
-  color: #94a3b8;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: #64748b;
   margin-top: 1px;
 }
 
 .cfd-root .cfd-grand-amount {
-  font-size: 2rem !important;
-  font-weight: 800 !important;
-  color: #34d399 !important;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 1.85rem !important;
+  font-weight: 600 !important;
+  color: #059669 !important;
   letter-spacing: -0.02em !important;
-  text-shadow: 0 0 16px rgba(52, 211, 153, 0.45);
+  font-variant-numeric: tabular-nums !important;
+  text-shadow: none !important;
 }
 
 /* ================= 2. INTERACTIVE PAYMENT & HUB (FILLS VOID) ================= */

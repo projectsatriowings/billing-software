@@ -62,6 +62,7 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
@@ -72,6 +73,7 @@ import { BulkBarcodeModal } from './components/BulkBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
+import { TodayDashboardView } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
 import { CashBankView } from './components/finance/CashBankView.tsx';
@@ -370,6 +372,7 @@ export function App() {
     | 'categories'
     | 'inventory'
     | 'product-movement'
+    | 'sales-analysis'
     | 'purchases'
     | 'invoices'
     | 'customers'
@@ -390,6 +393,7 @@ export function App() {
     | 'gst-import-export'
     | 'gst-filing-history'
   >('dashboard');
+  const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
@@ -423,6 +427,9 @@ export function App() {
 
   const navigateTo = (newView: 'landing' | 'login' | 'register' | 'selector' | 'dashboard') => {
     setView(newView);
+    if (newView === 'dashboard') {
+      setActiveTab('dashboard');
+    }
     window.location.hash = newView;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -602,6 +609,7 @@ export function App() {
 
   // Invoices list state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceFilterDate, setInvoiceFilterDate] = useState<string>('');
 
   // Analytics state
   const [report, setReport] = useState<DashboardReport | null>(null);
@@ -2273,7 +2281,7 @@ export function App() {
   const handleQuickEnrollCustomer = async (phone: string, name?: string) => {
     const cleanDigits = phone.replace(/\D/g, '').slice(-10);
     if (!cleanDigits || cleanDigits.length < 7) {
-      alert('Please enter a valid mobile number (at least 7 to 10 digits)');
+      showToast('Please enter a valid mobile number (at least 7 to 10 digits)', 'warning');
       return;
     }
     setIsQuickEnrolling(true);
@@ -2294,7 +2302,7 @@ export function App() {
       setShowCustomerDropdown(false);
       showToast(`🎉 Customer ${res.party.name} enrolled! Points will start on this bill.`);
     } catch (err: any) {
-      alert(err.message || 'Failed to enroll customer');
+      showToast(err.message || 'Failed to enroll customer', 'error');
     } finally {
       setIsQuickEnrolling(false);
     }
@@ -2307,7 +2315,7 @@ export function App() {
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
     if (selectedPayMode === 'credit') {
       if (!selectedCustomer) {
-        alert('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.');
+        showToast('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.', 'warning');
         return;
       }
       if (selectedCustomer.creditLimitMinor && selectedCustomer.creditLimitMinor > 0) {
@@ -2443,6 +2451,7 @@ export function App() {
         }
       }
       showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}`);
+      window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
       if (!isKot) {
@@ -2467,7 +2476,7 @@ export function App() {
         setSuccessPhoneError('');
       }
     } catch (err: any) {
-      alert(err.message || 'Checkout failed');
+      showToast(err.message || 'Checkout failed', 'error');
     } finally {
       setIsCheckingOut(false);
     }
@@ -3447,6 +3456,7 @@ export function App() {
       });
 
       showToast(`Credit Note ${res.creditNoteNumber} issued!`);
+      window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
       loadInvoices();
       loadParties();
       loadDuesSummary();
@@ -4230,14 +4240,53 @@ export function App() {
               >
                 <span className="nav-icon">🏬</span>
                 <span className="nav-text">Inventory Hub</span>
-                {totalStockAlerts > 0 && (
-                  <span
-                    className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
-                    title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
-                  >
-                    {totalStockAlerts}
+                <div className="nav-trailing">
+                  {totalStockAlerts > 0 && (
+                    <span
+                      className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
+                      title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
+                    >
+                      {totalStockAlerts}
+                    </span>
+                  )}
+                  <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </span>
-                )}
+                </div>
+              </button>
+            )}
+
+            {/* Inventory Submenu */}
+            {user.role !== 'cashier' && isInventorySubmenuVisible && (
+              <div className="sidebar-submenu-list" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('product-movement');
+                    setShowInventoryDropdown(true);
+                  }}
+                  title="Product Analysis"
+                >
+                  <span className="submenu-icon" aria-hidden="true">🚀</span>
+                  <span className="submenu-text">Product Analysis</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sales Analysis: For Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
+                onClick={() => setActiveTab('sales-analysis')}
+              >
+                <span className="nav-icon">💰</span>
+                <span className="nav-text">Sales Analysis</span>
+                <span className="nav-badge-new">NEW</span>
               </button>
             )}
 
@@ -4584,7 +4633,7 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
+        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -4650,41 +4699,104 @@ export function App() {
           </header>
         )}
 
-        {/* ROLE-BASED DASHBOARDS (SUPER ADMIN / STORE MANAGER / CASHIER) */}
-        {activeTab === 'dashboard' && (
-          <div className="role-dashboards-view">
-            {user.role === 'owner' && (
-              <SuperAdminDashboard
-                user={user}
-                shop={shop}
-                report={report}
-                onRefreshReport={loadReports}
-                onNavigate={setActiveTab}
-              />
-            )}
-            {user.role === 'manager' && (
-              <StoreManagerDashboard
-                user={user}
-                shop={shop}
-                onNavigate={setActiveTab}
-              />
-            )}
-            {user.role === 'cashier' && (
-              <CashierDashboard
+        {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
+        {activeTab === 'dashboard' && user && (
+          <div className="dashboard-tab-wrapper">
+            <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+              <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => setDashboardViewMode('today')}
+                >
+                  📊 Today's Live Overview
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => setDashboardViewMode('management')}
+                >
+                  🏢 {user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}
+                </button>
+              </div>
+            </div>
+
+            {dashboardViewMode === 'today' ? (
+              <TodayDashboardView
                 user={user}
                 shop={shop}
                 onNavigateToPos={() => setActiveTab('pos')}
                 onNavigateToShifts={() => setActiveTab('shifts')}
+                onNavigateToInventory={() => setActiveTab('inventory')}
+                onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+                onNavigateToPurchases={() => {
+                  setActiveTab('purchases');
+                  loadPurchases();
+                }}
+                onOpenAddProductModal={() => {
+                  setEditingItem(null);
+                  setShowItemModal(true);
+                }}
+                showToast={showToast}
               />
-            )}
-            {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
-              <SuperAdminDashboard
-                user={user}
-                shop={shop}
-                report={report}
-                onRefreshReport={loadReports}
-                onNavigate={setActiveTab}
-              />
+            ) : (
+              <div className="role-dashboards-view">
+                {user.role === 'owner' && (
+                  <SuperAdminDashboard
+                    user={user}
+                    shop={shop}
+                    report={report}
+                    onRefreshReport={loadReports}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+                {user.role === 'manager' && (
+                  <StoreManagerDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+                {user.role === 'cashier' && (
+                  <CashierDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                    onNavigateToShifts={() => setActiveTab('shifts')}
+                  />
+                )}
+                {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+                  <SuperAdminDashboard
+                    user={user}
+                    shop={shop}
+                    report={report}
+                    onRefreshReport={loadReports}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+              </div>
             )}
           </div>
         )}
@@ -7787,26 +7899,43 @@ export function App() {
         )}
 
         {/* TAB 3: BILLS & INVOICES */}
-        {activeTab === 'invoices' && (
-          <div className="card">
-            <div className="card-title">
-              <span>Past Sales Invoices ({invoices.length} bills)</span>
-            </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Invoice No</th>
-                  <th>Date & Time</th>
-                  <th>Customer / Reference</th>
-                  <th>Total Amount</th>
-                  <th>Taxable</th>
-                  <th>GST</th>
-                  <th>Payment Method</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
+        {activeTab === 'invoices' && (() => {
+          const displayedInvoices = invoices.filter((inv) => {
+            if (!invoiceFilterDate) return true;
+            return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+          });
+          return (
+            <div className="card">
+              <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <span>Past Sales Invoices ({displayedInvoices.length} bills)</span>
+                  {invoiceFilterDate && (
+                    <span
+                      className="badge badge-emerald"
+                      style={{ marginLeft: '10px', cursor: 'pointer', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 }}
+                      onClick={() => setInvoiceFilterDate('')}
+                      title="Click to clear date filter"
+                    >
+                      📅 Filtered: {invoiceFilterDate} ✕
+                    </span>
+                  )}
+                </div>
+              </div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice No</th>
+                    <th>Date & Time</th>
+                    <th>Customer / Reference</th>
+                    <th>Total Amount</th>
+                    <th>Taxable</th>
+                    <th>GST</th>
+                    <th>Payment Method</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedInvoices.map((inv) => (
                   <tr key={inv.id}>
                     <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>
                       <button
@@ -8028,7 +8157,21 @@ export function App() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          );
+        })()}
+
+        {/* TAB: SALES ANALYSIS */}
+        {activeTab === 'sales-analysis' && (
+          <SalesAnalysisView
+            userRole={user?.role}
+            shopName={shop?.name}
+            onNavigateToInvoices={(searchDate) => {
+              setInvoiceFilterDate(searchDate || '');
+              setActiveTab('invoices');
+            }}
+            showToast={showToast}
+          />
         )}
 
         {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
