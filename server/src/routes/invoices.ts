@@ -325,32 +325,50 @@ export function registerInvoices(r: Router) {
     await ctx.db.tx(async (q) => {
       // 0. Auto-enroll new customer if phone was given at counter and party does not exist yet
       if (!partyId && cleanPhoneDigits && cleanPhoneDigits.length >= 7) {
-        isNewCustomer = true;
-        const newCustId = newId('p');
-        const assignedCustName = (customerName && customerName.trim() && !customerName.toLowerCase().includes('walk-in'))
-          ? customerName.trim()
-          : `Customer ${cleanPhoneDigits.slice(-4)}`;
-        
-        await q.exec(
-          `INSERT INTO parties (
-            id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
-          ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
-          [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
+        const existingParty = await q.one<{ id: string }>(
+          `SELECT id FROM parties 
+           WHERE tenant_id = ? AND type = 'customer' 
+             AND (phone = ? OR REPLACE(phone, ' ', '') LIKE ? OR phone LIKE ?) 
+           LIMIT 1`,
+          [tenantId, (customerPhone || cleanPhoneDigits).trim(), `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
         );
-        partyId = newCustId;
+        if (existingParty) {
+          partyId = existingParty.id;
+        } else {
+          isNewCustomer = true;
+          const newCustId = newId('p');
+          const assignedCustName = (customerName && customerName.trim() && !customerName.toLowerCase().includes('walk-in'))
+            ? customerName.trim()
+            : `Customer ${cleanPhoneDigits.slice(-4)}`;
+          
+          await q.exec(
+            `INSERT INTO parties (
+              id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
+            ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
+            [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
+          );
+          partyId = newCustId;
+        }
       }
 
-      // 1. Generate sequential invoice number
+      // 1. Generate sequential invoice number ensuring zero duplicate collisions
       const prefix = shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV';
-      const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, ?, 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
-         RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId, prefix],
-      );
-      const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
-      assignedNumber = `${prefix}-${1000 + seqNo}`;
+      while (true) {
+        const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
+          `INSERT INTO number_series (tenant_id, series, next_no)
+           VALUES (?, ?, 2)
+           ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+           RETURNING (next_no - 1) AS assigned_no`,
+          [tenantId, prefix],
+        );
+        const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
+        const candidate = `${prefix}-${1000 + seqNo}`;
+        const collision = await q.one<{ id: string }>('SELECT id FROM invoices WHERE tenant_id = ? AND number = ? LIMIT 1', [tenantId, candidate]);
+        if (!collision) {
+          assignedNumber = candidate;
+          break;
+        }
+      }
 
       // 2. Payments calculation
       for (const p of paymentsInput) {

@@ -2262,7 +2262,7 @@ export function App() {
   const handleQuickEnrollCustomer = async (phone: string, name?: string) => {
     const cleanDigits = phone.replace(/\D/g, '').slice(-10);
     if (!cleanDigits || cleanDigits.length < 7) {
-      alert('Please enter a valid mobile number (at least 7 to 10 digits)');
+      showToast('Please enter a valid mobile number (at least 7 to 10 digits)', 'warning');
       return;
     }
     setIsQuickEnrolling(true);
@@ -2283,7 +2283,7 @@ export function App() {
       setShowCustomerDropdown(false);
       showToast(`🎉 Customer ${res.party.name} enrolled! Points will start on this bill.`);
     } catch (err: any) {
-      alert(err.message || 'Failed to enroll customer');
+      showToast(err.message || 'Failed to enroll customer', 'error');
     } finally {
       setIsQuickEnrolling(false);
     }
@@ -2296,7 +2296,7 @@ export function App() {
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
     if (selectedPayMode === 'credit') {
       if (!selectedCustomer) {
-        alert('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.');
+        showToast('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.', 'warning');
         return;
       }
       if (selectedCustomer.creditLimitMinor && selectedCustomer.creditLimitMinor > 0) {
@@ -2456,7 +2456,7 @@ export function App() {
         setSuccessPhoneError('');
       }
     } catch (err: any) {
-      alert(err.message || 'Checkout failed');
+      showToast(err.message || 'Checkout failed', 'error');
     } finally {
       setIsCheckingOut(false);
     }
