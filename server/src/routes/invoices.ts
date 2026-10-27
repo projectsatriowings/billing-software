@@ -368,8 +368,14 @@ export function registerInvoices(r: Router) {
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, place_state, intra,
+          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
           paid_minor, balance_minor, rule_version, calc, share_token, created_by, location, counter, custom
-        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb)`,
+        ) VALUES (
+          ?, ?, ?, ?, 'sale', 'posted', ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb
+        )`,
         [
           invoiceId,
           tenantId,
@@ -570,6 +576,23 @@ export function registerInvoices(r: Router) {
     const customObj = typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {});
     const tender = customObj?.tender || null;
 
+    const customFields: { label: string; value: string }[] = [];
+    const pId = inv.partyId ?? inv.party_id;
+    if (pId) {
+      const custRow = await ctx.db.one<{ loyalty_points?: number; loyaltyPoints?: number }>(
+        'SELECT loyalty_points FROM parties WHERE id = ?',
+        [pId]
+      );
+      const pts = Number(custRow?.loyaltyPoints ?? custRow?.loyalty_points ?? 0);
+      if (pts > 0) {
+        customFields.push({ label: '⭐ Loyalty Balance', value: `${pts} pts` });
+      }
+    }
+    const invCounter = inv.counter || customObj?.counter;
+    if (invCounter) {
+      customFields.push({ label: 'Counter', value: String(invCounter) });
+    }
+
     const printable: PrintableBill = {
       number: inv.number,
       kind: 'sale',
@@ -610,7 +633,7 @@ export function registerInvoices(r: Router) {
       },
       payments: payments.map((p: any) => ({ method: p.method, amountMinor: Number(p.amountMinor ?? p.amount_minor) })),
       tender,
-      customFields: [],
+      customFields,
       intra: true,
     };
 

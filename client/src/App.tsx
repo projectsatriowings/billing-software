@@ -6623,7 +6623,13 @@ export function App() {
                             <span>Processing...</span>
                           ) : (
                             <>
-                              <span>Proceed to Payment</span>
+                              <span>
+                                {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
+                                 selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
+                                 selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
+                                 selectedPayMode === 'credit' ? 'Post to Khata & Bill' :
+                                 'Proceed to Payment'}
+                              </span>
                               <span className="checkout-arrow">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
                                   <polyline points="9 18 15 12 9 6"></polyline>
