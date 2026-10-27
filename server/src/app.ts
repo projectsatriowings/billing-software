@@ -23,6 +23,7 @@ import { registerSalesAnalysis } from './routes/salesAnalysis.ts';
 import { registerDashboard } from './routes/dashboard.ts';
 import { registerExpenses } from './routes/expenses.ts';
 import { registerGst } from './routes/gst.ts';
+import { registerHsn } from './routes/hsn.ts';
 import { registerCfdBridge } from './routes/cfdBridge.ts';
 
 /** Every module adds one `registerXxx(r)` line here. Nothing else in the server needs to change. */
@@ -47,6 +48,7 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerScannerBridge(r);
   registerExpenses(r);
   registerGst(r);
+  registerHsn(r);
   registerCfdBridge(r);
   registerSalesAnalysis(r);
   registerDashboard(r);

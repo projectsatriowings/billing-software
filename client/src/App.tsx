@@ -33,6 +33,9 @@ import {
   type SupplierLedgerEntry,
   type SupplierPaymentRecord,
   deleteProduct,
+  searchHsnSac,
+  suggestHsnForProduct,
+  type HsnItem,
 } from './api';
 import { moneyInWords } from '../../shared/money.ts';
 import { qrSvg } from '../../shared/qr.ts';
@@ -66,6 +69,7 @@ import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashb
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
+import { BulkBarcodeModal } from './components/BulkBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
@@ -534,6 +538,7 @@ export function App() {
   const [activePrintLabels, setActivePrintLabels] = useState<Array<{ name: string; sku?: string | null; barcode: string; priceMinor?: number }> | null>(null);
   const [printBarcodeItem, setPrintBarcodeItem] = useState<Item | null>(null);
   const [showPrintBarcodeModal, setShowPrintBarcodeModal] = useState(false);
+  const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
 
   // Wireless Mobile Barcode Scanner State
@@ -781,6 +786,12 @@ export function App() {
   const [itemFormReorder, setItemFormReorder] = useState('0');
   const [itemFormMinStock, setItemFormMinStock] = useState('0');
   const [itemFormSupplierId, setItemFormSupplierId] = useState('');
+  // HSN & SAC Smart Directory states
+  const [hsnSuggestions, setHsnSuggestions] = useState<HsnItem[]>([]);
+  const [hsnSearchResults, setHsnSearchResults] = useState<HsnItem[]>([]);
+  const [isHsnSearching, setIsHsnSearching] = useState(false);
+  const [showHsnDropdown, setShowHsnDropdown] = useState(false);
+  const [selectedHsnDesc, setSelectedHsnDesc] = useState('');
 
   // Master Data: Party Form Modal (Customers & Suppliers, Add & Edit)
   const [showPartyModal, setShowPartyModal] = useState(false);
@@ -2608,6 +2619,10 @@ export function App() {
     setItemFormReorder('10');
     setItemFormMinStock('5');
     setItemFormSupplierId('');
+    setHsnSuggestions([]);
+    setHsnSearchResults([]);
+    setSelectedHsnDesc('');
+    setShowHsnDropdown(false);
     setShowItemModal(true);
   };
 
@@ -2627,8 +2642,52 @@ export function App() {
     setItemFormReorder(String(((item.reorderMilli ?? item.reorderLevelMilli) || 0) / 1000));
     setItemFormMinStock(String((item.minStockMilli || 0) / 1000));
     setItemFormSupplierId(item.preferredSupplierId || '');
+    setHsnSuggestions([]);
+    setHsnSearchResults([]);
+    setSelectedHsnDesc('');
+    setShowHsnDropdown(false);
     setShowItemModal(true);
   };
+
+  // Auto-suggest HSN codes when typing Product Name or Category in Item Modal (only if HSN not yet selected)
+  useEffect(() => {
+    if (!showItemModal || !itemFormName.trim() || itemFormHsn.trim()) {
+      setHsnSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await suggestHsnForProduct(itemFormName, itemFormCategory);
+        // Only set if user hasn't selected an HSN in the meantime
+        if (!itemFormHsn.trim()) {
+          setHsnSuggestions(res.suggestions || []);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch HSN suggestions', err);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [itemFormName, itemFormCategory, showItemModal, itemFormHsn]);
+
+  // Live search when typing inside HSN / SAC field
+  useEffect(() => {
+    if (!showItemModal || !itemFormHsn.trim() || itemFormHsn.trim().length < 2) {
+      setHsnSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setIsHsnSearching(true);
+        const res = await searchHsnSac(itemFormHsn, 15);
+        setHsnSearchResults(res.results || []);
+      } catch (err) {
+        console.warn('Failed to search HSN', err);
+      } finally {
+        setIsHsnSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [itemFormHsn, showItemModal]);
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -6993,9 +7052,9 @@ export function App() {
                     📥 Import Products
                   </button>
                   <button
-                    id="bulk-print-labels-btn"
+                    id="bulk-print-custom-labels-btn"
                     className="btn btn-secondary"
-                    onClick={handlePrintAllLabels}
+                    onClick={() => setShowBulkBarcodeModal(true)}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -7003,9 +7062,9 @@ export function App() {
                       fontWeight: 600,
                       padding: '0.45rem 0.85rem',
                     }}
-                    title="Print labels for all active products in current list"
+                    title="Select multiple products and set custom label quantities for each"
                   >
-                    🖨️ Print Labels
+                    🏷️ Bulk Print Labels
                   </button>
                   <button className="btn btn-primary" onClick={openAddItemModal}>
                     + Add New Item
@@ -7021,7 +7080,6 @@ export function App() {
                         <th className="col-product-name">Product Name</th>
                         <th className="col-nowrap">Category</th>
                         <th className="col-nowrap">SKU / Code</th>
-                        <th className="col-nowrap">Barcode</th>
                         <th className="col-nowrap">HSN / SAC</th>
                         <th className="col-nowrap">Selling Price</th>
                         {can(user?.role as any, 'purchases') && <th className="col-nowrap">Last Purchase Cost</th>}
@@ -7045,7 +7103,6 @@ export function App() {
                           </td>
                           <td className="col-nowrap"><span className="badge badge-blue">{i.category || 'General'}</span></td>
                           <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.sku || '—'}</td>
-                          <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.barcode || '—'}</td>
                           <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.hsn || '—'}</td>
                           <td className="mono col-nowrap" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
                           {can(user?.role as any, 'purchases') && (
@@ -7066,7 +7123,7 @@ export function App() {
                           </td>
                           <td className="col-nowrap" style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.4rem 0.5rem' }}>
                             {i.barcode && i.barcode.trim() ? (
-                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
+                              <div style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
                                 <div
                                   className="barcode-svg-preview"
                                   style={{
@@ -7082,28 +7139,6 @@ export function App() {
                                   }}
                                   dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(i.barcode) }}
                                 />
-                                <button
-                                  id={`print-barcode-btn-${i.id}`}
-                                  className="btn btn-secondary btn-print-label"
-                                  onClick={() => handlePrintSingleLabel(i)}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    padding: '0.15rem 0.55rem',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 600,
-                                    lineHeight: '1.2',
-                                    borderRadius: '4px',
-                                    background: '#f8fafc',
-                                    border: '1px solid #cbd5e1',
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                  }}
-                                  title={`Print barcode label for ${i.name}`}
-                                >
-                                  🖨️ Print
-                                </button>
                               </div>
                             ) : (
                               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
@@ -9557,6 +9592,16 @@ export function App() {
         />
       )}
 
+      {/* BULK PRINT BARCODE LABELS MODAL */}
+      {showBulkBarcodeModal && (
+        <BulkBarcodeModal
+          isOpen={showBulkBarcodeModal}
+          items={items}
+          shopName={shop?.name}
+          onClose={() => setShowBulkBarcodeModal(false)}
+        />
+      )}
+
       {/* DELETE PRODUCT CONFIRMATION MODAL */}
       {deletingItem && (
         <div className="modal-overlay" style={{ zIndex: 1200 }}>
@@ -9673,6 +9718,65 @@ export function App() {
                   onChange={(e) => setItemFormName(e.target.value)}
                   placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
                 />
+                {!itemFormHsn && hsnSuggestions.length > 0 && (
+                  <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>💡 Suggested HSN for "{itemFormName}":</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
+                        <button
+                          type="button"
+                          onClick={() => setHsnSuggestions([])}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', padding: '0 3px', lineHeight: 1 }}
+                          title="Dismiss"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {hsnSuggestions.map((sug) => (
+                        <button
+                          key={sug.code}
+                          type="button"
+                          onClick={() => {
+                            setItemFormHsn(sug.code);
+                            setSelectedHsnDesc(sug.desc);
+                            setShowHsnDropdown(false);
+                            setHsnSuggestions([]); // Instantly closes this box upon selection!
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '5px',
+                            fontSize: '0.76rem',
+                            cursor: 'pointer',
+                            border: '1px solid #334155',
+                            background: 'rgba(30, 41, 59, 0.95)',
+                            color: '#e2e8f0',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#38bdf8';
+                            e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#334155';
+                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.95)';
+                          }}
+                          title={sug.desc}
+                        >
+                          <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
+                          <span style={{ color: '#cbd5e1', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {sug.desc}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -9780,15 +9884,130 @@ export function App() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">HSN / SAC Code</label>
+                <div className="form-group" style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
+                    <span style={{ fontSize: '0.72rem', color: '#38bdf8' }}>
+                      {isHsnSearching ? '🔍 Searching 22k+ items...' : '⚡ GST Directory'}
+                    </span>
+                  </div>
                   <input
                     type="text"
                     className="form-input"
                     value={itemFormHsn}
-                    onChange={(e) => setItemFormHsn(e.target.value)}
-                    placeholder="e.g. 3004 for medicines, 1006 for rice"
+                    onChange={(e) => {
+                      setItemFormHsn(e.target.value);
+                      setShowHsnDropdown(true);
+                      if (!e.target.value) setSelectedHsnDesc('');
+                    }}
+                    onFocus={() => {
+                      if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
+                    }}
+                    placeholder="Search code or name (e.g. 1006, rice, 3004)"
+                    autoComplete="off"
                   />
+                  {/* Live HSN Search Dropdown */}
+                  {showHsnDropdown && hsnSearchResults.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        maxHeight: '230px',
+                        overflowY: 'auto',
+                        background: '#0f172a',
+                        border: '1px solid #38bdf8',
+                        borderRadius: '8px',
+                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
+                        zIndex: 1050,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.7rem',
+                          color: '#94a3b8',
+                          borderBottom: '1px solid #1e293b',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          background: '#1e293b',
+                        }}
+                      >
+                        <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowHsnDropdown(false)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem' }}
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+                      {hsnSearchResults.map((item) => (
+                        <div
+                          key={item.code}
+                          onClick={() => {
+                            setItemFormHsn(item.code);
+                            setSelectedHsnDesc(item.desc);
+                            setShowHsnDropdown(false);
+                          }}
+                          style={{
+                            padding: '0.45rem 0.65rem',
+                            borderBottom: '1px solid #1e293b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.15rem',
+                            background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.background =
+                              itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
+                          }
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                              {item.code}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '0.65rem',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                background: item.type === 'SAC' ? '#0284c7' : '#334155',
+                                color: '#e2e8f0',
+                              }}
+                            >
+                              {item.type}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedHsnDesc && (
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        color: '#10b981',
+                        marginTop: '0.3rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        lineHeight: '1.2',
+                      }}
+                    >
+                      <span>✓</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedHsnDesc}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">GST Tax Rate</label>

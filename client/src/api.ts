@@ -1260,6 +1260,7 @@ export const deleteProduct = (id: string) =>
   api<{ ok: boolean; deleted: boolean; itemId: string; message: string }>(`/api/items/${encodeURIComponent(id)}?permanent=true`, {
     method: 'DELETE',
   });
+
 export interface TodayDashboardData {
   serverTime: string;
   nowKolkata: {
@@ -1426,3 +1427,28 @@ export interface TodayDashboardData {
 }
 
 export const fetchTodayDashboard = () => api<TodayDashboardData>('/api/dashboard/today');
+
+// --------------------------------------------------------------------------
+// HSN / SAC Directory APIs
+// --------------------------------------------------------------------------
+export interface HsnItem {
+  code: string;
+  desc: string;
+  type: 'HSN' | 'SAC';
+}
+
+export const searchHsnSac = (q: string, limit = 20) =>
+  api<{ q: string; results: HsnItem[]; total: number }>(
+    `/api/hsn/search?q=${encodeURIComponent(q)}&limit=${limit}`
+  );
+
+export const suggestHsnForProduct = (name: string, category?: string) => {
+  const query = new URLSearchParams();
+  if (name) query.set('name', name);
+  if (category) query.set('category', category);
+  return api<{ name: string; category: string; suggestions: HsnItem[] }>(
+    `/api/hsn/suggest?${query.toString()}`
+  );
+};
+
+
