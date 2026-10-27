@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { StockCount, StockCountLine, Role } from '../../api.ts';
+import type { StockCount, StockCountLine, Role, Category } from '../../api.ts';
 import {
   fetchStockCounts,
   startStockCount,
@@ -12,6 +12,7 @@ import {
 
 interface PhysicalStockCountViewProps {
   categories: string[];
+  categoriesList?: Category[];
   userRole?: Role;
   onInventoryUpdated: () => void;
   showToast: (msg: string) => void;
@@ -19,6 +20,7 @@ interface PhysicalStockCountViewProps {
 
 export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
   categories,
+  categoriesList = [],
   userRole,
   onInventoryUpdated,
   showToast,
@@ -725,11 +727,19 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                   onChange={(e) => setNewCountCategory(e.target.value)}
                 >
                   <option value="ALL">📦 All Tracked Products in Store</option>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      📁 Category: {c}
-                    </option>
-                  ))}
+                  {categoriesList && categoriesList.length > 0
+                    ? categoriesList
+                        .filter((c) => c.active)
+                        .map((c) => (
+                          <option key={c.id} value={c.name}>
+                            📁 {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                          </option>
+                        ))
+                    : categories.map((c) => (
+                        <option key={c} value={c}>
+                          📁 Category: {c}
+                        </option>
+                      ))}
                 </select>
                 <span className="field-helper">You can audit your entire catalog or limit this audit to a specific category.</span>
               </div>

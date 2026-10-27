@@ -74,6 +74,8 @@ export function registerInvoices(r: Router) {
         whatsappLastSentTo: r.whatsappLastSentTo ?? r.whatsapp_last_sent_to,
         whatsappLastLanguage: r.whatsappLastLanguage ?? r.whatsapp_last_language,
         whatsappLastSentBy: r.whatsappLastSentBy ?? r.whatsapp_last_sent_by,
+        location: r.location || 'MAIN',
+        counter: r.counter || 'COUNTER-1',
         shareToken: r.shareToken ?? r.share_token,
       })),
     };
@@ -301,6 +303,8 @@ export function registerInvoices(r: Router) {
 
     let assignedNumber = '';
     let totalPaidMinor = 0;
+    const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
+    const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
 
     await ctx.db.tx(async (q) => {
       // 1. Generate sequential invoice number
@@ -331,9 +335,8 @@ export function registerInvoices(r: Router) {
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, place_state, intra,
-          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
-          paid_minor, balance_minor, rule_version, calc, share_token, created_by, custom
-        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?::jsonb)`,
+          paid_minor, balance_minor, rule_version, calc, share_token, created_by, location, counter, custom
+        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb)`,
         [
           invoiceId,
           tenantId,
@@ -358,6 +361,8 @@ export function registerInvoices(r: Router) {
           j(calculated),
           shareToken,
           ctx.user!.id,
+          location,
+          counter,
           j(tenderData ? { tender: tenderData } : {}),
         ],
       );
@@ -396,12 +401,12 @@ export function registerInvoices(r: Router) {
           ],
         );
 
-        // Deduct inventory
+        // Deduct inventory at the sale's branch location
         if (item.itemId) {
           await q.exec(
             `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
-             VALUES (?, ?, ?, 'MAIN', ?, 'sale', 'invoice', ?, ?)`,
-            [newId('sm'), tenantId, item.itemId, -item.qtyMilli, invoiceId, ctx.user!.id],
+             VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
+            [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
           );
         }
       }
@@ -433,9 +438,9 @@ export function registerInvoices(r: Router) {
         }
 
         await q.exec(
-          `INSERT INTO payments (id, tenant_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by)
-           VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id],
+          `INSERT INTO payments (id, tenant_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter)
+           VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, counter],
         );
       }
 
@@ -454,6 +459,8 @@ export function registerInvoices(r: Router) {
       totalMinor: calculated.totalMinor,
       paidMinor: totalPaidMinor,
       balanceMinor: Math.max(0, calculated.totalMinor - totalPaidMinor),
+      location,
+      counter,
       shareToken,
       tender: tenderData,
     };

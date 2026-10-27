@@ -60,11 +60,27 @@ import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
+import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
+import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
+import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
+import { PaymentsView } from './components/finance/PaymentsView.tsx';
+import { ExpensesView } from './components/finance/ExpensesView.tsx';
+import { CashBankView } from './components/finance/CashBankView.tsx';
+import { ReceivablesView } from './components/finance/ReceivablesView.tsx';
+import { PayablesView } from './components/finance/PayablesView.tsx';
+import { GstOverviewView } from './components/gst/GstOverviewView.tsx';
+import { GstSalesRegisterView } from './components/gst/GstSalesRegisterView.tsx';
+import { GstPurchaseRegisterView } from './components/gst/GstPurchaseRegisterView.tsx';
+import { ItcRegisterView } from './components/gst/ItcRegisterView.tsx';
+import { Gstr3bView } from './components/gst/Gstr3bView.tsx';
+import { Gstr1View } from './components/gst/Gstr1View.tsx';
+import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
+import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -332,7 +348,58 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('pos');
+  const [activeTab, setActiveTab] = useState<
+    | 'dashboard'
+    | 'pos'
+    | 'shifts'
+    | 'items'
+    | 'categories'
+    | 'inventory'
+    | 'product-movement'
+    | 'purchases'
+    | 'invoices'
+    | 'customers'
+    | 'suppliers'
+    | 'reports'
+    | 'settings'
+    | 'payments'
+    | 'expenses'
+    | 'cashbank'
+    | 'receivables'
+    | 'payables'
+    | 'gst-overview'
+    | 'gst-sales-register'
+    | 'gst-purchase-register'
+    | 'gst-itc-reconciliation'
+    | 'gst-gstr3b'
+    | 'gst-gstr1'
+    | 'gst-import-export'
+    | 'gst-filing-history'
+  >('dashboard');
+
+  // Collapsible sidebar accordion sections
+  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
+  const isGstTabActive = [
+    'gst-overview',
+    'gst-sales-register',
+    'gst-gstr1',
+    'gst-purchase-register',
+    'gst-itc-reconciliation',
+    'gst-gstr3b',
+    'gst-import-export',
+    'gst-filing-history',
+  ].includes(activeTab);
+
+  const [isAccountsOpen, setIsAccountsOpen] = useState<boolean>(() => isAccountsTabActive);
+  const [isGstOpen, setIsGstOpen] = useState<boolean>(() => isGstTabActive);
+
+  useEffect(() => {
+    if (isAccountsTabActive) setIsAccountsOpen(true);
+  }, [isAccountsTabActive]);
+
+  useEffect(() => {
+    if (isGstTabActive) setIsGstOpen(true);
+  }, [isGstTabActive]);
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -701,9 +768,36 @@ export function App() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatParentId, setNewCatParentId] = useState('');
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
   const [editingCatDesc, setEditingCatDesc] = useState('');
+  const [editingCatParentId, setEditingCatParentId] = useState('');
+  const [catSearchTerm, setCatSearchTerm] = useState('');
+  const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
+
+  // Bulk Category Import state
+  const [showCatImportView, setShowCatImportView] = useState(false);
+  const [catImportCsv, setCatImportCsv] = useState('');
+  const [catImportFileName, setCatImportFileName] = useState('');
+  const [catImportLoading, setCatImportLoading] = useState(false);
+  const [catImportPreview, setCatImportPreview] = useState<{
+    valid: boolean;
+    total: number;
+    mainCategoriesCount: number;
+    subcategoriesCount: number;
+    duplicateCount: number;
+    errorCount: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
+  const [catImportUpdateExisting, setCatImportUpdateExisting] = useState(false);
+  const [catImportResult, setCatImportResult] = useState<{
+    total: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
 
   // Master Data Search & Filters
   const [itemSearchMaster, setItemSearchMaster] = useState('');
@@ -887,6 +981,12 @@ export function App() {
     if (!can(user.role as any, 'purchases') && activeTab === 'purchases') {
       setActiveTab('pos');
     }
+    if (!can(user.role as any, 'expenses') && activeTab === 'expenses') {
+      setActiveTab('pos');
+    }
+    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
+      setActiveTab('pos');
+    }
     loadItems();
     loadCategories();
     loadParties();
@@ -913,8 +1013,6 @@ export function App() {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
       setItems(res.items);
-      const cats = Array.from(new Set(res.items.map((i) => i.category).filter(Boolean))) as string[];
-      if (cats.length > 0) setCategories(cats);
     } catch (err) {
       console.error('Failed to load items', err);
     }
@@ -925,9 +1023,7 @@ export function App() {
       const res = await api<{ categories: Category[] }>('/api/categories?includeInactive=1');
       setCategoriesList(res.categories || []);
       const activeCats = (res.categories || []).filter((c) => c.active).map((c) => c.name);
-      if (activeCats.length > 0) {
-        setCategories(activeCats);
-      }
+      setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
     }
@@ -3029,10 +3125,12 @@ export function App() {
         body: JSON.stringify({
           name: newCatName.trim(),
           description: newCatDesc.trim() || undefined,
+          parentId: newCatParentId.trim() || undefined,
         }),
       });
       setNewCatName('');
       setNewCatDesc('');
+      setNewCatParentId('');
       loadCategories();
       showToast('Category created!');
     } catch (err: any) {
@@ -3048,9 +3146,11 @@ export function App() {
         body: JSON.stringify({
           name: editingCatName.trim(),
           description: editingCatDesc.trim() || null,
+          parentId: editingCatParentId.trim() || null,
         }),
       });
       setEditingCatId(null);
+      setEditingCatParentId('');
       loadCategories();
       loadItems();
       showToast('Category updated!');
@@ -3061,22 +3161,135 @@ export function App() {
 
   const handleToggleCategoryActive = async (cat: Category) => {
     try {
-      if (!cat.active) {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active: true }),
-        });
-        showToast(`Category "${cat.name}" reactivated!`);
-      } else {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'DELETE',
-        });
-        showToast(`Category "${cat.name}" deactivated!`);
-      }
+      const nextActive = !cat.active;
+      await api(`/api/categories/${cat.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: nextActive }),
+      });
+      showToast(`Category "${cat.name}" ${nextActive ? 'activated (ON)' : 'deactivated (OFF)'}!`);
       loadCategories();
     } catch (err: any) {
       alert(err.message || 'Failed to update category status');
     }
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    const confirmMsg = `Are you sure you want to permanently delete category "${cat.name}"? Products assigned to this category will have their category cleared.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api(`/api/categories/${cat.id}`, {
+        method: 'DELETE',
+      });
+      showToast(`Category "${cat.name}" permanently deleted!`);
+      loadCategories();
+      loadItems();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete category');
+    }
+  };
+
+  const handleDownloadCategoryTemplate = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch('/api/categories/template', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to download template');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'categories_sample_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Sample template downloaded!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to download category template');
+    }
+  };
+
+  const handleCategoryFileChange = async (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Please select a valid CSV file (.csv).');
+      return;
+    }
+    setCatImportFileName(file.name);
+    setCatImportLoading(true);
+    setCatImportResult(null);
+    setCatImportPreview(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = String(evt.target?.result || '');
+      setCatImportCsv(text);
+      try {
+        const preview = await api<any>('/api/categories/import', {
+          method: 'POST',
+          body: JSON.stringify({ csvContent: text, dryRun: true }),
+        });
+        setCatImportPreview(preview);
+      } catch (err: any) {
+        alert(err.message || 'Failed to parse category file');
+        setCatImportPreview(null);
+      } finally {
+        setCatImportLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      alert('Failed to read file content.');
+      setCatImportLoading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCommitCategoryImport = async () => {
+    if (!catImportCsv) return;
+    setCatImportLoading(true);
+    try {
+      const res = await api<{
+        success: boolean;
+        total: number;
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: Array<{ row: number; name?: string; error: string }>;
+      }>('/api/categories/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          csvContent: catImportCsv,
+          dryRun: false,
+          updateExisting: catImportUpdateExisting,
+        }),
+      });
+      setCatImportResult(res);
+      setCatImportPreview(null);
+      loadCategories();
+      loadItems();
+      showToast(`Import completed: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped`);
+    } catch (err: any) {
+      alert(err.message || 'Category import failed');
+    } finally {
+      setCatImportLoading(false);
+    }
+  };
+
+  const handleDownloadImportErrors = () => {
+    const errors = catImportPreview?.errors || catImportResult?.errors || [];
+    if (errors.length === 0) return;
+    const csvContent = 'Row,Category Name,Error\r\n' + errors.map((e) => `${e.row},"${(e.name || '').replace(/"/g, '""')}","${(e.error || '').replace(/"/g, '""')}"`).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'category_import_errors.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -3386,16 +3599,23 @@ export function App() {
             )}
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links - Strictly Tailored per Role */}
           <nav className="sidebar-nav">
+            {/* 1. Dashboard Tab - Custom title and icon per role */}
             <button
               type="button"
-              className={`sidebar-nav-item`}
-              onClick={() => setActiveTab('pos')}
+              className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
             >
-              <span className="nav-icon">🏠</span>
-              <span className="nav-text">Dashboard</span>
+              <span className="nav-icon">
+                {user.role === 'owner' ? '👑' : user.role === 'manager' ? '🏪' : '💳'}
+              </span>
+              <span className="nav-text">
+                {user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
+              </span>
             </button>
+
+            {/* 2. POS Counter - Available to Cashier, Store Manager, and Super Admin */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'pos' ? 'active' : ''}`}
@@ -3405,48 +3625,59 @@ export function App() {
               <span className="nav-text">POS Counter</span>
               <span className="nav-tag-shortcut">F1</span>
             </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('shifts')}
-            >
-              <span className="nav-icon">💵</span>
-              <span className="nav-text">Cashier Shifts</span>
-              {activeShiftNumber ? (
-                <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
-                  ● {activeShiftNumber}
-                </span>
-              ) : (
-                <span className="nav-shift-badge closed">
-                  Closed
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
-              onClick={() => setActiveTab('items')}
-            >
-              <span className="nav-icon">📦</span>
-              <span className="nav-text">Products</span>
-              <span className="nav-count-badge">{items.length}</span>
-            </button>
-            {/* INVENTORY HUB WITH SUBMENU DROPDOWN */}
-            <div
-              ref={inventoryDropdownRef}
-              className={`sidebar-nav-group ${isInventorySubmenuVisible ? 'dropdown-open' : ''}`}
-              onMouseEnter={handleInventoryMouseEnter}
-              onMouseLeave={handleInventoryMouseLeave}
-            >
+            {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
+            {user.role === 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
-                  activeTab === 'product-movement' ? 'has-active-child' : ''
-                } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
-                onClick={handleInventoryClick}
-                aria-haspopup="true"
-                aria-expanded={isInventorySubmenuVisible}
-                title="Inventory Hub & Stock Operations"
+                className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('shifts')}
+              >
+                <span className="nav-icon">💵</span>
+                <span className="nav-text">My Cashier Shift</span>
+                {activeShiftNumber ? (
+                  <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
+                    ● {activeShiftNumber}
+                  </span>
+                ) : (
+                  <span className="nav-shift-badge closed">
+                    Closed
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* 4. Products: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
+                onClick={() => setActiveTab('items')}
+              >
+                <span className="nav-icon">📦</span>
+                <span className="nav-text">Products</span>
+                <span className="nav-count-badge">{items.length}</span>
+              </button>
+            )}
+
+            {/* 4b. Categories: Dedicated Module */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
+                onClick={() => setActiveTab('categories')}
+              >
+                <span className="nav-icon">🏷️</span>
+                <span className="nav-text">Categories</span>
+                <span className="nav-count-badge">{categoriesList.length}</span>
+              </button>
+            )}
+
+            {/* 5. Inventory Hub: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('inventory')}
               >
                 <span className="nav-icon">🏬</span>
                 <span className="nav-text">Inventory Hub</span>
@@ -3458,87 +3689,242 @@ export function App() {
                     {totalStockAlerts}
                   </span>
                 )}
-                <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
-                  ▾
-                </span>
-              </button>
-
-              {isInventorySubmenuVisible && (
-                <div className="sidebar-submenu-dropdown" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveTab('product-movement');
-                      setShowInventoryDropdown(true);
-                    }}
-                    title="Product Movement Analysis"
-                  >
-                    <span className="submenu-icon">🚀</span>
-                    <span className="submenu-text">Product Movement Analysis</span>
-                  </button>
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
-              onClick={() => setActiveTab('invoices')}
-            >
-              <span className="nav-icon">📄</span>
-              <span className="nav-text">Bills & Invoices</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('customers')}
-            >
-              <span className="nav-icon">👥</span>
-              <span className="nav-text">Customers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('suppliers')}
-            >
-              <span className="nav-icon">🚚</span>
-              <span className="nav-text">Suppliers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
-            </button>
-            {can(user?.role as any, 'purchases') && (
-              <button
-                type="button"
-                className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('purchases');
-                  loadPurchases();
-                }}
-              >
-                <span className="nav-icon">📥</span>
-                <span className="nav-text">Purchases & Inward</span>
-                <span className="nav-count-badge">{purchases.length}</span>
               </button>
             )}
 
-            <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reports')}
-            >
-              <span className="nav-icon">📊</span>
-              <span className="nav-text">Analytics & Reports</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <span className="nav-icon">⚙️</span>
-              <span className="nav-text">Business Packs</span>
-            </button>
+            {/* Cashier Recent Bills */}
+            {user.role === 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                onClick={() => setActiveTab('invoices')}
+              >
+                <span className="nav-icon">📄</span>
+                <span className="nav-text">Recent Bills</span>
+              </button>
+            )}
+
+            {/* 7. Customers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('customers')}
+              >
+                <span className="nav-icon">👥</span>
+                <span className="nav-text">Customers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+              </button>
+            )}
+
+            {/* 8. Suppliers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('suppliers')}
+              >
+                <span className="nav-icon">🚚</span>
+                <span className="nav-text">Suppliers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+              </button>
+            )}
+
+            {/* ACCOUNTS & FINANCE - Matching upper section nav items */}
+            {user.role !== 'cashier' && (
+              <>
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => setIsAccountsOpen(!isAccountsOpen)}
+                  aria-expanded={isAccountsOpen}
+                >
+                  <span className="nav-icon">💼</span>
+                  <span className="nav-text">Accounts &amp; Finance</span>
+                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>▼</span>
+                </button>
+                
+                {isAccountsOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('invoices')}
+                    >
+                      <span className="nav-icon">🧾</span>
+                      <span className="nav-text">Sales &amp; Invoices</span>
+                    </button>
+
+                    {can(user?.role as any, 'purchases') && (
+                      <button
+                        type="button"
+                        className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveTab('purchases');
+                          loadPurchases();
+                        }}
+                      >
+                        <span className="nav-icon">📥</span>
+                        <span className="nav-text">Purchases &amp; Inward</span>
+                        <span className="nav-count-badge">{purchases.length}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payments')}
+                    >
+                      <span className="nav-icon">💳</span>
+                      <span className="nav-text">Payments</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'expenses' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('expenses')}
+                    >
+                      <span className="nav-icon">💼</span>
+                      <span className="nav-text">Expenses</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('cashbank')}
+                    >
+                      <span className="nav-icon">🏦</span>
+                      <span className="nav-text">Cash &amp; Bank</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payables')}
+                    >
+                      <span className="nav-icon">📉</span>
+                      <span className="nav-text">Payables</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('reports')}
+                    >
+                      <span className="nav-icon">📊</span>
+                      <span className="nav-text">Financial Reports</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* GST FILING - Matching upper section nav items */}
+            {user.role !== 'cashier' && (
+              <>
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => setIsGstOpen(!isGstOpen)}
+                  aria-expanded={isGstOpen}
+                >
+                  <span className="nav-icon">🏛️</span>
+                  <span className="nav-text">GST Filing</span>
+                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>▼</span>
+                </button>
+                
+                {isGstOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-overview' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-overview')}
+                    >
+                      <span className="nav-icon">🏛️</span>
+                      <span className="nav-text">GST Overview</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-sales-register')}
+                    >
+                      <span className="nav-icon">📋</span>
+                      <span className="nav-text">Sales Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr1')}
+                    >
+                      <span className="nav-icon">📑</span>
+                      <span className="nav-text">GSTR-1</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-purchase-register')}
+                    >
+                      <span className="nav-icon">📦</span>
+                      <span className="nav-text">Purchase Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-itc-reconciliation')}
+                    >
+                      <span className="nav-icon">⚖️</span>
+                      <span className="nav-text">ITC Register &amp; Reconciliation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr3b' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr3b')}
+                    >
+                      <span className="nav-icon">📄</span>
+                      <span className="nav-text">GSTR-3B Preparation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-import-export')}
+                    >
+                      <span className="nav-icon">📥</span>
+                      <span className="nav-text">Import &amp; Export</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-filing-history')}
+                    >
+                      <span className="nav-icon">🕰️</span>
+                      <span className="nav-text">Filing History</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Management Section: Only for Super Admin */}
+            {user.role === 'owner' && (
+              <>
+                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>CONFIGURATION</div>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('settings')}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  <span className="nav-text">Business Packs</span>
+                </button>
+              </>
+            )}
           </nav>
         </div>
 
@@ -3552,21 +3938,23 @@ export function App() {
               <span className="sidebar-user-name">{user.name}</span>
               <span className="sidebar-user-role">
                 <span className="user-status-dot"></span>
-                {user.role}
+                {user.role === 'owner' ? '👑 Super Admin' : user.role === 'manager' ? '🏪 Store Manager' : user.role === 'cashier' ? '💳 Cashier' : user.role}
               </span>
             </div>
           </div>
 
           <div className="sidebar-footer-buttons-list">
-            <button
-              type="button"
-              className="sidebar-action-row-btn"
-              onClick={() => setActiveTab('settings')}
-              title="Store Configuration & Settings"
-            >
-              <span className="action-row-icon">⚙️</span>
-              <span>Settings</span>
-            </button>
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className="sidebar-action-row-btn"
+                onClick={() => setActiveTab('settings')}
+                title="Store Configuration & Settings"
+              >
+                <span className="action-row-icon">⚙️</span>
+                <span>Settings</span>
+              </button>
+            )}
             <button
               type="button"
               className="sidebar-action-row-btn signout"
@@ -3625,7 +4013,7 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && (
+        {activeTab !== 'pos' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -3635,10 +4023,23 @@ export function App() {
                 {activeTab === 'product-movement' && '🚀 Product Movement Analysis'}
                 {activeTab === 'purchases' && '📥 Purchases & Stock Inward'}
                 {activeTab === 'invoices' && '🧾 Sales Invoices & Bills'}
-                {activeTab === 'customers' && '👥 Customer Directory & Khata'}
+                {activeTab === 'customers' && '👥 Customer Directory'}
                 {activeTab === 'suppliers' && '🚚 Supplier Directory'}
                 {activeTab === 'reports' && '📊 Business Analytics & Reports'}
                 {activeTab === 'settings' && '⚙️ Business Configuration & Settings'}
+                {activeTab === 'payments' && '💳 Supplier Payments & Disbursements'}
+                {activeTab === 'expenses' && '💼 Business Operational Expenses'}
+                {activeTab === 'cashbank' && '🏦 Cash & Bank Reconciliation'}
+                {activeTab === 'receivables' && '📈 Accounts Receivable & Customer Dues'}
+                {activeTab === 'payables' && '📉 Accounts Payable & Vendor Balances'}
+                {activeTab === 'gst-overview' && '🏛️ GST Compliance & Filing Overview'}
+                {activeTab === 'gst-sales-register' && '📋 GST Sales Register (Outward)'}
+                {activeTab === 'gst-purchase-register' && '📦 GST Purchase & Inward Register'}
+                {activeTab === 'gst-itc-reconciliation' && '⚖️ Input Tax Credit (ITC) Register & Reconciliation'}
+                {activeTab === 'gst-gstr3b' && '📄 GSTR-3B Preparation & Filing'}
+                {activeTab === 'gst-gstr1' && '📑 GSTR-1 Outward Supplies'}
+                {activeTab === 'gst-import-export' && '📥 GST Import & Export Hub'}
+                {activeTab === 'gst-filing-history' && '🕰️ GST Return Filing History'}
               </h1>
               <span className="content-page-subtitle">
                 {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
@@ -3647,10 +4048,23 @@ export function App() {
                 {activeTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
                 {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                 {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
-                {activeTab === 'customers' && 'Manage customer accounts, GSTINs, and khata balances'}
+                {activeTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and purchase history'}
                 {activeTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
                 {activeTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
                 {activeTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
+                {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
+                {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
+                {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
+                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and khata receivables'}
+                {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
+                {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
+                {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
+                {activeTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
+                {activeTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
+                {activeTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
+                {activeTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
+                {activeTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                {activeTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
               </span>
             </div>
 
@@ -3663,6 +4077,45 @@ export function App() {
               </div>
             </div>
           </header>
+        )}
+
+        {/* ROLE-BASED DASHBOARDS (SUPER ADMIN / STORE MANAGER / CASHIER) */}
+        {activeTab === 'dashboard' && (
+          <div className="role-dashboards-view">
+            {user.role === 'owner' && (
+              <SuperAdminDashboard
+                user={user}
+                shop={shop}
+                report={report}
+                onRefreshReport={loadReports}
+                onNavigate={setActiveTab}
+              />
+            )}
+            {user.role === 'manager' && (
+              <StoreManagerDashboard
+                user={user}
+                shop={shop}
+                onNavigate={setActiveTab}
+              />
+            )}
+            {user.role === 'cashier' && (
+              <CashierDashboard
+                user={user}
+                shop={shop}
+                onNavigateToPos={() => setActiveTab('pos')}
+                onNavigateToShifts={() => setActiveTab('shifts')}
+              />
+            )}
+            {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+              <SuperAdminDashboard
+                user={user}
+                shop={shop}
+                report={report}
+                onRefreshReport={loadReports}
+                onNavigate={setActiveTab}
+              />
+            )}
+          </div>
         )}
 
         {/* TAB 1: BENTO POS BILLING TERMINAL */}
@@ -5233,11 +5686,19 @@ export function App() {
 
         {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
         {activeTab === 'shifts' && user && (
-          <ShiftsDashboard
-            user={user}
-            shop={shop}
-            onNavigateToPos={() => setActiveTab('pos')}
-          />
+          user.role === 'manager' ? (
+            <StoreManagerDashboard
+              user={user}
+              shop={shop}
+              onNavigate={setActiveTab}
+            />
+          ) : (
+            <ShiftsDashboard
+              user={user}
+              shop={shop}
+              onNavigateToPos={() => setActiveTab('pos')}
+            />
+          )
         )}
 
         {/* TAB 2: PRODUCTS */}
@@ -5308,7 +5769,9 @@ export function App() {
                   >
                     <option value="ALL">All Categories</option>
                     {categoriesList.filter((c) => c.active).map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
                     ))}
                   </select>
                   <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
@@ -5349,6 +5812,7 @@ export function App() {
                   </button>
                 </div>
               </div>
+
               <div className="table-scroll-x">
                 <div className="table-scroll-y">
                   <table className="data-table">
@@ -5544,15 +6008,609 @@ export function App() {
           );
         })()}
 
+        {/* TAB 2b: CATEGORY MANAGEMENT MODULE */}
+        {activeTab === 'categories' && (() => {
+          const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
+          const subCategories = categoriesList.filter((c) => c.parentId && c.active);
+          const filteredCategories = categoriesList.filter((cat) => {
+            if (catTypeFilter === 'main' && cat.parentId) return false;
+            if (catTypeFilter === 'sub' && !cat.parentId) return false;
+            const q = catSearchTerm.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              cat.name.toLowerCase().includes(q) ||
+              (cat.parentName && cat.parentName.toLowerCase().includes(q)) ||
+              (cat.description && cat.description.toLowerCase().includes(q))
+            );
+          });
+
+          return (
+            <div className="category-module-container">
+              {/* Category Management Hero Header */}
+              <div className="card" style={{ borderTop: '3px solid #6366f1' }}>
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '1.25rem' }}>🏷️</span>
+                      <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
+                        Category Management Module
+                      </span>
+                      <span className="badge badge-blue">{categoriesList.length} Total</span>
+                      <span className="badge badge-emerald">{mainCategories.length} Main</span>
+                      <span className="badge badge-blue">{subCategories.length} Sub</span>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '3px' }}>
+                      Manage main categories, subcategories, bulk CSV import, and synchronize catalog organization for {shop?.name}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleDownloadCategoryTemplate}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📄</span> Download Sample Template
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setShowCatImportView(!showCatImportView)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📥</span> {showCatImportView ? 'Close Import Drawer' : 'Import Categories (CSV)'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bulk Import Drawer */}
+                {showCatImportView && (
+                  <div
+                    style={{
+                      marginTop: '1.25rem',
+                      padding: '1.25rem',
+                      background: '#f8fafc',
+                      borderRadius: '10px',
+                      border: '1.5px dashed #cbd5e1',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>📥</span> Bulk Category CSV Import
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                          Supports 1,000+ categories. Subcategories can appear anywhere in the file.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCatImportView(false)}
+                        style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+                      <label
+                        className="btn btn-secondary"
+                        style={{
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.45rem',
+                          padding: '0.55rem 1rem',
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>{catImportFileName || 'Choose CSV File to Upload...'}</span>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCategoryFileChange(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer', color: '#334155' }}>
+                        <input
+                          type="checkbox"
+                          checked={catImportUpdateExisting}
+                          onChange={(e) => setCatImportUpdateExisting(e.target.checked)}
+                        />
+                        <span>Update existing categories if found (overwrite description/parent)</span>
+                      </label>
+                    </div>
+
+                    {catImportLoading && (
+                      <div style={{ padding: '1rem', color: '#6366f1', fontWeight: 600, fontSize: '0.88rem' }}>
+                        Processing category file... Please wait.
+                      </div>
+                    )}
+
+                    {/* Pre-flight Import Preview Card */}
+                    {catImportPreview && (
+                      <div
+                        style={{
+                          background: '#ffffff',
+                          padding: '1rem',
+                          borderRadius: '8px',
+                          border: `1.5px solid ${catImportPreview.errorCount > 0 ? '#fca5a5' : '#86efac'}`,
+                          marginBottom: '1rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                            Pre-flight Import Preview: {catImportFileName}
+                          </span>
+                          <span className={`badge ${catImportPreview.errorCount > 0 ? 'badge-amber' : 'badge-emerald'}`}>
+                            {catImportPreview.errorCount > 0 ? `${catImportPreview.errorCount} Errors Found` : 'Ready to Import'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Total Rows</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{catImportPreview.total}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Main Categories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{catImportPreview.mainCategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Subcategories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{catImportPreview.subcategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Existing in Store</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{catImportPreview.duplicateCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Errors</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: catImportPreview.errorCount > 0 ? '#dc2626' : '#16a34a' }}>
+                              {catImportPreview.errorCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {catImportPreview.errors.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>
+                                Validation Errors ({catImportPreview.errors.length}) — Fix before importing:
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                onClick={handleDownloadImportErrors}
+                              >
+                                📥 Download Error Report CSV
+                              </button>
+                            </div>
+                            <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #fee2e2', borderRadius: '6px' }}>
+                              <table className="data-table" style={{ fontSize: '0.78rem' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '60px' }}>Row</th>
+                                    <th>Category Name</th>
+                                    <th>Error Message</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {catImportPreview.errors.map((e, idx) => (
+                                    <tr key={idx}>
+                                      <td className="mono" style={{ color: '#dc2626', fontWeight: 700 }}>#{e.row}</td>
+                                      <td>{e.name || '—'}</td>
+                                      <td style={{ color: '#dc2626' }}>{e.error}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setCatImportPreview(null);
+                              setCatImportCsv('');
+                              setCatImportFileName('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={catImportPreview.errorCount > 0 || catImportLoading}
+                            onClick={handleCommitCategoryImport}
+                          >
+                            {catImportLoading ? 'Importing...' : `Confirm & Import ${catImportPreview.total} Categories`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Final Import Result Card */}
+                    {catImportResult && (
+                      <div
+                        style={{
+                          background: '#ecfdf5',
+                          border: '1.5px solid #a7f3d0',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem', marginBottom: '0.4rem' }}>
+                          ✓ Bulk Category Import Successful!
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#047857', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <span><strong>{catImportResult.created}</strong> new categories created</span>
+                          <span><strong>{catImportResult.updated}</strong> updated</span>
+                          <span><strong>{catImportResult.skipped}</strong> skipped (already existing)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Category Card - Enhanced Responsive Grid & Proportional Button */}
+              <div className="category-add-card">
+                <div className="category-card-header">
+                  <div className="category-card-title">
+                    <span style={{ fontSize: '1.05rem', color: '#4f46e5' }}>➕</span>
+                    <span>Add New Category or Subcategory</span>
+                  </div>
+                  <div className="category-card-hint">
+                    <span>💡</span>
+                    <span>Leave parent empty for a Top-Level Main Category, or select a parent to create a Subcategory.</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCreateCategory} className="category-form-grid">
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Category Name <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="category-field-input"
+                      required
+                      placeholder="e.g. Beverages, Dairy, Pulses..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Parent Category <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <select
+                      className="category-field-input"
+                      value={newCatParentId}
+                      onChange={(e) => setNewCatParentId(e.target.value)}
+                    >
+                      <option value="">📁 None (Top-Level Main Category)</option>
+                      {mainCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          ↳ Subcategory of {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Description <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="category-field-input"
+                      placeholder="Optional notes or shelf location..."
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="category-field-group">
+                    <button
+                      type="submit"
+                      className="category-submit-btn"
+                    >
+                      <span>➕</span>
+                      <span>Add Category</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Category Catalog Table Card */}
+              <div className="card">
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b' }}>Store Category Hierarchy</span>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontWeight: 600 }}>
+                      {filteredCategories.length} listed
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Quick Filter Pills */}
+                    <div className="category-filter-pills">
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('all')}
+                      >
+                        All ({categoriesList.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'main' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('main')}
+                      >
+                        📁 Main ({mainCategories.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'sub' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('sub')}
+                      >
+                        ↳ Sub ({subCategories.length})
+                      </button>
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ width: '220px', padding: '0.42rem 0.75rem 0.42rem 2rem', fontSize: '0.84rem' }}
+                        placeholder="Search categories..."
+                        value={catSearchTerm}
+                        onChange={(e) => setCatSearchTerm(e.target.value)}
+                      />
+                      <span style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        🔍
+                      </span>
+                      {catSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setCatSearchTerm('')}
+                          style={{
+                            position: 'absolute',
+                            right: '0.5rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Category Name & Hierarchy</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Live Catalog Items</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCategories.map((cat) => (
+                        <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
+                          <td>
+                            {editingCatId === cat.id ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                  value={editingCatName}
+                                  onChange={(e) => setEditingCatName(e.target.value)}
+                                  placeholder="Category name..."
+                                />
+                                <select
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                  value={editingCatParentId}
+                                  onChange={(e) => setEditingCatParentId(e.target.value)}
+                                >
+                                  <option value="">📁 None (Top-Level Main Category)</option>
+                                  {categoriesList
+                                    .filter((c) => c.id !== cat.id && !c.parentId && c.active)
+                                    .map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        ↳ Subcategory of {c.name}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="cat-hierarchy-tree">
+                                {cat.parentName ? (
+                                  <>
+                                    <span className="cat-parent-tag">📁 {cat.parentName}</span>
+                                    <span className="cat-tree-branch">→</span>
+                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                  </>
+                                ) : (
+                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          <td>
+                            {cat.parentId ? (
+                              <span className="badge badge-blue">Subcategory</span>
+                            ) : (
+                              <span className="badge badge-emerald">Main Category</span>
+                            )}
+                          </td>
+
+                          <td style={{ color: '#64748b' }}>
+                            {editingCatId === cat.id ? (
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                value={editingCatDesc}
+                                onChange={(e) => setEditingCatDesc(e.target.value)}
+                                placeholder="Description..."
+                              />
+                            ) : (
+                              cat.description || '—'
+                            )}
+                          </td>
+
+                          <td>
+                            <span
+                              className="cat-item-pill"
+                              onClick={() => {
+                                setItemCatFilterMaster(cat.name);
+                                setActiveTab('items');
+                              }}
+                              title="Click to view products in this category"
+                            >
+                              📦 {cat.itemCount || 0} Products ↗
+                            </span>
+                          </td>
+
+                          <td>
+                            <button
+                              type="button"
+                              className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                              onClick={() => handleToggleCategoryActive(cat)}
+                              title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                            >
+                              <span className="cat-toggle-track">
+                                <span className="cat-toggle-thumb" />
+                              </span>
+                              <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                            </button>
+                          </td>
+
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+                              {editingCatId === cat.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => handleUpdateCategory(cat.id)}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      setEditingCatId(null);
+                                      setEditingCatParentId('');
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="cat-edit-btn"
+                                    onClick={() => {
+                                      setEditingCatId(cat.id);
+                                      setEditingCatName(cat.name);
+                                      setEditingCatDesc(cat.description || '');
+                                      setEditingCatParentId(cat.parentId || '');
+                                    }}
+                                    title="Edit Category Name, Parent, or Description"
+                                  >
+                                    <span style={{ fontSize: '0.85rem' }}>✏️</span>
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cat-delete-btn"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                    title={`Delete "${cat.name}" category`}
+                                  >
+                                    🗑️
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {filteredCategories.length === 0 && (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.5rem' }}>🔍</span>
+                              <span>No categories found matching your search / filter.</span>
+                              {(catSearchTerm || catTypeFilter !== 'all') && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}
+                                  onClick={() => {
+                                    setCatSearchTerm('');
+                                    setCatTypeFilter('all');
+                                  }}
+                                >
+                                  Reset Filters
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* TAB: INVENTORY MANAGEMENT */}
         {activeTab === 'inventory' && (
           <InventoryDashboard
             items={items}
             categories={categories}
+            categoriesList={categoriesList}
             suppliers={parties.filter((p) => p.type === 'supplier')}
             userRole={user?.role as any}
             businessType={shop?.businessType}
             allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
+            onNavigateToCategories={() => setActiveTab('categories')}
             onNavigateToPurchases={(supplierId) => {
               setActiveTab('purchases');
               if (supplierId) {
@@ -7018,6 +8076,129 @@ export function App() {
             <StrictIsolationBanner />
           </div>
         )}
+
+        {/* ACCOUNTS & FINANCE TAB VIEWS */}
+        {activeTab === 'payments' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PaymentsView
+              onOpenCustomerKhata={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+              onOpenSupplierLedger={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'expenses' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ExpensesView
+              userRole={user.role}
+              userLocation={shop?.locations?.[0] || shop?.address}
+              suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
+            />
+          </div>
+        )}
+
+        {activeTab === 'cashbank' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <CashBankView />
+          </div>
+        )}
+
+        {activeTab === 'receivables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ReceivablesView
+              onCollectPayment={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'payables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PayablesView
+              onPaySupplier={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {/* GST FILING TAB VIEWS */}
+        {activeTab === 'gst-overview' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-sales-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-purchase-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-itc-reconciliation' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr3b' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr1' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-import-export' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-filing-history' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
       </main>
 
       {/* PRINT RECEIPT MODAL */}
@@ -7408,26 +8589,24 @@ export function App() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Category</label>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <select
-                      className="form-input"
-                      value={itemFormCategory}
-                      onChange={(e) => setItemFormCategory(e.target.value)}
-                    >
-                      <option value="">Select or Type Category...</option>
-                      {categoriesList.filter((c) => c.active).map((c) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <input
-                    type="text"
+                  <select
                     className="form-input"
-                    style={{ marginTop: '0.35rem', fontSize: '0.8rem' }}
-                    placeholder="Or type custom category name..."
                     value={itemFormCategory}
                     onChange={(e) => setItemFormCategory(e.target.value)}
-                  />
+                  >
+                    <option value="">— Select Category from Category Module —</option>
+                    {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
+                      <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
+                    )}
+                    {categoriesList.filter((c) => c.active).map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Categories are managed and imported in the <strong>🏷️ Categories</strong> module.
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unit of Measurement (UOM) *</label>
@@ -8075,14 +9254,20 @@ export function App() {
                           </span>
                         </td>
                         <td>
-                          {cat.active ? (
-                            <span className="badge badge-emerald">Active</span>
-                          ) : (
-                            <span className="badge badge-amber">Inactive</span>
-                          )}
+                          <button
+                            type="button"
+                            className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                            onClick={() => handleToggleCategoryActive(cat)}
+                            title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                          >
+                            <span className="cat-toggle-track">
+                              <span className="cat-toggle-thumb" />
+                            </span>
+                            <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                          </button>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                             {editingCatId === cat.id ? (
                               <>
                                 <button
@@ -8106,23 +9291,24 @@ export function App() {
                               <>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                  className="cat-edit-btn"
                                   onClick={() => {
                                     setEditingCatId(cat.id);
                                     setEditingCatName(cat.name);
                                     setEditingCatDesc(cat.description || '');
                                   }}
+                                  title="Edit Category"
                                 >
                                   ✏️
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: cat.active ? '#f87171' : '#34d399' }}
-                                  onClick={() => handleToggleCategoryActive(cat)}
+                                  className="cat-delete-btn"
+                                  style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}
+                                  onClick={() => handleDeleteCategory(cat)}
+                                  title={`Delete "${cat.name}" category`}
                                 >
-                                  {cat.active ? 'Deactivate' : 'Activate'}
+                                  🗑️
                                 </button>
                               </>
                             )}

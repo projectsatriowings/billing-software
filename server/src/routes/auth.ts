@@ -7,7 +7,28 @@ import { parseEmail, parseShopFields, shopView } from '../shopFields.ts';
 import { j } from '../db/index.ts';
 
 export const permsFor = (role: Role): Perm[] => (Object.keys(PERMS) as Perm[]).filter((p) => (PERMS[p] as readonly Role[]).includes(role));
-export const userView = (u: any) => ({ id: u.id, name: u.name, email: u.email, role: u.role as Role });
+export const userView = (u: any) => {
+  const parseAllowed = (v: any): string[] | null => {
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') {
+      try { const parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : [v]; } catch { return [v]; }
+    }
+    return null;
+  };
+  const assignedLocation = u.assignedLocation || u.assigned_location || 'MAIN';
+  const assignedCounter = u.assignedCounter || u.assigned_counter || 'COUNTER-1';
+  const allowedLocations = parseAllowed(u.allowedLocations || u.allowed_locations) || [assignedLocation];
+  return {
+    id: u.id,
+    employeeId: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role as Role,
+    assignedLocation,
+    assignedCounter,
+    allowedLocations,
+  };
+};
 
 const weak = (pw: unknown) => {
   const p = passwordProblem(pw);
@@ -52,11 +73,18 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
   });
 
   r.post('/api/auth/login', async (ctx) => {
-    const email = parseEmail(ctx.body?.email);
+    const rawLogin = V.str(ctx.body?.email || ctx.body?.login || ctx.body?.employeeId, 'Email or Employee ID', { required: true, max: 254 }).trim();
     const password = V.str(ctx.body?.password, 'Password', { required: true, max: 128 });
-    rateLimit(`login:${ctx.ip}:${email}`, 10, 15 * 60_000);
+    const loginLower = rawLogin.toLowerCase();
+    const loginUpper = rawLogin.toUpperCase();
+    rateLimit(`login:${ctx.ip}:${loginLower}`, 10, 15 * 60_000);
     rateLimit(`login-ip:${ctx.ip}`, 100, 15 * 60_000);
-    const u = await ctx.db.one('SELECT id, tenant_id, name, email, role, active, password_hash FROM users WHERE lower(email) = ?', [email]);
+    const u = await ctx.db.one(
+      `SELECT id, tenant_id, name, email, role, active, password_hash, assigned_location, assigned_counter, allowed_locations
+       FROM users
+       WHERE lower(email) = ? OR upper(id) = ? OR lower(id) = ? OR lower(email) = ?`,
+      [loginLower, loginUpper, loginLower, `${loginLower}@billing.local`]
+    );
     if (!u) {
       burnPasswordTime(password);
       throw new HttpError(401, 'BAD_LOGIN', 'Email or password is wrong');

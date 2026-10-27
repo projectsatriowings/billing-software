@@ -34,9 +34,39 @@ export const PERMS = {
   backup: ['owner'],
   plan: ['owner'],
   support: ALL,
+  branches: ['owner', 'manager'],
+  expenses: ['owner', 'manager', 'accountant'],
+  'expenses.write': ['owner', 'manager', 'accountant'],
+  'expenses.void': ['owner', 'manager'],
+  'gst.view': ['owner', 'manager', 'accountant'],
+  'gst.manage': ['owner', 'accountant'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Perm = keyof typeof PERMS;
 export const can = (role: Role | undefined, perm: Perm): boolean => !!role && (PERMS[perm] as readonly Role[]).includes(role);
+
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active: boolean;
+  counters: string[];
+  managerId?: string | null;
+  managerName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BranchInput {
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active?: boolean;
+  counters?: string[];
+  managerId?: string | null;
+}
 
 export type FieldEntity = 'item' | 'customer' | 'invoice';
 export type FieldType = 'text' | 'number' | 'date' | 'select';
@@ -189,8 +219,29 @@ export interface Category {
   name: string;
   description?: string | null;
   active: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
   createdAt?: string;
   itemCount?: number;
+}
+
+export interface CategoryImportRow {
+  name: string;
+  parentCategory?: string | null;
+  description?: string | null;
+  status?: string | null;
+}
+
+export interface CategoryImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{
+    row: number;
+    name?: string;
+    error: string;
+  }>;
 }
 
 export type PurchaseStatus = 'draft' | 'posted' | 'voided' | 'cancelled';
@@ -573,6 +624,188 @@ export interface ShiftClosingReport {
   }[];
 }
 
+export type ExpenseCategory =
+  | 'rent'
+  | 'electricity'
+  | 'internet'
+  | 'transport'
+  | 'advertising'
+  | 'packaging'
+  | 'maintenance'
+  | 'office_supplies'
+  | 'professional_fees'
+  | 'salary'
+  | 'tea_snacks'
+  | 'other';
+
+export type GstTreatment = 'regular' | 'composition' | 'exempt' | 'nil_rated' | 'non_gst' | 'import';
+export type ItcEligibility = 'eligible' | 'ineligible' | 'blocked_17_5' | 'pending_review';
+
+export interface Expense {
+  id: string;
+  tenantId: string;
+  expenseNumber: string;
+  expenseDate: string;
+  category: ExpenseCategory | string;
+  description?: string | null;
+  notes?: string | null;
+  supplierId?: string | null;
+  supplierName?: string | null;
+  supplierGstin?: string | null;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceDate?: string | null;
+  taxInclusive: boolean;
+  taxRateBp: number;
+  taxableMinor: number;
+  cgstMinor: number;
+  sgstMinor: number;
+  igstMinor: number;
+  totalMinor: number;
+  paymentMethod: 'cash' | 'upi' | 'card' | 'bank' | 'cheque' | 'credit';
+  paymentStatus: 'paid' | 'unpaid' | 'partial';
+  paidMinor: number;
+  balanceMinor: number;
+  gstTreatment: GstTreatment;
+  itcEligibility: ItcEligibility;
+  itcMinor: number;
+  location: string;
+  status: 'posted' | 'voided';
+  voidReason?: string | null;
+  voidedBy?: string | null;
+  voidedAt?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ItcMatchingStatus =
+  | 'pending_review'
+  | 'matched'
+  | 'missing_from_2b'
+  | 'missing_in_books'
+  | 'taxable_mismatch'
+  | 'gst_mismatch'
+  | 'requires_correction';
+
+export type ItcReviewStatus =
+  | 'pending_review'
+  | 'eligible_reviewed'
+  | 'partially_eligible_reviewed'
+  | 'ineligible_reviewed'
+  | 'blocked_17_5'
+  | 'requires_correction';
+
+export interface ItcRegisterItem {
+  id: string;
+  docType: 'purchase' | 'expense';
+  docId: string;
+  docNumber: string;
+  docDate: string;
+  supplierName: string;
+  supplierGstin?: string | null;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  taxableMinor: number;
+  cgstMinor: number;
+  sgstMinor: number;
+  igstMinor: number;
+  totalGstMinor: number;
+  totalAmountMinor: number;
+  gstr2bMatchingStatus: ItcMatchingStatus;
+  itcReviewStatus: ItcReviewStatus;
+  reviewedEligibleItcMinor: number;
+  ineligibleItcMinor: number;
+  mismatchMinor: number;
+  reviewDecisionReason?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  sourceLink: string;
+}
+
+export interface Gstr2bRecord {
+  id: string;
+  importId: string;
+  returnPeriod: string;
+  supplierGstin: string;
+  supplierName?: string | null;
+  invoiceNumber: string;
+  invoiceType: string;
+  invoiceDate: string;
+  taxableMinor: number;
+  cgstMinor: number;
+  sgstMinor: number;
+  igstMinor: number;
+  cessMinor: number;
+  totalGstMinor: number;
+  itcAvailability: string;
+  reason?: string | null;
+  matchedStatus: 'matched' | 'taxable_mismatch' | 'gst_mismatch' | 'missing_in_books' | 'unmatched';
+  linkedDocType?: 'purchase' | 'expense' | null;
+  linkedDocId?: string | null;
+}
+
+export interface Gstr2bImportSummary {
+  id: string;
+  gstin: string;
+  returnPeriod: string;
+  filename: string;
+  fileFormat: 'json' | 'csv';
+  totalRecords: number;
+  totalTaxableMinor: number;
+  totalCgstMinor: number;
+  totalSgstMinor: number;
+  totalIgstMinor: number;
+  matchedCount: number;
+  mismatchedCount: number;
+  missingInBooksCount: number;
+  createdAt: string;
+}
+
+export interface Gstr3bSummary {
+  gstin: string;
+  returnPeriod: string;
+  status: 'draft' | 'reviewed' | 'finalized';
+  table31Outward: {
+    taxableSupplies: { taxableMinor: number; igstMinor: number; cgstMinor: number; sgstMinor: number };
+    zeroRated: { taxableMinor: number; igstMinor: number; cgstMinor: number; sgstMinor: number };
+    nilRatedExempt: { taxableMinor: number; igstMinor: number; cgstMinor: number; sgstMinor: number };
+    reverseChargeInward: { taxableMinor: number; igstMinor: number; cgstMinor: number; sgstMinor: number };
+    nonGst: { taxableMinor: number; igstMinor: number; cgstMinor: number; sgstMinor: number };
+  };
+  table4EligibleItc: {
+    allOtherItc: { igstMinor: number; cgstMinor: number; sgstMinor: number; totalMinor: number };
+    reversalRule42_43: { igstMinor: number; cgstMinor: number; sgstMinor: number; totalMinor: number };
+    netItcAvailable: { igstMinor: number; cgstMinor: number; sgstMinor: number; totalMinor: number };
+    ineligibleSection17_5: { igstMinor: number; cgstMinor: number; sgstMinor: number; totalMinor: number };
+  };
+  netTaxPayable: {
+    igstMinor: number;
+    cgstMinor: number;
+    sgstMinor: number;
+    totalMinor: number;
+  };
+  unresolvedMismatchesCount: number;
+  unreviewedRecordsCount: number;
+}
+
+export interface GstOverviewMetrics {
+  selectedGstin: string;
+  returnPeriod: string;
+  salesTaxableMinor: number;
+  outputGstMinor: number;
+  purchaseTaxableMinor: number;
+  purchaseGstMinor: number;
+  expenseTaxableMinor: number;
+  expenseGstUnderReviewMinor: number;
+  potentialItcMinor: number;
+  reviewedEligibleItcMinor: number;
+  ineligibleItcMinor: number;
+  unresolvedMismatchesCount: number;
+  estimatedNetGstLiabilityMinor: number;
+  gstr1Status: 'ready' | 'pending';
+  gstr3bStatus: 'draft' | 'ready_to_file' | 'pending_review';
+}
+
 // ── PRODUCT MOVEMENT ANALYSIS (FAST / SLOW / NON-MOVING) ───────────────────
 export type ProductMovementStatus = 'fast_moving' | 'slow_moving' | 'non_moving';
 
@@ -638,4 +871,3 @@ export interface ProductMovementAnalysisData {
   };
   products: ProductMovementItem[];
 }
-
