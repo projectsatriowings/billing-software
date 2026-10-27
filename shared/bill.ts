@@ -66,59 +66,199 @@ function taxBreakup(bill: PrintableBill) {
 }
 
 function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, string>, copyLabel: string, opts: RenderOpts): string {
-  const title = bill.kind === 'credit_note' ? L.credit_note : L.invoice;
-  const rows = bill.lines
-    .map((l) => {
-      const meta: string[] = [];
-      if (tpl.showHsn && l.hsn) meta.push(`${L.hsn} ${esc(l.hsn)}`);
-      if (l.taxRateBp) meta.push(`${L.gst} ${bpToPct(l.taxRateBp)}%`);
-      if (tpl.showDiscount && l.discountMinor > 0) meta.push(`${L.disc} -${money(l.discountMinor)}`);
-      if (l.serialNo) meta.push(`SN ${esc(l.serialNo)}`);
-      if (l.batchNo) meta.push(`B ${esc(l.batchNo)}`);
-      return `<div class="ln"><div class="nm">${esc(l.name)}</div><div class="rw"><span>${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''} × ${money(l.priceMinor)}</span><span>${money(l.totalMinor)}</span></div>${meta.length ? `<div class="mt">${meta.join(' · ')}</div>` : ''}</div>`;
+  const isCn = bill.kind === 'credit_note';
+  const title = isCn ? (L.credit_note || 'CREDIT NOTE') : (L.invoice || 'TAX INVOICE');
+  const isCancelled = bill.status === 'cancelled';
+  const t = bill.totals;
+
+  // Extract special custom fields if present
+  const loyaltyField = bill.customFields.find((f) => f.label.toLowerCase().includes('loyalty'));
+  const counterField = bill.customFields.find((f) => f.label.toLowerCase().includes('counter'));
+  const otherCustom = bill.customFields.filter((f) => f !== loyaltyField && f !== counterField && f.value);
+
+  // Totals calculations
+  const itemCount = bill.lines.length;
+  const totalQty = bill.lines.reduce((acc, l) => acc + (l.qtyMilli / 1000), 0);
+  const totalSavingsMinor = t.discountMinor;
+
+  // Items table rows
+  const itemRows = bill.lines
+    .map((l, idx) => {
+      const metaParts: string[] = [];
+      if (tpl.showHsn && l.hsn) metaParts.push(`HSN: ${esc(l.hsn)}`);
+      if (l.taxRateBp) metaParts.push(`GST ${bpToPct(l.taxRateBp)}%`);
+      if (tpl.showDiscount && l.discountMinor > 0) metaParts.push(`Disc: -₹${money(l.discountMinor)}`);
+      if (l.serialNo) metaParts.push(`SN: ${esc(l.serialNo)}`);
+      if (l.batchNo) metaParts.push(`B: ${esc(l.batchNo)}`);
+
+      const qtyStr = `${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}`;
+      const priceStr = `₹${money(l.priceMinor)}`;
+
+      return `
+        <div class="th-line">
+          <div class="th-line-top">
+            <span class="th-line-name"><b>${idx + 1}.</b> ${esc(l.name)}</span>
+          </div>
+          <div class="rw th-line-calc">
+            <span class="th-calc-qty">${qtyStr} × ${priceStr}</span>
+            <span class="th-calc-amt">₹${money(l.totalMinor)}</span>
+          </div>
+          ${metaParts.length ? `<div class="th-line-meta">${metaParts.join(' · ')}</div>` : ''}
+        </div>
+      `;
     })
     .join('');
-  const t = bill.totals;
+
+  // Tax Breakdown rows
   const taxRows = tpl.showTaxBreakup
     ? bill.intra
-      ? `<div class="rw"><span>${L.cgst}</span><span>${money(t.cgstMinor)}</span></div><div class="rw"><span>${L.sgst}</span><span>${money(t.sgstMinor)}</span></div>`
-      : `<div class="rw"><span>${L.igst}</span><span>${money(t.igstMinor)}</span></div>`
+      ? `<div class="rw sm"><span>${L.cgst}</span><span>₹${money(t.cgstMinor)}</span></div>
+         <div class="rw sm"><span>${L.sgst}</span><span>₹${money(t.sgstMinor)}</span></div>`
+      : `<div class="rw sm"><span>${L.igst}</span><span>₹${money(t.igstMinor)}</span></div>`
     : '';
-  const pays = bill.payments.filter((p) => p.amountMinor > 0).map((p) => `<div class="rw"><span>${esc(L[p.method] ?? p.method)}</span><span>${money(p.amountMinor)}</span></div>`).join('');
-  const custom = bill.customFields.filter((f) => f.value).map((f) => `<div class="rw"><span>${esc(f.label)}</span><span>${esc(f.value)}</span></div>`).join('');
-  return `<section class="copy">
-  ${bill.status === 'cancelled' ? `<div class="stamp">${L.cancelled}</div>` : ''}
-  <div class="shop">${esc(bill.shop.name)}</div>
-  <div class="c sm">${esc(bill.shop.address ?? '')}</div>
-  <div class="c sm">${bill.shop.phone ? `${L.phone}: ${esc(bill.shop.phone)}` : ''}${bill.shop.gstin ? ` · ${L.gstin}: ${esc(bill.shop.gstin)}` : ''}</div>
-  ${tpl.header ? `<div class="c sm">${esc(tpl.header)}</div>` : ''}
-  <hr/>
-  <div class="c b">${title}${copyLabel ? ` <span class="sm">(${esc(copyLabel)})</span>` : ''}</div>
-  <div class="rw"><span>${L.billNo}</span><b>${esc(bill.number)}</b></div>
-  <div class="rw"><span>${L.date}</span><span>${esc(bill.dateText)}</span></div>
-  ${bill.linkedNumber ? `<div class="rw"><span>${L.against}</span><span>${esc(bill.linkedNumber)}</span></div>` : ''}
-  ${bill.customer?.name ? `<div class="rw"><span>${L.customer}</span><span>${esc(bill.customer.name)}</span></div>` : ''}
-  ${bill.customer?.phone ? `<div class="rw"><span>${L.phone}</span><span>${esc(bill.customer.phone)}</span></div>` : ''}
-  ${bill.customer?.gstin ? `<div class="rw"><span>${L.gstin}</span><span>${esc(bill.customer.gstin)}</span></div>` : ''}
-  ${custom}
-  <hr/>
-  ${rows}
-  <hr/>
-  ${t.discountMinor > 0 ? `<div class="rw"><span>${L.subtotal}</span><span>${money(t.subtotalMinor)}</span></div><div class="rw"><span>${L.discount}</span><span>-${money(t.discountMinor)}</span></div>` : ''}
-  ${taxRows}
-  ${t.roundOffMinor !== 0 ? `<div class="rw"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}${money(Math.abs(t.roundOffMinor))}</span></div>` : ''}
-  <div class="rw tot"><span>${L.total}</span><span>₹${money(t.totalMinor)}</span></div>
-  ${pays}
-  ${bill.tender && bill.tender.cashReceivedMinor > 0 ? `
-    <div class="rw"><span>${L.cashReceived}</span><span>₹${money(bill.tender.cashReceivedMinor)}</span></div>
-    <div class="rw b"><span>${L.changeReturn}</span><span>₹${money(bill.tender.changeReturnedMinor)}</span></div>
+
+  // Payment Breakdown
+  const paymentRows = bill.payments
+    .filter((p) => p.amountMinor > 0)
+    .map((p) => {
+      const label = L[p.method] ?? p.method.toUpperCase();
+      return `<div class="rw sm"><span>Paid via ${esc(label)}:</span><b>₹${money(p.amountMinor)}</b></div>`;
+    })
+    .join('');
+
+  return `<section class="copy th-bill">
+  ${isCancelled ? `<div class="stamp">${L.cancelled}</div>` : ''}
+
+  <!-- STORE BRANDING HEADER -->
+  <div class="th-brand">
+    <div class="shop-name">${esc(bill.shop.name)}</div>
+    ${bill.shop.address ? `<div class="c shop-addr">${esc(bill.shop.address)}</div>` : ''}
+    <div class="c shop-contact">
+      ${bill.shop.phone ? `<span>${L.phone}: ${esc(bill.shop.phone)}</span>` : ''}
+      ${bill.shop.phone && bill.shop.gstin ? `<span class="dot-sep">•</span>` : ''}
+      ${bill.shop.gstin ? `<span>${L.gstin}: <b>${esc(bill.shop.gstin)}</b></span>` : ''}
+    </div>
+    ${tpl.header ? `<div class="c shop-extra">${esc(tpl.header)}</div>` : ''}
+  </div>
+
+  <div class="th-divider"></div>
+
+  <!-- TITLE BADGE -->
+  <div class="th-title-wrap">
+    <span class="th-title-badge">${title.toUpperCase()}</span>
+    ${copyLabel ? `<span class="th-copy-label">(${esc(copyLabel)})</span>` : ''}
+  </div>
+
+  <!-- BILL METADATA (COMPACT 2-COLUMN ARRANGEMENT) -->
+  <div class="th-meta-grid">
+    <div class="rw">
+      <span>${L.billNo}: <b>#${esc(bill.number)}</b></span>
+      <span>${esc(bill.dateText)}</span>
+    </div>
+    <div class="rw sm">
+      <span>${counterField ? `${esc(counterField.label)}: <b>${esc(counterField.value)}</b>` : 'POS Billing'}</span>
+      <span>${bill.linkedNumber ? `${L.against}: #${esc(bill.linkedNumber)}` : 'Cashier Counter'}</span>
+    </div>
+    ${otherCustom.map((c) => `<div class="rw sm"><span>${esc(c.label)}:</span><span>${esc(c.value)}</span></div>`).join('')}
+  </div>
+
+  <!-- CUSTOMER CARD (IF PRESENT) -->
+  ${(bill.customer?.name || bill.customer?.phone) ? `
+    <div class="th-cust-card">
+      <div class="rw">
+        <span>${L.customer}: <b>${esc(bill.customer.name || 'Walk-in')}</b></span>
+        ${bill.customer.phone ? `<span>Ph: <b>${esc(bill.customer.phone)}</b></span>` : ''}
+      </div>
+      ${bill.customer.gstin ? `<div class="rw sm"><span>${L.gstin}:</span><span>${esc(bill.customer.gstin)}</span></div>` : ''}
+      ${loyaltyField ? `<div class="rw sm th-loyalty-row"><span>${esc(loyaltyField.label)}:</span><span><b>${esc(loyaltyField.value)}</b></span></div>` : ''}
+    </div>
   ` : ''}
-  ${t.balanceMinor > 0 ? `<div class="rw b"><span>${L.balance}</span><span>₹${money(t.balanceMinor)}</span></div>` : ''}
-  ${opts.qrSvg ? `<div class="qr">${opts.qrSvg}<div class="sm">${esc(opts.qrCaption ?? '')}</div></div>` : ''}
-  <hr/>
-  <div class="c sm">${esc(tpl.footer || L.thanks)}</div>
-  ${tpl.terms ? `<div class="c xs">${esc(tpl.terms)}</div>` : ''}
-  ${opts.duplicate ? `<div class="c b dup">${L.duplicate}</div>` : ''}
+
+  <div class="th-divider"></div>
+
+  <!-- ITEMS COLUMN HEADERS -->
+  <div class="rw th-table-header">
+    <span class="col-item">ITEM DESCRIPTION / QTY × RATE</span>
+    <span class="col-amt">AMOUNT</span>
+  </div>
+  <div class="th-divider-sub"></div>
+
+  <!-- ITEM LIST -->
+  <div class="th-items-body">
+    ${itemRows}
+  </div>
+
+  <!-- ITEM COUNT & QTY SUMMARY -->
+  <div class="th-divider-sub"></div>
+  <div class="rw th-item-summary">
+    <span>Total Items: <b>${itemCount}</b></span>
+    <span>Total Qty: <b>${totalQty % 1 === 0 ? totalQty : totalQty.toFixed(3)}</b></span>
+  </div>
+  <div class="th-divider"></div>
+
+  <!-- FINANCIAL TOTALS & TAX -->
+  <div class="th-totals-box">
+    ${t.discountMinor > 0 ? `
+      <div class="rw"><span>${L.subtotal}</span><span>₹${money(t.subtotalMinor)}</span></div>
+      <div class="rw th-savings-line"><span>${L.discount}</span><span>-₹${money(t.discountMinor)}</span></div>
+    ` : ''}
+    ${taxRows}
+    ${t.roundOffMinor !== 0 ? `
+      <div class="rw sm"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}₹${money(Math.abs(t.roundOffMinor))}</span></div>
+    ` : ''}
+
+    <div class="th-grand-total-box">
+      <div class="rw tot">
+        <span class="tot-label">${L.total}</span>
+        <span class="tot-amount">₹${money(t.totalMinor)}</span>
+      </div>
+    </div>
+
+    ${totalSavingsMinor > 0 ? `
+      <div class="th-savings-callout">
+        🎉 YOU SAVED ₹${money(totalSavingsMinor)} ON THIS BILL!
+      </div>
+    ` : ''}
+  </div>
+
+  <!-- PAYMENTS & TENDER CASH SECTION -->
+  <div class="th-payment-section">
+    ${paymentRows}
+    ${bill.tender && bill.tender.cashReceivedMinor > 0 ? `
+      <div class="th-tender-details">
+        <div class="rw"><span>${L.cashReceived}:</span><b>₹${money(bill.tender.cashReceivedMinor)}</b></div>
+        <div class="rw b th-change-row"><span>${L.changeReturn}:</span><span>₹${money(bill.tender.changeReturnedMinor)}</span></div>
+      </div>
+    ` : ''}
+    ${t.balanceMinor > 0 ? `
+      <div class="th-due-banner">
+        <div class="rw b">
+          <span>⚠️ ${L.balance.toUpperCase()}:</span>
+          <span>₹${money(t.balanceMinor)}</span>
+        </div>
+      </div>
+    ` : `
+      <div class="th-settled-badge">✓ PAYMENT SETTLED IN FULL</div>
+    `}
+  </div>
+
+  <!-- QR CODE -->
+  ${opts.qrSvg ? `
+    <div class="th-qr-wrap">
+      <div class="qr">${opts.qrSvg}</div>
+      <div class="th-qr-caption">${esc(opts.qrCaption || 'Scan UPI to pay')}</div>
+    </div>
+  ` : ''}
+
+  <div class="th-divider-double"></div>
+
+  <!-- FOOTER -->
+  <div class="th-footer">
+    <div class="c b foot-thanks">${esc(tpl.footer || L.thanks)}</div>
+    ${tpl.terms ? `<div class="c xs foot-terms">${esc(tpl.terms)}</div>` : ''}
+    <div class="c xs foot-system">*** Computer Generated GST Invoice ***</div>
+    ${opts.duplicate ? `<div class="c b dup">${L.duplicate}</div>` : ''}
+  </div>
 </section>`;
 }
 
@@ -181,25 +321,83 @@ function a4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, strin
 const CSS = (paper: PrintTemplate['paper']) => {
   const thermal = paper === 'thermal58' || paper === 'thermal80';
   const w = paper === 'thermal58' ? '58mm' : '80mm';
-  const page = thermal ? `@page{size:${w} auto;margin:2mm}` : paper === 'a5' ? '@page{size:A5;margin:8mm}' : '@page{size:A4;margin:12mm}';
-  const base = `*{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:'Noto Sans Tamil','Noto Sans Devanagari','Noto Sans','Segoe UI',Roboto,Arial,sans-serif;color:#111;background:#fff}`;
+  const page = thermal ? `@page{size:${w} auto;margin:0}` : paper === 'a5' ? '@page{size:A5;margin:8mm}' : '@page{size:A4;margin:12mm}';
+  const base = `*{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#000;background:#fff}`;
 
   if (thermal) {
-    const fs = paper === 'thermal58' ? 10.5 : 11.5;
+    const fs = paper === 'thermal58' ? 10 : 11;
     return `${page}${base}
 @media screen {
-  body { background:#f1f5f9; padding:24px 12px; display:flex; flex-direction:column; align-items:center; min-height:100vh }
-  .copy { width:${w === '58mm' ? '58mm' : '80mm'}!important; background:#ffffff; box-shadow:0 4px 15px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.06); padding:14px 12px!important; border-radius:6px; margin:0 auto 24px auto!important }
+  body { background:#cbd5e1; padding:24px 12px; display:flex; flex-direction:column; align-items:center; min-height:100vh }
+  .copy { width:${w === '58mm' ? '58mm' : '80mm'}!important; background:#ffffff; box-shadow:0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1); padding:16px 14px!important; border-radius:6px; margin:0 auto 24px auto!important; border:1px solid #94a3b8 }
 }
 @media print {
   body { background:#fff; padding:0 }
-  .copy { width:${w === '58mm' ? '54mm' : '76mm'}!important; box-shadow:none!important; border-radius:0!important; padding:2mm 0!important; margin:0 auto!important }
+  .copy { width:${w === '58mm' ? '54mm' : '76mm'}!important; box-shadow:none!important; border-radius:0!important; padding:2mm 0!important; margin:0 auto!important; border:none!important }
 }
-.copy{margin:0 auto;font-size:${fs}px;line-height:1.35;page-break-after:always;position:relative}.copy:last-child{page-break-after:auto}
-.shop{text-align:center;font-weight:700;font-size:${fs + 3}px}.c{text-align:center}.sm{font-size:${fs - 1}px}.xs{font-size:${fs - 2}px;color:#444}.b{font-weight:700}
-hr{border:0;border-top:1px dashed #555;margin:4px 0}.rw{display:flex;justify-content:space-between;gap:6px}.rw>span:last-child,.rw>b:last-child{text-align:right;white-space:nowrap}
-.ln{margin:3px 0}.nm{font-weight:600;word-break:break-word}.mt{font-size:${fs - 2}px;color:#444}.tot{font-weight:700;font-size:${fs + 3}px;border-top:1px solid #111;border-bottom:1px solid #111;margin:3px 0;padding:2px 0}
-.qr{text-align:center;margin-top:4px}.qr svg{width:30mm;height:30mm}.dup{margin-top:4px;border:1px solid #111;padding:1px}.stamp{position:absolute;top:30%;left:10%;transform:rotate(-20deg);font-size:22px;font-weight:800;color:#c0392b;opacity:.35;border:3px solid #c0392b;padding:2px 8px}`;
+.copy{margin:0 auto;font-size:${fs}px;line-height:1.35;page-break-after:always;position:relative;font-variant-numeric:tabular-nums}.copy:last-child{page-break-after:auto}
+.c{text-align:center}.sm{font-size:${fs - 1}px}.xs{font-size:${fs - 2}px;color:#333}.b{font-weight:700}
+.rw{display:flex;justify-content:space-between;gap:6px;align-items:baseline}.rw>span:last-child,.rw>b:last-child{text-align:right;white-space:nowrap}
+
+/* Thermal Bill Components */
+.th-brand{text-align:center;margin-bottom:4px}
+.shop-name{font-size:${fs + 4}px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:#000;line-height:1.2;margin-bottom:2px}
+.shop-addr{font-size:${fs - 1}px;color:#222;line-height:1.25;margin-bottom:2px}
+.shop-contact{font-size:${fs - 1}px;color:#333}
+.dot-sep{margin:0 4px;color:#666}
+.shop-extra{font-size:${fs - 1.5}px;color:#444;margin-top:2px}
+
+.th-divider{border-top:1px dashed #000;margin:5px 0}
+.th-divider-sub{border-top:1px dashed #666;margin:4px 0}
+.th-divider-double{border-top:2px dashed #000;margin:6px 0}
+
+.th-title-wrap{text-align:center;margin:4px 0}
+.th-title-badge{display:inline-block;border:1.5px solid #000;padding:1px 10px;font-size:${fs}px;font-weight:800;letter-spacing:1px;border-radius:2px}
+.th-copy-label{font-size:${fs - 1.5}px;margin-left:4px;color:#555}
+
+.th-meta-grid{font-size:${fs - 0.5}px;line-height:1.35;margin:3px 0}
+.th-cust-card{background:#f8fafc;border:1px dashed #64748b;border-radius:4px;padding:4px 6px;margin:4px 0;font-size:${fs - 0.5}px}
+.th-loyalty-row{color:#000;margin-top:2px}
+
+.th-table-header{font-size:${fs - 1}px;font-weight:800;letter-spacing:0.5px;color:#000;padding:2px 0}
+.col-item{text-align:left}
+.col-amt{text-align:right}
+
+.th-items-body{margin:2px 0}
+.th-line{margin:4px 0}
+.th-line-top{font-size:${fs + 0.5}px;font-weight:700;line-height:1.25}
+.th-line-calc{font-size:${fs}px;color:#111;padding-left:12px;margin-top:1px}
+.th-calc-qty{color:#333}
+.th-calc-amt{font-weight:700}
+.th-line-meta{font-size:${fs - 1.8}px;color:#444;padding-left:12px;margin-top:1px}
+
+.th-item-summary{font-size:${fs - 0.8}px;color:#111}
+
+.th-totals-box{margin-top:4px;font-size:${fs}px}
+.th-savings-line{color:#15803d;font-weight:600}
+.th-grand-total-box{border-top:2px dashed #000;border-bottom:2px solid #000;margin:5px 0;padding:4px 0}
+.tot{font-size:${fs + 4}px;font-weight:900}
+.tot-label{letter-spacing:0.5px}
+.tot-amount{font-size:${fs + 4.5}px;font-weight:900}
+.th-savings-callout{text-align:center;font-size:${fs - 1}px;font-weight:800;color:#15803d;border:1px dashed #16a34a;background:#f0fdf4;padding:3px 6px;border-radius:4px;margin:4px 0}
+
+.th-payment-section{margin-top:4px;font-size:${fs}px}
+.th-tender-details{background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px 6px;margin:4px 0;font-size:${fs - 0.5}px}
+.th-change-row{color:#047857;border-top:1px dashed #a7f3d0;padding-top:2px;margin-top:2px;font-size:${fs + 0.5}px}
+.th-due-banner{background:#fef2f2;border:1.5px solid #dc2626;border-radius:4px;padding:3px 6px;margin:4px 0;color:#b91c1c;font-size:${fs + 0.5}px}
+.th-settled-badge{text-align:center;font-size:${fs - 1.5}px;font-weight:700;color:#166534;margin:3px 0;letter-spacing:0.5px}
+
+.th-qr-wrap{text-align:center;margin:6px 0}
+.th-qr-wrap .qr svg{width:30mm;height:30mm}
+.th-qr-caption{font-size:${fs - 1.5}px;font-weight:700;color:#111;margin-top:2px}
+
+.th-footer{margin-top:4px}
+.foot-thanks{font-size:${fs}px;margin-bottom:2px}
+.foot-terms{font-size:${fs - 2}px;color:#444;line-height:1.2;margin-bottom:2px}
+.foot-system{font-size:${fs - 2.5}px;color:#666}
+
+.dup{margin-top:4px;border:1px solid #000;padding:2px}
+.stamp{position:absolute;top:25%;left:10%;transform:rotate(-20deg);font-size:24px;font-weight:900;color:#dc2626;opacity:.4;border:3px solid #dc2626;padding:4px 12px}`;
   }
 
   return `${page}${base}

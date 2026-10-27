@@ -655,6 +655,7 @@ export function App() {
   const [successSendState, setSuccessSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [successPhoneError, setSuccessPhoneError] = useState('');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [showWalkinWhatsapp, setShowWalkinWhatsapp] = useState(false);
 
   // WhatsApp Bill Sharing: Invoices Table Resend Popover State (Section 5)
   const [resendInvoice, setResendInvoice] = useState<Invoice | null>(null);
@@ -2396,6 +2397,11 @@ export function App() {
         }
       }
 
+      // Capture customer phone & name reliably before resetting search inputs
+      const cleanSearchDigits = customerSearch.trim().replace(/\D/g, '');
+      const checkoutPhone = selectedCustomer?.phone || (cleanSearchDigits.length >= 7 ? customerSearch.trim() : undefined);
+      const checkoutCustName = custName || (selectedCustomer ? selectedCustomer.name : (quickCustomerName.trim() || (checkoutPhone ? `Customer ${checkoutPhone.replace(/\D/g, '').slice(-4)}` : undefined)));
+
       const res = await api<{
         invoiceId: string;
         number: string;
@@ -2416,8 +2422,8 @@ export function App() {
           billDiscountMinor: discountMinor,
           payments: paymentsPayload,
           tender: tenderPayload,
-          customerName: custName || (customerSearch.trim() ? (quickCustomerName.trim() || `Customer ${customerSearch.replace(/\D/g, '').slice(-4)}`) : undefined),
-          customerPhone: selectedCustomer ? selectedCustomer.phone : (customerSearch.trim() || undefined),
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
           partyId: selectedPartyId || undefined,
           redeemedPoints: redeemPoints && pointsActuallyRedeemed > 0 ? pointsActuallyRedeemed : 0,
         }),
@@ -2439,7 +2445,7 @@ export function App() {
       loadItems(); // refresh stock
       const earnedPoints = res.earnedLoyaltyPoints ?? 0;
       let pointsMsg = '';
-      if (res.partyId || selectedPartyId || selectedCustomer?.phone) {
+      if (res.partyId || selectedPartyId || checkoutPhone) {
         if (pointsActuallyRedeemed > 0) {
           pointsMsg = ` • Redeemed ${pointsActuallyRedeemed} pts (-${formatRupees(pointsDiscountMinor)}) & earned +${earnedPoints} pts!`;
         } else if (earnedPoints > 0) {
@@ -2455,12 +2461,11 @@ export function App() {
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
       if (!isKot) {
-        const finalPhone = selectedCustomer?.phone || customerSearch.trim() || undefined;
         setCheckoutSuccess({
           invoiceId: res.invoiceId,
           number: res.number,
-          customerName: custName || (finalPhone ? `Customer ${finalPhone.slice(-4)}` : undefined),
-          customerPhone: finalPhone,
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
           itemCount: itemsInBillCount,
           totalMinor: res.totalMinor,
           paidMinor: res.paidMinor,
@@ -2470,10 +2475,11 @@ export function App() {
           tender: res.tender || tenderPayload,
           payments: paymentsPayload,
         });
-        setSuccessPhone(finalPhone || '');
+        setSuccessPhone(checkoutPhone || '');
         setSuccessLang((shop?.whatsappDefaultLang as any) || 'en');
         setSuccessSendState('idle');
         setSuccessPhoneError('');
+        setShowWalkinWhatsapp(false);
       }
     } catch (err: any) {
       showToast(err.message || 'Checkout failed', 'error');
@@ -2484,6 +2490,7 @@ export function App() {
 
   const handleStartNewBill = () => {
     setCheckoutSuccess(null);
+    setShowWalkinWhatsapp(false);
     setCart([]);
     setSelectedPartyId('');
     setCustomerSearch('');
@@ -6064,7 +6071,7 @@ export function App() {
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
                                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                                 </svg>
-                                Customer Mobile
+                                Customer Mobile <span style={{ color: '#d97706', fontSize: '0.74rem', fontWeight: 700 }}>(Compulsory for Loyalty Points)</span>
                               </label>
                               <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                                 <input
