@@ -17025,13 +17025,7 @@ select.expense-input-control {
   font-weight: 600;
 }
 
-.cfd-grand-amount {
-  font-size: 2.3rem;
-  font-weight: 900;
-  color: #059669;
-  letter-spacing: -0.03em;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+/* Legacy .cfd-grand-amount moved to CustomerDisplay.css */
 
 /* SAVINGS BANNER */
 .cfd-savings-banner {
