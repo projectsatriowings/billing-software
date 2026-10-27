@@ -51,6 +51,12 @@ async function main() {
   };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
+  process.on('unhandledRejection', (reason: any) => {
+    console.warn(JSON.stringify({ level: 'warn', msg: 'unhandled rejection intercepted', error: String(reason?.message ?? reason) }));
+  });
+  process.on('uncaughtException', (err: any) => {
+    console.error(JSON.stringify({ level: 'error', msg: 'uncaught exception intercepted', error: String(err?.message ?? err) }));
+  });
 }
 
 main().catch((e) => {
