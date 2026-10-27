@@ -1,0 +1,974 @@
+/* ==========================================================================
+   CUSTOMER-FACING DISPLAY (CFD / DUAL-SCREEN MODE) - LUXURY RETAIL REDESIGN
+   ========================================================================== */
+
+.cfd-root,
+.cfd-root * {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  box-sizing: border-box;
+}
+
+.cfd-root {
+  min-height: 100vh;
+  width: 100vw;
+  background: #f8fafc;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular Numerals across CFD for clean price alignment without dotty monospace */
+.cfd-num {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: 'tnum' 1, 'cv05' 1 !important;
+  letter-spacing: -0.01em;
+}
+
+/* ================= HEADER ================= */
+.cfd-header {
+  height: 64px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.cfd-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.cfd-store-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+  flex-shrink: 0;
+}
+
+.cfd-store-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfd-store-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.cfd-store-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cfd-gst-pill {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.cfd-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.cfd-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #059669;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.cfd-sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  animation: cfdPulse 2s infinite ease-in-out;
+}
+
+@keyframes cfdPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.85); opacity: 0.5; }
+}
+
+.cfd-time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.cfd-fullscreen-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cfd-fullscreen-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+/* ================= MAIN TWO-COLUMN LAYOUT ================= */
+.cfd-content-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  max-width: 1700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 1050px) {
+  .cfd-content-grid {
+    grid-template-columns: 1fr;
+    padding: 0.85rem;
+    gap: 1rem;
+  }
+}
+
+/* ================= LEFT COLUMN: CART CARD ================= */
+.cfd-cart-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+  height: calc(100vh - 105px);
+}
+
+@media (max-width: 1050px) {
+  .cfd-cart-card {
+    height: auto;
+    min-height: 480px;
+  }
+}
+
+.cfd-card-header {
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.cfd-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.cfd-card-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cfd-card-heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.cfd-card-subheading {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.cfd-state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+}
+
+.cfd-state-badge.billing {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.cfd-state-badge.payment {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.cfd-state-badge.completed {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+/* ================= CATEGORY BREAKDOWN STRIP ================= */
+.cfd-cat-strip {
+  padding: 0.55rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.cfd-cat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.cfd-cat-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cfd-cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.cfd-cat-icon-wrap {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.cfd-cat-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cfd-cat-count {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.cfd-cat-total {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #4f46e5;
+  background: #f5f3ff;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* ================= ITEMS TABLE ================= */
+.cfd-table-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cfd-item-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cfd-item-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  padding: 0.75rem 1.15rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 10;
+}
+
+.cfd-item-table td {
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.cfd-item-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.cfd-item-table tbody tr.new-item-pulse {
+  animation: cfdRowFade 1.6s ease-out;
+}
+
+@keyframes cfdRowFade {
+  0% { background: #ede9fe; }
+  100% { background: transparent; }
+}
+
+.cfd-item-title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.cfd-item-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.3rem;
+}
+
+.cfd-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 5px;
+}
+
+.cfd-tag-badge svg {
+  width: 12px;
+  height: 12px;
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.cfd-tag-savings {
+  display: inline-flex;
+  align-items: center;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 5px;
+}
+
+.cfd-qty-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.cfd-mrp-strike {
+  color: #94a3b8;
+  font-size: 0.88rem;
+  text-decoration: line-through;
+}
+
+.cfd-rate-text {
+  color: #334155;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.cfd-line-total {
+  color: #0f172a;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+/* ================= IDLE EMPTY STATE ================= */
+.cfd-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.cfd-empty-icon-box {
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #eef2ff 0%, #ede9fe 100%);
+  border: 1px solid #c7d2fe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4f46e5;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.12);
+}
+
+.cfd-empty-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cfd-empty-sub {
+  margin: 0 0 1.75rem 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.cfd-empty-perks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+  width: 100%;
+  max-width: 580px;
+}
+
+.cfd-perk-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+}
+
+.cfd-perk-card strong {
+  font-size: 0.8rem;
+  color: #0f172a;
+}
+
+.cfd-perk-card span {
+  font-size: 0.7rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+/* ================= RIGHT COLUMN: SUMMARY & PAYMENT ================= */
+.cfd-summary-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 1. ORDER SUMMARY CARD */
+.cfd-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cfd-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cfd-summary-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.cfd-summary-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.cfd-calc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  color: #475569;
+}
+
+.cfd-calc-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.cfd-calc-icon-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cfd-calc-val {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+/* GST Box */
+.cfd-gst-pill-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cfd-gst-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.cfd-gst-sub {
+  font-size: 0.74rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* SAVINGS CELEBRATION BANNER */
+.cfd-savings-box {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cfd-savings-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #047857;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.cfd-savings-star-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #d1fae5;
+  color: #059669;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cfd-savings-val {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #047857;
+}
+
+/* GRAND TOTAL CARD (ELEGANT DEEP NAVY / INDIGO WITH LUMINOUS TOTAL) */
+.cfd-root .cfd-grand-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  border: 1px solid #312e81;
+  border-radius: 14px;
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.25);
+  color: #ffffff;
+}
+
+.cfd-root .cfd-grand-label-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfd-root .cfd-grand-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #c7d2fe;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cfd-root .cfd-grand-sub {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.cfd-root .cfd-grand-amount {
+  font-size: 2rem !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  letter-spacing: -0.02em !important;
+  text-shadow: 0 0 16px rgba(52, 211, 153, 0.45);
+}
+
+/* ================= 2. INTERACTIVE PAYMENT & HUB (FILLS VOID) ================= */
+.cfd-hub-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* A) UPI PAYMENT MODE ACTIVE */
+.cfd-upi-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.cfd-upi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.cfd-upi-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.cfd-upi-sub {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.cfd-qr-box {
+  background: #ffffff;
+  padding: 0.75rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfd-qr-box svg {
+  width: 170px;
+  height: 170px;
+  display: block;
+}
+
+.cfd-upi-amount-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.84rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+}
+
+.cfd-vpa-pill {
+  font-size: 0.74rem;
+  color: #64748b;
+}
+
+.cfd-vpa-pill strong {
+  color: #334155;
+}
+
+/* B) COMPLETED INVOICE STATE */
+.cfd-completed-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
+}
+
+.cfd-success-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  border: 2px solid #a7f3d0;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.18);
+}
+
+.cfd-success-heading {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #065f46;
+  margin: 0;
+}
+
+.cfd-success-sub {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.cfd-invoice-chip {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+}
+
+.cfd-change-banner {
+  width: 100%;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cfd-change-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #047857;
+}
+
+.cfd-change-val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #065f46;
+}
+
+/* C) IDLE / CASHIER SCANNING HUB */
+.cfd-loyalty-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.cfd-loyalty-promo {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.cfd-promo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #fef08a;
+  color: #b45309;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.cfd-promo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfd-promo-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.cfd-promo-desc {
+  font-size: 0.75rem;
+  color: #b45309;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.cfd-payment-badges-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cfd-badges-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cfd-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45rem;
+}
+
+.cfd-badge-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.45rem 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cfd-badge-item svg {
+  width: 16px;
+  height: 16px;
+  color: #6366f1;
+}
+
+.cfd-assurance-tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+.cfd-assurance-tag svg {
+  width: 13px;
+  height: 13px;
+  color: #10b981;
+}

@@ -33,8 +33,19 @@ export function registerShop(r: Router) {
       if (!Object.keys(changed).length) return shopView(row);
 
       await q.exec(
-        `UPDATE tenants SET name = ?, business_type = ?, gstin = ?, state_code = ?, address = ?, phone = ?, upi_id = ?, invoice_prefix = ?, language = ?, locations = ?::jsonb, whatsapp_enabled = ?, whatsapp_default_lang = ?, whatsapp_include_link = ? WHERE id = ?`,
-        [next.name, next.businessType, next.gstin, next.stateCode, next.address, next.phone, next.upiId, next.invoicePrefix, next.language, j(next.locations), next.whatsappEnabled, next.whatsappDefaultLang, next.whatsappIncludeLink, tenantId],
+        `UPDATE tenants SET
+          name = ?, business_type = ?, gstin = ?, state_code = ?, address = ?, phone = ?, upi_id = ?,
+          invoice_prefix = ?, language = ?, locations = ?::jsonb,
+          whatsapp_enabled = ?, whatsapp_default_lang = ?, whatsapp_include_link = ?,
+          loyalty_enabled = ?, loyalty_points_per_100 = ?, loyalty_point_value_minor = ?, loyalty_min_points_redeem = ?
+         WHERE id = ?`,
+        [
+          next.name, next.businessType, next.gstin, next.stateCode, next.address, next.phone, next.upiId,
+          next.invoicePrefix, next.language, j(next.locations),
+          next.whatsappEnabled, next.whatsappDefaultLang, next.whatsappIncludeLink,
+          next.loyaltyEnabled, next.loyaltyPointsPer100, next.loyaltyPointValueMinor, next.loyaltyMinPointsRedeem,
+          tenantId,
+        ],
       );
       await audit(q, ctx, { action: 'shop.update', entity: 'tenant', entityId: tenantId, detail: { changed } });
       return shopView(await q.one('SELECT * FROM tenants WHERE id = ?', [tenantId]));

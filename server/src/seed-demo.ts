@@ -25,6 +25,7 @@ interface BusinessSeed {
     gstin?: string;
     address?: string;
     credit?: number;
+    loyaltyPoints?: number;
   }[];
   items: {
     id: string;
@@ -74,8 +75,8 @@ const BUSINESSES: BusinessSeed[] = [
     ownerName: 'Sangeetha Priya',
     ownerEmail: 'demo@billing.local',
     parties: [
-      { id: 'p_ret_c1', name: 'Ramesh Kumar', phone: '9840123456', email: 'ramesh.k@example.com', type: 'customer', address: '12 4th Cross St, Chennai', credit: 500000 },
-      { id: 'p_ret_c2', name: 'Priya Sundaram', phone: '9840987654', email: 'priya.s@example.com', type: 'customer', address: '45 Anna Nagar, Chennai', credit: 300000 },
+      { id: 'p_cust_1', name: 'Ramesh Kumar', phone: '9840123456', email: 'ramesh.k@example.com', type: 'customer', address: '12 4th Cross St, Chennai', credit: 500000, loyaltyPoints: 145 },
+      { id: 'p_cust_2', name: 'Priya Sundaram', phone: '9840987654', email: 'priya.s@example.com', type: 'customer', address: '45 Anna Nagar, Chennai', credit: 300000, loyaltyPoints: 210 },
       { id: 'p_ret_s1', name: 'Hindustan Fast Moving Consumer Goods Ltd', phone: '044-24567890', type: 'supplier', address: 'Industrial Estate, Guindy, Chennai', credit: 0 },
     ],
     items: [
@@ -348,10 +349,13 @@ async function seed() {
       // 3. Parties
       for (const p of b.parties) {
         await q.exec(
-          `INSERT INTO parties (id, tenant_id, type, name, phone, email, gstin, state_code, address, credit_limit_minor)
-           VALUES (?, ?, ?, ?, ?, ?, ?, '33', ?, ?)
-           ON CONFLICT (id) DO NOTHING`,
-          [p.id, b.tenantId, p.type, p.name, p.phone || null, p.email || null, p.gstin || null, p.address || null, p.credit || 0],
+          `INSERT INTO parties (id, tenant_id, type, name, phone, email, gstin, state_code, address, credit_limit_minor, loyalty_points)
+           VALUES (?, ?, ?, ?, ?, ?, ?, '33', ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             phone = EXCLUDED.phone,
+             loyalty_points = EXCLUDED.loyalty_points`,
+          [p.id, b.tenantId, p.type, p.name, p.phone || null, p.email || null, p.gstin || null, p.address || null, p.credit || 0, p.loyaltyPoints || 0],
         );
       }
 
