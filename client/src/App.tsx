@@ -12099,28 +12099,9 @@ export function App() {
           }}
           tabIndex={-1}
         >
-          <div
-            className="modal-content"
-            style={{
-              maxWidth: '460px',
-              width: '92%',
-              borderRadius: '16px',
-              padding: 0,
-              overflow: 'hidden',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15)',
-            }}
-          >
+          <div className="modal-content checkout-rect-modal">
             {/* Modal Header */}
-            <div
-              style={{
-                background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                padding: '1.25rem 1.5rem',
-                borderBottom: '1px solid #a7f3d0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
+            <div className="checkout-rect-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <div
                   style={{
@@ -12134,15 +12115,16 @@ export function App() {
                     justifyContent: 'center',
                     fontSize: '1.25rem',
                     fontWeight: 'bold',
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
                   }}
                 >
                   ✓
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: '#047857', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Bill Created
+                  <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Bill Created Successfully
                   </div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#064e3b' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#064e3b' }}>
                     #{checkoutSuccess.number}
                   </div>
                 </div>
@@ -12161,6 +12143,7 @@ export function App() {
                   padding: '6px',
                   lineHeight: 1,
                   borderRadius: '6px',
+                  transition: 'background 0.15s ease',
                 }}
                 title="Close (Esc)"
               >
@@ -12171,299 +12154,259 @@ export function App() {
               </button>
             </div>
 
-            <div style={{ padding: '1.25rem 1.5rem' }}>
-              {/* Summary Line */}
-              <div
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '0.85rem 1rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    {checkoutSuccess.customerName || 'Walk-in Customer'}
-                  </span>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                      <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                    </svg>
-                    {checkoutSuccess.itemCount} {checkoutSuccess.itemCount === 1 ? 'item' : 'items'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.4rem', borderTop: '1px dashed #cbd5e1' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>Grand Total</span>
-                  <span className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a' }}>
-                    {formatRupees(checkoutSuccess.totalMinor)}
-                  </span>
-                </div>
-
-                {/* Loyalty Points Automatically Credited */}
-                {Math.floor((checkoutSuccess.totalMinor || 0) / 1000) > 0 && checkoutSuccess.customerName && checkoutSuccess.customerName !== 'Walk-in Customer' && (
-                  <div style={{ marginTop: '0.45rem', padding: '0.4rem 0.75rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', color: '#92400e' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}>
-                      🪙 Loyalty Points Credited:
-                    </span>
-                    <span className="mono" style={{ fontWeight: 800, fontSize: '0.88rem', color: '#d97706' }}>
-                      +{Math.floor((checkoutSuccess.totalMinor || 0) / 1000)} pts (₹{(Math.floor((checkoutSuccess.totalMinor || 0) / 1000) * 0.1).toFixed(2)})
-                    </span>
-                  </div>
-                )}
-
-                {/* Multiple / Split Payments Breakdown */}
-                {checkoutSuccess.payments && checkoutSuccess.payments.length > 1 && (
-                  <div className="checkout-split-pills">
-                    {checkoutSuccess.payments.map((p, idx) => (
-                      <span key={idx} className="checkout-split-pill">
-                        <strong>{p.method.toUpperCase()}:</strong> {formatRupees(p.amountMinor)}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Cash Tender & Change Returned banner */}
-                {checkoutSuccess.tender && checkoutSuccess.tender.cashReceivedMinor > 0 && (
-                  <div
-                    style={{
-                      background: '#ecfdf5',
-                      border: '1.5px solid #a7f3d0',
-                      borderRadius: '8px',
-                      padding: '0.65rem 0.85rem',
-                      marginTop: '0.65rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.25rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#065f46' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <rect x="2" y="6" width="20" height="12" rx="2" />
-                          <circle cx="12" cy="12" r="3.5" />
-                          <path d="M6 12h.01M18 12h.01" />
-                        </svg>
-                        Cash Tendered by Customer:
-                      </span>
-                      <strong className="mono">{formatRupees(checkoutSuccess.tender.cashReceivedMinor)}</strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.92rem', color: '#047857', borderTop: '1px dashed #6ee7b7', paddingTop: '0.3rem', marginTop: '0.1rem' }}>
-                      <span style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="9 14 4 9 9 4"></polyline>
-                          <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
-                        </svg>
-                        Change to Customer:
-                      </span>
-                      <strong className="mono" style={{ fontSize: '1.12rem', fontWeight: 900, color: '#047857' }}>
-                        {formatRupees(checkoutSuccess.tender.changeReturnedMinor)}
-                      </strong>
-                    </div>
-                  </div>
-                )}
-
-                {/* Balance Line (shown ONLY when balanceMinor > 0) */}
-                {checkoutSuccess.balanceMinor > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '0.85rem',
-                      marginTop: '0.4rem',
-                      paddingTop: '0.4rem',
-                      borderTop: '1px solid #e2e8f0',
-                    }}
-                  >
-                    <span style={{ color: '#10b981' }}>Paid: {formatRupees(checkoutSuccess.paidMinor)}</span>
-                    <span className="mono" style={{ color: '#ef4444', fontWeight: 700 }}>
-                      Balance Due: {formatRupees(checkoutSuccess.balanceMinor)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* WhatsApp Block (Section 4.3) */}
-              {shop?.whatsappEnabled !== false && (
-                <div
-                  style={{
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '12px',
-                    padding: '1rem',
-                    marginBottom: '1.25rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+            {/* 2-Column Landscape Body */}
+            <div className="checkout-rect-body">
+              {/* LEFT COLUMN: Bill & Financial Details */}
+              <div className="checkout-rect-left">
+                <div className="checkout-bill-card">
+                  {/* Customer & Item count */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
                       </svg>
-                      Share on WhatsApp
+                      {checkoutSuccess.customerName || 'Walk-in Customer'}
                     </span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748b', background: '#e2e8f0', padding: '2px 8px', borderRadius: '12px' }}>
+                      {checkoutSuccess.itemCount} {checkoutSuccess.itemCount === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
 
-                    {/* Language Selector (en / hi / ta) */}
-                    <div style={{ display: 'flex', gap: '3px', background: '#dcfce7', padding: '2px', borderRadius: '6px' }}>
-                      {(['en', 'hi', 'ta'] as const).map((l) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => setSuccessLang(l)}
-                          style={{
-                            border: 'none',
-                            background: successLang === l ? '#16a34a' : 'transparent',
-                            color: successLang === l ? '#ffffff' : '#15803d',
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          {l === 'en' ? 'English' : l === 'hi' ? 'हिन्दी' : 'தமிழ்'}
-                        </button>
+                  {/* Grand Total */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#334155' }}>Grand Total</span>
+                    <span className="mono" style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>
+                      {formatRupees(checkoutSuccess.totalMinor)}
+                    </span>
+                  </div>
+
+                  {/* Loyalty Points Automatically Credited */}
+                  {Math.floor((checkoutSuccess.totalMinor || 0) / 1000) > 0 && checkoutSuccess.customerName && checkoutSuccess.customerName !== 'Walk-in Customer' && (
+                    <div style={{ padding: '0.45rem 0.75rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', color: '#92400e' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}>
+                        🪙 Loyalty Points Credited:
+                      </span>
+                      <span className="mono" style={{ fontWeight: 800, fontSize: '0.88rem', color: '#d97706' }}>
+                        +{Math.floor((checkoutSuccess.totalMinor || 0) / 1000)} pts (₹{(Math.floor((checkoutSuccess.totalMinor || 0) / 1000) * 0.1).toFixed(2)})
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Multiple / Split Payments Breakdown */}
+                  {checkoutSuccess.payments && checkoutSuccess.payments.length > 1 && (
+                    <div className="checkout-split-pills">
+                      {checkoutSuccess.payments.map((p, idx) => (
+                        <span key={idx} className="checkout-split-pill">
+                          <strong>{p.method.toUpperCase()}:</strong> {formatRupees(p.amountMinor)}
+                        </span>
                       ))}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Phone Input */}
-                  <div style={{ marginBottom: '0.65rem' }}>
-                    <input
-                      type="tel"
-                      className="form-input"
+                  {/* Cash Tender & Change Returned banner */}
+                  {checkoutSuccess.tender && checkoutSuccess.tender.cashReceivedMinor > 0 && (
+                    <div
                       style={{
-                        width: '100%',
-                        borderColor: successPhoneError ? '#ef4444' : '#86efac',
-                        background: '#ffffff',
-                        fontSize: '0.95rem',
-                        padding: '0.55rem 0.75rem',
+                        background: '#ecfdf5',
+                        border: '1.5px solid #a7f3d0',
+                        borderRadius: '9px',
+                        padding: '0.65rem 0.85rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.35rem',
                       }}
-                      placeholder="Customer mobile number"
-                      value={successPhone}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSuccessPhone(val);
-                        if (!val.trim()) {
-                          setSuccessPhoneError('');
-                        } else {
-                          const check = validateIndianPhone(val);
-                          setSuccessPhoneError(check.valid ? '' : 'Enter a valid 10-digit mobile number');
-                        }
-                      }}
-                    />
-                    {successPhoneError && (
-                      <div style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '4px', fontWeight: 500 }}>
-                        {successPhoneError}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#065f46' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <rect x="2" y="6" width="20" height="12" rx="2" />
+                            <circle cx="12" cy="12" r="3.5" />
+                            <path d="M6 12h.01M18 12h.01" />
+                          </svg>
+                          Cash Tendered:
+                        </span>
+                        <strong className="mono">{formatRupees(checkoutSuccess.tender.cashReceivedMinor)}</strong>
                       </div>
-                    )}
-                  </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.92rem', color: '#047857', borderTop: '1px dashed #6ee7b7', paddingTop: '0.35rem' }}>
+                        <span style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 14 4 9 9 4"></polyline>
+                            <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                          </svg>
+                          Change to Return:
+                        </span>
+                        <strong className="mono" style={{ fontSize: '1.18rem', fontWeight: 900, color: '#047857' }}>
+                          {formatRupees(checkoutSuccess.tender.changeReturnedMinor)}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* Send Button */}
-                  <button
-                    type="button"
-                    disabled={!validateIndianPhone(successPhone).valid || isSendingWhatsApp}
-                    onClick={handleSendWhatsAppFromSuccessModal}
-                    style={{
-                      width: '100%',
-                      padding: '0.65rem 1rem',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: validateIndianPhone(successPhone).valid ? '#25D366' : '#94a3b8',
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: '0.95rem',
-                      cursor: validateIndianPhone(successPhone).valid ? 'pointer' : 'not-allowed',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.5rem',
-                      boxShadow: validateIndianPhone(successPhone).valid ? '0 2px 4px rgba(37, 211, 102, 0.3)' : 'none',
-                      transition: 'background 0.2s ease',
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                    </svg>
-                    <span>{successSendState === 'sent' ? 'Sent — Send Again' : 'Send Bill on WhatsApp'}</span>
-                  </button>
+                  {/* Balance Line (shown ONLY when balanceMinor > 0) */}
+                  {checkoutSuccess.balanceMinor > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '0.85rem',
+                        paddingTop: '0.4rem',
+                        borderTop: '1px solid #e2e8f0',
+                      }}
+                    >
+                      <span style={{ color: '#10b981', fontWeight: 600 }}>Paid: {formatRupees(checkoutSuccess.paidMinor)}</span>
+                      <span className="mono" style={{ color: '#ef4444', fontWeight: 700 }}>
+                        Balance Due: {formatRupees(checkoutSuccess.balanceMinor)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {/* Other Actions: Print Thermal & View A4 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <a
-                  href={`/api/invoices/${checkoutSuccess.invoiceId}/print?paper=thermal80&autoprint=true`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-secondary"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    padding: '0.6rem 0.75rem',
-                    fontSize: '0.85rem',
-                    textDecoration: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
-                  <span>Print Thermal Slip</span>
-                </a>
-                <a
-                  href={`/api/invoices/${checkoutSuccess.invoiceId}/print?paper=a4`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-secondary"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    padding: '0.6rem 0.75rem',
-                    fontSize: '0.85rem',
-                    textDecoration: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  <span>View A4 GST PDF</span>
-                </a>
               </div>
 
-              {/* Footer: New Bill (Primary) */}
-              <div>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem 1rem',
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    borderRadius: '8px',
-                  }}
-                  onClick={handleStartNewBill}
-                >
-                  + Start New Bill
-                </button>
+              {/* RIGHT COLUMN: WhatsApp Share & Quick Actions */}
+              <div className="checkout-rect-right">
+                {/* WhatsApp Block */}
+                {shop?.whatsappEnabled !== false && (
+                  <div className="checkout-whatsapp-box">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                        </svg>
+                        Share on WhatsApp
+                      </span>
+
+                      {/* Language Selector */}
+                      <div style={{ display: 'flex', gap: '3px', background: '#dcfce7', padding: '2px', borderRadius: '6px' }}>
+                        {(['en', 'hi', 'ta'] as const).map((l) => (
+                          <button
+                            key={l}
+                            type="button"
+                            onClick={() => setSuccessLang(l)}
+                            style={{
+                              border: 'none',
+                              background: successLang === l ? '#16a34a' : 'transparent',
+                              color: successLang === l ? '#ffffff' : '#15803d',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              padding: '2px 7px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {l === 'en' ? 'English' : l === 'hi' ? 'हिन्दी' : 'தமிழ்'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phone Input */}
+                    <div>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          borderColor: successPhoneError ? '#ef4444' : '#86efac',
+                          background: '#ffffff',
+                          fontSize: '0.92rem',
+                          padding: '0.5rem 0.7rem',
+                          boxSizing: 'border-box',
+                        }}
+                        placeholder="Customer mobile number"
+                        value={successPhone}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSuccessPhone(val);
+                          if (!val.trim()) {
+                            setSuccessPhoneError('');
+                          } else {
+                            const check = validateIndianPhone(val);
+                            setSuccessPhoneError(check.valid ? '' : 'Enter a valid 10-digit mobile number');
+                          }
+                        }}
+                      />
+                      {successPhoneError && (
+                        <div style={{ color: '#ef4444', fontSize: '0.76rem', marginTop: '3px', fontWeight: 500 }}>
+                          {successPhoneError}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Send WhatsApp Button */}
+                    <button
+                      type="button"
+                      disabled={!validateIndianPhone(successPhone).valid || isSendingWhatsApp}
+                      onClick={handleSendWhatsAppFromSuccessModal}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.85rem',
+                        borderRadius: '7px',
+                        border: 'none',
+                        background: validateIndianPhone(successPhone).valid ? '#25D366' : '#94a3b8',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '0.9rem',
+                        cursor: validateIndianPhone(successPhone).valid ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.45rem',
+                        boxShadow: validateIndianPhone(successPhone).valid ? '0 2px 4px rgba(37, 211, 102, 0.25)' : 'none',
+                        transition: 'background 0.2s ease',
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                      </svg>
+                      <span>{successSendState === 'sent' ? 'Sent — Send Again' : 'Send Bill on WhatsApp'}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Print Options */}
+                <div className="checkout-action-links">
+                  <a
+                    href={`/api/invoices/${checkoutSuccess.invoiceId}/print?paper=thermal80&autoprint=true`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary checkout-action-btn"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                      <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    <span>Print Thermal Slip</span>
+                  </a>
+                  <a
+                    href={`/api/invoices/${checkoutSuccess.invoiceId}/print?paper=a4`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary checkout-action-btn"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span>View A4 GST PDF</span>
+                  </a>
+                </div>
+
+                {/* Start New Bill */}
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn-primary checkout-start-btn"
+                    onClick={handleStartNewBill}
+                  >
+                    + Start New Bill
+                  </button>
+                </div>
               </div>
             </div>
           </div>
