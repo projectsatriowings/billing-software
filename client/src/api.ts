@@ -790,6 +790,25 @@ export const fetchProductMovementAnalysis = (params: {
   return api<import('../../shared/types.ts').ProductMovementAnalysisData>(`/api/inventory/movement-analysis${qs}`);
 };
 
+export const fetchSalesAnalysis = (params: {
+  from?: string;
+  to?: string;
+  compare?: 'previous_period' | 'same_period_last_month' | 'none';
+  counterId?: string;
+  categoryId?: string;
+  userId?: string;
+} = {}) => {
+  const sp = new URLSearchParams();
+  if (params.from) sp.set('from', params.from);
+  if (params.to) sp.set('to', params.to);
+  if (params.compare) sp.set('compare', params.compare);
+  if (params.counterId && params.counterId !== 'ALL') sp.set('counterId', params.counterId);
+  if (params.categoryId && params.categoryId !== 'All categories' && params.categoryId !== 'ALL') sp.set('categoryId', params.categoryId);
+  if (params.userId && params.userId !== 'ALL') sp.set('userId', params.userId);
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<import('../../shared/types.ts').SalesAnalysisData>(`/api/sales-analysis${qs}`);
+};
+
 export type {
   InventoryInsights,
   StockoutRiskItem,
@@ -808,6 +827,18 @@ export type {
   ShiftSummary,
   ShiftPaymentMethodBreakdown,
   ShiftClosingReport,
+  SalesSummaryMetrics,
+  SalesComparisonDiff,
+  SalesOverviewPoint,
+  CategorySalesItem,
+  HeatmapCell,
+  PaymentModeBreakdown,
+  TopCustomerItem,
+  SalesInsight,
+  DaywiseSalesRow,
+  CashierPerformanceRow,
+  CashierSummaryStrip,
+  SalesAnalysisData,
 } from '../../shared/types.ts';
 
 // Cashier Shifts & Day-End Closing API
@@ -842,7 +873,11 @@ export const recordCashMovement = (
   id: string,
   data: { movementType: 'cash_in' | 'cash_out'; amountMinor: number; reason: string; notes?: string },
 ) =>
-  api<{ ok: boolean; movement: import('../../shared/types.ts').CashMovement }>(`/api/shifts/${id}/cash-moves`, {
+  api<{
+    ok: boolean;
+    movement: import('../../shared/types.ts').CashMovement;
+    summary?: import('../../shared/types.ts').ShiftSummary;
+  }>(`/api/shifts/${id}/cash-moves`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -1225,4 +1260,169 @@ export const deleteProduct = (id: string) =>
   api<{ ok: boolean; deleted: boolean; itemId: string; message: string }>(`/api/items/${encodeURIComponent(id)}?permanent=true`, {
     method: 'DELETE',
   });
+export interface TodayDashboardData {
+  serverTime: string;
+  nowKolkata: {
+    timeStr: string;
+    hour: number;
+    minute: number;
+    todayYMD: string;
+    weekday: string;
+    formattedDate: string;
+    compDateYMD: string;
+    compWeekday: string;
+    compWeekdayShort: string;
+    compLabel: string;
+    lastWeekYMD?: string;
+    lastWeekday?: string;
+  };
+  cards: {
+    todaySales: {
+      netSalesMinor: number;
+      grossSalesMinor: number;
+      compNetSalesMinor: number;
+      changePct: number | null;
+      diffMinor: number;
+    };
+    bills: {
+      billsCount: number;
+      compBillsCount: number;
+      diffCount: number | null;
+      hasCompBills: boolean;
+    };
+    avgBillValue: {
+      avgBillMinor: number;
+      compAvgBillMinor: number;
+      changePct: number | null;
+    };
+    grossProfit: {
+      profitMinor: number;
+      marginPct: number;
+      cogsMinor: number;
+      isEstimated: boolean;
+      visible: boolean;
+    };
+    itemsSold: {
+      totalUnits: number;
+      distinctProductsCount: number;
+    };
+    returns: {
+      returnsMinor: number;
+      returnsCount: number;
+      returnRatePct: number;
+      compReturnsMinor: number;
+      changePct: number | null;
+    };
+  };
+  hourly: {
+    openingHour: number;
+    closingHour: number;
+    currentHour: number;
+    currentMinute: number;
+    busiestHourToday: {
+      hour: number;
+      label: string;
+      salesMinor: number;
+      billsCount: number;
+      profitMinor: number;
+      compSalesMinor: number;
+      compBillsCount: number;
+      compProfitMinor: number;
+      lastWeekSalesMinor?: number;
+    } | null;
+    busiestHourComp: {
+      hour: number;
+      label: string;
+      salesMinor: number;
+      billsCount: number;
+      profitMinor: number;
+    } | null;
+    busiestHourLastWeek?: {
+      hour: number;
+      label: string;
+      salesMinor: number;
+    } | null;
+    isEveningRushAhead: boolean;
+    subtitle: string;
+    series: Array<{
+      hour: number;
+      label: string;
+      hourRange: string;
+      isPastOrCurrent: boolean;
+      todaySalesMinor: number | null;
+      todayBillsCount: number | null;
+      todayProfitMinor: number | null;
+      compSalesMinor: number;
+      compBillsCount: number;
+      compProfitMinor: number;
+      lastWeekSalesMinor?: number;
+      lastWeekBillsCount?: number;
+      lastWeekProfitMinor?: number;
+    }>;
+  };
+  payments: {
+    collectedTotalMinor: number;
+    modes: Array<{
+      key: string;
+      name: string;
+      amountMinor: number;
+      percentage: number;
+      color: string;
+    }>;
+    gst: {
+      totalGstMinor: number;
+      cgstMinor: number;
+      sgstMinor: number;
+      igstMinor: number;
+    };
+  };
+  topSellers: Array<{
+    itemId: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    salesMinor: number;
+    barPct: number;
+  }>;
+  stockAttention: Array<{
+    itemId: string;
+    name: string;
+    stockQty: number;
+    unit: string;
+    reorderLevel: number | null;
+    soldTodayQty: number;
+    status: 'out_of_stock' | 'sold_today' | 'below_reorder' | 'not_configured';
+    badgeText: string;
+    badgeType: 'danger' | 'warning' | 'neutral';
+  }>;
+  shiftDrawer: {
+    hasOpenShift: boolean;
+    shiftNumber: string | null;
+    counterName: string;
+    openedAt: string | null;
+    openedAtFormatted: string | null;
+    cashierName: string;
+    openingCashMinor: number;
+    cashSalesMinor: number;
+    cashPaymentsMinor: number;
+    cashRefundsMinor: number;
+    cashInMinor: number;
+    cashOutMinor: number;
+    expectedCashMinor: number;
+    activeShift: any | null;
+  };
+  countersToday?: {
+    title: string;
+    subtitle: string;
+    counters: Array<{
+      id: string;
+      name: string;
+      amountMinor: number;
+      formattedAmount: string;
+    }>;
+    totalMinor: number;
+    formattedTotal: string;
+  };
+}
 
+export const fetchTodayDashboard = () => api<TodayDashboardData>('/api/dashboard/today');

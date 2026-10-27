@@ -44,6 +44,19 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
   useEffect(() => {
     loadActiveShift();
     loadHistory();
+
+    const handleSync = () => {
+      loadActiveShift();
+      loadHistory();
+    };
+
+    window.addEventListener('shift_status_changed', handleSync);
+    window.addEventListener('cash_movement_recorded', handleSync);
+
+    return () => {
+      window.removeEventListener('shift_status_changed', handleSync);
+      window.removeEventListener('cash_movement_recorded', handleSync);
+    };
   }, [historyStatusFilter]);
 
   const loadActiveShift = async () => {
@@ -54,7 +67,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       if (res.activeShift) {
         // Load movements
         const det = await fetchShiftDetails(res.activeShift.id);
-        setMovements(det.movements || []);
+        setMovements(det.movements || (det.shift as any)?.cashMovements || []);
       } else {
         setMovements([]);
       }
@@ -79,6 +92,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
   const handleOpenSuccess = (newShift: Shift) => {
     setActiveShift(newShift);
+    window.dispatchEvent(new Event('shift_status_changed'));
     loadActiveShift();
     loadHistory();
   };
@@ -86,19 +100,48 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
   const handleCloseSuccess = (closedShift: Shift) => {
     setActiveShift(null);
     setReportModalShiftId(closedShift.id);
+    window.dispatchEvent(new Event('shift_status_changed'));
     loadHistory();
   };
 
-  const handleMovementSuccess = () => {
+  const handleMovementSuccess = (_movement?: any, updatedSummary?: any) => {
+    window.dispatchEvent(new Event('shift_status_changed'));
+    window.dispatchEvent(new Event('cash_movement_recorded'));
+    if (updatedSummary) {
+      setActiveShift((prev) => (prev ? { ...prev, summary: updatedSummary } : null));
+    }
     loadActiveShift();
     loadHistory();
   };
 
   const summary = activeShift?.summary;
 
+  // Safe format shift opened timestamp (contextual date + time, with fallback)
+  const formatShiftOpenedAt = (openedAtStr?: string | null) => {
+    if (!openedAtStr) return 'Opening time unavailable';
+    const date = new Date(openedAtStr);
+    if (isNaN(date.getTime())) return 'Opening time unavailable';
+
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (isToday) return timeStr;
+    if (isYesterday) return `Yesterday · ${timeStr}`;
+    const dateStr = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return `${dateStr} · ${timeStr}`;
+  };
+
   // Running shift duration calculation
-  const getDurationString = (openedAtStr: string) => {
-    const diffMs = Math.max(0, Date.now() - new Date(openedAtStr).getTime());
+  const getDurationString = (openedAtStr?: string | null) => {
+    if (!openedAtStr) return '';
+    const date = new Date(openedAtStr);
+    if (isNaN(date.getTime())) return '';
+    const diffMs = Math.max(0, Date.now() - date.getTime());
     const totalMinutes = Math.floor(diffMs / 60000);
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
@@ -141,7 +184,10 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <p className="shifts-hero-subtitle">
             {activeShift ? (
               <>
-                Opened at {new Date(activeShift.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} • Active for <strong>{getDurationString(activeShift.openedAt)}</strong>
+                Opened {formatShiftOpenedAt(activeShift.openedAt)}
+                {getDurationString(activeShift.openedAt) && (
+                  <> • Active for <strong>{getDurationString(activeShift.openedAt)}</strong></>
+                )}
               </>
             ) : (
               'Open a shift with an initial opening cash float to begin recording sales and drawer cash movements.'

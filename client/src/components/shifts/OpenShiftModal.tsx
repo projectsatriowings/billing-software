@@ -95,7 +95,8 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="shift-modal-body">
+        <form onSubmit={handleSubmit} className="shift-modal-form">
+          <div className="shift-modal-body">
           {error && (
             <div className="shift-modal-alert error">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -176,6 +177,7 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
                 <option value="MAIN">Main Billing Counter (MAIN)</option>
                 <option value="COUNTER-1">Counter 1</option>
                 <option value="COUNTER-2">Counter 2</option>
+                <option value="COUNTER-3">Counter 3</option>
                 <option value="EXPRESS">Express Checkout</option>
               </select>
             </div>
@@ -192,6 +194,7 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
               onChange={(e) => setNotes(e.target.value)}
               maxLength={200}
             />
+          </div>
           </div>
 
           {/* Modal Actions */}

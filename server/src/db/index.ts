@@ -112,9 +112,22 @@ export async function connectPg(url: string): Promise<DB> {
     throw new Error('The "pg" package is not installed. Run "npm install" first.');
   }
   pg.types.setTypeParser(20, (v: string) => Number(v)); // int8 -> number (money is paise, always < 2^53)
-  pg.types.setTypeParser(1700, (v: string) => Number(v)); // numeric (SUM of bigint)
-  const pool = new pg.Pool({ connectionString: url, max: Number(process.env.DB_POOL_MAX ?? 10), idleTimeoutMillis: 10_000, connectionTimeoutMillis: 20_000 });
-  pool.on('error', (e: Error) => console.error(JSON.stringify({ level: 'error', msg: 'pg pool error', error: e.message })));
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: Number(process.env.DB_POOL_MAX ?? 10),
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 20_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  });
+  pool.on('error', (e: Error) => {
+    console.warn(JSON.stringify({ level: 'warn', msg: 'pg pool error (handled)', error: e.message }));
+  });
+  pool.on('connect', (client: any) => {
+    client.on('error', (err: any) => {
+      console.warn(JSON.stringify({ level: 'warn', msg: 'pg client socket error (handled)', error: err?.message || String(err) }));
+    });
+  });
   const raw: RawPool = {
     async connect() {
       const client = await pool.connect();

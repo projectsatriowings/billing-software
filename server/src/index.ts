@@ -6,6 +6,19 @@ import { env } from './env.ts'; // must be first: it loads .env before anything 
 import { connectDb, migrate } from './db/index.ts';
 import { createApp } from './app.ts';
 
+// Guard process against unhandled socket resets (e.g. ECONNRESET on idle postgres connection drops)
+process.on('uncaughtException', (err: any) => {
+  if (err?.code === 'ECONNRESET' || err?.message?.includes('ECONNRESET')) {
+    console.warn(JSON.stringify({ level: 'warn', msg: 'Handled transient socket ECONNRESET', error: err.message }));
+    return;
+  }
+  console.error(JSON.stringify({ level: 'error', msg: 'Uncaught exception', error: err?.stack || err?.message || String(err) }));
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  console.warn(JSON.stringify({ level: 'warn', msg: 'Handled unhandled promise rejection', error: reason?.message || String(reason) }));
+});
+
 async function main() {
   const db = await connectDb();
   const applied = await migrate(db);

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { recordCashMovement, type CashMovement, type Shift } from '../../api.ts';
+import { recordCashMovement, type CashMovement, type Shift, type ShiftSummary } from '../../api.ts';
 
 interface CashMovementModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (movement: CashMovement) => void;
+  onSuccess: (movement: CashMovement, updatedSummary?: ShiftSummary) => void;
   activeShift: Shift;
 }
 
@@ -56,8 +56,9 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    const parsedRupees = parseFloat(amountRupees);
-    if (isNaN(parsedRupees) || parsedRupees <= 0) {
+    const cleanAmountStr = amountRupees.toString().replace(/,/g, '').trim();
+    const parsedRupees = parseFloat(cleanAmountStr);
+    if (isNaN(parsedRupees) || !isFinite(parsedRupees) || parsedRupees <= 0) {
       setError('Movement amount must be greater than zero.');
       return;
     }
@@ -66,28 +67,58 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
       ? customReason.trim()
       : reasonCategory;
 
-    if (!effectiveReason) {
+    if (!effectiveReason || effectiveReason.trim().length < 2) {
       setError('Please provide an authorized reason for this cash movement.');
       return;
     }
 
     const amountMinor = Math.round(parsedRupees * 100);
+    if (!Number.isInteger(amountMinor) || amountMinor < 1) {
+      setError('Movement amount is invalid.');
+      return;
+    }
+
+    if (!activeShift?.id) {
+      setError('No active shift found to record cash movement.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const res = await recordCashMovement(activeShift.id, {
         movementType,
         amountMinor,
-        reason: effectiveReason,
+        reason: effectiveReason.trim(),
         notes: notes.trim() || undefined,
       });
-      onSuccess(res.movement);
+      window.dispatchEvent(new CustomEvent('cash_movement_recorded', { detail: res }));
+      window.dispatchEvent(new Event('shift_status_changed'));
+      onSuccess(res.movement, res.summary);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to record cash movement.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const formatShiftOpenedAt = (openedAtStr?: string | null) => {
+    if (!openedAtStr) return 'Opening time unavailable';
+    const date = new Date(openedAtStr);
+    if (isNaN(date.getTime())) return 'Opening time unavailable';
+
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (isToday) return timeStr;
+    if (isYesterday) return `Yesterday · ${timeStr}`;
+    const dateStr = date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return `${dateStr} · ${timeStr}`;
   };
 
   return (
@@ -113,11 +144,22 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
             <div>
               <h2 className="modal-title">Record Cash Movement</h2>
               <p className="modal-subtitle">
-                Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span> • Drawer Cash Flow
+                Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span>
+                {activeShift.openedAt && (
+                  <> • Opened: <span>{formatShiftOpenedAt(activeShift.openedAt)}</span></>
+                )}
+                {' '}• Drawer Cash Flow
               </p>
             </div>
           </div>
-          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+          <button
+            type="button"
+            className="modal-close-btn"
+            onClick={onClose}
+            aria-label="Close modal without saving"
+            title="Close without saving"
+            disabled={isSubmitting}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -125,134 +167,136 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="shift-modal-body">
-          {error && (
-            <div className="shift-modal-alert error">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="shift-modal-form">
+          <div className="shift-modal-body">
+            {error && (
+              <div className="shift-modal-alert error">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
 
-          {/* Movement Type Toggle */}
-          <div className="movement-toggle-row">
-            <button
-              type="button"
-              className={`movement-toggle-btn in ${movementType === 'cash_in' ? 'active' : ''}`}
-              onClick={() => handleTypeToggle('cash_in')}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2v14M19 9l-7 7-7-7M2 20h20"/>
-              </svg>
-              <span>Cash-In (Deposit into Drawer)</span>
-            </button>
-            <button
-              type="button"
-              className={`movement-toggle-btn out ${movementType === 'cash_out' ? 'active' : ''}`}
-              onClick={() => handleTypeToggle('cash_out')}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 16V2M5 9l7-7 7 7M2 20h20"/>
-              </svg>
-              <span>Cash-Out (Drawer Payout)</span>
-            </button>
-          </div>
-
-          {/* Amount input */}
-          <div className="form-group">
-            <label className="form-label">
-              <span>Amount (₹)</span>
-              <span className="req">*</span>
-            </label>
-            <div className="rupee-input-wrapper">
-              <div className="rupee-badge-prefix">₹</div>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                className="form-input rupee-input"
-                placeholder="0"
-                value={amountRupees}
-                onChange={(e) => setAmountRupees(e.target.value)}
-                autoFocus
-                required
-              />
-            </div>
-            <div className="quick-amount-pills">
-              {quickAmounts.map((amt) => {
-                const isSelected = parseFloat(amountRupees) === amt;
-                return (
-                  <button
-                    key={amt}
-                    type="button"
-                    className={`quick-pill ${isSelected ? 'active' : ''}`}
-                    onClick={() => setAmountRupees(amt.toString())}
-                  >
-                    <span className="quick-pill-currency">₹</span>
-                    <span className="quick-pill-val">{amt.toLocaleString('en-IN')}</span>
-                    {isSelected && (
-                      <span className="quick-pill-check">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Reason Select */}
-          <div className="form-group">
-            <label className="form-label">
-              <span>Reason / Category</span>
-              <span className="req">*</span>
-            </label>
-            <div className="select-input-wrapper">
-              <select
-                className="form-input form-select"
-                value={reasonCategory}
-                onChange={(e) => setReasonCategory(e.target.value)}
+            {/* Movement Type Toggle */}
+            <div className="movement-toggle-row">
+              <button
+                type="button"
+                className={`movement-toggle-btn in ${movementType === 'cash_in' ? 'active' : ''}`}
+                onClick={() => handleTypeToggle('cash_in')}
               >
-                {(movementType === 'cash_in' ? cashInReasons : cashOutReasons).map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v14M19 9l-7 7-7-7M2 20h20"/>
+                </svg>
+                <span>Cash-In (Deposit into Drawer)</span>
+              </button>
+              <button
+                type="button"
+                className={`movement-toggle-btn out ${movementType === 'cash_out' ? 'active' : ''}`}
+                onClick={() => handleTypeToggle('cash_out')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 16V2M5 9l7-7 7 7M2 20h20"/>
+                </svg>
+                <span>Cash-Out (Drawer Payout)</span>
+              </button>
             </div>
-          </div>
 
-          {reasonCategory.includes('Other') && (
+            {/* Amount input */}
             <div className="form-group">
               <label className="form-label">
-                <span>Specify Custom Reason</span>
+                <span>Amount (₹)</span>
                 <span className="req">*</span>
               </label>
+              <div className="rupee-input-wrapper">
+                <div className="rupee-badge-prefix">₹</div>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  className="form-input rupee-input"
+                  placeholder="0"
+                  value={amountRupees}
+                  onChange={(e) => setAmountRupees(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="quick-amount-pills">
+                {quickAmounts.map((amt) => {
+                  const isSelected = parseFloat(amountRupees.toString().replace(/,/g, '')) === amt;
+                  return (
+                    <button
+                      key={amt}
+                      type="button"
+                      className={`quick-pill ${isSelected ? 'active' : ''}`}
+                      onClick={() => setAmountRupees(amt.toString())}
+                    >
+                      <span className="quick-pill-currency">₹</span>
+                      <span className="quick-pill-val">{amt.toLocaleString('en-IN')}</span>
+                      {isSelected && (
+                        <span className="quick-pill-check">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Reason Select */}
+            <div className="form-group">
+              <label className="form-label">
+                <span>Reason / Category</span>
+                <span className="req">*</span>
+              </label>
+              <div className="select-input-wrapper">
+                <select
+                  className="form-input form-select"
+                  value={reasonCategory}
+                  onChange={(e) => setReasonCategory(e.target.value)}
+                >
+                  {(movementType === 'cash_in' ? cashInReasons : cashOutReasons).map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {reasonCategory.includes('Other') && (
+              <div className="form-group">
+                <label className="form-label">
+                  <span>Specify Custom Reason</span>
+                  <span className="req">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Enter specific reason..."
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            {/* Notes */}
+            <div className="form-group">
+              <label className="form-label">Audit Notes & Reference (Optional)</label>
               <input
                 type="text"
                 className="form-input"
-                placeholder="Enter specific reason..."
-                value={customReason}
-                onChange={(e) => setCustomReason(e.target.value)}
-                required
+                placeholder="e.g., Voucher #, Denominations or Safe bag id"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                maxLength={250}
               />
             </div>
-          )}
-
-          {/* Notes */}
-          <div className="form-group">
-            <label className="form-label">Audit Notes & Reference (Optional)</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="e.g., Voucher #, Denominations or Safe bag id"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={250}
-            />
           </div>
 
           <div className="modal-actions">
@@ -266,27 +310,28 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
             </button>
             <button
               type="submit"
+              id="btn-save-cash-movement"
               className={`btn ${movementType === 'cash_in' ? 'btn-success-gradient' : 'btn-warning-gradient'}`}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
                   <span className="spinner-sm"></span>
-                  <span>Recording...</span>
+                  <span>Saving Movement...</span>
                 </>
               ) : movementType === 'cash_in' ? (
                 <>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 2v14M19 9l-7 7-7-7M2 20h20"/>
                   </svg>
-                  <span>Confirm Cash-In (+)</span>
+                  <span>Record Cash-In (+)</span>
                 </>
               ) : (
                 <>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 16V2M5 9l7-7 7 7M2 20h20"/>
                   </svg>
-                  <span>Confirm Cash-Out (-)</span>
+                  <span>Record Cash-Out (-)</span>
                 </>
               )}
             </button>
