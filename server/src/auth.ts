@@ -10,9 +10,15 @@ import { passwordStamp, verifyToken } from './security.ts';
  */
 export function makeAuthenticator(secret: string) {
   return async (ctx: Ctx): Promise<AuthUser | null> => {
+    let tokenStr: string | null = null;
     const h = ctx.req.headers.authorization;
-    if (!h || !h.startsWith('Bearer ')) return null;
-    const p = verifyToken(h.slice(7).trim(), secret);
+    if (h && h.startsWith('Bearer ')) {
+      tokenStr = h.slice(7).trim();
+    } else if (ctx.query && typeof ctx.query.token === 'string' && ctx.query.token.trim()) {
+      tokenStr = ctx.query.token.trim();
+    }
+    if (!tokenStr) return null;
+    const p = verifyToken(tokenStr, secret);
     if (!p) return null;
     const u = await ctx.db.one<any>(
       'SELECT * FROM users WHERE id = ? AND tenant_id = ?',

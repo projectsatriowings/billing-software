@@ -274,6 +274,40 @@ body {
   user-select: none;
 }
 
+/* Sidebar Dropdown Chevron & Sub-items (Matching upper nav items) */
+.sidebar-chevron {
+  font-size: 0.68rem;
+  color: #e0e7ff;
+  opacity: 0.7;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: auto;
+  line-height: 1;
+}
+
+.sidebar-chevron.open {
+  transform: rotate(180deg);
+}
+
+.sidebar-nav-item:hover .sidebar-chevron {
+  opacity: 1;
+  color: #ffffff;
+}
+
+.sidebar-sub-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.65rem;
+  margin-left: 0.65rem;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-sub-items .sidebar-nav-item {
+  font-size: 0.88rem;
+  padding: 0.62rem 0.75rem;
+}
+
+
 .sidebar-nav-item {
   display: flex;
   align-items: center;
@@ -13915,3 +13949,1929 @@ body {
   transform: scale(0.97);
 }
 
+/* ==========================================================================
+   EXPENSES & FINANCE RESPONSIVE MODULE
+   ========================================================================== */
+.expense-view-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.expense-top-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.expense-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Summary KPI Cards */
+.expense-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.expense-kpi-card {
+  background: var(--bg-card, #ffffff);
+  padding: 1.15rem;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(49, 46, 129, 0.04);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+}
+
+.expense-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(49, 46, 129, 0.08);
+}
+
+.expense-kpi-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expense-kpi-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expense-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-kpi-sub {
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Filter Card & Datebar */
+.expense-filter-card {
+  background: var(--bg-card, #ffffff);
+  border-radius: 14px;
+  border: 1.5px solid var(--border, #e2e8f0);
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 2px 8px rgba(49, 46, 129, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.expense-datebar-tier {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.expense-preset-scroll {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.expense-preset-btn {
+  padding: 0.38rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expense-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(200px, 2fr) auto;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+/* Modal and Popovers */
+.expense-popover-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.expense-popover-box {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+/* Breakpoint Queries for Responsive Screen Sizes */
+@media (max-width: 1200px) {
+  .expense-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .expense-filter-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .expense-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .expense-filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .expense-datebar-tier {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .expense-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .expense-filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .expense-toolbar-actions {
+    width: 100%;
+    display: flex;
+  }
+  .expense-toolbar-actions > button {
+    flex: 1;
+    justify-content: center;
+  }
+  .expense-preset-scroll {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .expense-preset-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+  .expense-preset-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+}
+
+/* Modal Forms Responsiveness & Executive Theme */
+.expense-modal-box {
+  background: #ffffff;
+  border-radius: 20px;
+  max-width: 760px;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.75rem;
+  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.expense-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid #f1f5f9;
+  padding-bottom: 1rem;
+}
+
+.expense-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.expense-modal-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6d4aff 0%, #4f46e5 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.expense-form-card {
+  background: #f8fafc;
+  padding: 1.15rem 1.25rem;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: border-color 0.15s ease;
+}
+
+.expense-form-card:focus-within {
+  border-color: #c7d2fe;
+}
+
+.expense-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.expense-card-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.expense-badge-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.expense-badge-optional {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.expense-badge-auto {
+  background: #ede9fe;
+  color: #6d4aff;
+  border: 1px solid #ddd6fe;
+}
+
+.expense-form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.expense-form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
+.expense-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.expense-form-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.expense-form-label .required {
+  color: #dc2626;
+}
+
+.expense-input-control {
+  width: 100%;
+  height: 42px;
+  padding: 0 0.85rem;
+  font-size: 0.85rem;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+select.expense-input-control {
+  cursor: pointer;
+  appearance: auto;
+}
+
+.expense-input-control:hover {
+  border-color: #94a3b8;
+}
+
+.expense-input-control:focus {
+  border-color: #6d4aff;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.15);
+}
+
+.expense-calc-pill-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+  background: #ffffff;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1.5px dashed #c7d2fe;
+}
+
+.expense-calc-pill-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.expense-calc-pill-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.expense-calc-pill-val {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+}
+
+@media (max-width: 680px) {
+  .expense-modal-box {
+    padding: 1.15rem;
+    border-radius: 14px;
+    width: 96%;
+  }
+  .expense-form-row-2,
+  .expense-form-row-3 {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .expense-calc-pill-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE GRID UTILITIES FOR GST & STATUTORY DASHBOARDS
+   ========================================================================== */
+.grid {
+  display: grid;
+}
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-5 { gap: 1.25rem; }
+.gap-6 { gap: 1.5rem; }
+
+@media (min-width: 640px) {
+  .sm\:grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sm\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .md\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .lg\:grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .lg\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   GST FILING & STATUTORY SUITE: MODERN OVERVIEW & GSTR-3B WORKBOOK STYLES
+   ========================================================================== */
+
+.text-emerald-800 { color: #065f46; }
+.h-56 { height: 14rem; }
+.p-8 { padding: 2rem; }
+.animate-spin { animation: spin 1s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Outer View Wrappers */
+.gst-view-wrapper,
+.gstr3b-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Common Header Card */
+.gst-header-card,
+.gstr3b-header-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 8px -2px rgba(49, 46, 129, 0.05);
+}
+
+@media (min-width: 768px) {
+  .gst-header-card,
+  .gstr3b-header-card {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.gst-header-left,
+.gstr3b-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gst-header-title,
+.gstr3b-header-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #1e1b4b;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gst-header-subtitle,
+.gstr3b-header-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.gst-header-actions,
+.gstr3b-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* Period Controls & Pill Buttons */
+.gst-period-picker-group {
+  display: flex;
+  align-items: center;
+  background: #f8faff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 3px 6px;
+  gap: 4px;
+}
+
+.gst-period-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.gst-period-nav-btn {
+  background: transparent;
+  border: none;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gst-period-nav-btn:hover {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.gst-period-input {
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e1b4b;
+  outline: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.gst-pill-btn {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.gst-pill-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.gst-pill-btn.primary {
+  background: linear-gradient(135deg, #6d4aff 0%, #4f46e5 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.25);
+}
+
+.gst-pill-btn.primary:hover {
+  background: linear-gradient(135deg, #5b3ee0 0%, #4338ca 100%);
+  box-shadow: 0 6px 16px rgba(109, 74, 255, 0.35);
+}
+
+.gst-pill-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.gst-pill-btn.success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+}
+
+.gst-pill-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Main Net Position Hero Card */
+.gst-hero-liability {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 45%, #312e81 100%);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  box-shadow: 0 20px 40px -10px rgba(30, 27, 75, 0.35);
+  padding: 1.75rem 2rem;
+  color: #ffffff;
+}
+
+.gst-hero-liability::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(109, 74, 255, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.gst-hero-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .gst-hero-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gst-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.gst-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  background: rgba(167, 139, 250, 0.18);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #e0e7ff;
+  text-transform: uppercase;
+}
+
+.gst-hero-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 8px #a78bfa;
+}
+
+.gst-hero-amount {
+  font-size: 2.6rem;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.gst-hero-formula-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.gst-formula-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.gst-formula-chip strong {
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+}
+
+.gst-formula-op {
+  font-weight: 800;
+  color: #a78bfa;
+  font-size: 0.95rem;
+}
+
+.gst-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.gst-hero-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #6d4aff 0%, #4f46e5 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(109, 74, 255, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gst-hero-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(109, 74, 255, 0.5);
+  background: linear-gradient(135deg, #7c5cff 0%, #5850ec 100%);
+}
+
+.gst-hero-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gst-hero-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+/* 10 Required Summary Cards Grid */
+.gst-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 1rem;
+}
+
+.gst-kpi-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px -2px rgba(49, 46, 129, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.gst-kpi-card:hover {
+  transform: translateY(-3px);
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 24px -6px rgba(49, 46, 129, 0.12);
+}
+
+.gst-kpi-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.gst-kpi-label-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.gst-kpi-num-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+}
+
+.gst-kpi-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.gst-kpi-icon-pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.gst-kpi-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.gst-kpi-sub {
+  font-size: 0.74rem;
+  color: #64748b;
+  margin-top: 0.4rem;
+  line-height: 1.35;
+}
+
+/* Distinct Card Variants */
+.gst-kpi-card.output-gst {
+  border-color: #e0e7ff;
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+}
+.gst-kpi-card.output-gst .gst-kpi-val {
+  color: #4f46e5;
+}
+.gst-kpi-card.output-gst .gst-kpi-num-badge {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.gst-kpi-card.expense-gst {
+  border-color: #fef3c7;
+}
+.gst-kpi-card.expense-gst .gst-kpi-val {
+  color: #d97706;
+}
+
+.gst-kpi-card.eligible-itc {
+  border-color: #a7f3d0;
+  background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);
+  box-shadow: 0 4px 14px -3px rgba(16, 185, 129, 0.12);
+}
+.gst-kpi-card.eligible-itc .gst-kpi-title {
+  color: #065f46;
+}
+.gst-kpi-card.eligible-itc .gst-kpi-val {
+  color: #059669;
+}
+.gst-kpi-card.eligible-itc .gst-kpi-num-badge {
+  background: #d1fae5;
+  color: #065f46;
+}
+.gst-kpi-card.eligible-itc .gst-kpi-sub {
+  color: #047857;
+  font-weight: 600;
+}
+
+.gst-kpi-card.ineligible-itc {
+  border-color: #fecdd3;
+  background: linear-gradient(180deg, #fff1f2 0%, #ffffff 100%);
+}
+.gst-kpi-card.ineligible-itc .gst-kpi-title {
+  color: #9f1239;
+}
+.gst-kpi-card.ineligible-itc .gst-kpi-val {
+  color: #e11d48;
+}
+.gst-kpi-card.ineligible-itc .gst-kpi-num-badge {
+  background: #ffe4e6;
+  color: #9f1239;
+}
+
+.gst-kpi-card.diff-alert {
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+}
+.gst-kpi-card.diff-alert .gst-kpi-title {
+  color: #92400e;
+}
+.gst-kpi-card.diff-alert .gst-kpi-val {
+  color: #b45309;
+}
+.gst-kpi-card.diff-alert .gst-kpi-num-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.gst-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  width: fit-content;
+  margin-top: 0.3rem;
+}
+.gst-status-badge.ready {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.gst-status-badge.in-progress {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+.gst-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Recommended GST Compliance Journey */
+.gst-journey-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px -2px rgba(49, 46, 129, 0.05);
+}
+
+.gst-journey-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 1.25rem;
+}
+
+.gst-journey-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1e1b4b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.gst-journey-subtitle {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.gst-journey-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.15rem;
+}
+
+.gst-journey-step {
+  background: #f8faff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.gst-journey-step:hover {
+  background: #ffffff;
+  border-color: #a78bfa;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(109, 74, 255, 0.12);
+}
+
+.gst-journey-step-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.gst-journey-step-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #6d4aff;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gst-journey-step-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.gst-journey-step-desc {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.gst-journey-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #ffffff;
+  border: 1.5px solid #c7d2fe;
+  color: #4f46e5;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.55rem 0.95rem;
+  border-radius: 10px;
+  cursor: pointer;
+  width: fit-content;
+  transition: all 0.15s ease;
+}
+
+.gst-journey-action-btn:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+  gap: 0.6rem;
+}
+
+/* ==========================================================================
+   GSTR-3B SPECIFIC STYLES: AUDIT ALERT, HERO & ACCREDITED STATUTORY TABLES
+   ========================================================================== */
+
+/* Review Warning Alert */
+.gstr3b-alert-banner {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1.5px solid #fde68a;
+  border-radius: 16px;
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 4px 12px -2px rgba(245, 158, 11, 0.12);
+}
+
+@media (min-width: 768px) {
+  .gstr3b-alert-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gstr3b-alert-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.gstr3b-alert-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.35rem;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.12);
+}
+
+.gstr3b-alert-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gstr3b-alert-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #78350f;
+}
+
+.gstr3b-alert-desc {
+  font-size: 0.78rem;
+  color: #92400e;
+  line-height: 1.45;
+}
+
+.gstr3b-alert-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.gstr3b-alert-chip {
+  background: #ffffff;
+  border: 1px solid #fcd34d;
+  color: #b45309;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.15rem 0.55rem;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gstr3b-alert-btn {
+  background: #b45309;
+  color: #ffffff;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.6rem 1.15rem;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(180, 83, 9, 0.25);
+  transition: all 0.15s ease;
+}
+
+.gstr3b-alert-btn:hover {
+  background: #92400e;
+  transform: translateY(-1px);
+}
+
+/* GSTR-3B Hero Net Tax Payable Card */
+.gstr3b-hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #090d16 0%, #1e1b4b 50%, #312e81 100%);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.4);
+  padding: 1.75rem 2rem;
+  color: #ffffff;
+}
+
+.gstr3b-hero-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .gstr3b-hero-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gstr3b-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gstr3b-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  background: rgba(167, 139, 250, 0.2);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #c7d2fe;
+  text-transform: uppercase;
+}
+
+.gstr3b-hero-amount {
+  font-size: 2.6rem;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.gstr3b-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.gstr3b-meta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: 8px;
+}
+
+.gstr3b-meta-tag strong {
+  font-family: 'JetBrains Mono', monospace;
+  color: #e2e8f0;
+}
+
+.gstr3b-meta-tag.status-draft {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.gstr3b-meta-tag.status-reviewed {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.gstr3b-tax-split-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  min-width: 320px;
+}
+
+.gstr3b-tax-split-item {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gstr3b-tax-split-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gstr3b-tax-split-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+}
+
+/* Accredited Statutory Tables */
+.gstr3b-table-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px -2px rgba(49, 46, 129, 0.06);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.gstr3b-table-header {
+  background: linear-gradient(180deg, #f8faff 0%, #f1f5f9 100%);
+  border-bottom: 1.5px solid #e2e8f0;
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+@media (min-width: 768px) {
+  .gstr3b-table-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gstr3b-table-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.gstr3b-table-badge {
+  background: #6d4aff;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.gstr3b-table-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.gstr3b-table-note {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.gstr3b-table-wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.gstr3b-stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.gstr3b-stat-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.gstr3b-stat-table th.num,
+.gstr3b-stat-table td.num {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gstr3b-stat-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.gstr3b-stat-table tbody tr:hover td {
+  background: #f8faff;
+}
+
+/* Distinct Table Rows */
+.gstr3b-stat-table tr.section-header td {
+  background: #f5f3ff;
+  color: #4338ca;
+  font-weight: 800;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-top: 1.5px solid #e0e7ff;
+  border-bottom: 1.5px solid #e0e7ff;
+  padding: 0.55rem 1rem;
+}
+
+.gstr3b-stat-table tr.section-header.danger td {
+  background: #fff1f2;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+
+.gstr3b-stat-table tr.section-header.slate td {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.gstr3b-stat-table tr.highlight-summary td {
+  background: #ecfdf5 !important;
+  color: #065f46;
+  font-weight: 800;
+  border-top: 2px solid #a7f3d0;
+  border-bottom: 2px solid #a7f3d0;
+  font-size: 0.84rem;
+}
+
+.gstr3b-stat-table tr.highlight-summary td.num {
+  color: #047857;
+  font-size: 0.95rem;
+}
+
+.gstr3b-stat-table td.zero-val {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.gstr3b-stat-table td.active-val {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.gstr3b-stat-table td.eligible-val {
+  color: #059669;
+  font-weight: 800;
+}
+
+.gstr3b-stat-table td.reversal-val {
+  color: #e11d48;
+  font-weight: 700;
+}
+
+.gstr3b-stat-table td.cash-paid-cell {
+  background: #faf5ff;
+  color: #4338ca;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   GST IMPORT & EXPORT HUB STYLES
+   ========================================================================== */
+
+/* GSTR-2B Import Hero Banner */
+.gst-import-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4338ca 100%);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  box-shadow: 0 16px 36px -6px rgba(49, 46, 129, 0.28);
+  padding: 1.75rem 2rem;
+  color: #ffffff;
+}
+
+.gst-import-hero-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .gst-import-hero-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gst-import-hero-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  max-width: 750px;
+}
+
+.gst-import-icon-badge {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.gst-import-hero-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.gst-import-hero-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.gst-import-pill {
+  background: rgba(167, 139, 250, 0.2);
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  color: #c7d2fe;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gst-import-hero-desc {
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-top: 0.35rem;
+}
+
+.gst-import-steps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  font-size: 0.76rem;
+}
+
+.gst-import-step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.25rem 0.65rem;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.gst-import-step-arrow {
+  color: #a78bfa;
+  font-weight: 800;
+}
+
+.gst-import-hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #6d4aff 0%, #a78bfa 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 0.85rem 1.6rem;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(109, 74, 255, 0.45);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.gst-import-hero-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(109, 74, 255, 0.6);
+  background: linear-gradient(135deg, #7c5cff 0%, #b89dff 100%);
+}
+
+/* Featured 1-Click All-5-Registers CA Audit Package Banner */
+.gst-ca-bundle-banner {
+  background: linear-gradient(135deg, #faf5ff 0%, #ede9fe 50%, #e0e7ff 100%);
+  border: 2px solid #c7d2fe;
+  border-radius: 18px;
+  padding: 1.35rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  box-shadow: 0 6px 20px -4px rgba(109, 74, 255, 0.12);
+  transition: all 0.2s ease;
+}
+
+@media (min-width: 840px) {
+  .gst-ca-bundle-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.gst-ca-bundle-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.gst-ca-bundle-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6d4aff 0%, #4f46e5 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(109, 74, 255, 0.35);
+}
+
+.gst-ca-bundle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gst-ca-bundle-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gst-ca-bundle-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1e1b4b;
+  margin: 0;
+}
+
+.gst-ca-bundle-tag {
+  background: #6d4aff;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.15rem 0.55rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gst-ca-bundle-desc {
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.gst-ca-bundle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #6d4aff 0%, #4338ca 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.8rem 1.4rem;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(109, 74, 255, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gst-ca-bundle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(109, 74, 255, 0.45);
+  background: linear-gradient(135deg, #5b3ee0 0%, #3730a3 100%);
+}
+
+.gst-ca-bundle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 5 Individual Registers Grid */
+.gst-registers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.gst-register-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px -2px rgba(49, 46, 129, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.gst-register-card:hover {
+  transform: translateY(-3px);
+  border-color: #a78bfa;
+  box-shadow: 0 10px 26px -4px rgba(109, 74, 255, 0.14);
+}
+
+.gst-register-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.gst-register-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gst-register-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.gst-register-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+
+.gst-register-badge.emerald {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.gst-register-badge.indigo {
+  background: #e0e7ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.gst-register-badge.blue {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.gst-register-badge.purple {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+
+.gst-register-badge.amber {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.gst-register-format {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.gst-register-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.gst-register-desc {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
+  margin-top: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.gst-register-stats-pill {
+  background: #f8faff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.gst-register-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.gst-register-stat-label {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.gst-register-stat-val {
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+}
+
+.gst-register-stat-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #64748b;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.gst-register-download-btn {
+  margin-top: 1rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.65rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gst-register-download-btn:hover {
+  background: #f8faff;
+  border-color: #6d4aff;
+  color: #6d4aff;
+  transform: translateY(-1px);
+}
+
+.gst-register-download-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}

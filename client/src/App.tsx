@@ -62,6 +62,19 @@ import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
+import { PaymentsView } from './components/finance/PaymentsView.tsx';
+import { ExpensesView } from './components/finance/ExpensesView.tsx';
+import { CashBankView } from './components/finance/CashBankView.tsx';
+import { ReceivablesView } from './components/finance/ReceivablesView.tsx';
+import { PayablesView } from './components/finance/PayablesView.tsx';
+import { GstOverviewView } from './components/gst/GstOverviewView.tsx';
+import { GstSalesRegisterView } from './components/gst/GstSalesRegisterView.tsx';
+import { GstPurchaseRegisterView } from './components/gst/GstPurchaseRegisterView.tsx';
+import { ItcRegisterView } from './components/gst/ItcRegisterView.tsx';
+import { Gstr3bView } from './components/gst/Gstr3bView.tsx';
+import { Gstr1View } from './components/gst/Gstr1View.tsx';
+import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
+import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -151,7 +164,58 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'categories' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+    | 'dashboard'
+    | 'pos'
+    | 'shifts'
+    | 'items'
+    | 'categories'
+    | 'inventory'
+    | 'purchases'
+    | 'invoices'
+    | 'customers'
+    | 'suppliers'
+    | 'reports'
+    | 'settings'
+    | 'payments'
+    | 'expenses'
+    | 'cashbank'
+    | 'receivables'
+    | 'payables'
+    | 'gst-overview'
+    | 'gst-sales-register'
+    | 'gst-purchase-register'
+    | 'gst-itc-reconciliation'
+    | 'gst-gstr3b'
+    | 'gst-gstr1'
+    | 'gst-import-export'
+    | 'gst-filing-history'
+  >('dashboard');
+
+  // Collapsible sidebar accordion sections
+  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
+  const isGstTabActive = [
+    'gst-overview',
+    'gst-sales-register',
+    'gst-gstr1',
+    'gst-purchase-register',
+    'gst-itc-reconciliation',
+    'gst-gstr3b',
+    'gst-import-export',
+    'gst-filing-history',
+  ].includes(activeTab);
+
+  const [isAccountsOpen, setIsAccountsOpen] = useState<boolean>(() => isAccountsTabActive);
+  const [isGstOpen, setIsGstOpen] = useState<boolean>(() => isGstTabActive);
+
+  useEffect(() => {
+    if (isAccountsTabActive) setIsAccountsOpen(true);
+  }, [isAccountsTabActive]);
+
+  useEffect(() => {
+    if (isGstTabActive) setIsGstOpen(true);
+  }, [isGstTabActive]);
+
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -663,6 +727,12 @@ export function App() {
   useEffect(() => {
     if (!user || !shop) return;
     if (!can(user.role as any, 'purchases') && activeTab === 'purchases') {
+      setActiveTab('pos');
+    }
+    if (!can(user.role as any, 'expenses') && activeTab === 'expenses') {
+      setActiveTab('pos');
+    }
+    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
     loadItems();
@@ -3328,17 +3398,17 @@ export function App() {
               </button>
             )}
 
-            {/* 6. Bills & Invoices: Visible to all (Cashier views recent counter invoices) */}
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
-              onClick={() => setActiveTab('invoices')}
-            >
-              <span className="nav-icon">📄</span>
-              <span className="nav-text">
-                {user.role === 'cashier' ? 'Recent Bills' : 'Bills & Invoices'}
-              </span>
-            </button>
+            {/* Cashier Recent Bills */}
+            {user.role === 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                onClick={() => setActiveTab('invoices')}
+              >
+                <span className="nav-icon">📄</span>
+                <span className="nav-text">Recent Bills</span>
+              </button>
+            )}
 
             {/* 7. Customers: Only for Store Manager and Super Admin */}
             {user.role !== 'cashier' && (
@@ -3366,44 +3436,199 @@ export function App() {
               </button>
             )}
 
-            {/* 9. Purchases & Inward: Only for Store Manager and Super Admin if permitted */}
-            {user.role !== 'cashier' && can(user?.role as any, 'purchases') && (
-              <button
-                type="button"
-                className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('purchases');
-                  loadPurchases();
-                }}
-              >
-                <span className="nav-icon">📥</span>
-                <span className="nav-text">Purchases & Inward</span>
-                <span className="nav-count-badge">{purchases.length}</span>
-              </button>
-            )}
-
-            {/* Management Section: Only for Store Manager and Super Admin */}
+            {/* ACCOUNTS & FINANCE - Matching upper section nav items */}
             {user.role !== 'cashier' && (
               <>
-                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
                 <button
                   type="button"
-                  className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('reports')}
+                  className="sidebar-nav-item"
+                  onClick={() => setIsAccountsOpen(!isAccountsOpen)}
+                  aria-expanded={isAccountsOpen}
                 >
-                  <span className="nav-icon">📊</span>
-                  <span className="nav-text">Analytics & Reports</span>
+                  <span className="nav-icon">💼</span>
+                  <span className="nav-text">Accounts &amp; Finance</span>
+                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>▼</span>
                 </button>
-                {user.role === 'owner' && (
-                  <button
-                    type="button"
-                    className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('settings')}
-                  >
-                    <span className="nav-icon">⚙️</span>
-                    <span className="nav-text">Business Packs</span>
-                  </button>
+                
+                {isAccountsOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('invoices')}
+                    >
+                      <span className="nav-icon">🧾</span>
+                      <span className="nav-text">Sales &amp; Invoices</span>
+                    </button>
+
+                    {can(user?.role as any, 'purchases') && (
+                      <button
+                        type="button"
+                        className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveTab('purchases');
+                          loadPurchases();
+                        }}
+                      >
+                        <span className="nav-icon">📥</span>
+                        <span className="nav-text">Purchases &amp; Inward</span>
+                        <span className="nav-count-badge">{purchases.length}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payments')}
+                    >
+                      <span className="nav-icon">💳</span>
+                      <span className="nav-text">Payments</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'expenses' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('expenses')}
+                    >
+                      <span className="nav-icon">💼</span>
+                      <span className="nav-text">Expenses</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('cashbank')}
+                    >
+                      <span className="nav-icon">🏦</span>
+                      <span className="nav-text">Cash &amp; Bank</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payables')}
+                    >
+                      <span className="nav-icon">📉</span>
+                      <span className="nav-text">Payables</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('reports')}
+                    >
+                      <span className="nav-icon">📊</span>
+                      <span className="nav-text">Financial Reports</span>
+                    </button>
+                  </div>
                 )}
+              </>
+            )}
+
+            {/* GST FILING - Matching upper section nav items */}
+            {user.role !== 'cashier' && (
+              <>
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => setIsGstOpen(!isGstOpen)}
+                  aria-expanded={isGstOpen}
+                >
+                  <span className="nav-icon">🏛️</span>
+                  <span className="nav-text">GST Filing</span>
+                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>▼</span>
+                </button>
+                
+                {isGstOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-overview' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-overview')}
+                    >
+                      <span className="nav-icon">🏛️</span>
+                      <span className="nav-text">GST Overview</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-sales-register')}
+                    >
+                      <span className="nav-icon">📋</span>
+                      <span className="nav-text">Sales Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr1')}
+                    >
+                      <span className="nav-icon">📑</span>
+                      <span className="nav-text">GSTR-1</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-purchase-register')}
+                    >
+                      <span className="nav-icon">📦</span>
+                      <span className="nav-text">Purchase Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-itc-reconciliation')}
+                    >
+                      <span className="nav-icon">⚖️</span>
+                      <span className="nav-text">ITC Register &amp; Reconciliation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr3b' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr3b')}
+                    >
+                      <span className="nav-icon">📄</span>
+                      <span className="nav-text">GSTR-3B Preparation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-import-export')}
+                    >
+                      <span className="nav-icon">📥</span>
+                      <span className="nav-text">Import &amp; Export</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-filing-history')}
+                    >
+                      <span className="nav-icon">🕰️</span>
+                      <span className="nav-text">Filing History</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Management Section: Only for Super Admin */}
+            {user.role === 'owner' && (
+              <>
+                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>CONFIGURATION</div>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('settings')}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  <span className="nav-text">Business Packs</span>
+                </button>
               </>
             )}
           </nav>
@@ -3503,10 +3728,23 @@ export function App() {
                 {activeTab === 'inventory' && '🏬 Inventory Hub & Stock Operations'}
                 {activeTab === 'purchases' && '📥 Purchases & Stock Inward'}
                 {activeTab === 'invoices' && '🧾 Sales Invoices & Bills'}
-                {activeTab === 'customers' && '👥 Customer Directory & Khata'}
+                {activeTab === 'customers' && '👥 Customer Directory'}
                 {activeTab === 'suppliers' && '🚚 Supplier Directory'}
                 {activeTab === 'reports' && '📊 Business Analytics & Reports'}
                 {activeTab === 'settings' && '⚙️ Business Configuration & Settings'}
+                {activeTab === 'payments' && '💳 Supplier Payments & Disbursements'}
+                {activeTab === 'expenses' && '💼 Business Operational Expenses'}
+                {activeTab === 'cashbank' && '🏦 Cash & Bank Reconciliation'}
+                {activeTab === 'receivables' && '📈 Accounts Receivable & Customer Dues'}
+                {activeTab === 'payables' && '📉 Accounts Payable & Vendor Balances'}
+                {activeTab === 'gst-overview' && '🏛️ GST Compliance & Filing Overview'}
+                {activeTab === 'gst-sales-register' && '📋 GST Sales Register (Outward)'}
+                {activeTab === 'gst-purchase-register' && '📦 GST Purchase & Inward Register'}
+                {activeTab === 'gst-itc-reconciliation' && '⚖️ Input Tax Credit (ITC) Register & Reconciliation'}
+                {activeTab === 'gst-gstr3b' && '📄 GSTR-3B Preparation & Filing'}
+                {activeTab === 'gst-gstr1' && '📑 GSTR-1 Outward Supplies'}
+                {activeTab === 'gst-import-export' && '📥 GST Import & Export Hub'}
+                {activeTab === 'gst-filing-history' && '🕰️ GST Return Filing History'}
               </h1>
               <span className="content-page-subtitle">
                 {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
@@ -3514,10 +3752,23 @@ export function App() {
                 {activeTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
                 {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                 {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
-                {activeTab === 'customers' && 'Manage customer accounts, GSTINs, and khata balances'}
+                {activeTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and purchase history'}
                 {activeTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
                 {activeTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
                 {activeTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
+                {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
+                {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
+                {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
+                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and khata receivables'}
+                {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
+                {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
+                {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
+                {activeTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
+                {activeTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
+                {activeTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
+                {activeTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
+                {activeTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                {activeTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
               </span>
             </div>
 
@@ -7361,6 +7612,129 @@ export function App() {
 
             {/* Strict Multi-Tenant Data Isolation Banner (Settings Tab Only) */}
             <StrictIsolationBanner />
+          </div>
+        )}
+
+        {/* ACCOUNTS & FINANCE TAB VIEWS */}
+        {activeTab === 'payments' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PaymentsView
+              onOpenCustomerKhata={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+              onOpenSupplierLedger={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'expenses' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ExpensesView
+              userRole={user.role}
+              userLocation={shop?.locations?.[0] || shop?.address}
+              suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
+            />
+          </div>
+        )}
+
+        {activeTab === 'cashbank' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <CashBankView />
+          </div>
+        )}
+
+        {activeTab === 'receivables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ReceivablesView
+              onCollectPayment={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'payables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PayablesView
+              onPaySupplier={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {/* GST FILING TAB VIEWS */}
+        {activeTab === 'gst-overview' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-sales-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-purchase-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-itc-reconciliation' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr3b' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr1' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-import-export' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-filing-history' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
       </main>

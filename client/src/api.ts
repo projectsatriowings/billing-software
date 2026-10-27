@@ -1,8 +1,44 @@
 // Typed client API wrapper for Adaptive Billing Platform
 
-export const getToken = (): string => localStorage.getItem('billing_token') || '';
+export const getToken = (): string =>
+  localStorage.getItem('billing_token') || localStorage.getItem('token') || '';
 export const setToken = (t: string) => localStorage.setItem('billing_token', t);
-export const clearToken = () => localStorage.removeItem('billing_token');
+export const clearToken = () => {
+  localStorage.removeItem('billing_token');
+  localStorage.removeItem('token');
+};
+
+export function withAuthToken(url: string): string {
+  const token = getToken();
+  if (!token) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
+}
+
+export async function downloadFile(url: string, defaultFilename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const msg =
+      errorData?.error?.message ||
+      (typeof errorData?.error === 'string' ? errorData.error : null) ||
+      errorData?.message ||
+      `Export failed with status ${res.status}`;
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = defaultFilename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(objectUrl);
+  document.body.removeChild(a);
+}
 
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
@@ -811,4 +847,251 @@ export const updateBranch = (id: string, data: Partial<Branch>) =>
   api<Branch>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const fetchBranchSummary = (id: string) =>
   api<BranchSummary>(`/api/branches/${id}/summary`);
+
+// Re-export GST and Expense shared types and utilities
+export type {
+  Expense,
+  ExpenseCategory,
+  GstTreatment,
+  ItcEligibility,
+  ItcMatchingStatus,
+  ItcReviewStatus,
+  ItcRegisterItem,
+  Gstr2bRecord,
+  Gstr2bImportSummary,
+  Gstr3bSummary,
+  GstOverviewMetrics,
+} from '../../shared/types.ts';
+
+export {
+  calcExpense,
+  STANDARD_EXPENSE_CATEGORIES,
+} from '../../shared/gst.ts';
+
+// --------------------------------------------------------------------------
+// Expenses APIs
+// --------------------------------------------------------------------------
+export const fetchExpenses = (params: Record<string, string> = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return api<{
+    expenses: import('../../shared/types.ts').Expense[];
+    totalCount: number;
+    summary: {
+      totalMinor: number;
+      taxableMinor: number;
+      totalGstMinor: number;
+      itcMinor: number;
+      paidMinor: number;
+      balanceMinor: number;
+    };
+    page: number;
+    limit: number;
+  }>(`/api/expenses${query ? '?' + query : ''}`);
+};
+
+export const fetchExpenseCategories = () =>
+  api<{ categories: typeof import('../../shared/gst.ts').STANDARD_EXPENSE_CATEGORIES }>('/api/expenses/categories');
+
+export const createExpense = (data: any) =>
+  api<{ expense: import('../../shared/types.ts').Expense }>('/api/expenses', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchExpense = (id: string) =>
+  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`);
+
+export const updateExpense = (id: string, data: any) =>
+  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+
+export const voidExpense = (id: string, reason: string) =>
+  api<{ expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+// --------------------------------------------------------------------------
+// GST Filing, ITC Register & Reconciliation APIs
+// --------------------------------------------------------------------------
+export const fetchGstOverview = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<import('../../shared/types.ts').GstOverviewMetrics>(`/api/gst/overview?${q.toString()}`);
+};
+
+export const fetchGstSalesRegister = (period?: string) => {
+  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+  return api<{
+    period: string;
+    invoices: any[];
+    summary: {
+      totalInvoices: number;
+      b2bCount: number;
+      b2cCount: number;
+      totalTaxableMinor: number;
+      totalGstMinor: number;
+      totalAmountMinor: number;
+    };
+  }>(`/api/gst/sales-register${q}`);
+};
+
+export const fetchGstPurchaseRegister = (period?: string) => {
+  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+  return api<{
+    period: string;
+    items: any[];
+    summary: {
+      totalRecords: number;
+      purchasesCount: number;
+      expensesCount: number;
+      totalTaxableMinor: number;
+      totalGstMinor: number;
+      totalItcMinor: number;
+      totalAmountMinor: number;
+    };
+  }>(`/api/gst/purchase-register${q}`);
+};
+
+export const fetchItcRegister = (period?: string) => {
+  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+  return api<{
+    period: string;
+    items: import('../../shared/types.ts').ItcRegisterItem[];
+    summary: {
+      totalRecords: number;
+      totalPotentialItcMinor: number;
+      totalReviewedEligibleItcMinor: number;
+      totalIneligibleItcMinor: number;
+      pendingReviewCount: number;
+      matchedCount: number;
+      mismatchCount: number;
+      missingIn2BCount: number;
+    };
+  }>(`/api/gst/itc-register${q}`);
+};
+
+export const submitItcReview = (data: {
+  docType: 'purchase' | 'expense';
+  docId: string;
+  returnPeriod: string;
+  eligibilityStatus: string;
+  reviewedEligibleItcMinor: number;
+  reason: string;
+}) =>
+  api<{ ok: boolean; review: any }>('/api/gst/itc-review', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const importGstr2b = (data: {
+  gstin: string;
+  returnPeriod: string;
+  filename: string;
+  fileFormat: 'json' | 'csv';
+  fileContent: any;
+  forceOverwrite?: boolean;
+}) =>
+  api<{
+    ok: boolean;
+    importId: string;
+    filename: string;
+    returnPeriod: string;
+    totalRecords: number;
+    matchedCount: number;
+    mismatchedCount: number;
+    missingInBooksCount: number;
+  }>('/api/gst/gstr2b/import', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchGstr3b = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<import('../../shared/types.ts').Gstr3bSummary>(`/api/gst/gstr3b?${q.toString()}`);
+};
+
+export const saveGstr3b = (data: {
+  gstin: string;
+  returnPeriod: string;
+  status: 'draft' | 'reviewed' | 'filed' | 'exported';
+  summary?: any;
+  notes?: string;
+}) =>
+  api<{ ok: boolean; id: string; status: string }>('/api/gst/gstr3b/save', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchGstHistory = () =>
+  api<{
+    history: {
+      id: string;
+      returnType: string;
+      returnPeriod: string;
+      gstin: string;
+      status: string;
+      summary: any;
+      notes?: string | null;
+      filedByName: string;
+      filedAt: string;
+      createdAt: string;
+    }[];
+  }>('/api/gst/history');
+
+// --------------------------------------------------------------------------
+// Accounts & Finance Additional Overview APIs
+// --------------------------------------------------------------------------
+export const fetchFinanceCashBank = () =>
+  api<{
+    todayDate: string;
+    collectionsByMethod: { method: string; totalMinor: number }[];
+    supplierPaymentsByMethod: { method: string; totalMinor: number }[];
+    expensesByMethod: { method: string; totalMinor: number }[];
+    cashDrawer: {
+      totalCashCollectionsMinor: number;
+      cashMovementsInMinor: number;
+      cashMovementsOutMinor: number;
+    };
+    digitalBank: {
+      totalUpiMinor: number;
+      totalCardMinor: number;
+      totalBankMinor: number;
+    };
+  }>('/api/finance/cash-bank');
+
+export const fetchFinanceReceivables = () =>
+  api<{
+    totalReceivableMinor: number;
+    customersCount: number;
+    customers: {
+      customerId: string;
+      customerName: string;
+      customerPhone?: string | null;
+      totalDueMinor: number;
+      openInvoicesCount: number;
+      oldestInvoiceDate: string;
+    }[];
+  }>('/api/finance/receivables');
+
+export const fetchFinancePayables = () =>
+  api<{
+    totalPayableMinor: number;
+    suppliersCount: number;
+    suppliers: {
+      supplierId: string;
+      supplierName: string;
+      supplierPhone?: string | null;
+      supplierGstin?: string | null;
+      totalPayableMinor: number;
+      openPurchasesCount: number;
+      oldestBillDate: string;
+    }[];
+  }>('/api/finance/payables');
+
 

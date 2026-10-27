@@ -1136,6 +1136,155 @@ export function registerPayments(r: Router) {
     );
     return new HtmlResponse(html);
   });
+
+  // --------------------------------------------------------------------------
+  // Financial Overview Endpoints for Accounts & Finance
+  // --------------------------------------------------------------------------
+
+  // Cash & Bank Overview
+  r.get('/api/finance/cash-bank', requirePerm('reports'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    // 1. Drawer Cash collections today
+    const cashSales = await ctx.db.one<{ total: number }>(
+      `SELECT COALESCE(SUM(paid_minor), 0)::bigint AS total
+       FROM invoices
+       WHERE tenant_id = ? AND bdate = ? AND status = 'posted' AND kind = 'sale'`,
+      [tenantId, todayStr],
+    );
+
+    // Collections by method
+    const collectionsByMethod = await ctx.db.query<{ method: string; total: number }>(
+      `SELECT COALESCE(mode, method) AS method, COALESCE(SUM(amount_minor), 0)::bigint AS total
+       FROM payments
+       WHERE tenant_id = ? AND (status IS NULL OR status = 'posted')
+       GROUP BY COALESCE(mode, method)
+       ORDER BY total DESC`,
+      [tenantId],
+    );
+
+    // Supplier payments out by method
+    const supplierPaymentsByMethod = await ctx.db.query<{ method: string; total: number }>(
+      `SELECT COALESCE(method, 'cash') AS method, COALESCE(SUM(amount_minor), 0)::bigint AS total
+       FROM payments
+       WHERE tenant_id = ? AND kind = 'supplier_payment' AND status = 'posted'
+       GROUP BY COALESCE(method, 'cash')
+       ORDER BY total DESC`,
+      [tenantId],
+    );
+
+    // Cash movements from active shifts
+    const cashMovements = await ctx.db.query<{ movement_type: string; total: number }>(
+      `SELECT movement_type, COALESCE(SUM(amount_minor), 0)::bigint AS total
+       FROM cash_movements
+       WHERE tenant_id = ?
+       GROUP BY movement_type`,
+      [tenantId],
+    );
+
+    // Expenses paid by method
+    const expensesByMethod = await ctx.db.query<{ payment_method: string; total: number }>(
+      `SELECT payment_method, COALESCE(SUM(paid_minor), 0)::bigint AS total
+       FROM expenses
+       WHERE tenant_id = ? AND status = 'posted'
+       GROUP BY payment_method`,
+      [tenantId],
+    );
+
+    const getSum = (arr: any[], key: string, valKey = 'total') =>
+      arr.reduce((acc, row) => (row[key] ? acc + Number(row[valKey]) : acc), 0);
+
+    const cashIn = Number(cashMovements.find((m: any) => (m.movementType ?? m.movement_type) === 'cash_in')?.total || 0);
+    const cashOut = Number(cashMovements.find((m: any) => (m.movementType ?? m.movement_type) === 'cash_out')?.total || 0);
+
+    return {
+      todayDate: todayStr,
+      collectionsByMethod: collectionsByMethod.map((c: any) => ({ method: c.method, totalMinor: Number(c.total) })),
+      supplierPaymentsByMethod: supplierPaymentsByMethod.map((s: any) => ({ method: s.method, totalMinor: Number(s.total) })),
+      expensesByMethod: expensesByMethod.map((e: any) => ({ method: e.paymentMethod ?? e.payment_method, totalMinor: Number(e.total) })),
+      cashDrawer: {
+        totalCashCollectionsMinor: Number(collectionsByMethod.find((c: any) => c.method === 'cash')?.total || 0),
+        cashMovementsInMinor: cashIn,
+        cashMovementsOutMinor: cashOut,
+      },
+      digitalBank: {
+        totalUpiMinor: Number(collectionsByMethod.find((c: any) => c.method === 'upi')?.total || 0),
+        totalCardMinor: Number(collectionsByMethod.find((c: any) => c.method === 'card')?.total || 0),
+        totalBankMinor: Number(collectionsByMethod.find((c: any) => c.method === 'bank')?.total || 0),
+      },
+    };
+  });
+
+  // Receivables (Customer Outstanding Dues & Aging)
+  r.get('/api/finance/receivables', requirePerm('reports'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+
+    const customersWithDues = await ctx.db.query(
+      `SELECT
+        p.id AS customer_id, p.name AS customer_name, p.phone AS customer_phone,
+        COALESCE(SUM(i.balance_minor), 0)::bigint AS total_due_minor,
+        COUNT(i.id)::int AS open_invoices_count,
+        MIN(i.bdate) AS oldest_invoice_date
+       FROM parties p
+       JOIN invoices i ON i.party_id = p.id AND i.tenant_id = p.tenant_id
+       WHERE p.tenant_id = ? AND p.type = 'customer' AND i.status = 'posted' AND i.balance_minor > 0
+       GROUP BY p.id, p.name, p.phone
+       ORDER BY total_due_minor DESC`,
+      [tenantId],
+    );
+
+    const totalReceivableMinor = customersWithDues.reduce((sum, c: any) => sum + Number(c.totalDueMinor ?? c.total_due_minor ?? 0), 0);
+
+    return {
+      totalReceivableMinor,
+      customersCount: customersWithDues.length,
+      customers: customersWithDues.map((c: any) => ({
+        customerId: c.customerId ?? c.customer_id,
+        customerName: c.customerName ?? c.customer_name ?? 'Customer',
+        customerPhone: c.customerPhone ?? c.customer_phone,
+        totalDueMinor: Number(c.totalDueMinor ?? c.total_due_minor ?? 0),
+        openInvoicesCount: Number(c.openInvoicesCount ?? c.open_invoices_count ?? 0),
+        oldestInvoiceDate: c.oldestInvoiceDate ?? c.oldest_invoice_date,
+      })),
+    };
+  });
+
+  // Payables (Supplier Outstanding Dues & Aging)
+  r.get('/api/finance/payables', requirePerm('reports'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+
+    const suppliersWithPayables = await ctx.db.query(
+      `SELECT
+        part.id AS supplier_id, part.name AS supplier_name, part.phone AS supplier_phone,
+        part.gstin AS supplier_gstin,
+        COALESCE(SUM(pur.balance_minor), 0)::bigint AS total_payable_minor,
+        COUNT(pur.id)::int AS open_purchases_count,
+        MIN(COALESCE(pur.purchase_date, pur.bdate)) AS oldest_bill_date
+       FROM parties part
+       JOIN purchases pur ON pur.supplier_id = part.id AND pur.tenant_id = part.tenant_id
+       WHERE part.tenant_id = ? AND part.type = 'supplier' AND pur.status != 'voided' AND pur.balance_minor > 0
+       GROUP BY part.id, part.name, part.phone, part.gstin
+       ORDER BY total_payable_minor DESC`,
+      [tenantId],
+    );
+
+    const totalPayableMinor = suppliersWithPayables.reduce((sum, s: any) => sum + Number(s.totalPayableMinor ?? s.total_payable_minor ?? 0), 0);
+
+    return {
+      totalPayableMinor,
+      suppliersCount: suppliersWithPayables.length,
+      suppliers: suppliersWithPayables.map((s: any) => ({
+        supplierId: s.supplierId ?? s.supplier_id,
+        supplierName: s.supplierName ?? s.supplier_name ?? 'Supplier',
+        supplierPhone: s.supplierPhone ?? s.supplier_phone,
+        supplierGstin: s.supplierGstin ?? s.supplier_gstin,
+        totalPayableMinor: Number(s.totalPayableMinor ?? s.total_payable_minor ?? 0),
+        openPurchasesCount: Number(s.openPurchasesCount ?? s.open_purchases_count ?? 0),
+        oldestBillDate: s.oldestBillDate ?? s.oldest_bill_date,
+      })),
+    };
+  });
 }
 
 function formatPaymentWithAllocations(p: any, allocations: any[] = [], balanceAfterMinor?: number) {
