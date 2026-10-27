@@ -33,6 +33,9 @@ import {
   type SupplierLedgerEntry,
   type SupplierPaymentRecord,
   deleteProduct,
+  searchHsnSac,
+  suggestHsnForProduct,
+  type HsnItem,
 } from './api';
 import { moneyInWords } from '../../shared/money.ts';
 import { qrSvg } from '../../shared/qr.ts';
@@ -752,6 +755,12 @@ export function App() {
   const [itemFormReorder, setItemFormReorder] = useState('0');
   const [itemFormMinStock, setItemFormMinStock] = useState('0');
   const [itemFormSupplierId, setItemFormSupplierId] = useState('');
+  // HSN & SAC Smart Directory states
+  const [hsnSuggestions, setHsnSuggestions] = useState<HsnItem[]>([]);
+  const [hsnSearchResults, setHsnSearchResults] = useState<HsnItem[]>([]);
+  const [isHsnSearching, setIsHsnSearching] = useState(false);
+  const [showHsnDropdown, setShowHsnDropdown] = useState(false);
+  const [selectedHsnDesc, setSelectedHsnDesc] = useState('');
 
   // Master Data: Party Form Modal (Customers & Suppliers, Add & Edit)
   const [showPartyModal, setShowPartyModal] = useState(false);
@@ -2180,6 +2189,10 @@ export function App() {
     setItemFormReorder('10');
     setItemFormMinStock('5');
     setItemFormSupplierId('');
+    setHsnSuggestions([]);
+    setHsnSearchResults([]);
+    setSelectedHsnDesc('');
+    setShowHsnDropdown(false);
     setShowItemModal(true);
   };
 
@@ -2199,8 +2212,49 @@ export function App() {
     setItemFormReorder(String(((item.reorderMilli ?? item.reorderLevelMilli) || 0) / 1000));
     setItemFormMinStock(String((item.minStockMilli || 0) / 1000));
     setItemFormSupplierId(item.preferredSupplierId || '');
+    setHsnSuggestions([]);
+    setHsnSearchResults([]);
+    setSelectedHsnDesc('');
+    setShowHsnDropdown(false);
     setShowItemModal(true);
   };
+
+  // Auto-suggest HSN codes when typing Product Name or Category in Item Modal
+  useEffect(() => {
+    if (!showItemModal || !itemFormName.trim()) {
+      setHsnSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await suggestHsnForProduct(itemFormName, itemFormCategory);
+        setHsnSuggestions(res.suggestions || []);
+      } catch (err) {
+        console.warn('Failed to fetch HSN suggestions', err);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [itemFormName, itemFormCategory, showItemModal]);
+
+  // Live search when typing inside HSN / SAC field
+  useEffect(() => {
+    if (!showItemModal || !itemFormHsn.trim() || itemFormHsn.trim().length < 2) {
+      setHsnSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setIsHsnSearching(true);
+        const res = await searchHsnSac(itemFormHsn, 15);
+        setHsnSearchResults(res.results || []);
+      } catch (err) {
+        console.warn('Failed to search HSN', err);
+      } finally {
+        setIsHsnSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [itemFormHsn, showItemModal]);
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -8561,6 +8615,49 @@ export function App() {
                   onChange={(e) => setItemFormName(e.target.value)}
                   placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
                 />
+                {hsnSuggestions.length > 0 && (
+                  <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>💡 Suggested HSN for "{itemFormName}":</span>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {hsnSuggestions.map((sug) => {
+                        const isSelected = itemFormHsn === sug.code;
+                        return (
+                          <button
+                            key={sug.code}
+                            type="button"
+                            onClick={() => {
+                              setItemFormHsn(sug.code);
+                              setSelectedHsnDesc(sug.desc);
+                              setShowHsnDropdown(false);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '5px',
+                              fontSize: '0.76rem',
+                              cursor: 'pointer',
+                              border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
+                              background: isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(30, 41, 59, 0.95)',
+                              color: isSelected ? '#38bdf8' : '#e2e8f0',
+                            }}
+                            title={sug.desc}
+                          >
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{sug.code}</span>
+                            <span style={{ color: '#94a3b8', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {sug.desc}
+                            </span>
+                            {isSelected && <span style={{ color: '#38bdf8' }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -8652,15 +8749,130 @@ export function App() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">HSN / SAC Code</label>
+                <div className="form-group" style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
+                    <span style={{ fontSize: '0.72rem', color: '#38bdf8' }}>
+                      {isHsnSearching ? '🔍 Searching 22k+ items...' : '⚡ GST Directory'}
+                    </span>
+                  </div>
                   <input
                     type="text"
                     className="form-input"
                     value={itemFormHsn}
-                    onChange={(e) => setItemFormHsn(e.target.value)}
-                    placeholder="e.g. 3004 for medicines, 1006 for rice"
+                    onChange={(e) => {
+                      setItemFormHsn(e.target.value);
+                      setShowHsnDropdown(true);
+                      if (!e.target.value) setSelectedHsnDesc('');
+                    }}
+                    onFocus={() => {
+                      if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
+                    }}
+                    placeholder="Search code or name (e.g. 1006, rice, 3004)"
+                    autoComplete="off"
                   />
+                  {/* Live HSN Search Dropdown */}
+                  {showHsnDropdown && hsnSearchResults.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        maxHeight: '230px',
+                        overflowY: 'auto',
+                        background: '#0f172a',
+                        border: '1px solid #38bdf8',
+                        borderRadius: '8px',
+                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
+                        zIndex: 1050,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.7rem',
+                          color: '#94a3b8',
+                          borderBottom: '1px solid #1e293b',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          background: '#1e293b',
+                        }}
+                      >
+                        <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowHsnDropdown(false)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem' }}
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+                      {hsnSearchResults.map((item) => (
+                        <div
+                          key={item.code}
+                          onClick={() => {
+                            setItemFormHsn(item.code);
+                            setSelectedHsnDesc(item.desc);
+                            setShowHsnDropdown(false);
+                          }}
+                          style={{
+                            padding: '0.45rem 0.65rem',
+                            borderBottom: '1px solid #1e293b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.15rem',
+                            background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.background =
+                              itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
+                          }
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                              {item.code}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '0.65rem',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                background: item.type === 'SAC' ? '#0284c7' : '#334155',
+                                color: '#e2e8f0',
+                              }}
+                            >
+                              {item.type}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedHsnDesc && (
+                    <div
+                      style={{
+                        fontSize: '0.72rem',
+                        color: '#10b981',
+                        marginTop: '0.3rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        lineHeight: '1.2',
+                      }}
+                    >
+                      <span>✓</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedHsnDesc}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">GST Tax Rate</label>
