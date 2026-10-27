@@ -257,7 +257,8 @@ export function registerShifts(r: Router) {
     const userId = ctx.user!.id;
 
     const openingCashMinor = V.int(b.openingCashMinor ?? 0, 'Opening cash float (paise)', { min: 0 });
-    const location = V.optStr(b.location, 'Location', 50) || 'MAIN';
+    const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
+    const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
     const notes = V.optStr(b.notes, 'Opening notes', 500);
 
     return ctx.db.tx(async (q) => {
@@ -291,9 +292,9 @@ export function registerShifts(r: Router) {
       await q.exec(
         `INSERT INTO shifts (
           id, tenant_id, shift_number, user_id, status,
-          opened_at, opening_cash_minor, location, note,
+          opened_at, opening_cash_minor, location, counter, note,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`,
         [
           shiftId,
           tenantId,
@@ -302,6 +303,7 @@ export function registerShifts(r: Router) {
           now,
           openingCashMinor,
           location,
+          counter,
           notes || null,
           now,
           now,
@@ -312,7 +314,7 @@ export function registerShifts(r: Router) {
         action: 'shift.open',
         entity: 'shift',
         entityId: shiftId,
-        detail: { shiftNumber, openingCashMinor, location },
+        detail: { shiftNumber, openingCashMinor, location, counter },
       });
 
       return {
@@ -323,6 +325,7 @@ export function registerShifts(r: Router) {
           userId,
           userName: ctx.user!.name,
           location,
+          counter,
           status: 'open',
           openedAt: now,
           openingCashMinor,
@@ -406,17 +409,29 @@ export function registerShifts(r: Router) {
     const offset = Math.max(0, Number(ctx.query.offset ?? 0));
     const status = (ctx.query.status as string || 'all').trim().toLowerCase();
     const filterUserId = (ctx.query.userId as string || '').trim();
+    const filterLocation = (ctx.query.location as string || '').trim();
 
     let whereSql = 'WHERE s.tenant_id = ?';
     const params: unknown[] = [tenantId];
 
-    // Cashiers only see their own shifts; Managers/Owners/Accountants see all staff
+    // Cashiers only see their own shifts; Managers see their assigned branches; Owners/Accountants see all
     if (!isManagerOrOwner) {
       whereSql += ' AND s.user_id = ?';
       params.push(ctx.user!.id);
-    } else if (filterUserId) {
-      whereSql += ' AND s.user_id = ?';
-      params.push(filterUserId);
+    } else {
+      if (userRole === 'manager') {
+        const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
+        whereSql += ` AND s.location IN (${allowed.map(() => '?').join(', ')})`;
+        params.push(...allowed);
+      }
+      if (filterUserId) {
+        whereSql += ' AND s.user_id = ?';
+        params.push(filterUserId);
+      }
+      if (filterLocation && filterLocation !== 'ALL') {
+        whereSql += ' AND s.location = ?';
+        params.push(filterLocation);
+      }
     }
 
     if (status === 'open' || status === 'closed') {
@@ -462,6 +477,7 @@ export function registerShifts(r: Router) {
           userEmail: r.userEmail ?? r.user_email,
           userRole: r.userRole ?? r.user_role,
           location: r.location || 'MAIN',
+          counter: r.counter || 'COUNTER-1',
           status: r.status,
           openedAt: r.openedAt ?? r.opened_at,
           closedAt: r.closedAt ?? r.closed_at,

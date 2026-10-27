@@ -14,7 +14,16 @@ export const forbidden = (msg = 'You do not have permission to do this', code = 
 export const notFound = (what = 'Record') => new HttpError(404, 'NOT_FOUND', `${what} not found`);
 export const conflict = (msg: string, code = 'CONFLICT', details?: unknown) => new HttpError(409, code, msg, details);
 
-export interface AuthUser { id: string; tenantId: string; name: string; role: Role; email: string }
+export interface AuthUser {
+  id: string;
+  tenantId: string;
+  name: string;
+  role: Role;
+  email: string;
+  assignedLocation?: string;
+  assignedCounter?: string;
+  allowedLocations?: string[];
+}
 export interface Ctx {
   req: http.IncomingMessage;
   res: http.ServerResponse;
@@ -184,7 +193,13 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
       }
       if (!res.headersSent) send(code, { 'Content-Type': 'application/json; charset=utf-8' }, JSON.stringify(body));
     } finally {
-      if (opts.log !== false && url.pathname.startsWith('/api/')) {
+      const isHeartbeatPoll =
+        url.pathname === '/api/cfd/update' ||
+        url.pathname === '/api/cfd/state' ||
+        url.pathname === '/api/scanner/events' ||
+        url.pathname === '/api/health';
+
+      if (opts.log !== false && url.pathname.startsWith('/api/') && (!isHeartbeatPoll || status >= 400)) {
         console.log(JSON.stringify({ t: new Date().toISOString(), rid: requestId, m: req.method, p: url.pathname, s: status, ms: Date.now() - started, tenant: ctx.user?.tenantId, user: ctx.user?.id }));
       }
     }

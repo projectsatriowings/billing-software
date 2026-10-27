@@ -74,6 +74,8 @@ export function registerInvoices(r: Router) {
         whatsappLastSentTo: r.whatsappLastSentTo ?? r.whatsapp_last_sent_to,
         whatsappLastLanguage: r.whatsappLastLanguage ?? r.whatsapp_last_language,
         whatsappLastSentBy: r.whatsappLastSentBy ?? r.whatsapp_last_sent_by,
+        location: r.location || 'MAIN',
+        counter: r.counter || 'COUNTER-1',
         shareToken: r.shareToken ?? r.share_token,
       })),
     };
@@ -247,8 +249,21 @@ export function registerInvoices(r: Router) {
     const paymentsInput = V.arr(b.payments ?? [], 'Payments');
     const customerName = V.optStr(b.customerName, 'Customer name', 100);
     const customerPhone = V.optStr(b.customerPhone, 'Customer phone', 20);
-    const partyId = V.optStr(b.partyId, 'Customer party', 50);
+    let partyId = V.optStr(b.partyId, 'Customer party', 50);
+    const redeemedPoints = Math.max(0, V.int(b.redeemedPoints ?? 0, 'Redeemed points', { min: 0 }));
     const billDiscountMinor = V.int(b.billDiscountMinor ?? 0, 'Bill discount', { min: 0 });
+
+    const cleanPhoneDigits = customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '';
+    if (!partyId && cleanPhoneDigits) {
+      const match = await ctx.db.one<{ id: string }>(
+        `SELECT id FROM parties 
+         WHERE tenant_id = ? AND type = 'customer' 
+           AND (phone = ? OR REPLACE(phone, ' ', '') LIKE ? OR phone LIKE ?) 
+         LIMIT 1`,
+        [tenantId, customerPhone, `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
+      );
+      if (match) partyId = match.id;
+    }
 
     const tenderInput = b.tender;
     let tenderData: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
@@ -301,10 +316,32 @@ export function registerInvoices(r: Router) {
 
     let assignedNumber = '';
     let totalPaidMinor = 0;
+    const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
+    const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
+    let earnedLoyaltyPoints = 0;
+    let customerLoyaltyPoints: number | null = null;
+    let isNewCustomer = false;
 
     await ctx.db.tx(async (q) => {
+      // 0. Auto-enroll new customer if phone was given at counter and party does not exist yet
+      if (!partyId && cleanPhoneDigits && cleanPhoneDigits.length >= 7) {
+        isNewCustomer = true;
+        const newCustId = newId('p');
+        const assignedCustName = (customerName && customerName.trim() && !customerName.toLowerCase().includes('walk-in'))
+          ? customerName.trim()
+          : `Customer ${cleanPhoneDigits.slice(-4)}`;
+        
+        await q.exec(
+          `INSERT INTO parties (
+            id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
+          ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
+          [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
+        );
+        partyId = newCustId;
+      }
+
       // 1. Generate sequential invoice number
-      const prefix = shop.invoice_prefix || 'INV';
+      const prefix = shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV';
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
         `INSERT INTO number_series (tenant_id, series, next_no)
          VALUES (?, ?, 2)
@@ -332,8 +369,13 @@ export function registerInvoices(r: Router) {
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
-          paid_minor, balance_minor, rule_version, calc, share_token, created_by, custom
-        ) VALUES (?, ?, ?, ?, 'sale', 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?::jsonb)`,
+          paid_minor, balance_minor, rule_version, calc, share_token, created_by, location, counter, custom
+        ) VALUES (
+          ?, ?, ?, ?, 'sale', 'posted', ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb
+        )`,
         [
           invoiceId,
           tenantId,
@@ -358,6 +400,8 @@ export function registerInvoices(r: Router) {
           j(calculated),
           shareToken,
           ctx.user!.id,
+          location,
+          counter,
           j(tenderData ? { tender: tenderData } : {}),
         ],
       );
@@ -396,12 +440,12 @@ export function registerInvoices(r: Router) {
           ],
         );
 
-        // Deduct inventory
+        // Deduct inventory at the sale's branch location
         if (item.itemId) {
           await q.exec(
             `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
-             VALUES (?, ?, ?, 'MAIN', ?, 'sale', 'invoice', ?, ?)`,
-            [newId('sm'), tenantId, item.itemId, -item.qtyMilli, invoiceId, ctx.user!.id],
+             VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
+            [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
           );
         }
       }
@@ -433,17 +477,63 @@ export function registerInvoices(r: Router) {
         }
 
         await q.exec(
-          `INSERT INTO payments (id, tenant_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by)
-           VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id],
+          `INSERT INTO payments (id, tenant_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter)
+           VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, counter],
         );
+      }
+
+      // 6. Customer loyalty points calculation & update based on shop's custom rule
+      if (partyId) {
+        const isLoyaltyActive = Boolean(shop.loyaltyEnabled ?? shop.loyalty_enabled ?? true);
+        const ptsPer100 = Number(shop.loyaltyPointsPer100 ?? shop.loyalty_points_per_100 ?? 10);
+        const minRedeem = Number(shop.loyaltyMinPointsRedeem ?? shop.loyalty_min_points_redeem ?? 10);
+
+        if (isLoyaltyActive && ptsPer100 > 0) {
+          // calculated.totalMinor is in paise (₹100 = 10,000 paise)
+          earnedLoyaltyPoints = Math.floor((calculated.totalMinor * ptsPer100) / 10000);
+        } else {
+          earnedLoyaltyPoints = 0;
+        }
+
+        if (redeemedPoints > 0) {
+          if (!isLoyaltyActive) {
+            throw bad('Loyalty rewards program is currently disabled for this store.');
+          }
+          const custParty = await q.one<{ loyalty_points: number; loyaltyPoints: number }>(
+            'SELECT loyalty_points FROM parties WHERE id = ? AND tenant_id = ? FOR UPDATE',
+            [partyId, tenantId]
+          );
+          const currentPts = Number(custParty?.loyaltyPoints ?? custParty?.loyalty_points ?? 0);
+          if (currentPts < minRedeem) {
+            throw bad(`Minimum ${minRedeem} points required to redeem (customer has ${currentPts} points).`);
+          }
+          if (currentPts < redeemedPoints) {
+            throw bad(`Insufficient loyalty points. Customer has ${currentPts} points, requested to redeem ${redeemedPoints}.`);
+          }
+        }
+
+        const updatedCust = await q.one<{ loyalty_points?: number; loyaltyPoints?: number }>(
+          `UPDATE parties
+           SET loyalty_points = GREATEST(0, loyalty_points - ? + ?)
+           WHERE id = ? AND tenant_id = ?
+           RETURNING loyalty_points`,
+          [redeemedPoints, earnedLoyaltyPoints, partyId, tenantId]
+        );
+        customerLoyaltyPoints = Number(updatedCust?.loyaltyPoints ?? updatedCust?.loyalty_points ?? 0);
       }
 
       await audit(q, ctx, {
         action: 'invoice.create',
         entity: 'invoice',
         entityId: invoiceId,
-        detail: { number: assignedNumber, totalMinor: calculated.totalMinor, lines: formattedLines.length },
+        detail: {
+          number: assignedNumber,
+          totalMinor: calculated.totalMinor,
+          lines: formattedLines.length,
+          earnedLoyaltyPoints,
+          redeemedPoints,
+        },
       });
     });
 
@@ -454,8 +544,15 @@ export function registerInvoices(r: Router) {
       totalMinor: calculated.totalMinor,
       paidMinor: totalPaidMinor,
       balanceMinor: Math.max(0, calculated.totalMinor - totalPaidMinor),
+      location,
+      counter,
       shareToken,
       tender: tenderData,
+      earnedLoyaltyPoints,
+      redeemedLoyaltyPoints: redeemedPoints,
+      customerLoyaltyPoints,
+      partyId,
+      isNewCustomer,
     };
   });
 
@@ -478,6 +575,23 @@ export function registerInvoices(r: Router) {
     const createdAt = inv.createdAt ?? inv.created_at;
     const customObj = typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {});
     const tender = customObj?.tender || null;
+
+    const customFields: { label: string; value: string }[] = [];
+    const pId = inv.partyId ?? inv.party_id;
+    if (pId) {
+      const custRow = await ctx.db.one<{ loyalty_points?: number; loyaltyPoints?: number }>(
+        'SELECT loyalty_points FROM parties WHERE id = ?',
+        [pId]
+      );
+      const pts = Number(custRow?.loyaltyPoints ?? custRow?.loyalty_points ?? 0);
+      if (pts > 0) {
+        customFields.push({ label: '⭐ Loyalty Balance', value: `${pts} pts` });
+      }
+    }
+    const invCounter = inv.counter || customObj?.counter;
+    if (invCounter) {
+      customFields.push({ label: 'Counter', value: String(invCounter) });
+    }
 
     const printable: PrintableBill = {
       number: inv.number,
@@ -519,7 +633,7 @@ export function registerInvoices(r: Router) {
       },
       payments: payments.map((p: any) => ({ method: p.method, amountMinor: Number(p.amountMinor ?? p.amount_minor) })),
       tender,
-      customFields: [],
+      customFields,
       intra: true,
     };
 

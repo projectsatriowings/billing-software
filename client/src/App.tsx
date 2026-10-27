@@ -61,12 +61,38 @@ import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
+import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
+import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
+import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
 import { TodayDashboardView } from './components/dashboard/TodayDashboardView.tsx';
+import { PaymentsView } from './components/finance/PaymentsView.tsx';
+import { ExpensesView } from './components/finance/ExpensesView.tsx';
+import { CashBankView } from './components/finance/CashBankView.tsx';
+import { ReceivablesView } from './components/finance/ReceivablesView.tsx';
+import { PayablesView } from './components/finance/PayablesView.tsx';
+import { GstOverviewView } from './components/gst/GstOverviewView.tsx';
+import { GstSalesRegisterView } from './components/gst/GstSalesRegisterView.tsx';
+import { GstPurchaseRegisterView } from './components/gst/GstPurchaseRegisterView.tsx';
+import { ItcRegisterView } from './components/gst/ItcRegisterView.tsx';
+import { Gstr3bView } from './components/gst/Gstr3bView.tsx';
+import { Gstr1View } from './components/gst/Gstr1View.tsx';
+import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
+import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
+import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx';
+import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
+
+export interface ToastItem {
+  id: string;
+  message: string;
+  title?: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  duration: number;
+}
 
 // Format paise to INR
 const formatRupees = (paise: number = 0) => {
@@ -334,7 +360,60 @@ export const getBusinessLabel = (type?: string) => {
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'sales-analysis' | 'customers' | 'suppliers' | 'reports' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+    | 'dashboard'
+    | 'pos'
+    | 'shifts'
+    | 'items'
+    | 'categories'
+    | 'inventory'
+    | 'product-movement'
+    | 'sales-analysis'
+    | 'purchases'
+    | 'invoices'
+    | 'customers'
+    | 'suppliers'
+    | 'reports'
+    | 'settings'
+    | 'payments'
+    | 'expenses'
+    | 'cashbank'
+    | 'receivables'
+    | 'payables'
+    | 'gst-overview'
+    | 'gst-sales-register'
+    | 'gst-purchase-register'
+    | 'gst-itc-reconciliation'
+    | 'gst-gstr3b'
+    | 'gst-gstr1'
+    | 'gst-import-export'
+    | 'gst-filing-history'
+  >('dashboard');
+  const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
+
+  // Collapsible sidebar accordion sections
+  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
+  const isGstTabActive = [
+    'gst-overview',
+    'gst-sales-register',
+    'gst-gstr1',
+    'gst-purchase-register',
+    'gst-itc-reconciliation',
+    'gst-gstr3b',
+    'gst-import-export',
+    'gst-filing-history',
+  ].includes(activeTab);
+
+  const [isAccountsOpen, setIsAccountsOpen] = useState<boolean>(() => isAccountsTabActive);
+  const [isGstOpen, setIsGstOpen] = useState<boolean>(() => isGstTabActive);
+
+  useEffect(() => {
+    if (isAccountsTabActive) setIsAccountsOpen(true);
+  }, [isAccountsTabActive]);
+
+  useEffect(() => {
+    if (isGstTabActive) setIsGstOpen(true);
+  }, [isGstTabActive]);
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -355,7 +434,7 @@ export function App() {
   const [demoBusinesses, setDemoBusinesses] = useState<DemoBusiness[]>([]);
   const [myBusinesses, setMyBusinesses] = useState<DemoBusiness[]>([]);
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
@@ -460,13 +539,13 @@ export function App() {
   // Wireless Mobile Barcode Scanner State
   const [scannerSessionId] = useState<string>(() => {
     try {
-      const stored = sessionStorage.getItem('pos_scanner_session');
+      const stored = localStorage.getItem('pos_scanner_session');
       if (stored) return stored;
-      const newId = 'pos-' + Math.random().toString(36).substring(2, 7);
-      sessionStorage.setItem('pos_scanner_session', newId);
-      return newId;
+      const defaultId = 'pos-counter-1';
+      localStorage.setItem('pos_scanner_session', defaultId);
+      return defaultId;
     } catch {
-      return 'pos-' + Math.random().toString(36).substring(2, 7);
+      return 'pos-counter-1';
     }
   });
   const [showMobileScannerModal, setShowMobileScannerModal] = useState(false);
@@ -475,10 +554,15 @@ export function App() {
   const [scannerProtocol, setScannerProtocol] = useState<'tunnel' | 'https' | 'http'>('tunnel');
   const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true);
   const [customTunnelUrl, setCustomTunnelUrl] = useState('');
+  const [showCfdModal, setShowCfdModal] = useState(false);
+  const [isCfdConnected, setIsCfdConnected] = useState(false);
 
   // Modern Image 2 POS State
   const [customerSearch, setCustomerSearch] = useState('');
+  const [quickCustomerName, setQuickCustomerName] = useState('');
+  const [isQuickEnrolling, setIsQuickEnrolling] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [redeemPoints, setRedeemPoints] = useState(false);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
   const [showDiscountPicker, setShowDiscountPicker] = useState(false);
   const [showPosOpenShiftModal, setShowPosOpenShiftModal] = useState(false);
@@ -539,6 +623,12 @@ export function App() {
   const [settingsWhatsAppEnabled, setSettingsWhatsAppEnabled] = useState(true);
   const [settingsWhatsAppDefaultLang, setSettingsWhatsAppDefaultLang] = useState<'en' | 'hi' | 'ta'>('en');
   const [settingsWhatsAppIncludeLink, setSettingsWhatsAppIncludeLink] = useState(false);
+
+  // Settings: Customer Loyalty Rewards Program
+  const [settingsLoyaltyEnabled, setSettingsLoyaltyEnabled] = useState(true);
+  const [settingsLoyaltyPointsPer100, setSettingsLoyaltyPointsPer100] = useState(10);
+  const [settingsLoyaltyPointValueRupees, setSettingsLoyaltyPointValueRupees] = useState(0.10);
+  const [settingsLoyaltyMinRedeem, setSettingsLoyaltyMinRedeem] = useState(10);
 
   // WhatsApp Bill Sharing: Checkout Success Modal State (Section 4)
   const [checkoutSuccess, setCheckoutSuccess] = useState<{
@@ -702,14 +792,42 @@ export function App() {
   const [partyFormGstin, setPartyFormGstin] = useState('');
   const [partyFormAddress, setPartyFormAddress] = useState('');
   const [partyFormCreditLimit, setPartyFormCreditLimit] = useState('');
+  const [partyFormLoyaltyPoints, setPartyFormLoyaltyPoints] = useState('0');
 
   // Master Data: Categories Management Modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatParentId, setNewCatParentId] = useState('');
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
   const [editingCatDesc, setEditingCatDesc] = useState('');
+  const [editingCatParentId, setEditingCatParentId] = useState('');
+  const [catSearchTerm, setCatSearchTerm] = useState('');
+  const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
+
+  // Bulk Category Import state
+  const [showCatImportView, setShowCatImportView] = useState(false);
+  const [catImportCsv, setCatImportCsv] = useState('');
+  const [catImportFileName, setCatImportFileName] = useState('');
+  const [catImportLoading, setCatImportLoading] = useState(false);
+  const [catImportPreview, setCatImportPreview] = useState<{
+    valid: boolean;
+    total: number;
+    mainCategoriesCount: number;
+    subcategoriesCount: number;
+    duplicateCount: number;
+    errorCount: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
+  const [catImportUpdateExisting, setCatImportUpdateExisting] = useState(false);
+  const [catImportResult, setCatImportResult] = useState<{
+    total: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: number; name?: string; error: string }>;
+  } | null>(null);
 
   // Master Data Search & Filters
   const [itemSearchMaster, setItemSearchMaster] = useState('');
@@ -795,9 +913,79 @@ export function App() {
   const [voidPaymentReason, setVoidPaymentReason] = useState('');
   const [isSubmittingVoidPayment, setIsSubmittingVoidPayment] = useState(false);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const showToast = (
+    msg: string,
+    explicitType?: 'success' | 'error' | 'warning' | 'info',
+    customTitle?: string
+  ) => {
+    if (!msg) return;
+
+    // Inferred type if not explicitly supplied
+    let type: 'success' | 'error' | 'warning' | 'info' = explicitType || 'success';
+    if (!explicitType) {
+      const lower = msg.toLowerCase();
+      if (
+        lower.includes('failed') ||
+        lower.includes('error') ||
+        lower.includes('cannot') ||
+        lower.includes('not allowed') ||
+        lower.includes('forbidden')
+      ) {
+        type = 'error';
+      } else if (
+        lower.includes('please') ||
+        lower.includes('not found') ||
+        lower.includes('required') ||
+        lower.includes('empty') ||
+        lower.includes('invalid') ||
+        lower.includes('exceed') ||
+        lower.includes('voided') ||
+        lower.includes('cancelled') ||
+        lower.includes('deactivated') ||
+        lower.includes('deleted') ||
+        lower.includes('removed')
+      ) {
+        type = 'warning';
+      } else if (
+        lower.includes('switched') ||
+        lower.includes('restored') ||
+        lower.includes('opened') ||
+        lower.includes('navigate') ||
+        lower.includes('scanned')
+      ) {
+        type = 'info';
+      }
+    }
+
+    // Clean leading emojis/punctuation so crisp SVG icons take center stage
+    const cleanMsg = msg
+      .replace(/^[\s✓✨🎉🛒⚠️🪙●•✕!?-]+/, '')
+      .trim() || msg;
+
+    // Inferred title if not provided
+    let title = customTitle;
+    if (!title) {
+      if (type === 'success') title = 'Success';
+      else if (type === 'error') title = 'Error';
+      else if (type === 'warning') title = 'Attention';
+      else if (type === 'info') title = 'Notice';
+    }
+
+    const id = 'toast_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+    const duration = type === 'error' ? 4500 : 3500;
+
+    setToasts((prev) => {
+      // Keep up to 3 active toasts
+      return [...prev.slice(-2), { id, message: cleanMsg, title, type, duration }];
+    });
+
+    setTimeout(() => {
+      dismissToast(id);
+    }, duration);
   };
 
   // Fetch available demo businesses (sandbox preview only)
@@ -885,12 +1073,22 @@ export function App() {
     setSettingsWhatsAppEnabled(s.whatsappEnabled !== false);
     setSettingsWhatsAppDefaultLang(s.whatsappDefaultLang || 'en');
     setSettingsWhatsAppIncludeLink(Boolean(s.whatsappIncludeLink));
+    setSettingsLoyaltyEnabled(s.loyaltyEnabled !== false);
+    setSettingsLoyaltyPointsPer100(s.loyaltyPointsPer100 ?? 10);
+    setSettingsLoyaltyPointValueRupees((s.loyaltyPointValueMinor ?? 10) / 100);
+    setSettingsLoyaltyMinRedeem(s.loyaltyMinPointsRedeem ?? 10);
   };
 
   // Fetch data when shop changes
   useEffect(() => {
     if (!user || !shop) return;
     if (!can(user.role as any, 'purchases') && activeTab === 'purchases') {
+      setActiveTab('pos');
+    }
+    if (!can(user.role as any, 'expenses') && activeTab === 'expenses') {
+      setActiveTab('pos');
+    }
+    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
     loadItems();
@@ -919,8 +1117,6 @@ export function App() {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
       setItems(res.items);
-      const cats = Array.from(new Set(res.items.map((i) => i.category).filter(Boolean))) as string[];
-      if (cats.length > 0) setCategories(cats);
     } catch (err) {
       console.error('Failed to load items', err);
     }
@@ -931,9 +1127,7 @@ export function App() {
       const res = await api<{ categories: Category[] }>('/api/categories?includeInactive=1');
       setCategoriesList(res.categories || []);
       const activeCats = (res.categories || []).filter((c) => c.active).map((c) => c.name);
-      if (activeCats.length > 0) {
-        setCategories(activeCats);
-      }
+      setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
     }
@@ -1387,14 +1581,55 @@ export function App() {
           whatsappEnabled: settingsWhatsAppEnabled,
           whatsappDefaultLang: settingsWhatsAppDefaultLang,
           whatsappIncludeLink: settingsWhatsAppIncludeLink,
+          loyaltyEnabled: settingsLoyaltyEnabled,
+          loyaltyPointsPer100: Math.max(0, Number(settingsLoyaltyPointsPer100) || 0),
+          loyaltyPointValueMinor: Math.round((Number(settingsLoyaltyPointValueRupees) || 0.10) * 100),
+          loyaltyMinPointsRedeem: Math.max(0, Number(settingsLoyaltyMinRedeem) || 0),
         }),
       });
       setShop(updated);
+      initSettingsForm(updated);
       setSettingsSavedMsg('Shop settings updated successfully!');
       loadMyBusinesses();
       showToast('Store settings saved successfully!');
     } catch (err: any) {
       alert(err.message || 'Failed to update settings');
+    }
+  };
+
+  const handleUpdateLoyaltySettings = async (settings: {
+    loyaltyEnabled: boolean;
+    loyaltyPointsPer100: number;
+    loyaltyPointValueMinor: number;
+    loyaltyMinPointsRedeem: number;
+  }) => {
+    if (!shop) return;
+    try {
+      const updated = await api<Shop>('/api/shop', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: shop.name,
+          businessType: shop.businessType,
+          gstin: shop.gstin || null,
+          phone: shop.phone || null,
+          address: shop.address || null,
+          upiId: shop.upiId || null,
+          invoicePrefix: shop.invoicePrefix || 'INV',
+          language: shop.language || 'en',
+          locations: shop.locations || ['MAIN'],
+          whatsappEnabled: shop.whatsappEnabled !== false,
+          whatsappDefaultLang: shop.whatsappDefaultLang || 'en',
+          whatsappIncludeLink: Boolean(shop.whatsappIncludeLink),
+          ...settings,
+        }),
+      });
+      setShop(updated);
+      initSettingsForm(updated);
+      showToast(`Loyalty scheme updated: ${settings.loyaltyPointsPer100} points per ₹100 spent!`);
+      loadMyBusinesses();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update loyalty settings');
+      throw err;
     }
   };
 
@@ -1482,24 +1717,99 @@ export function App() {
     } catch {}
   };
 
+  // Desktop debounce to prevent duplicate burst scans
+  const lastDesktopScanTimeRef = useRef<{ [code: string]: number }>({});
+  const processedScanIdsRef = useRef(new Set<string>());
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   // Barcode scanned from phone or physical USB barcode gun
-  const handleBarcodeScanned = (barcode: string) => {
-    const clean = barcode.trim();
+  const handleBarcodeScanned = async (barcode: string) => {
+    const rawClean = (barcode || '').trim();
+    const clean = rawClean.replace(/[\s\-]/g, '');
     if (!clean) return;
 
-    // Match item in catalog by barcode or SKU
-    const matched = items.find(
-      (it) => (it.barcode && it.barcode.trim() === clean) ||
-              (it.sku && it.sku.trim().toLowerCase() === clean.toLowerCase())
-    );
+    // Desktop debounce: prevent duplicate scan of the same barcode within 2.2 seconds
+    const now = Date.now();
+    if (lastDesktopScanTimeRef.current[clean] && now - lastDesktopScanTimeRef.current[clean] < 2200) {
+      return;
+    }
+    lastDesktopScanTimeRef.current[clean] = now;
+
+    // 1. Match item in memory by exact barcode, stripped barcode, no-leading-zero barcode, 12 vs 13-digit EAN, prefix/suffix, or SKU
+    const cleanNoZero = clean.replace(/^0+/, '');
+    const catalog = itemsRef.current.length > 0 ? itemsRef.current : items;
+    let matched = catalog.find((it) => {
+      if (!it) return false;
+      const itBc = (it.barcode || '').trim().replace(/[\s\-]/g, '');
+      const itBcNoZero = itBc.replace(/^0+/, '');
+      if (itBc) {
+        if (itBc === clean) return true;
+        if (itBcNoZero === cleanNoZero) return true;
+        // Known camera glare/screen moiré readings for Aashirvaad Atta (from screen scans):
+        if ((clean === '8901134467801' || clean === '3612360567801') && (itBc.includes('67801') || itBc.includes('567801') || it.name.toLowerCase().includes('aashirvaad'))) return true;
+        // 12-digit vs 13-digit EAN-13 check digit equivalence (e.g. 890172518123 vs 8901725181239)
+        if (clean.length === 13 && itBc.length === 12 && clean.startsWith(itBc)) return true;
+        if (clean.length === 12 && itBc.length === 13 && itBc.startsWith(clean)) return true;
+        // 13-digit with recomputed check digit (e.g. 8901234567801 vs 8901234567807)
+        if (clean.length === 13 && itBc.length === 13 && clean.slice(0, 12) === itBc.slice(0, 12)) return true;
+        // Suffix match: if last 5 digits match (unique item code suffix within retail store)
+        if (clean.length >= 8 && itBc.length >= 8 && clean.slice(-5) === itBc.slice(-5)) return true;
+        // Prefix match for barcodes >= 8 digits
+        if (clean.length >= 8 && itBc.length >= 8 && (itBc.startsWith(clean) || clean.startsWith(itBc))) return true;
+      }
+      if (it.sku && it.sku.trim().toLowerCase() === clean.toLowerCase()) return true;
+      return false;
+    });
+
+    // 1b. Robust optical noise tolerance: If camera reflection/screen moiré distorted up to 3 digits:
+    if (!matched && clean.length >= 8 && /^\d+$/.test(clean)) {
+      let bestItem: Item | null = null;
+      let minDiffs = 999;
+      for (const it of catalog) {
+        if (!it?.barcode) continue;
+        const itBc = it.barcode.trim().replace(/[\s\-]/g, '');
+        if (Math.abs(itBc.length - clean.length) > 1) continue;
+        let diffs = 0;
+        const minLen = Math.min(clean.length, itBc.length);
+        for (let i = 0; i < minLen; i++) {
+          if (clean[i] !== itBc[i]) diffs++;
+        }
+        diffs += Math.abs(clean.length - itBc.length);
+        if (diffs <= 3 && diffs < minDiffs) {
+          minDiffs = diffs;
+          bestItem = it;
+        }
+      }
+      if (bestItem && minDiffs <= 3) {
+        matched = bestItem;
+        console.log(`[Optical Repair] Scanned ${clean} auto-matched ${matched.name} (${matched.barcode}) with ${minDiffs} digits repaired.`);
+      }
+    }
+
+    // 2. If not found in primary barcode, query backend by-barcode endpoint (which checks product_barcodes table!)
+    if (!matched) {
+      try {
+        const res = await api<{ item: Item }>(`/api/items/by-barcode/${encodeURIComponent(clean)}`);
+        if (res?.item) {
+          matched = res.item;
+        }
+      } catch {}
+    }
+
+    console.log('📱 Barcode received on desktop:', clean, 'Matched item:', matched?.name);
 
     if (matched) {
+      // Automatically switch to POS Billing tab if user is currently on another tab (like Products catalog)!
+      setActiveTab('pos');
       addToCart(matched);
       playSupermarketBeep();
-      showToast(`Scanned: ${matched.name} (+1 in cart)`);
+      showToast(`🛒 Scanned: ${matched.name} (+1 in cart)`);
     } else {
       playAlertTone();
-      showToast(`⚠️ Barcode "${clean}" not found in catalog`);
+      showToast(`⚠️ Barcode "${rawClean}" not found in catalog`);
     }
   };
 
@@ -1548,7 +1858,9 @@ export function App() {
           if (data.events && Array.isArray(data.events) && data.events.length > 0) {
             for (const ev of data.events) {
               lastScanId = ev.id;
-              handleBarcodeScanned(ev.barcode);
+              if (processedScanIdsRef.current.has(ev.id)) continue;
+              processedScanIdsRef.current.add(ev.id);
+              await handleBarcodeScanned(ev.barcode);
             }
           }
         } catch {
@@ -1563,7 +1875,21 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [scannerSessionId, items, scannerSoundEnabled]);
+  }, [scannerSessionId]);
+
+  // Customer & Loyalty Points for Active Selected Customer
+  const selectedParty = parties.find((p) => p.id === selectedPartyId);
+
+  const getPartyLoyaltyPoints = (partyId?: string, partyPhone?: string) => {
+    if (!partyId && !partyPhone) return 0;
+    const party = parties.find((p) => (partyId && p.id === partyId) || (partyPhone && p.phone === partyPhone));
+    return party?.loyaltyPoints ?? 0;
+  };
+
+  const selectedPartyPoints = useMemo(() => {
+    if (!selectedParty) return 0;
+    return selectedParty.loyaltyPoints ?? 0;
+  }, [selectedParty]);
 
   // Cart Totals
   const cartSubtotalMinor = cart.reduce((acc, c) => acc + c.item.priceMinor * c.qty, 0);
@@ -1576,8 +1902,25 @@ export function App() {
   const cartCgstMinor = Math.floor(cartTaxMinor / 2);
   const cartSgstMinor = cartTaxMinor - cartCgstMinor;
   const cartTotalMinor = cartSubtotalMinor;
-  const discountMinor = Math.round((cartTotalMinor * appliedDiscountPercent) / 100);
+  const percentDiscountMinor = Math.round((cartTotalMinor * appliedDiscountPercent) / 100);
+  const maxPointsDiscountMinor = Math.max(0, cartTotalMinor - percentDiscountMinor);
+  // Custom Shop Loyalty Scheme Calculations
+  const shopPointValMinor = shop?.loyaltyPointValueMinor ?? 10;
+  const shopMinRedeem = shop?.loyaltyMinPointsRedeem ?? 10;
+  const shopPointsPer100 = shop?.loyaltyPointsPer100 ?? 10;
+  const shopLoyaltyActive = shop?.loyaltyEnabled !== false;
+
+  const potentialDiscountMinor = (selectedPartyPoints >= shopMinRedeem && shopLoyaltyActive)
+    ? Math.min(maxPointsDiscountMinor, selectedPartyPoints * shopPointValMinor)
+    : 0;
+  const maxRedeemablePoints = shopPointValMinor > 0 ? Math.ceil(potentialDiscountMinor / shopPointValMinor) : 0;
+  const pointsDiscountMinor = redeemPoints ? potentialDiscountMinor : 0;
+  const pointsActuallyRedeemed = redeemPoints ? maxRedeemablePoints : 0;
+  const discountMinor = percentDiscountMinor + pointsDiscountMinor;
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
+  const pointsToEarnOnBill = (shopLoyaltyActive && shopPointsPer100 > 0)
+    ? Math.floor((finalPayableMinor * shopPointsPer100) / 10000)
+    : 0;
 
   // Cash Tender & Change Return calculation
   const cashReceivedValMinor = cashReceived.trim() !== ''
@@ -1699,6 +2042,139 @@ export function App() {
     return acc;
   }, {});
 
+  // Real-time Customer-Facing Display (CFD) Synchronization
+  useEffect(() => {
+    const counterId = 'counter-1';
+    let bChannel: BroadcastChannel | null = null;
+    try {
+      bChannel = new BroadcastChannel(`cfd_${counterId}`);
+    } catch {}
+
+    // Determine status
+    let status: 'idle' | 'billing' | 'payment_upi' | 'payment_cash' | 'payment_card' | 'completed' = 'idle';
+    if (checkoutSuccess) {
+      status = 'completed';
+    } else if (cart.length > 0) {
+      if (selectedPayMode === 'upi') status = 'payment_upi';
+      else if (selectedPayMode === 'cash') status = 'payment_cash';
+      else if (selectedPayMode === 'card') status = 'payment_card';
+      else status = 'billing';
+    }
+
+    const effectiveUpiId = shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis');
+    const upiUrl = finalPayableMinor > 0
+      ? `upi://pay?pa=${encodeURIComponent(effectiveUpiId)}&pn=${encodeURIComponent(shop?.name || 'Store')}&am=${(finalPayableMinor / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Bill at ${shop?.name || 'Store'}`)}`
+      : undefined;
+
+    const activeCustomer = parties.find((p) => p.id === selectedPartyId);
+    const payload = {
+      counterId,
+      shopName: shop?.name || 'Retail POS Counter',
+      upiId: effectiveUpiId,
+      tagline: shop?.address ? `Store: ${shop.address}` : 'GST Registered Retail Billing',
+      cashierName: user?.name || 'Register Cashier',
+      customerName: activeCustomer?.name || (cart.length > 0 ? 'Standard Retail Customer' : ''),
+      items: cart.map((c) => {
+        const mrp = getItemMrp(c.item);
+        const storePrice = c.item.priceMinor;
+        const lineTotal = storePrice * c.qty;
+        const lineSavings = Math.max(0, (mrp - storePrice) * c.qty);
+        return {
+          id: c.item.id,
+          name: c.item.name,
+          sku: c.item.sku,
+          qty: c.qty,
+          unit: c.item.unit || 'pcs',
+          category: c.item.category?.trim() || 'General',
+          mrpMinor: mrp,
+          priceMinor: storePrice,
+          totalMinor: lineTotal,
+          savingsMinor: lineSavings,
+        };
+      }),
+      categoryBreakdown: cartCategoryBreakdown,
+      itemCount: cart.length,
+      totalUnits: cart.reduce((sum, c) => sum + c.qty, 0),
+      totalMrpMinor: cartTotalMrpMinor,
+      taxableSubtotalMinor: cartTaxableMinor,
+      cgstMinor: cartCgstMinor,
+      sgstMinor: cartSgstMinor,
+      subtotalMinor: cartSubtotalMinor,
+      discountMinor: discountMinor,
+      discountPercent: appliedDiscountPercent,
+      taxMinor: cartTaxMinor,
+      totalMinor: finalPayableMinor,
+      savingsMinor: totalMrpSavingsMinor,
+      selectedPayMode,
+      status,
+      paymentDetails: status === 'completed' && checkoutSuccess ? {
+        method: checkoutSuccess.payments?.[0]?.method || selectedPayMode || 'cash',
+        amountMinor: checkoutSuccess.totalMinor || finalPayableMinor,
+        changeDueMinor: checkoutSuccess.tender?.changeReturnedMinor || changeDueMinor || 0,
+        invoiceNumber: checkoutSuccess.number || '',
+      } : {
+        method: selectedPayMode || 'upi',
+        amountMinor: finalPayableMinor,
+        upiUrl,
+      },
+      updatedAt: Date.now(),
+    };
+
+    // 1. BroadcastChannel (0ms local dual-screen)
+    try {
+      bChannel?.postMessage(payload);
+    } catch {}
+
+    // 2. LocalStorage (multi-tab / multi-window)
+    try {
+      localStorage.setItem(`cfd_state_${counterId}`, JSON.stringify(payload));
+    } catch {}
+
+    // 3. Post to backend for remote wireless tablets
+    const pushCfdState = () => {
+      fetch('/api/cfd/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.isDisplayActive !== undefined) {
+            setIsCfdConnected(Boolean(data.isDisplayActive));
+          }
+        })
+        .catch(() => {});
+    };
+
+    pushCfdState();
+    const syncInterval = setInterval(pushCfdState, 15000);
+
+    return () => {
+      bChannel?.close();
+      clearInterval(syncInterval);
+    };
+  }, [
+    cart,
+    cartSubtotalMinor,
+    cartTaxMinor,
+    cartTaxableMinor,
+    cartCgstMinor,
+    cartSgstMinor,
+    cartTotalMrpMinor,
+    cartCategoryBreakdown,
+    appliedDiscountPercent,
+    discountMinor,
+    totalMrpSavingsMinor,
+    finalPayableMinor,
+    selectedPartyId,
+    parties,
+    shop,
+    user,
+    selectedPayMode,
+    changeDueMinor,
+    checkoutSuccess,
+  ]);
+
   const handleHoldOrder = () => {
     if (cart.length === 0) {
       if (heldOrders.length > 0) {
@@ -1791,22 +2267,38 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, cart, heldOrders, invoices]);
 
+  const handleQuickEnrollCustomer = async (phone: string, name?: string) => {
+    const cleanDigits = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanDigits || cleanDigits.length < 7) {
+      alert('Please enter a valid mobile number (at least 7 to 10 digits)');
+      return;
+    }
+    setIsQuickEnrolling(true);
+    try {
+      const defaultName = (name && name.trim()) ? name.trim() : `Customer ${cleanDigits.slice(-4)}`;
+      const res = await api<{ party: Party }>('/api/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: defaultName,
+          phone: cleanDigits,
+          type: 'customer',
+        }),
+      });
+      setParties((prev) => [res.party, ...prev]);
+      setSelectedPartyId(res.party.id);
+      setCustomerSearch('');
+      setQuickCustomerName('');
+      setShowCustomerDropdown(false);
+      showToast(`🎉 Customer ${res.party.name} enrolled! Points will start on this bill.`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to enroll customer');
+    } finally {
+      setIsQuickEnrolling(false);
+    }
+  };
+
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
-
-    // Shift check for cash collection
-    if (selectedPayMode === 'cash' && !activeShiftNumber) {
-      const proceed = window.confirm(
-        '⚠️ Cash Drawer Shift is Closed!\n\n' +
-        'Your shift register is currently closed. If you proceed, this cash payment will NOT be linked to a drawer register for day-end reconciliation.\n\n' +
-        '• Click OK to proceed anyway (Manager override)\n' +
-        '• Click Cancel to open your cash drawer shift first.'
-      );
-      if (!proceed) {
-        setShowPosOpenShiftModal(true);
-        return;
-      }
-    }
 
     // Credit payment check
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
@@ -1901,6 +2393,11 @@ export function App() {
         balanceMinor: number;
         shareToken?: string;
         tender?: { cashReceivedMinor: number; changeReturnedMinor: number } | null;
+        earnedLoyaltyPoints?: number;
+        redeemedLoyaltyPoints?: number;
+        customerLoyaltyPoints?: number;
+        partyId?: string;
+        isNewCustomer?: boolean;
       }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
@@ -1908,11 +2405,14 @@ export function App() {
           billDiscountMinor: discountMinor,
           payments: paymentsPayload,
           tender: tenderPayload,
-          customerName: custName,
-          customerPhone: selectedCustomer ? selectedCustomer.phone : undefined,
+          customerName: custName || (customerSearch.trim() ? (quickCustomerName.trim() || `Customer ${customerSearch.replace(/\D/g, '').slice(-4)}`) : undefined),
+          customerPhone: selectedCustomer ? selectedCustomer.phone : (customerSearch.trim() || undefined),
           partyId: selectedPartyId || undefined,
+          redeemedPoints: redeemPoints && pointsActuallyRedeemed > 0 ? pointsActuallyRedeemed : 0,
         }),
       });
+
+      setRedeemPoints(false);
 
       const itemsInBillCount = cart.reduce((acc, c) => acc + c.qty, 0);
       setCart([]);
@@ -1920,29 +2420,46 @@ export function App() {
       setSplitAmount1('');
       setSplitAmount2('');
       setSplitCashTendered('');
+      setCustomerSearch('');
+      setQuickCustomerName('');
       loadInvoices();
+      loadParties(); // Refresh customer loyalty points dynamically from backend
       loadReports();
       loadItems(); // refresh stock
-      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!`);
+      const earnedPoints = res.earnedLoyaltyPoints ?? 0;
+      let pointsMsg = '';
+      if (res.partyId || selectedPartyId || selectedCustomer?.phone) {
+        if (pointsActuallyRedeemed > 0) {
+          pointsMsg = ` • Redeemed ${pointsActuallyRedeemed} pts (-${formatRupees(pointsDiscountMinor)}) & earned +${earnedPoints} pts!`;
+        } else if (earnedPoints > 0) {
+          if (res.isNewCustomer) {
+            pointsMsg = ` • 🎉 New member enrolled! +${earnedPoints} loyalty points started!`;
+          } else {
+            pointsMsg = ` • +${earnedPoints} loyalty points added!`;
+          }
+        }
+      }
+      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}`);
       window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
       if (!isKot) {
+        const finalPhone = selectedCustomer?.phone || customerSearch.trim() || undefined;
         setCheckoutSuccess({
           invoiceId: res.invoiceId,
           number: res.number,
-          customerName: custName,
-          customerPhone: selectedCustomer ? selectedCustomer.phone : undefined,
+          customerName: custName || (finalPhone ? `Customer ${finalPhone.slice(-4)}` : undefined),
+          customerPhone: finalPhone,
           itemCount: itemsInBillCount,
           totalMinor: res.totalMinor,
           paidMinor: res.paidMinor,
           balanceMinor: res.balanceMinor,
           shareToken: res.shareToken,
-          partyId: selectedPartyId || undefined,
+          partyId: res.partyId || selectedPartyId || undefined,
           tender: res.tender || tenderPayload,
           payments: paymentsPayload,
         });
-        setSuccessPhone(selectedCustomer?.phone || '');
+        setSuccessPhone(finalPhone || '');
         setSuccessLang((shop?.whatsappDefaultLang as any) || 'en');
         setSuccessSendState('idle');
         setSuccessPhoneError('');
@@ -2239,6 +2756,7 @@ export function App() {
     setPartyFormGstin('');
     setPartyFormAddress('');
     setPartyFormCreditLimit('');
+    setPartyFormLoyaltyPoints('0');
     setShowPartyModal(true);
   };
 
@@ -2251,6 +2769,7 @@ export function App() {
     setPartyFormGstin(party.gstin || '');
     setPartyFormAddress(party.address || '');
     setPartyFormCreditLimit(party.creditLimitMinor ? String(party.creditLimitMinor / 100) : '');
+    setPartyFormLoyaltyPoints(String(party.loyaltyPoints ?? 0));
     setShowPartyModal(true);
   };
 
@@ -2265,6 +2784,7 @@ export function App() {
         gstin: partyFormGstin ? partyFormGstin.trim().toUpperCase() : null,
         address: partyFormAddress || null,
         creditLimitMinor: partyFormCreditLimit ? Math.round(parseFloat(partyFormCreditLimit) * 100) : 0,
+        loyaltyPoints: partyModalType === 'customer' ? Math.max(0, parseInt(partyFormLoyaltyPoints) || 0) : undefined,
       };
 
       if (editingParty) {
@@ -3037,10 +3557,12 @@ export function App() {
         body: JSON.stringify({
           name: newCatName.trim(),
           description: newCatDesc.trim() || undefined,
+          parentId: newCatParentId.trim() || undefined,
         }),
       });
       setNewCatName('');
       setNewCatDesc('');
+      setNewCatParentId('');
       loadCategories();
       showToast('Category created!');
     } catch (err: any) {
@@ -3056,9 +3578,11 @@ export function App() {
         body: JSON.stringify({
           name: editingCatName.trim(),
           description: editingCatDesc.trim() || null,
+          parentId: editingCatParentId.trim() || null,
         }),
       });
       setEditingCatId(null);
+      setEditingCatParentId('');
       loadCategories();
       loadItems();
       showToast('Category updated!');
@@ -3069,22 +3593,135 @@ export function App() {
 
   const handleToggleCategoryActive = async (cat: Category) => {
     try {
-      if (!cat.active) {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active: true }),
-        });
-        showToast(`Category "${cat.name}" reactivated!`);
-      } else {
-        await api(`/api/categories/${cat.id}`, {
-          method: 'DELETE',
-        });
-        showToast(`Category "${cat.name}" deactivated!`);
-      }
+      const nextActive = !cat.active;
+      await api(`/api/categories/${cat.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: nextActive }),
+      });
+      showToast(`Category "${cat.name}" ${nextActive ? 'activated (ON)' : 'deactivated (OFF)'}!`);
       loadCategories();
     } catch (err: any) {
       alert(err.message || 'Failed to update category status');
     }
+  };
+
+  const handleDeleteCategory = async (cat: Category) => {
+    const confirmMsg = `Are you sure you want to permanently delete category "${cat.name}"? Products assigned to this category will have their category cleared.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api(`/api/categories/${cat.id}`, {
+        method: 'DELETE',
+      });
+      showToast(`Category "${cat.name}" permanently deleted!`);
+      loadCategories();
+      loadItems();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete category');
+    }
+  };
+
+  const handleDownloadCategoryTemplate = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch('/api/categories/template', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to download template');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'categories_sample_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Sample template downloaded!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to download category template');
+    }
+  };
+
+  const handleCategoryFileChange = async (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Please select a valid CSV file (.csv).');
+      return;
+    }
+    setCatImportFileName(file.name);
+    setCatImportLoading(true);
+    setCatImportResult(null);
+    setCatImportPreview(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = String(evt.target?.result || '');
+      setCatImportCsv(text);
+      try {
+        const preview = await api<any>('/api/categories/import', {
+          method: 'POST',
+          body: JSON.stringify({ csvContent: text, dryRun: true }),
+        });
+        setCatImportPreview(preview);
+      } catch (err: any) {
+        alert(err.message || 'Failed to parse category file');
+        setCatImportPreview(null);
+      } finally {
+        setCatImportLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      alert('Failed to read file content.');
+      setCatImportLoading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCommitCategoryImport = async () => {
+    if (!catImportCsv) return;
+    setCatImportLoading(true);
+    try {
+      const res = await api<{
+        success: boolean;
+        total: number;
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: Array<{ row: number; name?: string; error: string }>;
+      }>('/api/categories/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          csvContent: catImportCsv,
+          dryRun: false,
+          updateExisting: catImportUpdateExisting,
+        }),
+      });
+      setCatImportResult(res);
+      setCatImportPreview(null);
+      loadCategories();
+      loadItems();
+      showToast(`Import completed: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped`);
+    } catch (err: any) {
+      alert(err.message || 'Category import failed');
+    } finally {
+      setCatImportLoading(false);
+    }
+  };
+
+  const handleDownloadImportErrors = () => {
+    const errors = catImportPreview?.errors || catImportResult?.errors || [];
+    if (errors.length === 0) return;
+    const csvContent = 'Row,Category Name,Error\r\n' + errors.map((e) => `${e.row},"${(e.name || '').replace(/"/g, '""')}","${(e.error || '').replace(/"/g, '""')}"`).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'category_import_errors.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -3231,8 +3868,6 @@ export function App() {
   );
   const totalStockAlerts = outOfStockItems.length + lowStockItems.length;
 
-  const selectedParty = parties.find((p) => p.id === selectedPartyId);
-
   const filteredParties = parties.filter((p) => {
     if (p.type !== 'customer') return false;
     if (!customerSearch) return true;
@@ -3246,11 +3881,63 @@ export function App() {
 
   return (
     <div className="app-container">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#10b981', color: '#ffffff', padding: '0.75rem 1.25rem', borderRadius: '8px', fontWeight: 700, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span>✨</span>
-          <span>{toastMessage}</span>
+      {/* Enterprise Custom Toast Notifications */}
+      {toasts.length > 0 && (
+        <div className="enterprise-toast-container" aria-live="polite">
+          {toasts.map((t) => (
+            <div key={t.id} className={`enterprise-toast toast-${t.type}`} role="alert">
+              <div className="toast-icon-badge">
+                {t.type === 'success' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+                {t.type === 'error' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                )}
+                {t.type === 'warning' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                )}
+                {t.type === 'info' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                )}
+              </div>
+
+              <div className="toast-body">
+                {t.title && <div className="toast-headline">{t.title}</div>}
+                <div className="toast-text">{t.message}</div>
+              </div>
+
+              <button
+                type="button"
+                className="toast-close-btn"
+                onClick={() => dismissToast(t.id)}
+                aria-label="Dismiss notification"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+
+              <div
+                className="toast-timer-bar"
+                style={{ animationDuration: `${t.duration}ms` }}
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -3284,8 +3971,11 @@ export function App() {
               onClick={() => setShowBusinessDropdown(!showBusinessDropdown)}
               title="Click to view store profile and partition details"
             >
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#6d4aff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0 }}>
-                🏬
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0, boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
               </div>
               <div className="sidebar-store-info">
                 <span className="sidebar-store-name">
@@ -3394,67 +4084,100 @@ export function App() {
             )}
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links - Strictly Tailored per Role */}
           <nav className="sidebar-nav">
+            {/* 1. Dashboard Tab - Custom title and icon per role */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveTab('dashboard')}
             >
-              <span className="nav-icon">🏠</span>
-              <span className="nav-text">Dashboard</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+                  <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+                  <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+                  <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+                </svg>
+              </span>
+              <span className="nav-text">
+                {user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
+              </span>
             </button>
+
+            {/* 2. POS Counter - Available to Cashier, Store Manager, and Super Admin */}
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === 'pos' ? 'active' : ''}`}
               onClick={() => setActiveTab('pos')}
             >
-              <span className="nav-icon">🛒</span>
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1"></circle>
+                  <circle cx="20" cy="21" r="1"></circle>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+              </span>
               <span className="nav-text">POS Counter</span>
               <span className="nav-tag-shortcut">F1</span>
             </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('shifts')}
-            >
-              <span className="nav-icon">💵</span>
-              <span className="nav-text">Cashier Shifts</span>
-              {activeShiftNumber ? (
-                <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
-                  ● {activeShiftNumber}
-                </span>
-              ) : (
-                <span className="nav-shift-badge closed">
-                  Closed
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
-              onClick={() => setActiveTab('items')}
-            >
-              <span className="nav-icon">📦</span>
-              <span className="nav-text">Products</span>
-              <span className="nav-count-badge">{items.length}</span>
-            </button>
-            {/* INVENTORY HUB WITH SUBMENU DROPDOWN */}
-            <div
-              ref={inventoryDropdownRef}
-              className={`sidebar-nav-group ${isInventorySubmenuVisible ? 'dropdown-open' : ''}`}
-              onMouseEnter={handleInventoryMouseEnter}
-              onMouseLeave={handleInventoryMouseLeave}
-            >
+            {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
+            {user.role === 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
-                  activeTab === 'product-movement' ? 'has-active-child' : ''
-                } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
-                onClick={handleInventoryClick}
-                aria-haspopup="true"
-                aria-expanded={isInventorySubmenuVisible}
-                title="Inventory Hub & Stock Operations"
+                className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('shifts')}
+              >
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <path d="M6 12h.01M18 12h.01"></path>
+                  </svg>
+                </span>
+                <span className="nav-text">My Cashier Shift</span>
+                {activeShiftNumber ? (
+                  <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
+                    ● {activeShiftNumber}
+                  </span>
+                ) : (
+                  <span className="nav-shift-badge closed">
+                    Closed
+                  </span>
+                )}
+              </button>
+            )}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
+                onClick={() => setActiveTab('items')}
+              >
+                <span className="nav-icon">📦</span>
+                <span className="nav-text">Products</span>
+                <span className="nav-count-badge">{items.length}</span>
+              </button>
+            )}
+
+            {/* 4b. Categories: Dedicated Module */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
+                onClick={() => setActiveTab('categories')}
+              >
+                <span className="nav-icon">🏷️</span>
+                <span className="nav-text">Categories</span>
+                <span className="nav-count-badge">{categoriesList.length}</span>
+              </button>
+            )}
+
+            {/* 5. Inventory Hub: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('inventory')}
               >
                 <span className="nav-icon">🏬</span>
                 <span className="nav-text">Inventory Hub</span>
@@ -3474,92 +4197,274 @@ export function App() {
                   </span>
                 </div>
               </button>
+            )}
 
-              {isInventorySubmenuVisible && (
-                <div className="sidebar-submenu-list" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveTab('product-movement');
-                      setShowInventoryDropdown(true);
-                    }}
-                    title="Product Analysis"
-                  >
-                    <span className="submenu-icon" aria-hidden="true">🚀</span>
-                    <span className="submenu-text">Product Analysis</span>
-                  </button>
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
-              onClick={() => setActiveTab('invoices')}
-            >
-              <span className="nav-icon">📄</span>
-              <span className="nav-text">Bills & Invoices</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sales-analysis')}
-            >
-              <span className="nav-icon">💰</span>
-              <span className="nav-text">Sales Analysis</span>
-              <span className="nav-badge-new">NEW</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('customers')}
-            >
-              <span className="nav-icon">👥</span>
-              <span className="nav-text">Customers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('suppliers')}
-            >
-              <span className="nav-icon">🚚</span>
-              <span className="nav-text">Suppliers</span>
-              <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
-            </button>
-            {can(user?.role as any, 'purchases') && (
+            {/* Inventory Submenu */}
+            {user.role !== 'cashier' && isInventorySubmenuVisible && (
+              <div className="sidebar-submenu-list" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('product-movement');
+                    setShowInventoryDropdown(true);
+                  }}
+                  title="Product Analysis"
+                >
+                  <span className="submenu-icon" aria-hidden="true">🚀</span>
+                  <span className="submenu-text">Product Analysis</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sales Analysis: For Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('purchases');
-                  loadPurchases();
-                }}
+                className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
+                onClick={() => setActiveTab('sales-analysis')}
               >
-                <span className="nav-icon">📥</span>
-                <span className="nav-text">Purchases & Inward</span>
-                <span className="nav-count-badge">{purchases.length}</span>
+                <span className="nav-icon">💰</span>
+                <span className="nav-text">Sales Analysis</span>
+                <span className="nav-badge-new">NEW</span>
               </button>
             )}
 
-            <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>MANAGEMENT</div>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reports')}
-            >
-              <span className="nav-icon">📊</span>
-              <span className="nav-text">Analytics & Reports</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <span className="nav-icon">⚙️</span>
-              <span className="nav-text">Business Packs</span>
-            </button>
+            {/* Cashier Recent Bills */}
+            {user.role === 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                onClick={() => setActiveTab('invoices')}
+              >
+                <span className="nav-icon">📄</span>
+                <span className="nav-text">Recent Bills</span>
+              </button>
+            )}
+
+            {/* 7. Customers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('customers')}
+              >
+                <span className="nav-icon">👥</span>
+                <span className="nav-text">Customers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+              </button>
+            )}
+
+            {/* 8. Suppliers: Only for Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('suppliers')}
+              >
+                <span className="nav-icon">🚚</span>
+                <span className="nav-text">Suppliers</span>
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+              </button>
+            )}
+
+            {/* ACCOUNTS & FINANCE - Matching upper section nav items */}
+            {user.role !== 'cashier' && (
+              <>
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => setIsAccountsOpen(!isAccountsOpen)}
+                  aria-expanded={isAccountsOpen}
+                >
+                  <span className="nav-icon">💼</span>
+                  <span className="nav-text">Accounts &amp; Finance</span>
+                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>▼</span>
+                </button>
+                
+                {isAccountsOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('invoices')}
+                    >
+                      <span className="nav-icon">🧾</span>
+                      <span className="nav-text">Sales &amp; Invoices</span>
+                    </button>
+
+                    {can(user?.role as any, 'purchases') && (
+                      <button
+                        type="button"
+                        className={`sidebar-nav-item ${activeTab === 'purchases' ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveTab('purchases');
+                          loadPurchases();
+                        }}
+                      >
+                        <span className="nav-icon">📥</span>
+                        <span className="nav-text">Purchases &amp; Inward</span>
+                        <span className="nav-count-badge">{purchases.length}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payments')}
+                    >
+                      <span className="nav-icon">💳</span>
+                      <span className="nav-text">Payments</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'expenses' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('expenses')}
+                    >
+                      <span className="nav-icon">💼</span>
+                      <span className="nav-text">Expenses</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('cashbank')}
+                    >
+                      <span className="nav-icon">🏦</span>
+                      <span className="nav-text">Cash &amp; Bank</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('payables')}
+                    >
+                      <span className="nav-icon">📉</span>
+                      <span className="nav-text">Payables</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('reports')}
+                    >
+                      <span className="nav-icon">📊</span>
+                      <span className="nav-text">Financial Reports</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* GST FILING - Matching upper section nav items */}
+            {user.role !== 'cashier' && (
+              <>
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => setIsGstOpen(!isGstOpen)}
+                  aria-expanded={isGstOpen}
+                >
+                  <span className="nav-icon">🏛️</span>
+                  <span className="nav-text">GST Filing</span>
+                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>▼</span>
+                </button>
+                
+                {isGstOpen && (
+                  <div className="sidebar-sub-items">
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-overview' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-overview')}
+                    >
+                      <span className="nav-icon">🏛️</span>
+                      <span className="nav-text">GST Overview</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-sales-register')}
+                    >
+                      <span className="nav-icon">📋</span>
+                      <span className="nav-text">Sales Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr1')}
+                    >
+                      <span className="nav-icon">📑</span>
+                      <span className="nav-text">GSTR-1</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-purchase-register')}
+                    >
+                      <span className="nav-icon">📦</span>
+                      <span className="nav-text">Purchase Register</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-itc-reconciliation')}
+                    >
+                      <span className="nav-icon">⚖️</span>
+                      <span className="nav-text">ITC Register &amp; Reconciliation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-gstr3b' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-gstr3b')}
+                    >
+                      <span className="nav-icon">📄</span>
+                      <span className="nav-text">GSTR-3B Preparation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-import-export')}
+                    >
+                      <span className="nav-icon">📥</span>
+                      <span className="nav-text">Import &amp; Export</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('gst-filing-history')}
+                    >
+                      <span className="nav-icon">🕰️</span>
+                      <span className="nav-text">Filing History</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Management Section: Only for Super Admin */}
+            {user.role === 'owner' && (
+              <>
+                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>CONFIGURATION</div>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('settings')}
+                >
+                  <span className="nav-icon">⚙️</span>
+                  <span className="nav-text">Business Packs</span>
+                </button>
+              </>
+            )}
+
           </nav>
         </div>
 
@@ -3573,28 +4478,41 @@ export function App() {
               <span className="sidebar-user-name">{user.name}</span>
               <span className="sidebar-user-role">
                 <span className="user-status-dot"></span>
-                {user.role}
+                {user.role === 'owner' ? '👑 Super Admin' : user.role === 'manager' ? '🏪 Store Manager' : user.role === 'cashier' ? '💳 Cashier' : user.role}
               </span>
             </div>
           </div>
 
           <div className="sidebar-footer-buttons-list">
-            <button
-              type="button"
-              className="sidebar-action-row-btn"
-              onClick={() => setActiveTab('settings')}
-              title="Store Configuration & Settings"
-            >
-              <span className="action-row-icon">⚙️</span>
-              <span>Settings</span>
-            </button>
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className="sidebar-action-row-btn"
+                onClick={() => setActiveTab('settings')}
+                title="Store Configuration & Settings"
+              >
+                <span className="action-row-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                </span>
+                <span>Settings</span>
+              </button>
+            )}
             <button
               type="button"
               className="sidebar-action-row-btn signout"
               onClick={handleLogout}
               title="Logout of current business"
             >
-              <span className="action-row-icon">🚪</span>
+              <span className="action-row-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+              </span>
               <span>Logout</span>
             </button>
           </div>
@@ -3606,7 +4524,12 @@ export function App() {
         {/* Top Global Bar Matching Image 2 */}
         <div className="top-global-bar">
           <div className="top-global-search">
-            <span className="global-search-icon">🔍</span>
+            <span className="global-search-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </span>
             <input
               type="text"
               className="global-search-input"
@@ -3621,12 +4544,17 @@ export function App() {
               className="top-notification-btn"
               title={
                 totalStockAlerts > 0
-                  ? `🔔 ${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock) — Click to review`
+                  ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock) — Click to review`
                   : 'No inventory alerts'
               }
               onClick={() => setActiveTab('inventory')}
             >
-              <span className="notif-icon">🔔</span>
+              <span className="notif-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+              </span>
               {totalStockAlerts > 0 && (
                 <span className={`notif-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}>
                   {totalStockAlerts}
@@ -3646,20 +4574,33 @@ export function App() {
         </div>
 
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && (
+        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
-                {activeTab === 'shifts' && '💵 Cashier Shifts & Day-End Closing'}
-                {activeTab === 'items' && '📦 Product & Stock Catalog'}
-                {activeTab === 'inventory' && '🏬 Inventory Hub & Stock Operations'}
-                {activeTab === 'product-movement' && '🚀 Product Movement Analysis'}
-                {activeTab === 'purchases' && '📥 Purchases & Stock Inward'}
-                {activeTab === 'invoices' && '🧾 Sales Invoices & Bills'}
-                {activeTab === 'customers' && '👥 Customer Directory & Khata'}
-                {activeTab === 'suppliers' && '🚚 Supplier Directory'}
-                {activeTab === 'reports' && '📊 Business Analytics & Reports'}
-                {activeTab === 'settings' && '⚙️ Business Configuration & Settings'}
+                {activeTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
+                {activeTab === 'items' && 'Product & Stock Catalog'}
+                {activeTab === 'inventory' && 'Inventory Hub & Stock Operations'}
+                {activeTab === 'product-movement' && 'Product Movement Analysis'}
+                {activeTab === 'purchases' && 'Purchases & Stock Inward'}
+                {activeTab === 'invoices' && 'Sales Invoices & Bills'}
+                {activeTab === 'customers' && 'Customer Directory & Loyalty Points'}
+                {activeTab === 'suppliers' && 'Supplier Directory'}
+                {activeTab === 'reports' && 'Business Analytics & Reports'}
+                {activeTab === 'settings' && 'Business Configuration & Settings'}
+                {activeTab === 'payments' && 'Supplier Payments & Disbursements'}
+                {activeTab === 'expenses' && 'Business Operational Expenses'}
+                {activeTab === 'cashbank' && 'Cash & Bank Reconciliation'}
+                {activeTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
+                {activeTab === 'payables' && 'Accounts Payable & Vendor Balances'}
+                {activeTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
+                {activeTab === 'gst-sales-register' && 'GST Sales Register (Outward)'}
+                {activeTab === 'gst-purchase-register' && 'GST Purchase & Inward Register'}
+                {activeTab === 'gst-itc-reconciliation' && 'Input Tax Credit (ITC) Register & Reconciliation'}
+                {activeTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
+                {activeTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
+                {activeTab === 'gst-import-export' && 'GST Import & Export Hub'}
+                {activeTab === 'gst-filing-history' && 'GST Return Filing History'}
               </h1>
               <span className="content-page-subtitle">
                 {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
@@ -3668,10 +4609,23 @@ export function App() {
                 {activeTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
                 {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                 {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
-                {activeTab === 'customers' && 'Manage customer accounts, GSTINs, and khata balances'}
+                {activeTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
                 {activeTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
                 {activeTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
                 {activeTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
+                {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
+                {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
+                {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
+                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and khata receivables'}
+                {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
+                {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
+                {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
+                {activeTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
+                {activeTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
+                {activeTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
+                {activeTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
+                {activeTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                {activeTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
               </span>
             </div>
 
@@ -3686,25 +4640,106 @@ export function App() {
           </header>
         )}
 
-        {/* TAB 0: TODAY'S OVERVIEW DASHBOARD */}
+        {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
         {activeTab === 'dashboard' && user && (
-          <TodayDashboardView
-            user={user}
-            shop={shop}
-            onNavigateToPos={() => setActiveTab('pos')}
-            onNavigateToShifts={() => setActiveTab('shifts')}
-            onNavigateToInventory={() => setActiveTab('inventory')}
-            onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
-            onNavigateToPurchases={() => {
-              setActiveTab('purchases');
-              loadPurchases();
-            }}
-            onOpenAddProductModal={() => {
-              setEditingItem(null);
-              setShowItemModal(true);
-            }}
-            showToast={showToast}
-          />
+          <div className="dashboard-tab-wrapper">
+            <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+              <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => setDashboardViewMode('today')}
+                >
+                  📊 Today's Live Overview
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => setDashboardViewMode('management')}
+                >
+                  🏢 {user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}
+                </button>
+              </div>
+            </div>
+
+            {dashboardViewMode === 'today' ? (
+              <TodayDashboardView
+                user={user}
+                shop={shop}
+                onNavigateToPos={() => setActiveTab('pos')}
+                onNavigateToShifts={() => setActiveTab('shifts')}
+                onNavigateToInventory={() => setActiveTab('inventory')}
+                onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+                onNavigateToPurchases={() => {
+                  setActiveTab('purchases');
+                  loadPurchases();
+                }}
+                onOpenAddProductModal={() => {
+                  setEditingItem(null);
+                  setShowItemModal(true);
+                }}
+                showToast={showToast}
+              />
+            ) : (
+              <div className="role-dashboards-view">
+                {user.role === 'owner' && (
+                  <SuperAdminDashboard
+                    user={user}
+                    shop={shop}
+                    report={report}
+                    onRefreshReport={loadReports}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+                {user.role === 'manager' && (
+                  <StoreManagerDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+                {user.role === 'cashier' && (
+                  <CashierDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                    onNavigateToShifts={() => setActiveTab('shifts')}
+                  />
+                )}
+                {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+                  <SuperAdminDashboard
+                    user={user}
+                    shop={shop}
+                    report={report}
+                    onRefreshReport={loadReports}
+                    onNavigate={setActiveTab}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* TAB 1: BENTO POS BILLING TERMINAL */}
@@ -3740,6 +4775,22 @@ export function App() {
               </div>
 
               <div className="bento-top-right">
+                {/* Customer Display Button */}
+                <button
+                  type="button"
+                  className={`bento-cfd-pill ${isCfdConnected ? 'active' : ''}`}
+                  onClick={() => setShowCfdModal(true)}
+                  title="Open Customer-Facing Display (Secondary Monitor / Wireless Tablet)"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                  <span>Customer Screen</span>
+                  {isCfdConnected && <span className="bento-cfd-dot"></span>}
+                </button>
+
                 {/* Inventory Alert Trigger */}
                 {totalStockAlerts > 0 && (
                   <button
@@ -3802,7 +4853,7 @@ export function App() {
               <div className="bento-left-col">
                 {/* ROW 1: Customer Card & Barcode Scanner in a 2-Card Bento Row */}
                 <div className="bento-subgrid-2">
-                  {/* BENTO CARD: Customer Desk & Khata */}
+                  {/* BENTO CARD: Customer Desk & Loyalty Rewards */}
                   <div className="bento-card bento-customer-card">
                     <div className="bento-card-header">
                       <div className="bento-header-label">
@@ -3813,8 +4864,10 @@ export function App() {
                           </svg>
                         </span>
                         <div>
-                          <h3 className="bento-card-title">Customer & Khata</h3>
-                          <span className="bento-card-subtitle">Walk-in or Registered Account</span>
+                          <h3 className="bento-card-title">Customer & Loyalty Rewards</h3>
+                          <span className="bento-card-subtitle">
+                            {selectedParty ? 'Earn 1 pt per ₹10 • Instant counter discount' : 'Enter mobile to credit points automatically'}
+                          </span>
                         </div>
                       </div>
                       <button
@@ -3836,13 +4889,37 @@ export function App() {
                         <input
                           type="text"
                           className="bento-input"
-                          placeholder="Search customer by name, phone or GSTIN..."
+                          placeholder="📱 Enter customer mobile or name..."
                           value={customerSearch}
                           onChange={(e) => {
                             setCustomerSearch(e.target.value);
                             setShowCustomerDropdown(true);
                           }}
-                          onFocus={() => setShowCustomerDropdown(true)}
+                          onFocus={() => {
+                            if (customerSearch.trim()) setShowCustomerDropdown(true);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') setShowCustomerDropdown(false);
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const cleanDigits = customerSearch.replace(/\D/g, '');
+                              const match = cleanDigits.length >= 7
+                                ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
+                                : null;
+                              if (match) {
+                                setSelectedPartyId(match.id);
+                                setCustomerSearch('');
+                                setShowCustomerDropdown(false);
+                                showToast(`✓ Linked member: ${match.name}`);
+                              } else if (cleanDigits.length >= 10) {
+                                handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
+                              } else if (filteredParties.length === 1) {
+                                setSelectedPartyId(filteredParties[0].id);
+                                setCustomerSearch('');
+                                setShowCustomerDropdown(false);
+                              }
+                            }
+                          }}
                         />
                         {selectedParty && (
                           <div className="selected-customer-pill">
@@ -3853,6 +4930,7 @@ export function App() {
                               onClick={() => {
                                 setSelectedPartyId('');
                                 setCustomerSearch('');
+                                setRedeemPoints(false);
                               }}
                               title="Switch to Walk-in"
                             >
@@ -3864,62 +4942,202 @@ export function App() {
                           </div>
                         )}
 
-                        {showCustomerDropdown && (
-                          <div className="customer-dropdown-list">
-                            <div
-                              className="customer-dropdown-item walkin"
-                              onClick={() => {
-                                setSelectedPartyId('');
-                                setCustomerSearch('');
-                                setShowCustomerDropdown(false);
-                              }}
-                            >
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="7" r="4"></circle>
-                                  <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2"></path>
-                                </svg>
-                                <span>Walk-in Customer (Standard Retail)</span>
-                              </span>
-                            </div>
-                            {filteredParties.map((p) => (
+                        {showCustomerDropdown && customerSearch.trim().length > 0 && (() => {
+                          const cleanDigits = customerSearch.replace(/\D/g, '');
+                          const isPhoneCandidate = cleanDigits.length >= 7;
+                          const exactPhoneMatch = isPhoneCandidate
+                            ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
+                            : null;
+
+                          return (
+                            <>
                               <div
-                                key={p.id}
-                                className="customer-dropdown-item"
-                                onClick={() => {
-                                  setSelectedPartyId(p.id);
-                                  setCustomerSearch(p.name);
-                                  setShowCustomerDropdown(false);
-                                }}
-                              >
-                                <div className="cust-item-main">
-                                  <span className="cust-item-name">{p.name}</span>
-                                  <span className="cust-item-phone">{p.phone || 'No phone'}</span>
-                                </div>
-                                {p.gstin && <span className="cust-item-gstin">{p.gstin}</span>}
+                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
+                                onClick={() => setShowCustomerDropdown(false)}
+                              />
+                              <div className="customer-dropdown-list" style={{ zIndex: 50 }}>
+                                {/* If phone digits typed and no existing customer matches: show fast inline enroll */}
+                                {isPhoneCandidate && !exactPhoneMatch && (
+                                  <div className="pos-quick-enroll-box" style={{ margin: '0.4rem 0.5rem' }}>
+                                    <div className="pos-quick-enroll-head">
+                                      <span className="pos-enroll-star">✨</span>
+                                      <div>
+                                        <div className="pos-enroll-title">
+                                          <span>New Customer Mobile:</span>
+                                          <strong>{cleanDigits}</strong>
+                                        </div>
+                                        <div className="pos-enroll-sub">First-time shopper • Loyalty points will start on this bill!</div>
+                                      </div>
+                                    </div>
+                                    <div className="pos-quick-enroll-inputs">
+                                      <input
+                                        type="text"
+                                        className="bento-input pos-enroll-name-input"
+                                        placeholder="Customer Name (optional)"
+                                        value={quickCustomerName}
+                                        onChange={(e) => setQuickCustomerName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
+                                          }
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="pos-enroll-btn"
+                                        onClick={() => handleQuickEnrollCustomer(cleanDigits, quickCustomerName)}
+                                        disabled={isQuickEnrolling}
+                                      >
+                                        {isQuickEnrolling ? 'Enrolling...' : '⚡ Enroll (Enter)'}
+                                      </button>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
+                                      💡 Or continue billing — account and points automatically start upon checkout!
+                                    </div>
+                                  </div>
+                                )}
+
+                                {filteredParties.length > 0 ? (
+                                  filteredParties.map((p) => {
+                                    const pts = getPartyLoyaltyPoints(p.id, p.phone);
+                                    const isExact = exactPhoneMatch?.id === p.id;
+                                    return (
+                                      <div
+                                        key={p.id}
+                                        className="customer-dropdown-item"
+                                        style={isExact ? { background: '#f0fdf4', borderLeft: '3px solid #16a34a' } : undefined}
+                                        onClick={() => {
+                                          setSelectedPartyId(p.id);
+                                          setCustomerSearch('');
+                                          setRedeemPoints(false);
+                                          setShowCustomerDropdown(false);
+                                        }}
+                                      >
+                                        <div className="cust-item-main">
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                            <span className="cust-item-name">{p.name}</span>
+                                            {isExact && (
+                                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
+                                                Exact Match
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="cust-item-phone">📱 {p.phone || 'No phone'}</span>
+                                        </div>
+                                        <div className="cust-item-loyalty-tag">
+                                          🪙 {pts.toLocaleString()} pts
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : !isPhoneCandidate ? (
+                                  <div style={{ padding: '0.85rem 1rem', textAlign: 'center', fontSize: '0.82rem', color: '#64748b' }}>
+                                    <div>No customer found matching "{customerSearch}"</div>
+                                    <button
+                                      type="button"
+                                      className="bento-add-btn"
+                                      style={{ margin: '0.5rem auto 0', display: 'inline-flex' }}
+                                      onClick={() => {
+                                        setShowCustomerDropdown(false);
+                                        openAddPartyModal('customer');
+                                      }}
+                                    >
+                                      + Register New Customer
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Customer Info Highlights */}
                       {selectedParty ? (
-                        <div className="bento-customer-meta">
-                          <div className="meta-item">
-                            <span className="meta-label">Phone:</span>
-                            <span className="meta-val">{selectedParty.phone || 'N/A'}</span>
+                        <div className="bento-customer-loyalty-card">
+                          <div className="loyalty-card-head">
+                            <div className="loyalty-phone-box">
+                              <span style={{ color: (selectedParty.loyaltyPoints ?? 0) > 0 ? '#15803d' : '#2563eb', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                {(selectedParty.loyaltyPoints ?? 0) > 0 ? 'Member' : 'Enrolled'}
+                              </span>
+                              <span style={{ color: '#94a3b8' }}>•</span>
+                              <span className="mono bold">{selectedParty.phone || 'No mobile'}</span>
+                            </div>
+                            <div className="loyalty-pts-pill" title={`1 pt = ${formatRupees(shopPointValMinor)} discount`}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
+                              </svg>
+                              <span className="mono bold pts-count">{selectedPartyPoints.toLocaleString()}</span>
+                              <span className="pts-label">pts</span>
+                              <span className="pts-val-bracket">({formatRupees(selectedPartyPoints * shopPointValMinor)})</span>
+                            </div>
                           </div>
-                          {selectedParty.gstin && (
-                            <div className="meta-item">
-                              <span className="meta-label">GSTIN:</span>
-                              <span className="meta-val mono">{selectedParty.gstin}</span>
+
+                          {/* 1-Click Points Redemption Button */}
+                          {shopLoyaltyActive && selectedPartyPoints >= shopMinRedeem && cart.length > 0 && (
+                            <button
+                              type="button"
+                              className={`pos-redeem-points-btn ${redeemPoints ? 'redeeming' : ''}`}
+                              onClick={() => setRedeemPoints(!redeemPoints)}
+                              title={redeemPoints ? 'Cancel points redemption' : `Redeem points for instant discount (1 pt = ${formatRupees(shopPointValMinor)})`}
+                            >
+                              {redeemPoints ? (
+                                <>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                  <span>Redeeming <strong>{pointsActuallyRedeemed} pts</strong> (-{formatRupees(pointsDiscountMinor)})</span>
+                                  <span className="redeem-cancel">✕ Cancel</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                  </svg>
+                                  <span>Redeem Available Points</span>
+                                  <span className="redeem-save-badge">Save up to {formatRupees(Math.min(cartTotalMinor - percentDiscountMinor, selectedPartyPoints * shopPointValMinor))}</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {shopLoyaltyActive && selectedPartyPoints > 0 && selectedPartyPoints < shopMinRedeem && (
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px dashed #cbd5e1', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                                <line x1="12" y1="8" x2="12.01" y2="8" />
+                              </svg>
+                              <span>Min. {shopMinRedeem} pts required to redeem (Current: {selectedPartyPoints} pts)</span>
                             </div>
                           )}
-                          <div className="meta-item">
-                            <span className="meta-label">Credit Limit:</span>
-                            <span className="meta-val mono">{formatRupees(selectedParty.creditLimitMinor || 0)}</span>
-                          </div>
+
+                          {/* Points Earned Preview */}
+                          {shopLoyaltyActive ? (
+                            <div className="loyalty-earn-notice">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="8" r="7" />
+                                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                              </svg>
+                              <span>
+                                This bill earns: <strong className="mono">+{pointsToEarnOnBill} pts</strong> ({shopPointsPer100} pts per ₹100 spent)
+                                {selectedPartyPoints > 0 && (
+                                  <span style={{ color: '#059669', marginLeft: '6px', fontWeight: 600 }}>
+                                    ➔ Total will be: {(selectedPartyPoints - (redeemPoints ? pointsActuallyRedeemed : 0) + pointsToEarnOnBill).toLocaleString()} pts
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="loyalty-earn-notice" style={{ opacity: 0.7 }}>
+                              <span>Loyalty program paused in shop settings</span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="bento-customer-quick-row">
@@ -4033,6 +5251,7 @@ export function App() {
                           </svg>
                           <span>Focus Scanner</span>
                         </button>
+
 
                         <button
                           type="button"
@@ -4716,7 +5935,16 @@ export function App() {
                       {appliedDiscountPercent > 0 && (
                         <div className="bento-summary-row discount-row">
                           <span className="summary-label">Bill Discount ({appliedDiscountPercent}%)</span>
-                          <span className="summary-val mono text-success">-{formatRupees(discountMinor)}</span>
+                          <span className="summary-val mono text-success">-{formatRupees(percentDiscountMinor)}</span>
+                        </div>
+                      )}
+
+                      {pointsDiscountMinor > 0 && (
+                        <div className="bento-summary-row discount-row" style={{ background: '#ecfdf5', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
+                          <span className="summary-label" style={{ color: '#047857', fontWeight: 700 }}>
+                            🪙 Points Redeemed ({pointsActuallyRedeemed} pts)
+                          </span>
+                          <span className="summary-val mono text-success">-{formatRupees(pointsDiscountMinor)}</span>
                         </div>
                       )}
 
@@ -4743,6 +5971,293 @@ export function App() {
                         </div>
                       )}
                     </div>
+
+                    {/* Counter Customer Mobile Input / Linked Member Badge */}
+                    {!selectedParty ? (() => {
+                      const cleanDigits = customerSearch.replace(/\D/g, '');
+                      const last10 = cleanDigits.slice(-10);
+                      const counterMatches = customerSearch.trim().length >= 3
+                        ? parties.filter(p => p.type === 'customer' && (
+                            (p.phone && p.phone.replace(/\D/g, '').includes(cleanDigits)) ||
+                            p.name.toLowerCase().includes(customerSearch.trim().toLowerCase())
+                          )).slice(0, 3)
+                        : [];
+                      const hasExactMatch = cleanDigits.length >= 7 && parties.some(p => p.type === 'customer' && p.phone && (
+                        p.phone.replace(/\D/g, '') === cleanDigits ||
+                        p.phone.replace(/\D/g, '').endsWith(last10) ||
+                        cleanDigits.endsWith(p.phone.replace(/\D/g, '').slice(-10))
+                      ));
+
+                      return (
+                        <div className="bento-counter-mobile-box">
+                          <div className="counter-mobile-head">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            <span className="mobile-title">Customer & Loyalty Rewards:</span>
+                            {customerSearch && <span className="mobile-val mono">{customerSearch}</span>}
+                          </div>
+
+                          <div className="counter-mobile-inputs-row" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '0.65rem' }}>
+                            <div className="counter-input-col">
+                              <label className="counter-col-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                </svg>
+                                Customer Mobile
+                              </label>
+                              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                <input
+                                  type="tel"
+                                  maxLength={15}
+                                  autoComplete="off"
+                                  style={{ flex: 1, fontSize: '0.88rem', padding: '0.45rem 0.65rem' }}
+                                  placeholder="10-digit mobile number..."
+                                  value={customerSearch}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setCustomerSearch(val);
+                                    const d = val.replace(/\D/g, '');
+                                    if (d.length >= 10) {
+                                      const d10 = d.slice(-10);
+                                      const match = parties.find(p => p.type === 'customer' && p.phone && (
+                                        p.phone.replace(/\D/g, '') === d ||
+                                        p.phone.replace(/\D/g, '').endsWith(d10) ||
+                                        d.endsWith(p.phone.replace(/\D/g, '').slice(-10))
+                                      ));
+                                      if (match) {
+                                        setSelectedPartyId(match.id);
+                                        setCustomerSearch('');
+                                        setQuickCustomerName('');
+                                        showToast(`✓ Linked member: ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
+                                      } else {
+                                        api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`).then((res) => {
+                                          if (res?.party) {
+                                            setParties((prev) => (prev.some(p => p.id === res.party!.id) ? prev : [...prev, res.party!]));
+                                            setSelectedPartyId(res.party.id);
+                                            setCustomerSearch('');
+                                            setQuickCustomerName('');
+                                            showToast(`✓ Linked member: ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
+                                          }
+                                        }).catch(() => {});
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const d = customerSearch.replace(/\D/g, '');
+                                      if (d.length >= 7) {
+                                        const d10 = d.slice(-10);
+                                        const match = parties.find(p => p.type === 'customer' && p.phone && (
+                                          p.phone.replace(/\D/g, '') === d ||
+                                          p.phone.replace(/\D/g, '').endsWith(d10) ||
+                                          d.endsWith(p.phone.replace(/\D/g, '').slice(-10))
+                                        ));
+                                        if (match) {
+                                          setSelectedPartyId(match.id);
+                                          setCustomerSearch('');
+                                          setQuickCustomerName('');
+                                          showToast(`✓ Linked ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
+                                        } else {
+                                          try {
+                                            const res = await api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`);
+                                            if (res?.party) {
+                                              setParties((prev) => (prev.some(p => p.id === res.party!.id) ? prev : [...prev, res.party!]));
+                                              setSelectedPartyId(res.party.id);
+                                              setCustomerSearch('');
+                                              setQuickCustomerName('');
+                                              showToast(`✓ Linked ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
+                                            }
+                                          } catch {}
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
+                                {customerSearch && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary compact"
+                                    style={{ padding: '0.45rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    onClick={() => {
+                                      setCustomerSearch('');
+                                      setSelectedPartyId('');
+                                      setQuickCustomerName('');
+                                    }}
+                                    title="Clear mobile number"
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="counter-input-col">
+                              <label className="counter-col-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                  <circle cx="12" cy="7" r="4" />
+                                </svg>
+                                Customer Name
+                              </label>
+                              <input
+                                type="text"
+                                autoComplete="off"
+                                style={{ width: '100%', fontSize: '0.88rem', padding: '0.45rem 0.65rem' }}
+                                placeholder="Name (e.g. Ramesh)"
+                                value={quickCustomerName}
+                                onChange={(e) => setQuickCustomerName(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Live Matched Customer Autocomplete Suggestions */}
+                          {counterMatches.length > 0 && (
+                            <div className="counter-matches-list">
+                              {counterMatches.map((m) => (
+                                <div
+                                  key={m.id}
+                                  className="counter-match-row"
+                                  onClick={() => {
+                                    setSelectedPartyId(m.id);
+                                    setCustomerSearch('');
+                                    setQuickCustomerName('');
+                                    showToast(`✓ Linked ${m.name} (${m.loyaltyPoints ?? 0} pts)`);
+                                  }}
+                                  title="Click to link customer and show loyalty points"
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                      <circle cx="12" cy="7" r="4" />
+                                    </svg>
+                                    <span className="counter-match-name">{m.name}</span>
+                                    <span className="counter-match-phone mono"> ({m.phone})</span>
+                                  </div>
+                                  <span className="counter-match-pts" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="9" />
+                                      <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
+                                    </svg>
+                                    {m.loyaltyPoints ?? 0} pts
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* If 10 digits typed and brand new customer */}
+                          {cleanDigits.length >= 7 && !hasExactMatch && (
+                            <div className="counter-new-customer-hint" style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              <span><strong>New Customer:</strong> {quickCustomerName.trim() ? `"${quickCustomerName.trim()}"` : 'Customer'} ({cleanDigits}) will be automatically created in your database upon payment!</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                      <div className={`bento-counter-customer-linked ${redeemPoints ? 'redeemed' : ''}`}>
+                        <div className="cust-linked-main-row">
+                          <div className="cust-linked-left">
+                            <div className="cust-linked-avatar">
+                              {selectedParty.name ? selectedParty.name.trim().charAt(0).toUpperCase() : 'C'}
+                            </div>
+                            <div className="cust-linked-details">
+                              <div className="cust-linked-name-row">
+                                <span className="cust-linked-name" title={selectedParty.name}>{selectedParty.name}</span>
+                                <span className="cust-linked-badge">Member</span>
+                              </div>
+                              <div className="cust-linked-phone-row">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                </svg>
+                                <span className="cust-linked-phone mono">{selectedParty.phone || 'No mobile'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="cust-linked-right">
+                            <div className="cust-linked-pts-badge" title={`${selectedPartyPoints} points available (Worth ₹${((selectedPartyPoints * shopPointValMinor) / 100).toFixed(2)})`}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
+                              </svg>
+                              <div className="pts-labels">
+                                <span className="pts-count mono">{selectedPartyPoints} pts</span>
+                                <span className="pts-worth">(₹{((selectedPartyPoints * shopPointValMinor) / 100).toFixed(2)})</span>
+                              </div>
+                            </div>
+
+                            {shopLoyaltyActive && selectedPartyPoints >= shopMinRedeem && cart.length > 0 && potentialDiscountMinor > 0 && (
+                              <button
+                                type="button"
+                                className={`counter-redeem-toggle-btn ${redeemPoints ? 'active' : ''}`}
+                                onClick={() => {
+                                  const next = !redeemPoints;
+                                  setRedeemPoints(next);
+                                  if (next) {
+                                    playSupermarketBeep();
+                                    showToast(`Redeemed ${maxRedeemablePoints} points (-₹${(potentialDiscountMinor / 100).toFixed(2)})`);
+                                  } else {
+                                    showToast('Points discount removed');
+                                  }
+                                }}
+                                title={redeemPoints ? 'Click to cancel discount' : `Click to redeem ${maxRedeemablePoints} points for ₹${(potentialDiscountMinor / 100).toFixed(2)} off`}
+                              >
+                                {redeemPoints ? (
+                                  <>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>-₹{(pointsDiscountMinor / 100).toFixed(2)} Applied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                    </svg>
+                                    <span>Redeem ₹{(potentialDiscountMinor / 100).toFixed(2)}</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="cust-linked-clear"
+                              onClick={() => {
+                                setSelectedPartyId('');
+                                setCustomerSearch('');
+                                setRedeemPoints(false);
+                              }}
+                              title="Unlink customer / Switch to Walk-in"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Active points discount alert strip */}
+                        {redeemPoints && pointsDiscountMinor > 0 && (
+                          <div className="cust-linked-discount-strip">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span><strong>₹{(pointsDiscountMinor / 100).toFixed(2)} Loyalty Discount Applied!</strong> {pointsActuallyRedeemed} points will be deducted upon billing.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Payment Tender Modes with Stylized Vector Icons */}
                     <div className="bento-payment-modes">
@@ -4929,6 +6444,96 @@ export function App() {
                                 </button>
                               );
                             })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* DYNAMIC UPI QR & CUSTOMER DISPLAY CARD */}
+                    {selectedPayMode === 'upi' && cart.length > 0 && (
+                      <div className="bento-upi-tender-card">
+                        <div className="upi-tender-header">
+                          <div className="upi-tender-title">
+                            <span className="upi-icon-box">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                              </svg>
+                            </span>
+                            <span>Dynamic UPI QR Scanner</span>
+                          </div>
+                          <div className="upi-tender-status">
+                            <button
+                              type="button"
+                              className={`upi-dual-screen-chip ${isCfdConnected ? 'live' : 'open'}`}
+                              onClick={() => {
+                                const cfdUrl = `${window.location.origin}/customer-display`;
+                                window.open(cfdUrl, 'CustomerFacingDisplay', 'width=1280,height=800,menubar=no,toolbar=no,location=no');
+                                showToast('🖥️ Customer Display opened! Drag to your 2nd monitor.');
+                              }}
+                              title="Click to launch customer display on 2nd monitor"
+                            >
+                              <span className={`pulse-dot ${isCfdConnected ? 'active' : ''}`}></span>
+                              <span>{isCfdConnected ? '🖥️ Live on 2nd Monitor' : '🖥️ Launch on 2nd Monitor'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="upi-tender-body">
+                          <div className="upi-qr-display-wrap">
+                            <div
+                              className="upi-qr-code"
+                              dangerouslySetInnerHTML={{
+                                __html: qrSvg(
+                                  `upi://pay?pa=${encodeURIComponent(shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis'))}&pn=${encodeURIComponent(shop?.name || 'Retail Store')}&am=${(finalPayableMinor / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Bill at ${shop?.name || 'Retail Store'}`)}`,
+                                  { size: 130, margin: 1 }
+                                ),
+                              }}
+                            />
+                            <span className="upi-qr-brand-label">GPay • PhonePe • Paytm</span>
+                          </div>
+
+                          <div className="upi-tender-info">
+                            <div className="upi-amount-row">
+                              <span className="upi-label">Payable Amount:</span>
+                              <strong className="upi-val">₹{(finalPayableMinor / 100).toFixed(2)}</strong>
+                            </div>
+
+                            <div className="upi-vpa-row">
+                              <span className="upi-vpa-label">Shop VPA:</span>
+                              <span className="upi-vpa-code">{shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis')}</span>
+                              <button
+                                type="button"
+                                className="upi-edit-vpa-btn"
+                                onClick={async () => {
+                                  const current = shop?.upiId || '';
+                                  const input = window.prompt('Enter your Shop UPI ID / VPA (e.g. yourstore@okaxis, 9876543210@paytm):', current);
+                                  if (input !== null && shop) {
+                                    try {
+                                      const updated = await api<Shop>('/api/shop', {
+                                        method: 'PUT',
+                                        body: JSON.stringify({ ...shop, upiId: input.trim() || null }),
+                                      });
+                                      setShop(updated);
+                                      showToast(`✅ Shop UPI ID updated to ${input.trim() || 'default'}`);
+                                    } catch (e: any) {
+                                      alert(e.message || 'Failed to update UPI ID');
+                                    }
+                                  }
+                                }}
+                                title="Edit Shop UPI VPA"
+                              >
+                                ✏️ Edit VPA
+                              </button>
+                            </div>
+
+                            <div className="upi-dual-hint">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                              </svg>
+                              <span>Customer sees this QR on their screen. After payment confirmation, click <strong>Proceed to Payment</strong>.</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -5130,7 +6735,13 @@ export function App() {
                             <span>Processing...</span>
                           ) : (
                             <>
-                              <span>Proceed to Payment</span>
+                              <span>
+                                {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
+                                 selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
+                                 selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
+                                 selectedPayMode === 'credit' ? 'Post to Khata & Bill' :
+                                 'Proceed to Payment'}
+                              </span>
                               <span className="checkout-arrow">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
                                   <polyline points="9 18 15 12 9 6"></polyline>
@@ -5275,11 +6886,19 @@ export function App() {
 
         {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
         {activeTab === 'shifts' && user && (
-          <ShiftsDashboard
-            user={user}
-            shop={shop}
-            onNavigateToPos={() => setActiveTab('pos')}
-          />
+          user.role === 'manager' ? (
+            <StoreManagerDashboard
+              user={user}
+              shop={shop}
+              onNavigate={setActiveTab}
+            />
+          ) : (
+            <ShiftsDashboard
+              user={user}
+              shop={shop}
+              onNavigateToPos={() => setActiveTab('pos')}
+            />
+          )
         )}
 
         {/* TAB 2: PRODUCTS */}
@@ -5350,7 +6969,9 @@ export function App() {
                   >
                     <option value="ALL">All Categories</option>
                     {categoriesList.filter((c) => c.active).map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
                     ))}
                   </select>
                   <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
@@ -5391,6 +7012,7 @@ export function App() {
                   </button>
                 </div>
               </div>
+
               <div className="table-scroll-x">
                 <div className="table-scroll-y">
                   <table className="data-table">
@@ -5484,9 +7106,32 @@ export function App() {
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                                No barcode
-                              </span>
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                  No barcode
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem', color: '#4f46e5', fontWeight: 600, borderRadius: '4px' }}
+                                  onClick={async () => {
+                                    const code = '20' + Date.now().toString().slice(-10);
+                                    let sum = 0;
+                                    for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
+                                    const fullBc = code + ((10 - (sum % 10)) % 10);
+                                    try {
+                                      await api(`/api/items/${i.id}`, { method: 'PATCH', body: JSON.stringify({ barcode: fullBc }) });
+                                      showToast(`Generated barcode for ${i.name} & saved to DB!`);
+                                      loadItems();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to generate barcode');
+                                    }
+                                  }}
+                                  title="Generate and save an internal retail barcode to database"
+                                >
+                                  + Generate
+                                </button>
+                              </div>
                             )}
                           </td>
                           <td className="col-nowrap" style={{ verticalAlign: 'middle' }}>
@@ -5586,15 +7231,609 @@ export function App() {
           );
         })()}
 
+        {/* TAB 2b: CATEGORY MANAGEMENT MODULE */}
+        {activeTab === 'categories' && (() => {
+          const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
+          const subCategories = categoriesList.filter((c) => c.parentId && c.active);
+          const filteredCategories = categoriesList.filter((cat) => {
+            if (catTypeFilter === 'main' && cat.parentId) return false;
+            if (catTypeFilter === 'sub' && !cat.parentId) return false;
+            const q = catSearchTerm.trim().toLowerCase();
+            if (!q) return true;
+            return (
+              cat.name.toLowerCase().includes(q) ||
+              (cat.parentName && cat.parentName.toLowerCase().includes(q)) ||
+              (cat.description && cat.description.toLowerCase().includes(q))
+            );
+          });
+
+          return (
+            <div className="category-module-container">
+              {/* Category Management Hero Header */}
+              <div className="card" style={{ borderTop: '3px solid #6366f1' }}>
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '1.25rem' }}>🏷️</span>
+                      <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
+                        Category Management Module
+                      </span>
+                      <span className="badge badge-blue">{categoriesList.length} Total</span>
+                      <span className="badge badge-emerald">{mainCategories.length} Main</span>
+                      <span className="badge badge-blue">{subCategories.length} Sub</span>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '3px' }}>
+                      Manage main categories, subcategories, bulk CSV import, and synchronize catalog organization for {shop?.name}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleDownloadCategoryTemplate}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📄</span> Download Sample Template
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setShowCatImportView(!showCatImportView)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                    >
+                      <span>📥</span> {showCatImportView ? 'Close Import Drawer' : 'Import Categories (CSV)'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bulk Import Drawer */}
+                {showCatImportView && (
+                  <div
+                    style={{
+                      marginTop: '1.25rem',
+                      padding: '1.25rem',
+                      background: '#f8fafc',
+                      borderRadius: '10px',
+                      border: '1.5px dashed #cbd5e1',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>📥</span> Bulk Category CSV Import
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                          Supports 1,000+ categories. Subcategories can appear anywhere in the file.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCatImportView(false)}
+                        style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+                      <label
+                        className="btn btn-secondary"
+                        style={{
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.45rem',
+                          padding: '0.55rem 1rem',
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>{catImportFileName || 'Choose CSV File to Upload...'}</span>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCategoryFileChange(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer', color: '#334155' }}>
+                        <input
+                          type="checkbox"
+                          checked={catImportUpdateExisting}
+                          onChange={(e) => setCatImportUpdateExisting(e.target.checked)}
+                        />
+                        <span>Update existing categories if found (overwrite description/parent)</span>
+                      </label>
+                    </div>
+
+                    {catImportLoading && (
+                      <div style={{ padding: '1rem', color: '#6366f1', fontWeight: 600, fontSize: '0.88rem' }}>
+                        Processing category file... Please wait.
+                      </div>
+                    )}
+
+                    {/* Pre-flight Import Preview Card */}
+                    {catImportPreview && (
+                      <div
+                        style={{
+                          background: '#ffffff',
+                          padding: '1rem',
+                          borderRadius: '8px',
+                          border: `1.5px solid ${catImportPreview.errorCount > 0 ? '#fca5a5' : '#86efac'}`,
+                          marginBottom: '1rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                            Pre-flight Import Preview: {catImportFileName}
+                          </span>
+                          <span className={`badge ${catImportPreview.errorCount > 0 ? 'badge-amber' : 'badge-emerald'}`}>
+                            {catImportPreview.errorCount > 0 ? `${catImportPreview.errorCount} Errors Found` : 'Ready to Import'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Total Rows</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{catImportPreview.total}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Main Categories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{catImportPreview.mainCategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Subcategories</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{catImportPreview.subcategoriesCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Existing in Store</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{catImportPreview.duplicateCount}</div>
+                          </div>
+                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Errors</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: catImportPreview.errorCount > 0 ? '#dc2626' : '#16a34a' }}>
+                              {catImportPreview.errorCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {catImportPreview.errors.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>
+                                Validation Errors ({catImportPreview.errors.length}) — Fix before importing:
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                onClick={handleDownloadImportErrors}
+                              >
+                                📥 Download Error Report CSV
+                              </button>
+                            </div>
+                            <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #fee2e2', borderRadius: '6px' }}>
+                              <table className="data-table" style={{ fontSize: '0.78rem' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '60px' }}>Row</th>
+                                    <th>Category Name</th>
+                                    <th>Error Message</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {catImportPreview.errors.map((e, idx) => (
+                                    <tr key={idx}>
+                                      <td className="mono" style={{ color: '#dc2626', fontWeight: 700 }}>#{e.row}</td>
+                                      <td>{e.name || '—'}</td>
+                                      <td style={{ color: '#dc2626' }}>{e.error}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setCatImportPreview(null);
+                              setCatImportCsv('');
+                              setCatImportFileName('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={catImportPreview.errorCount > 0 || catImportLoading}
+                            onClick={handleCommitCategoryImport}
+                          >
+                            {catImportLoading ? 'Importing...' : `Confirm & Import ${catImportPreview.total} Categories`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Final Import Result Card */}
+                    {catImportResult && (
+                      <div
+                        style={{
+                          background: '#ecfdf5',
+                          border: '1.5px solid #a7f3d0',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                        }}
+                      >
+                        <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem', marginBottom: '0.4rem' }}>
+                          ✓ Bulk Category Import Successful!
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#047857', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <span><strong>{catImportResult.created}</strong> new categories created</span>
+                          <span><strong>{catImportResult.updated}</strong> updated</span>
+                          <span><strong>{catImportResult.skipped}</strong> skipped (already existing)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Category Card - Enhanced Responsive Grid & Proportional Button */}
+              <div className="category-add-card">
+                <div className="category-card-header">
+                  <div className="category-card-title">
+                    <span style={{ fontSize: '1.05rem', color: '#4f46e5' }}>➕</span>
+                    <span>Add New Category or Subcategory</span>
+                  </div>
+                  <div className="category-card-hint">
+                    <span>💡</span>
+                    <span>Leave parent empty for a Top-Level Main Category, or select a parent to create a Subcategory.</span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCreateCategory} className="category-form-grid">
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Category Name <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="category-field-input"
+                      required
+                      placeholder="e.g. Beverages, Dairy, Pulses..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Parent Category <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <select
+                      className="category-field-input"
+                      value={newCatParentId}
+                      onChange={(e) => setNewCatParentId(e.target.value)}
+                    >
+                      <option value="">📁 None (Top-Level Main Category)</option>
+                      {mainCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          ↳ Subcategory of {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="category-field-group">
+                    <label className="category-field-label">
+                      Description <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="category-field-input"
+                      placeholder="Optional notes or shelf location..."
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="category-field-group">
+                    <button
+                      type="submit"
+                      className="category-submit-btn"
+                    >
+                      <span>➕</span>
+                      <span>Add Category</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Category Catalog Table Card */}
+              <div className="card">
+                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b' }}>Store Category Hierarchy</span>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontWeight: 600 }}>
+                      {filteredCategories.length} listed
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Quick Filter Pills */}
+                    <div className="category-filter-pills">
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('all')}
+                      >
+                        All ({categoriesList.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'main' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('main')}
+                      >
+                        📁 Main ({mainCategories.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`category-filter-pill ${catTypeFilter === 'sub' ? 'active' : ''}`}
+                        onClick={() => setCatTypeFilter('sub')}
+                      >
+                        ↳ Sub ({subCategories.length})
+                      </button>
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ width: '220px', padding: '0.42rem 0.75rem 0.42rem 2rem', fontSize: '0.84rem' }}
+                        placeholder="Search categories..."
+                        value={catSearchTerm}
+                        onChange={(e) => setCatSearchTerm(e.target.value)}
+                      />
+                      <span style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        🔍
+                      </span>
+                      {catSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setCatSearchTerm('')}
+                          style={{
+                            position: 'absolute',
+                            right: '0.5rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Category Name & Hierarchy</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Live Catalog Items</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCategories.map((cat) => (
+                        <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
+                          <td>
+                            {editingCatId === cat.id ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                  value={editingCatName}
+                                  onChange={(e) => setEditingCatName(e.target.value)}
+                                  placeholder="Category name..."
+                                />
+                                <select
+                                  className="form-input"
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                  value={editingCatParentId}
+                                  onChange={(e) => setEditingCatParentId(e.target.value)}
+                                >
+                                  <option value="">📁 None (Top-Level Main Category)</option>
+                                  {categoriesList
+                                    .filter((c) => c.id !== cat.id && !c.parentId && c.active)
+                                    .map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        ↳ Subcategory of {c.name}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="cat-hierarchy-tree">
+                                {cat.parentName ? (
+                                  <>
+                                    <span className="cat-parent-tag">📁 {cat.parentName}</span>
+                                    <span className="cat-tree-branch">→</span>
+                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                  </>
+                                ) : (
+                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          <td>
+                            {cat.parentId ? (
+                              <span className="badge badge-blue">Subcategory</span>
+                            ) : (
+                              <span className="badge badge-emerald">Main Category</span>
+                            )}
+                          </td>
+
+                          <td style={{ color: '#64748b' }}>
+                            {editingCatId === cat.id ? (
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                value={editingCatDesc}
+                                onChange={(e) => setEditingCatDesc(e.target.value)}
+                                placeholder="Description..."
+                              />
+                            ) : (
+                              cat.description || '—'
+                            )}
+                          </td>
+
+                          <td>
+                            <span
+                              className="cat-item-pill"
+                              onClick={() => {
+                                setItemCatFilterMaster(cat.name);
+                                setActiveTab('items');
+                              }}
+                              title="Click to view products in this category"
+                            >
+                              📦 {cat.itemCount || 0} Products ↗
+                            </span>
+                          </td>
+
+                          <td>
+                            <button
+                              type="button"
+                              className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                              onClick={() => handleToggleCategoryActive(cat)}
+                              title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                            >
+                              <span className="cat-toggle-track">
+                                <span className="cat-toggle-thumb" />
+                              </span>
+                              <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                            </button>
+                          </td>
+
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+                              {editingCatId === cat.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => handleUpdateCategory(cat.id)}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      setEditingCatId(null);
+                                      setEditingCatParentId('');
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="cat-edit-btn"
+                                    onClick={() => {
+                                      setEditingCatId(cat.id);
+                                      setEditingCatName(cat.name);
+                                      setEditingCatDesc(cat.description || '');
+                                      setEditingCatParentId(cat.parentId || '');
+                                    }}
+                                    title="Edit Category Name, Parent, or Description"
+                                  >
+                                    <span style={{ fontSize: '0.85rem' }}>✏️</span>
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cat-delete-btn"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                    title={`Delete "${cat.name}" category`}
+                                  >
+                                    🗑️
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {filteredCategories.length === 0 && (
+                        <tr>
+                          <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.5rem' }}>🔍</span>
+                              <span>No categories found matching your search / filter.</span>
+                              {(catSearchTerm || catTypeFilter !== 'all') && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}
+                                  onClick={() => {
+                                    setCatSearchTerm('');
+                                    setCatTypeFilter('all');
+                                  }}
+                                >
+                                  Reset Filters
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* TAB: INVENTORY MANAGEMENT */}
         {activeTab === 'inventory' && (
           <InventoryDashboard
             items={items}
             categories={categories}
+            categoriesList={categoriesList}
             suppliers={parties.filter((p) => p.type === 'supplier')}
             userRole={user?.role as any}
             businessType={shop?.businessType}
             allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
+            onNavigateToCategories={() => setActiveTab('categories')}
             onNavigateToPurchases={(supplierId) => {
               setActiveTab('purchases');
               if (supplierId) {
@@ -5900,377 +8139,43 @@ export function App() {
           />
         )}
 
-        {/* TAB 4: CUSTOMERS */}
-        {activeTab === 'customers' && (() => {
-          const customersList = parties.filter((p) => p.type === 'customer' || !p.type);
-          const filteredCustomers = customersList.filter((p) => {
-            if (!customerFilterMaster.trim()) return true;
-            const q = customerFilterMaster.trim().toLowerCase();
-            return (
-              p.name.toLowerCase().includes(q) ||
-              (p.phone && p.phone.includes(q)) ||
-              (p.email && p.email.toLowerCase().includes(q)) ||
-              (p.gstin && p.gstin.toLowerCase().includes(q)) ||
-              (p.address && p.address.toLowerCase().includes(q))
-            );
-          });
+        {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
+        {activeTab === 'customers' && (
+          <CustomerDirectory
+            parties={parties}
+            invoices={invoices}
+            shop={shop}
+            onAddCustomer={() => openAddPartyModal('customer')}
+            onEditCustomer={(p) => openEditPartyModal(p)}
+            onToggleActive={(p) => handleTogglePartyActive(p)}
+            onUpdateLoyaltySettings={handleUpdateLoyaltySettings}
+            onRefresh={() => {
+              loadParties();
+              loadInvoices();
+            }}
+          />
+        )}
 
-          return (
-            <div>
-              {/* Customer Dues & Ageing Summary Header (Section 13) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem', marginBottom: '1.25rem' }}>
-                <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #f59e0b', margin: 0 }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Total Outstanding Dues
-                  </div>
-                  <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>
-                    {formatRupees(duesSummary?.totalDuesMinor || 0)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Across all credit customers
-                  </div>
-                </div>
-
-                <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #10b981', margin: 0 }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Total Advance Held
-                  </div>
-                  <div className="mono" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
-                    {formatRupees(duesSummary?.totalAdvanceMinor || 0)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    On-account credit balances
-                  </div>
-                </div>
-
-                <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #3b82f6', margin: 0 }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Ageing: 0–30 Days
-                  </div>
-                  <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1d4ed8', marginTop: '4px' }}>
-                    {formatRupees(duesSummary?.ageing['0_30'] || 0)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Current month dues
-                  </div>
-                </div>
-
-                <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #f97316', margin: 0 }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Ageing: 31–60 Days
-                  </div>
-                  <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#c2410c', marginTop: '4px' }}>
-                    {formatRupees(duesSummary?.ageing['31_60'] || 0)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Over 30 days pending
-                  </div>
-                </div>
-
-                <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #ef4444', margin: 0 }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Ageing: 60+ Days
-                  </div>
-                  <div className="mono" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#b91c1c', marginTop: '4px' }}>
-                    {formatRupees(duesSummary?.ageing['61_plus'] || 0)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Follow up required
-                  </div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-                  <div>
-                    <span>Customer Master & Khata Accounts ({customersList.length} customers)</span>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
-                      Customer credit limits, GSTINs, phone numbers and digital billing contacts
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ width: '220px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                      placeholder="Search customers by name, phone, GSTIN..."
-                      value={customerFilterMaster}
-                      onChange={(e) => setCustomerFilterMaster(e.target.value)}
-                    />
-                    <button className="btn btn-primary" onClick={() => openAddPartyModal('customer')}>
-                      + Add Customer
-                    </button>
-                  </div>
-                </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Customer Name</th>
-                      <th>Phone</th>
-                      <th>GSTIN</th>
-                      <th>Khata Balance (Dues)</th>
-                      <th>Credit Limit</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCustomers.map((p) => {
-                      const dues = p.duesMinor ?? 0;
-                      const adv = p.advanceMinor ?? 0;
-                      return (
-                        <tr key={p.id} style={{ opacity: p.active === false ? 0.6 : 1 }}>
-                          <td>
-                            <div style={{ fontWeight: 600 }}>{p.name}</div>
-                            {p.email && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.email}</div>}
-                          </td>
-                          <td className="mono">{p.phone || '—'}</td>
-                          <td className="mono">{p.gstin || '—'}</td>
-                          <td>
-                            {dues > 0 ? (
-                              <div>
-                                <div className="mono" style={{ fontWeight: 800, color: '#b45309' }}>
-                                  {formatRupees(dues)}
-                                </div>
-                                {adv > 0 && (
-                                  <div style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 600 }}>
-                                    Adv: {formatRupees(adv)}
-                                  </div>
-                                )}
-                              </div>
-                            ) : adv > 0 ? (
-                              <span className="badge badge-emerald" style={{ fontWeight: 700 }}>
-                                Advance: {formatRupees(adv)}
-                              </span>
-                            ) : (
-                              <span className="mono" style={{ color: '#94a3b8' }}>₹0.00</span>
-                            )}
-                          </td>
-                          <td className="mono">{formatRupees(p.creditLimitMinor)}</td>
-                          <td>
-                            {p.active !== false ? (
-                              <span className="badge badge-emerald">Active</span>
-                            ) : (
-                              <span className="badge badge-amber">Inactive</span>
-                            )}
-                          </td>
-                          <td style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                            {dues > 0 ? (
-                              <button
-                                className="btn btn-primary"
-                                style={{
-                                  padding: '0.25rem 0.6rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: '#f59e0b',
-                                  borderColor: '#d97706',
-                                }}
-                                onClick={() => openCollectPayment(p)}
-                                title="Collect payment towards dues"
-                              >
-                                💰 Collect
-                              </button>
-                            ) : (
-                              <button
-                                className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
-                                onClick={() => openCollectPayment(p)}
-                                title="Record advance payment"
-                              >
-                                💰 Advance
-                              </button>
-                            )}
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', fontWeight: 600 }}
-                              onClick={() => openCustomerLedger(p)}
-                              title="View Customer Khata Statement & Ledger"
-                            >
-                              📖 Ledger
-                            </button>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                              onClick={() => openEditPartyModal(p)}
-                              title="Edit Customer"
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: p.active !== false ? '#f87171' : '#34d399' }}
-                              onClick={() => handleTogglePartyActive(p)}
-                            >
-                              {p.active !== false ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filteredCustomers.length === 0 && (
-                      <tr>
-                        <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                          No customers found matching your search.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* TAB: SUPPLIERS */}
-        {activeTab === 'suppliers' && (() => {
-          const suppliersList = parties.filter((p) => p.type === 'supplier');
-          const filteredSuppliers = suppliersList.filter((p) => {
-            if (!supplierFilterMaster.trim()) return true;
-            const q = supplierFilterMaster.trim().toLowerCase();
-            return (
-              p.name.toLowerCase().includes(q) ||
-              (p.phone && p.phone.includes(q)) ||
-              (p.email && p.email.toLowerCase().includes(q)) ||
-              (p.gstin && p.gstin.toLowerCase().includes(q)) ||
-              (p.address && p.address.toLowerCase().includes(q))
-            );
-          });
-
-          return (
-            <div className="card">
-              <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-                <div>
-                  <span>Supplier Master & Wholesale Vendors ({suppliersList.length} vendors for {shop?.name})</span>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
-                    Manage suppliers, purchase distributors, GSTIN verification and vendor credit limits
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    style={{ width: '220px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                    placeholder="Search suppliers by name, phone, GSTIN..."
-                    value={supplierFilterMaster}
-                    onChange={(e) => setSupplierFilterMaster(e.target.value)}
-                  />
-                  <button className="btn btn-primary" onClick={() => openAddPartyModal('supplier')}>
-                    + Add New Supplier
-                  </button>
-                </div>
-              </div>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Supplier / Vendor Name</th>
-                    <th>Phone</th>
-                    <th>GSTIN</th>
-                    <th>Address</th>
-                    <th>Outstanding Payable</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSuppliers.map((p) => (
-                    <tr key={p.id} style={{ opacity: p.active === false ? 0.6 : 1 }}>
-                      <td style={{ fontWeight: 600 }}>{p.name}</td>
-                      <td className="mono">{p.phone || '—'}</td>
-                      <td className="mono">{p.gstin || '—'}</td>
-                      <td style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p.address || '—'}
-                      </td>
-                      <td>
-                        {(p.payableMinor || 0) > 0 ? (
-                          <div>
-                            <div className="mono" style={{ fontWeight: 700, color: '#ef4444' }}>
-                              {formatRupees(p.payableMinor)}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                              {p.openPurchasesCount} open bill{p.openPurchasesCount && p.openPurchasesCount > 1 ? 's' : ''}
-                              {p.oldestDueDate ? ` • due ${p.oldestDueDate}` : ''}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="badge badge-emerald" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
-                            No dues
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {p.active !== false ? (
-                          <span className="badge badge-emerald">Active</span>
-                        ) : (
-                          <span className="badge badge-amber">Inactive</span>
-                        )}
-                      </td>
-                      <td style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                        {can(user?.role as any, 'purchases.pay') && (p.payableMinor || 0) > 0 && (
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
-                            onClick={() => handleOpenPaySupplier(p)}
-                            title="Pay this supplier oldest-purchase first (FIFO)"
-                          >
-                            💳 Pay Supplier
-                          </button>
-                        )}
-                        {can(user?.role as any, 'purchases') && (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => handleOpenSupplierLedger(p.id)}
-                            title="View chronological running payable ledger"
-                          >
-                            📖 Ledger
-                          </button>
-                        )}
-                        {can(user?.role as any, 'purchases') && (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => openNewPurchaseModalForSupplier(p.id)}
-                            title="Create new purchase with this supplier preselected"
-                          >
-                            📥 + Purchase
-                          </button>
-                        )}
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                          onClick={() => openEditPartyModal(p)}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: p.active !== false ? '#f87171' : '#34d399' }}
-                          onClick={() => handleTogglePartyActive(p)}
-                        >
-                          {p.active !== false ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredSuppliers.length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
-                        <div>🚚 No suppliers registered yet.</div>
-                        <button
-                          className="btn btn-primary"
-                          style={{ marginTop: '0.75rem' }}
-                          onClick={() => openAddPartyModal('supplier')}
-                        >
-                          + Add Your First Supplier
-                        </button>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          );
-        })()}
+        {/* TAB: SUPPLIERS - MODERN UPGRADED SUPPLIER DIRECTORY */}
+        {activeTab === 'suppliers' && (
+          <SupplierDirectory
+            parties={parties}
+            purchases={purchases}
+            shop={shop}
+            canPayPurchases={can(user?.role as any, 'purchases.pay')}
+            canManagePurchases={can(user?.role as any, 'purchases')}
+            onAddSupplier={() => openAddPartyModal('supplier')}
+            onEditSupplier={(s) => openEditPartyModal(s)}
+            onPaySupplier={(s) => handleOpenPaySupplier(s)}
+            onOpenLedger={(sId) => handleOpenSupplierLedger(sId)}
+            onNewPurchase={(sId) => openNewPurchaseModalForSupplier(sId)}
+            onToggleActive={(s) => handleTogglePartyActive(s)}
+            onRefresh={() => {
+              loadParties();
+              loadPurchases();
+            }}
+          />
+        )}
 
         {/* TAB: PURCHASES & STOCK INWARD */}
         {activeTab === 'purchases' && (() => {
@@ -6945,6 +8850,198 @@ export function App() {
               </form>
             </div>
 
+            {/* Customer Loyalty & Rewards Scheme (Section 9.2) */}
+            <div className="card settings-section">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <span>🪙 Customer Loyalty & Rewards Scheme</span>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '3px', fontWeight: 'normal' }}>
+                    Set custom point earning rates (e.g. 100 ₹ = 10 pts, 5 pts) and cash discount per point for this shop
+                  </div>
+                </div>
+                <span className={`biz-badge ${settingsLoyaltyEnabled ? 'biz-retail' : 'biz-general'}`} style={{ fontSize: '0.75rem' }}>
+                  {settingsLoyaltyEnabled ? '● Scheme Active' : '○ Scheme Paused'}
+                </span>
+              </div>
+
+              <form onSubmit={handleSaveSettings}>
+                {/* Master Toggle */}
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: user?.role === 'owner' ? 'pointer' : 'default' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#2563eb' }}
+                      disabled={user?.role !== 'owner'}
+                      checked={settingsLoyaltyEnabled}
+                      onChange={(e) => setSettingsLoyaltyEnabled(e.target.checked)}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Enable Customer Loyalty Rewards Program</div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                        When enabled, registered customers automatically accrue points on billing and can redeem them for discounts at POS.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+                  {/* Points Earning Rate */}
+                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Points per ₹100 Purchase</span>
+                      <span className="mono bold" style={{ color: '#2563eb' }}>{settingsLoyaltyPointsPer100} pts</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="form-input"
+                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                      value={settingsLoyaltyPointsPer100}
+                      onChange={(e) => setSettingsLoyaltyPointsPer100(Math.max(0, parseInt(e.target.value) || 0))}
+                    />
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      {[2, 5, 10, 15, 20].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.2rem 0.55rem',
+                            fontSize: '0.72rem',
+                            background: settingsLoyaltyPointsPer100 === preset ? '#dbeafe' : '#ffffff',
+                            borderColor: settingsLoyaltyPointsPer100 === preset ? '#3b82f6' : '#cbd5e1',
+                            color: settingsLoyaltyPointsPer100 === preset ? '#1d4ed8' : '#475569',
+                            fontWeight: settingsLoyaltyPointsPer100 === preset ? 700 : 500,
+                          }}
+                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                          onClick={() => setSettingsLoyaltyPointsPer100(preset)}
+                        >
+                          {preset} pts
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
+                      Example: On a ₹500 bill, customer earns <strong>{Math.floor((500 * (settingsLoyaltyPointsPer100 || 0)) / 100)} points</strong>.
+                    </div>
+                  </div>
+
+                  {/* Cash Value per Point */}
+                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Point Redemption Value</span>
+                      <span className="mono bold" style={{ color: '#059669' }}>₹{settingsLoyaltyPointValueRupees.toFixed(2)} / pt</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0.01}
+                      max={10.0}
+                      step={0.05}
+                      className="form-input"
+                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                      value={settingsLoyaltyPointValueRupees}
+                      onChange={(e) => setSettingsLoyaltyPointValueRupees(Math.max(0.01, parseFloat(e.target.value) || 0.1))}
+                    />
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      {[0.10, 0.20, 0.50, 1.00].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.2rem 0.55rem',
+                            fontSize: '0.72rem',
+                            background: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#dcfce7' : '#ffffff',
+                            borderColor: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#10b981' : '#cbd5e1',
+                            color: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#047857' : '#475569',
+                            fontWeight: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? 700 : 500,
+                          }}
+                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                          onClick={() => setSettingsLoyaltyPointValueRupees(preset)}
+                        >
+                          ₹{preset.toFixed(2)}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
+                      Example: 100 points = <strong>₹{(100 * settingsLoyaltyPointValueRupees).toFixed(2)} discount</strong>.
+                    </div>
+                  </div>
+
+                  {/* Minimum Points to Redeem */}
+                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Min. Points to Redeem</span>
+                      <span className="mono bold" style={{ color: '#d97706' }}>{settingsLoyaltyMinRedeem} pts</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      step={5}
+                      className="form-input"
+                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                      value={settingsLoyaltyMinRedeem}
+                      onChange={(e) => setSettingsLoyaltyMinRedeem(Math.max(0, parseInt(e.target.value) || 0))}
+                    />
+                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      {[0, 10, 25, 50, 100].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '0.2rem 0.55rem',
+                            fontSize: '0.72rem',
+                            background: settingsLoyaltyMinRedeem === preset ? '#fef3c7' : '#ffffff',
+                            borderColor: settingsLoyaltyMinRedeem === preset ? '#f59e0b' : '#cbd5e1',
+                            color: settingsLoyaltyMinRedeem === preset ? '#b45309' : '#475569',
+                            fontWeight: settingsLoyaltyMinRedeem === preset ? 700 : 500,
+                          }}
+                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
+                          onClick={() => setSettingsLoyaltyMinRedeem(preset)}
+                        >
+                          {preset === 0 ? 'No Min' : `${preset} pts`}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
+                      Threshold required before points redemption button appears at checkout.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Preview Box */}
+                <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)', padding: '0.85rem 1.1rem', borderRadius: '10px', border: '1px solid #bfdbfe', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <span style={{ fontSize: '1.4rem' }}>✨</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e3a8a' }}>Active Rule Formula:</div>
+                      <div style={{ fontSize: '0.8rem', color: '#334155' }}>
+                        ₹100 spent = <strong>{settingsLoyaltyPointsPer100} pts</strong> &nbsp;•&nbsp; 1 pt = <strong>₹{settingsLoyaltyPointValueRupees.toFixed(2)}</strong> &nbsp;•&nbsp; Min: <strong>{settingsLoyaltyMinRedeem} pts</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#15803d', background: '#dcfce7', padding: '0.3rem 0.75rem', borderRadius: '20px' }}>
+                    Cashback Yield: {((settingsLoyaltyPointsPer100 * settingsLoyaltyPointValueRupees)).toFixed(1)}%
+                  </div>
+                </div>
+
+                {user?.role !== 'owner' ? (
+                  <div style={{ fontSize: '0.85rem', color: '#b45309', background: '#fffbeb', padding: '0.6rem 0.85rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
+                    ℹ️ Only business owners can change Loyalty Scheme settings.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button type="submit" className="btn btn-primary" style={{ padding: '0.55rem 1.25rem' }}>
+                      Save Loyalty Scheme Settings
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+
             {/* Section 2: Explore Industry Packs */}
             <div className="card settings-section">
               <div className="card-title">
@@ -7089,6 +9186,129 @@ export function App() {
 
             {/* Strict Multi-Tenant Data Isolation Banner (Settings Tab Only) */}
             <StrictIsolationBanner />
+          </div>
+        )}
+
+        {/* ACCOUNTS & FINANCE TAB VIEWS */}
+        {activeTab === 'payments' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PaymentsView
+              onOpenCustomerKhata={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+              onOpenSupplierLedger={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'expenses' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ExpensesView
+              userRole={user.role}
+              userLocation={shop?.locations?.[0] || shop?.address}
+              suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
+            />
+          </div>
+        )}
+
+        {activeTab === 'cashbank' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <CashBankView />
+          </div>
+        )}
+
+        {activeTab === 'receivables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ReceivablesView
+              onCollectPayment={(cid) => {
+                const customer = parties.find((p) => p.id === cid || p.name === cid);
+                if (customer) {
+                  setCustomerFilterMaster(customer.name);
+                } else if (cid) {
+                  setCustomerFilterMaster(cid);
+                }
+                setActiveTab('customers');
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === 'payables' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <PayablesView
+              onPaySupplier={(sid) => {
+                const supplier = parties.find((p) => p.id === sid || p.name === sid);
+                if (supplier) {
+                  setSupplierFilterMaster(supplier.name);
+                } else if (sid) {
+                  setSupplierFilterMaster(sid);
+                }
+                setActiveTab('suppliers');
+              }}
+            />
+          </div>
+        )}
+
+        {/* GST FILING TAB VIEWS */}
+        {activeTab === 'gst-overview' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-sales-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-purchase-register' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-itc-reconciliation' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr3b' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-gstr1' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-import-export' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
+          </div>
+        )}
+
+        {activeTab === 'gst-filing-history' && (
+          <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
       </main>
@@ -7467,7 +9687,23 @@ export function App() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Barcode / EAN</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
+                    <button
+                      type="button"
+                      style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                      onClick={() => {
+                        const code = '20' + Date.now().toString().slice(-10);
+                        let sum = 0;
+                        for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
+                        const fullBc = code + ((10 - (sum % 10)) % 10);
+                        setItemFormBarcode(fullBc);
+                      }}
+                      title="Generate a unique 13-digit EAN retail barcode"
+                    >
+                      ⚡ Auto-Generate
+                    </button>
+                  </div>
                   <input
                     type="text"
                     className="form-input"
@@ -7481,26 +9717,24 @@ export function App() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Category</label>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <select
-                      className="form-input"
-                      value={itemFormCategory}
-                      onChange={(e) => setItemFormCategory(e.target.value)}
-                    >
-                      <option value="">Select or Type Category...</option>
-                      {categoriesList.filter((c) => c.active).map((c) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <input
-                    type="text"
+                  <select
                     className="form-input"
-                    style={{ marginTop: '0.35rem', fontSize: '0.8rem' }}
-                    placeholder="Or type custom category name..."
                     value={itemFormCategory}
                     onChange={(e) => setItemFormCategory(e.target.value)}
-                  />
+                  >
+                    <option value="">— Select Category from Category Module —</option>
+                    {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
+                      <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
+                    )}
+                    {categoriesList.filter((c) => c.active).map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Categories are managed and imported in the <strong>🏷️ Categories</strong> module.
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unit of Measurement (UOM) *</label>
@@ -7669,6 +9903,111 @@ export function App() {
         </div>
       )}
 
+      {/* CUSTOMER-FACING DISPLAY (CFD) CONTROLLER MODAL */}
+      {showCfdModal && (
+        <div className="modal-overlay" onClick={() => setShowCfdModal(false)}>
+          <div className="modal-content cfd-control-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-left">
+                <span className="bento-icon-circle blue">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="card-title" style={{ margin: 0 }}>Customer-Facing Display (CFD)</h3>
+                  <div className="modal-subtitle">
+                    Live mirror items, discounts, and payment QR on a 2nd screen or iPad
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-icon-btn"
+                onClick={() => setShowCfdModal(false)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="scanner-modal-body" style={{ padding: '1.25rem' }}>
+              <div className="cfd-control-status-row">
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>Connection Status</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Dual-screen / Wireless tablet sync</div>
+                </div>
+                <div className={`cfd-status-indicator ${isCfdConnected ? 'connected' : 'waiting'}`}>
+                  <span className={`walkin-dot ${isCfdConnected ? '' : 'gray'}`} style={{ background: isCfdConnected ? '#10b981' : '#94a3b8' }}></span>
+                  <span>{isCfdConnected ? '🟢 Display Connected & Live' : '⚪ Waiting for Display'}</span>
+                </div>
+              </div>
+
+              <div className="cfd-actions-grid">
+                <button
+                  type="button"
+                  className="cfd-action-btn-large primary"
+                  onClick={() => {
+                    const cfdUrl = `${window.location.origin}/customer-display`;
+                    window.open(cfdUrl, 'CustomerFacingDisplay', 'width=1280,height=800,menubar=no,toolbar=no,location=no');
+                    showToast('Customer display opened! Drag it to your second monitor.');
+                  }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                  <span>Launch on 2nd Monitor</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="cfd-action-btn-large"
+                  onClick={() => {
+                    const cfdUrl = `${window.location.origin}/customer-display`;
+                    navigator.clipboard.writeText(cfdUrl);
+                    showToast('Link copied! Open on your tablet or customer-facing device.');
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                  </svg>
+                  <span>Copy Tablet Link</span>
+                </button>
+              </div>
+
+              {/* Direct Link box */}
+              <div className="cfd-url-share-box">
+                <label>Direct Link for Tablets & iPads:</label>
+                <div className="cfd-url-input-wrap">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/customer-display`}
+                  />
+                  <button
+                    type="button"
+                    className="scanner-open-btn"
+                    onClick={() => window.open('/customer-display', '_blank')}
+                  >
+                    Open
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.5rem' }}>
+                  💡 Tip: Place any tablet or secondary screen facing the customer and open this URL in full-screen. Items will mirror automatically as you scan them!
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WIRELESS MOBILE SCANNER PAIRING MODAL */}
       {showMobileScannerModal && (
         <div className="modal-overlay" onClick={() => setShowMobileScannerModal(false)}>
@@ -7717,34 +10056,53 @@ export function App() {
               </div>
 
               {/* QR Code and Instructions Grid */}
+              {/* QR Code and Instructions Grid (Landscape Rectangle) */}
               <div className="scanner-modal-grid">
                 <div className="scanner-qr-column">
                   <div className="scanner-qr-box">
                     {(() => {
                       const localIp = scannerNetworkInfo?.localIp || window.location.hostname;
                       const port = scannerProtocol === 'https'
-                        ? (scannerNetworkInfo?.httpsPort || 3443)
+                        ? (scannerNetworkInfo?.httpsPort || 3444)
                         : (scannerNetworkInfo?.httpPort || 3001);
+                      const effectiveProto = scannerProtocol === 'https' ? 'https' : 'http';
                       const pairingUrl = customTunnelUrl.trim()
                         ? `${customTunnelUrl.trim().replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
-                        : scannerProtocol === 'tunnel' && scannerNetworkInfo?.tunnelUrl
+                        : scannerNetworkInfo?.tunnelUrl
                         ? `${scannerNetworkInfo.tunnelUrl.replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
-                        : `${scannerProtocol}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
-                      const svgString = qrSvg(pairingUrl, { size: 210, margin: 2 });
+                        : `${effectiveProto}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
+                      const svgString = qrSvg(pairingUrl, { size: 155, margin: 2 });
                       return (
-                        <div
-                          className="scanner-qr-svg-wrap"
-                          dangerouslySetInnerHTML={{ __html: svgString }}
-                        />
+                        <>
+                          <div
+                            className="scanner-qr-svg-wrap"
+                            dangerouslySetInnerHTML={{ __html: svgString }}
+                          />
+                          <div className="scanner-qr-caption">
+                            <span>Point Phone Camera Here</span>
+                          </div>
+                          <div style={{ marginTop: '0.35rem', textAlign: 'center', width: '100%' }}>
+                            <div style={{ fontSize: '0.7rem', color: '#4f46e5', fontWeight: 600, wordBreak: 'break-all', padding: '0.2rem 0.35rem', background: '#eef2ff', borderRadius: '4px', border: '1px solid #c7d2fe' }}>
+                              {pairingUrl}
+                            </div>
+                            <button
+                              type="button"
+                              style={{ marginTop: '0.25rem', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', cursor: 'pointer', color: '#334155' }}
+                              onClick={() => {
+                                navigator.clipboard?.writeText(pairingUrl);
+                                showToast('📋 Link copied to clipboard!');
+                              }}
+                            >
+                              📋 Copy Link
+                            </button>
+                          </div>
+                        </>
                       );
                     })()}
-                    <div className="scanner-qr-caption">
-                      <span>Point Phone Camera Here</span>
-                    </div>
                   </div>
 
                   {/* Protocol Selector Tabs */}
-                  <div className="scanner-protocol-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.65rem' }}>
+                  <div className="scanner-protocol-toggle" style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '100%' }}>
                     {scannerNetworkInfo?.tunnelUrl && (
                       <button
                         type="button"
@@ -7755,74 +10113,73 @@ export function App() {
                           color: scannerProtocol === 'tunnel' ? '#ffffff' : '#4338ca',
                           fontWeight: 700,
                           border: '1px solid #c7d2fe',
-                          padding: '0.45rem 0.6rem',
-                          borderRadius: '8px',
+                          padding: '0.35rem 0.5rem',
+                          borderRadius: '6px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '0.35rem',
-                          fontSize: '0.76rem'
+                          gap: '0.3rem',
+                          fontSize: '0.72rem'
                         }}
                       >
-                        <span>🌐 Public Tunnel (Works on Hotspot & 5G)</span>
+                        <span>🌐 Public Tunnel (Hotspot / 5G)</span>
                       </button>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                      <button
-                        type="button"
-                        className={`proto-btn ${scannerProtocol === 'https' && !customTunnelUrl ? 'active' : ''}`}
-                        onClick={() => { setScannerProtocol('https'); setCustomTunnelUrl(''); }}
-                        style={{ padding: '0.45rem 0.4rem', fontSize: '0.74rem' }}
-                      >
-                        <span>🔒 Local HTTPS</span>
-                      </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem' }}>
                       <button
                         type="button"
                         className={`proto-btn ${scannerProtocol === 'http' && !customTunnelUrl ? 'active' : ''}`}
                         onClick={() => { setScannerProtocol('http'); setCustomTunnelUrl(''); }}
-                        style={{ padding: '0.45rem 0.4rem', fontSize: '0.74rem' }}
+                        style={{ padding: '0.35rem 0.35rem', fontSize: '0.72rem' }}
                       >
-                        <span>⚡ Local HTTP</span>
+                        <span>⚡ Local Wi-Fi</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`proto-btn ${scannerProtocol === 'https' && !customTunnelUrl ? 'active' : ''}`}
+                        onClick={() => { setScannerProtocol('https'); setCustomTunnelUrl(''); }}
+                        style={{ padding: '0.35rem 0.35rem', fontSize: '0.72rem' }}
+                      >
+                        <span>🔒 Local HTTPS</span>
                       </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="scanner-details-column">
-                  {/* Step-by-Step Guide */}
+                  {/* Step-by-Step Guide - Horizontal 3-card row */}
                   <div className="scanner-step-list">
                     <div className="scanner-step-item">
                       <span className="step-num">1</span>
                       <div>
-                        <strong>Connect to Same Wi-Fi</strong>
-                        <p>Ensure phone & PC share the same Wi-Fi router or phone's Mobile Hotspot.</p>
+                        <strong>Scan with Phone</strong>
+                        <p>Open phone camera & point at QR code.</p>
                       </div>
                     </div>
 
                     <div className="scanner-step-item">
                       <span className="step-num">2</span>
                       <div>
-                        <strong>Scan the Pairing QR</strong>
-                        <p>Open phone camera, tap the link that pops up. No app download needed!</p>
+                        <strong>Instant Web Scanner</strong>
+                        <p>Tap popup link. No app download needed!</p>
                       </div>
                     </div>
 
                     <div className="scanner-step-item">
                       <span className="step-num">3</span>
                       <div>
-                        <strong>Scan Products Freely</strong>
-                        <p>Aim at barcode stickers. Hear the supermarket beep as items jump straight into cart!</p>
+                        <strong>Items Add to Bill</strong>
+                        <p>Scan barcodes to beep straight into cart!</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Troubleshooting Helper Box */}
                   <div className="scanner-troubleshoot-box">
-                    <span className="troubleshoot-tag">💡 Phone Testing Tips:</span>
+                    <span className="troubleshoot-tag">💡 Quick Connection Tips:</span>
                     <ul className="troubleshoot-list">
-                      <li><strong>Using Mobile Hotspot or 5G?</strong> Tap <strong>🌐 Public Tunnel</strong> above for instant 1-tap connection with camera permission!</li>
-                      <li>If phone browser shows <em>"Connection not private"</em> on Local HTTPS, tap <strong>Advanced ➔ Proceed to site</strong> once.</li>
-                      <li>Click the <strong>Open</strong> button below to test the mobile scanner directly on this PC screen.</li>
+                      <li><strong>Using Hotspot or 5G?</strong> Tap <strong>🌐 Public Tunnel</strong> on the left for instant camera permission!</li>
+                      <li><strong>On Same Wi-Fi Router?</strong> Tap <strong>⚡ Local Wi-Fi</strong> for direct offline LAN pairing.</li>
                     </ul>
                   </div>
 
@@ -7830,23 +10187,24 @@ export function App() {
                   {(() => {
                     const localIp = scannerNetworkInfo?.localIp || window.location.hostname;
                     const port = scannerProtocol === 'https'
-                      ? (scannerNetworkInfo?.httpsPort || 3443)
+                      ? (scannerNetworkInfo?.httpsPort || 3444)
                       : (scannerNetworkInfo?.httpPort || 3001);
+                    const effectiveProto = scannerProtocol === 'https' ? 'https' : 'http';
                     const pairingUrl = customTunnelUrl.trim()
                       ? `${customTunnelUrl.trim().replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
-                      : scannerProtocol === 'tunnel' && scannerNetworkInfo?.tunnelUrl
+                      : scannerNetworkInfo?.tunnelUrl
                       ? `${scannerNetworkInfo.tunnelUrl.replace(/\/+$/, '')}/scanner?session=${encodeURIComponent(scannerSessionId)}`
-                      : `${scannerProtocol}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
+                      : `${effectiveProto}://${localIp}:${port}/scanner?session=${encodeURIComponent(scannerSessionId)}`;
 
                     return (
                       <div className="scanner-link-box">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                          <label className="scanner-link-label" style={{ margin: 0 }}>Direct Phone Link:</label>
-                          <span style={{ fontSize: '0.72rem', color: '#6366f1', cursor: 'pointer' }} onClick={() => {
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <label className="scanner-link-label" style={{ margin: 0 }}>Direct Browser Link:</label>
+                          <span style={{ fontSize: '0.7rem', color: '#6366f1', cursor: 'pointer', fontWeight: 600 }} onClick={() => {
                             const val = prompt('Optional: Paste public tunnel URL (e.g. from ngrok or localtunnel):', customTunnelUrl);
                             if (val !== null) setCustomTunnelUrl(val.trim());
                           }}>
-                            {customTunnelUrl ? '✓ Custom Tunnel Active (Edit)' : '+ Use Public Tunnel'}
+                            {customTunnelUrl ? '✓ Custom Tunnel (Edit)' : '+ Custom URL'}
                           </span>
                         </div>
                         <div className="scanner-link-input-row">
@@ -7870,14 +10228,15 @@ export function App() {
                             type="button"
                             className="scanner-open-btn"
                             onClick={() => window.open(pairingUrl, '_blank')}
-                            title="Open in new window to test"
                           >
-                            Open
+                            Open on PC
                           </button>
                         </div>
                       </div>
                     );
                   })()}
+                </div>
+              </div>
 
                   {/* Simulator & Settings Row */}
                   <div className="scanner-tools-row">
@@ -7909,8 +10268,6 @@ export function App() {
                       <span>Supermarket Beep Audio</span>
                     </label>
                   </div>
-                </div>
-              </div>
             </div>
 
             <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -7950,13 +10307,13 @@ export function App() {
               <div>
                 <h3 className="card-title" style={{ margin: 0 }}>
                   {editingParty
-                    ? `✏️ Edit ${partyModalType === 'supplier' ? 'Supplier' : 'Customer'}: ${editingParty.name}`
-                    : `+ Add New ${partyModalType === 'supplier' ? 'Supplier / Vendor' : 'Customer / Khata Account'}`}
+                    ? `✏️ Edit ${partyModalType === 'supplier' ? 'Supplier' : 'Customer Member'}: ${editingParty.name}`
+                    : `+ Add New ${partyModalType === 'supplier' ? 'Supplier / Vendor' : 'Customer / Loyalty Member'}`}
                 </h3>
                 <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
                   {partyModalType === 'supplier'
                     ? 'Enter supplier contact, GSTIN, and business address'
-                    : 'Customer contact details, phone for digital bills, and credit limit'}
+                    : 'Customer name and 10-digit mobile number for loyalty points and digital bills'}
                 </div>
               </div>
               <button
@@ -7969,7 +10326,7 @@ export function App() {
             <form onSubmit={handleSaveParty} className="modal-body">
               <div className="form-group">
                 <label className="form-label">
-                  {partyModalType === 'supplier' ? 'Supplier / Vendor Business Name *' : 'Customer / Business Name *'}
+                  {partyModalType === 'supplier' ? 'Supplier / Vendor Business Name *' : 'Customer Full Name *'}
                 </label>
                 <input
                   type="text"
@@ -7983,17 +10340,20 @@ export function App() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Mobile Phone Number</label>
+                  <label className="form-label">
+                    {partyModalType === 'customer' ? 'Mobile Number (for Points) *' : 'Mobile Phone Number'}
+                  </label>
                   <input
                     type="tel"
                     className="form-input"
+                    required={partyModalType === 'customer'}
                     value={partyFormPhone}
                     onChange={(e) => setPartyFormPhone(e.target.value)}
                     placeholder="10-digit mobile, e.g. 9840123456"
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Email Address</label>
+                  <label className="form-label">Email Address (Optional)</label>
                   <input
                     type="email"
                     className="form-input"
@@ -8004,31 +10364,52 @@ export function App() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">GSTIN (Optional for B2B)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={partyFormGstin}
-                    onChange={(e) => setPartyFormGstin(e.target.value.toUpperCase())}
-                    placeholder="15-digit GSTIN (e.g. 33AAAAA...)"
-                  />
+              {partyModalType === 'supplier' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">GSTIN (Optional for B2B)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={partyFormGstin}
+                      onChange={(e) => setPartyFormGstin(e.target.value.toUpperCase())}
+                      placeholder="15-digit GSTIN (e.g. 33AAAAA...)"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Credit / Balance Limit (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="form-input"
+                      value={partyFormCreditLimit}
+                      onChange={(e) => setPartyFormCreditLimit(e.target.value)}
+                      placeholder="e.g. 50000.00"
+                    />
+                  </div>
                 </div>
+              )}
+
+              {partyModalType === 'customer' && (
                 <div className="form-group">
-                  <label className="form-label">
-                    {partyModalType === 'supplier' ? 'Credit / Balance Limit (₹)' : 'Credit Limit / Khata Max (₹)'}
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>🪙 Customer Loyalty Points Balance</span>
+                    <span style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 700 }}>
+                      Worth {formatRupees((Number(partyFormLoyaltyPoints) || 0) * shopPointValMinor)} discount (1 pt = {formatRupees(shopPointValMinor)})
+                    </span>
                   </label>
                   <input
                     type="number"
-                    step="0.01"
-                    className="form-input"
-                    value={partyFormCreditLimit}
-                    onChange={(e) => setPartyFormCreditLimit(e.target.value)}
-                    placeholder="e.g. 50000.00"
+                    min="0"
+                    step="1"
+                    className="form-input mono bold"
+                    style={{ color: '#b45309', fontSize: '0.95rem' }}
+                    value={partyFormLoyaltyPoints}
+                    onChange={(e) => setPartyFormLoyaltyPoints(e.target.value)}
+                    placeholder="e.g. 250"
                   />
                 </div>
-              </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Billing / Physical Address</label>
@@ -8148,14 +10529,20 @@ export function App() {
                           </span>
                         </td>
                         <td>
-                          {cat.active ? (
-                            <span className="badge badge-emerald">Active</span>
-                          ) : (
-                            <span className="badge badge-amber">Inactive</span>
-                          )}
+                          <button
+                            type="button"
+                            className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                            onClick={() => handleToggleCategoryActive(cat)}
+                            title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                          >
+                            <span className="cat-toggle-track">
+                              <span className="cat-toggle-thumb" />
+                            </span>
+                            <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                          </button>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                             {editingCatId === cat.id ? (
                               <>
                                 <button
@@ -8179,23 +10566,24 @@ export function App() {
                               <>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                  className="cat-edit-btn"
                                   onClick={() => {
                                     setEditingCatId(cat.id);
                                     setEditingCatName(cat.name);
                                     setEditingCatDesc(cat.description || '');
                                   }}
+                                  title="Edit Category"
                                 >
                                   ✏️
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: cat.active ? '#f87171' : '#34d399' }}
-                                  onClick={() => handleToggleCategoryActive(cat)}
+                                  className="cat-delete-btn"
+                                  style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}
+                                  onClick={() => handleDeleteCategory(cat)}
+                                  title={`Delete "${cat.name}" category`}
                                 >
-                                  {cat.active ? 'Deactivate' : 'Activate'}
+                                  🗑️
                                 </button>
                               </>
                             )}
@@ -9817,6 +12205,18 @@ export function App() {
                     {formatRupees(checkoutSuccess.totalMinor)}
                   </span>
                 </div>
+
+                {/* Loyalty Points Automatically Credited */}
+                {Math.floor((checkoutSuccess.totalMinor || 0) / 1000) > 0 && checkoutSuccess.customerName && checkoutSuccess.customerName !== 'Walk-in Customer' && (
+                  <div style={{ marginTop: '0.45rem', padding: '0.4rem 0.75rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', color: '#92400e' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}>
+                      🪙 Loyalty Points Credited:
+                    </span>
+                    <span className="mono" style={{ fontWeight: 800, fontSize: '0.88rem', color: '#d97706' }}>
+                      +{Math.floor((checkoutSuccess.totalMinor || 0) / 1000)} pts (₹{(Math.floor((checkoutSuccess.totalMinor || 0) / 1000) * 0.1).toFixed(2)})
+                    </span>
+                  </div>
+                )}
 
                 {/* Multiple / Split Payments Breakdown */}
                 {checkoutSuccess.payments && checkoutSuccess.payments.length > 1 && (

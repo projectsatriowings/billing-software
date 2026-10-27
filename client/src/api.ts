@@ -1,8 +1,44 @@
 // Typed client API wrapper for Adaptive Billing Platform
 
-export const getToken = (): string => localStorage.getItem('billing_token') || '';
+export const getToken = (): string =>
+  localStorage.getItem('billing_token') || localStorage.getItem('token') || '';
 export const setToken = (t: string) => localStorage.setItem('billing_token', t);
-export const clearToken = () => localStorage.removeItem('billing_token');
+export const clearToken = () => {
+  localStorage.removeItem('billing_token');
+  localStorage.removeItem('token');
+};
+
+export function withAuthToken(url: string): string {
+  const token = getToken();
+  if (!token) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
+}
+
+export async function downloadFile(url: string, defaultFilename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const msg =
+      errorData?.error?.message ||
+      (typeof errorData?.error === 'string' ? errorData.error : null) ||
+      errorData?.message ||
+      `Export failed with status ${res.status}`;
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = defaultFilename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(objectUrl);
+  document.body.removeChild(a);
+}
 
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
@@ -31,11 +67,80 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   return data as T;
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ token: string }> {
+  const res = await api<{ token: string }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (res.token) {
+    setToken(res.token);
+  }
+  return res;
+}
+
 export interface User {
   id: string;
+  employeeId?: string;
   name: string;
   email: string;
   role: string;
+  assignedLocation?: string;
+  assignedCounter?: string;
+  allowedLocations?: string[];
+  active?: boolean;
+}
+
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  active: boolean;
+  counters: string[];
+  managerId?: string | null;
+  managerName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BranchSummary {
+  branch: Branch;
+  todaySalesCount: number;
+  todaySalesTotalMinor: number;
+  todayCollectionsMinor: number;
+  activeShiftsCount: number;
+  activeShifts: {
+    id: string;
+    shiftNumber: string;
+    cashierName: string;
+    counter: string;
+    openedAt: string;
+    openingCashMinor: number;
+  }[];
+  pendingReviewShiftsCount: number;
+  pendingReviewShifts: {
+    id: string;
+    shiftNumber: string;
+    cashierName: string;
+    closedAt: string;
+    varianceMinor: number;
+  }[];
+  lowStockCount: number;
+  lowStock: {
+    id: string;
+    name: string;
+    sku: string;
+    stockMilli: number;
+  }[];
+  staff: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    active: boolean;
+    counter?: string;
+  }[];
 }
 
 export interface Shop {
@@ -52,6 +157,10 @@ export interface Shop {
   whatsappEnabled?: boolean;
   whatsappDefaultLang?: 'en' | 'hi' | 'ta';
   whatsappIncludeLink?: boolean;
+  loyaltyEnabled?: boolean;
+  loyaltyPointsPer100?: number;
+  loyaltyPointValueMinor?: number;
+  loyaltyMinPointsRedeem?: number;
 }
 
 export interface DemoBusiness {
@@ -122,6 +231,7 @@ export interface Party {
   stateCode?: string;
   address?: string;
   creditLimitMinor: number;
+  loyaltyPoints?: number;
   advanceMinor?: number;
   unpaidInvoicesMinor?: number;
   duesMinor?: number;
@@ -138,7 +248,21 @@ export interface Category {
   name: string;
   description?: string | null;
   active: boolean;
+  parentId?: string | null;
+  parentName?: string | null;
   itemCount?: number;
+}
+
+export interface CategoryImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{
+    row: number;
+    name?: string;
+    error: string;
+  }>;
 }
 
 export interface InvoiceCreditNoteSummary {
@@ -314,6 +438,12 @@ export interface DashboardReport {
     totalCreditNotesMinor?: number;
     creditNotesCount?: number;
     returnRatePct?: number;
+    purchasesCount?: number;
+    purchasesTotalMinor?: number;
+    purchasesTaxableMinor?: number;
+    itcMinor?: number;
+    netGstPayableMinor?: number;
+    supplierPaymentsMinor?: number;
   };
   overall: {
     billCount: number;
@@ -322,12 +452,42 @@ export interface DashboardReport {
     totalCreditNotesMinor?: number;
     customerCount: number;
     itemCount: number;
+    totalSupplierPayablesMinor?: number;
+    stockValuationMinor?: number;
+  };
+  gstPosition?: {
+    outputGstMinor: number;
+    itcMinor: number;
+    netGstPayableMinor: number;
   };
   paymentBreakdown: { method: string; totalMinor: number }[];
   refundsPaid?: { mode: string; totalMinor: number }[];
   totalRefundsPaidMinor?: number;
   topItems: { name: string; qtyMilli: number; totalMinor: number }[];
   lowStock: { id: string; name: string; sku?: string; currentStockMilli: number }[];
+  branchesOverview?: {
+    totalBranches: number;
+    activeBranches: number;
+    totalCounters: number;
+  };
+  branchComparison?: {
+    id: string;
+    code: string;
+    name: string;
+    active: boolean;
+    countersCount: number;
+    counters: string[];
+    todaySalesCount: number;
+    todaySalesTotalMinor: number;
+    todayCollectionsMinor: number;
+    openShiftsCount: number;
+  }[];
+  shiftsSummary?: {
+    openShiftsCount: number;
+    pendingReviewShiftsCount: number;
+    discrepanciesCount: number;
+  };
+  outstandingDuesMinor?: number;
 }
 
 export interface PaymentAllocation {
@@ -685,7 +845,7 @@ export type {
 export const fetchActiveShift = () =>
   api<{ ok: boolean; activeShift: import('../../shared/types.ts').Shift | null }>('/api/shifts/active');
 
-export const openShift = (data: { openingCashMinor: number; location?: string; notes?: string }) =>
+export const openShift = (data: { openingCashMinor: number; location?: string; counter?: string; notes?: string }) =>
   api<{ ok: boolean; shift: import('../../shared/types.ts').Shift }>('/api/shifts', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -739,6 +899,299 @@ export const reviewShift = (id: string, data: { reviewNotes?: string }) =>
 
 export const fetchShiftReport = (id: string) =>
   api<{ ok: boolean; report: import('../../shared/types.ts').ShiftClosingReport }>(`/api/shifts/${id}/report`);
+
+// Multi-Branch Management APIs
+export const fetchBranches = () => api<{ branches: Branch[] }>('/api/branches');
+export const createBranch = (data: Partial<Branch>) =>
+  api<Branch>('/api/branches', { method: 'POST', body: JSON.stringify(data) });
+export const updateBranch = (id: string, data: Partial<Branch>) =>
+  api<Branch>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const fetchBranchSummary = (id: string) =>
+  api<BranchSummary>(`/api/branches/${id}/summary`);
+
+// Re-export GST and Expense shared types and utilities
+export type {
+  Expense,
+  ExpenseCategory,
+  GstTreatment,
+  ItcEligibility,
+  ItcMatchingStatus,
+  ItcReviewStatus,
+  ItcRegisterItem,
+  Gstr2bRecord,
+  Gstr2bImportSummary,
+  Gstr3bSummary,
+  GstOverviewMetrics,
+} from '../../shared/types.ts';
+
+export {
+  calcExpense,
+  STANDARD_EXPENSE_CATEGORIES,
+} from '../../shared/gst.ts';
+
+// --------------------------------------------------------------------------
+// Expenses APIs
+// --------------------------------------------------------------------------
+export const fetchExpenses = (params: Record<string, string> = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return api<{
+    expenses: import('../../shared/types.ts').Expense[];
+    totalCount: number;
+    summary: {
+      totalMinor: number;
+      taxableMinor: number;
+      totalGstMinor: number;
+      itcMinor: number;
+      paidMinor: number;
+      balanceMinor: number;
+    };
+    page: number;
+    limit: number;
+  }>(`/api/expenses${query ? '?' + query : ''}`);
+};
+
+export const fetchExpenseCategories = () =>
+  api<{ categories: typeof import('../../shared/gst.ts').STANDARD_EXPENSE_CATEGORIES }>('/api/expenses/categories');
+
+export const createExpense = (data: Partial<import('../../shared/types.ts').Expense>) =>
+  api<{ ok?: boolean; expense: import('../../shared/types.ts').Expense }>('/api/expenses', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateExpense = (id: string, data: Partial<import('../../shared/types.ts').Expense>) =>
+  api<{ ok?: boolean; expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+
+export const voidExpense = (id: string, voidReason?: string) =>
+  api<{ ok: boolean; expense: import('../../shared/types.ts').Expense }>(`/api/expenses/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ voidReason }),
+  });
+
+export const fetchExpenseSummary = (params: Record<string, string> = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return api<{
+    totalMinor: number;
+    taxableMinor: number;
+    totalGstMinor: number;
+    itcMinor: number;
+    paidMinor: number;
+    balanceMinor: number;
+    byCategory: { category: string; count: number; totalMinor: number }[];
+  }>(`/api/expenses/summary${query ? '?' + query : ''}`);
+};
+
+// --------------------------------------------------------------------------
+// GST Module APIs
+// --------------------------------------------------------------------------
+export const fetchGstOverview = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<import('../../shared/types.ts').GstOverviewMetrics>(`/api/gst/overview?${q.toString()}`);
+};
+
+export const fetchGstSalesRegister = (params?: string | Record<string, string>) => {
+  let query = '';
+  if (typeof params === 'string') {
+    query = `?period=${encodeURIComponent(params)}`;
+  } else if (params) {
+    query = `?${new URLSearchParams(params).toString()}`;
+  }
+  return api<{
+    period: string;
+    invoices: any[];
+    summary: {
+      totalInvoices: number;
+      b2bCount: number;
+      b2cCount: number;
+      totalTaxableMinor: number;
+      totalGstMinor: number;
+      totalAmountMinor: number;
+    };
+  }>(`/api/gst/sales-register${query}`);
+};
+
+export const fetchGstPurchaseRegister = (params?: string | Record<string, string>) => {
+  let query = '';
+  if (typeof params === 'string') {
+    query = `?period=${encodeURIComponent(params)}`;
+  } else if (params) {
+    query = `?${new URLSearchParams(params).toString()}`;
+  }
+  return api<{
+    period: string;
+    items: any[];
+    summary: {
+      totalRecords: number;
+      purchasesCount: number;
+      expensesCount: number;
+      totalTaxableMinor: number;
+      totalGstMinor: number;
+      totalItcMinor: number;
+      totalAmountMinor: number;
+    };
+  }>(`/api/gst/purchase-register${query}`);
+};
+
+export const fetchGstr1Summary = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<{
+    period: string;
+    gstin: string;
+    status: 'ready' | 'pending';
+    b2b: { count: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number; invoices: any[] };
+    b2cl: { count: number; taxableMinor: number; igstMinor: number; totalMinor: number; invoices: any[] };
+    b2cs: { count: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number };
+    hsnSummary: { hsn: string; description: string; uqc: string; totalQty: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; totalMinor: number }[];
+    docsIssued: { type: string; from: string; to: string; totalNumber: number; cancelledNumber: number; netNumber: number }[];
+    totalTaxableMinor: number;
+    totalGstMinor: number;
+  }>(`/api/gst/gstr1?${q.toString()}`);
+};
+
+export const fetchItcRegister = (period?: string) => {
+  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+  return api<{
+    period: string;
+    items: import('../../shared/types.ts').ItcRegisterItem[];
+    summary: {
+      totalRecords: number;
+      totalPotentialItcMinor: number;
+      totalReviewedEligibleItcMinor: number;
+      totalIneligibleItcMinor: number;
+      pendingReviewCount: number;
+      matchedCount: number;
+      mismatchCount: number;
+      missingIn2BCount: number;
+    };
+  }>(`/api/gst/itc-register${q}`);
+};
+
+export const submitItcReview = (data: {
+  docType: 'purchase' | 'expense';
+  docId: string;
+  returnPeriod: string;
+  eligibilityStatus: string;
+  reviewedEligibleItcMinor: number;
+  reason: string;
+}) =>
+  api<{ ok: boolean; review: any }>('/api/gst/itc-review', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const importGstr2b = (data: {
+  gstin: string;
+  returnPeriod: string;
+  filename: string;
+  fileFormat: 'json' | 'csv';
+  fileContent: any;
+  forceOverwrite?: boolean;
+}) =>
+  api<{
+    ok: boolean;
+    importId: string;
+    filename: string;
+    returnPeriod: string;
+    totalRecords: number;
+    matchedCount: number;
+    mismatchedCount: number;
+    missingInBooksCount: number;
+  }>('/api/gst/gstr2b/import', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchGstr3b = (period?: string, gstin?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set('period', period);
+  if (gstin) q.set('gstin', gstin);
+  return api<import('../../shared/types.ts').Gstr3bSummary>(`/api/gst/gstr3b?${q.toString()}`);
+};
+
+export const saveGstr3b = (data: {
+  gstin: string;
+  returnPeriod: string;
+  status: 'draft' | 'reviewed' | 'filed' | 'exported';
+  summary?: any;
+  notes?: string;
+}) =>
+  api<{ ok: boolean; id: string; status: string }>('/api/gst/gstr3b/save', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchGstHistory = () =>
+  api<{
+    history: {
+      id: string;
+      returnType: string;
+      returnPeriod: string;
+      gstin: string;
+      status: string;
+      summary: any;
+      notes?: string | null;
+      filedByName: string;
+      filedAt: string;
+      createdAt: string;
+    }[];
+  }>('/api/gst/history');
+
+// --------------------------------------------------------------------------
+// Accounts & Finance Additional Overview APIs
+// --------------------------------------------------------------------------
+export const fetchFinanceCashBank = () =>
+  api<{
+    todayDate: string;
+    collectionsByMethod: { method: string; totalMinor: number }[];
+    supplierPaymentsByMethod: { method: string; totalMinor: number }[];
+    expensesByMethod: { method: string; totalMinor: number }[];
+    cashDrawer: {
+      totalCashCollectionsMinor: number;
+      cashMovementsInMinor: number;
+      cashMovementsOutMinor: number;
+    };
+    digitalBank: {
+      totalUpiMinor: number;
+      totalCardMinor: number;
+      totalBankMinor: number;
+    };
+  }>('/api/finance/cash-bank');
+
+export const fetchFinanceReceivables = () =>
+  api<{
+    totalReceivableMinor: number;
+    customersCount: number;
+    customers: {
+      customerId: string;
+      customerName: string;
+      customerPhone?: string | null;
+      totalDueMinor: number;
+      openInvoicesCount: number;
+      oldestInvoiceDate: string;
+    }[];
+  }>('/api/finance/receivables');
+
+export const fetchFinancePayables = () =>
+  api<{
+    totalPayableMinor: number;
+    suppliersCount: number;
+    suppliers: {
+      supplierId: string;
+      supplierName: string;
+      supplierPhone?: string | null;
+      supplierGstin?: string | null;
+      totalPayableMinor: number;
+      openPurchasesCount: number;
+      oldestBillDate: string;
+    }[];
+  }>('/api/finance/payables');
 
 // ── Bulk Product Import ──────────────────────────────────────────────────────
 
@@ -807,7 +1260,6 @@ export const deleteProduct = (id: string) =>
   api<{ ok: boolean; deleted: boolean; itemId: string; message: string }>(`/api/items/${encodeURIComponent(id)}?permanent=true`, {
     method: 'DELETE',
   });
-
 export interface TodayDashboardData {
   serverTime: string;
   nowKolkata: {
@@ -974,4 +1426,3 @@ export interface TodayDashboardData {
 }
 
 export const fetchTodayDashboard = () => api<TodayDashboardData>('/api/dashboard/today');
-

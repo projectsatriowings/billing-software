@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { MobileScanner } from './components/MobileScanner';
+import { CustomerDisplay } from './components/CustomerDisplay';
 import './index.css';
 
 // Safety error listener to prevent silent blank screens on mobile devices
@@ -24,10 +25,14 @@ if (container) {
   const root = createRoot(container);
   const urlParams = new URLSearchParams(window.location.search);
   const isScanner = window.location.pathname.startsWith('/scanner') || urlParams.get('mode') === 'scanner' || urlParams.has('scanner');
+  const isCfd = window.location.pathname.startsWith('/customer-display') || window.location.pathname.startsWith('/cfd') || urlParams.get('mode') === 'cfd' || urlParams.has('cfd');
   const sessionId = urlParams.get('session') || 'pos-counter-1';
+  const counterId = urlParams.get('counter') || 'counter-1';
 
   if (isScanner) {
     root.render(<MobileScanner sessionId={sessionId} />);
+  } else if (isCfd) {
+    root.render(<CustomerDisplay counterId={counterId} />);
   } else {
     root.render(<App />);
   }

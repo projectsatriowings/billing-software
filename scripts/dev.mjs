@@ -49,10 +49,10 @@ async function startDev() {
     env: process.env,
   });
 
-  // Automatically start cloudflared quick tunnel for effortless mobile scanner HTTPS
+  // Automatically start cloudflared quick tunnel for effortless mobile scanner HTTPS (using http2 to prevent NAT/UDP drops)
   let tunnelProcess;
   try {
-    tunnelProcess = spawn('npx', ['-y', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
+    tunnelProcess = spawn('npx', ['-y', 'cloudflared', 'tunnel', '--protocol', 'http2', '--url', `http://localhost:${port}`], {
       shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
