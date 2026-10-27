@@ -89,12 +89,16 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
     const clean = code.trim();
     if (!clean) return;
 
-    // Debounce duplicate scans within 1.5 seconds
+    // Debounce duplicate scans: 2500ms cooldown for the same barcode, and 1000ms cooldown between ANY scans
     const now = Date.now();
-    if (lastScanTimeRef.current[clean] && now - lastScanTimeRef.current[clean] < 1500) {
+    if (lastScanTimeRef.current[clean] && now - lastScanTimeRef.current[clean] < 2500) {
+      return;
+    }
+    if (lastScanTimeRef.current['__LAST_GLOBAL__'] && now - lastScanTimeRef.current['__LAST_GLOBAL__'] < 1000) {
       return;
     }
     lastScanTimeRef.current[clean] = now;
+    lastScanTimeRef.current['__LAST_GLOBAL__'] = now;
 
     playBeep();
     if (window.navigator?.vibrate) {
@@ -375,6 +379,32 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
               <div className="reticle-corner top-right"></div>
               <div className="reticle-corner bottom-left"></div>
               <div className="reticle-corner bottom-right"></div>
+
+              {/* Instant Scan Success Feedback Toast on Viewfinder */}
+              {flashSuccess && (
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'rgba(22, 163, 74, 0.95)',
+                  color: '#ffffff',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '12px',
+                  fontWeight: 800,
+                  fontSize: '0.88rem',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                  zIndex: 30,
+                  textAlign: 'center',
+                  pointerEvents: 'none',
+                  whiteSpace: 'nowrap',
+                }}>
+                  <div>✓ BARCODE SCANNED</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.95, marginTop: '2px' }}>
+                    Added to Counter Bill
+                  </div>
+                </div>
+              )}
 
               {/* Quick Camera Bar (Torch & Flip) */}
               <div className="mobile-camera-controls">

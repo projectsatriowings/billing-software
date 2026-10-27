@@ -212,6 +212,27 @@ export function registerParties(r: Router) {
     };
   });
 
+  // Quick lookup customer by phone number (returns null if not found)
+  r.get('/api/parties/by-phone/:phone', requirePerm('parties.view'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const raw = ctx.params.phone || '';
+    const digits = raw.replace(/\D/g, '');
+    const last10 = digits.slice(-10);
+
+    const row = await ctx.db.one(
+      `SELECT p.*,
+              COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor
+       FROM parties p
+       WHERE p.tenant_id = ? AND p.type = 'customer' AND p.active = true
+         AND (p.phone = ? OR REPLACE(p.phone, ' ', '') LIKE ? OR p.phone LIKE ?)
+       LIMIT 1`,
+      [tenantId, raw, `%${last10}`, `%${last10}`],
+    );
+
+    if (!row) return { party: null };
+    return { party: formatParty(row) };
+  });
+
   // Get party by ID
   r.get('/api/parties/:id', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;

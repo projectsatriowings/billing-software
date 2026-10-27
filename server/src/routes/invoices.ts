@@ -335,13 +335,13 @@ export function registerInvoices(r: Router) {
           `INSERT INTO parties (
             id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
           ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
-          [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.state_code || '33']
+          [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
         );
         partyId = newCustId;
       }
 
       // 1. Generate sequential invoice number
-      const prefix = shop.invoice_prefix || 'INV';
+      const prefix = shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV';
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
         `INSERT INTO number_series (tenant_id, series, next_no)
          VALUES (?, ?, 2)
@@ -479,8 +479,10 @@ export function registerInvoices(r: Router) {
 
       // 6. Customer loyalty points calculation & update based on shop's custom rule
       if (partyId) {
-        const isLoyaltyActive = Boolean(shop.loyalty_enabled ?? true);
-        const ptsPer100 = Number(shop.loyalty_points_per_100 ?? 10);
+        const isLoyaltyActive = Boolean(shop.loyaltyEnabled ?? shop.loyalty_enabled ?? true);
+        const ptsPer100 = Number(shop.loyaltyPointsPer100 ?? shop.loyalty_points_per_100 ?? 10);
+        const minRedeem = Number(shop.loyaltyMinPointsRedeem ?? shop.loyalty_min_points_redeem ?? 10);
+
         if (isLoyaltyActive && ptsPer100 > 0) {
           // calculated.totalMinor is in paise (₹100 = 10,000 paise)
           earnedLoyaltyPoints = Math.floor((calculated.totalMinor * ptsPer100) / 10000);
@@ -489,11 +491,17 @@ export function registerInvoices(r: Router) {
         }
 
         if (redeemedPoints > 0) {
+          if (!isLoyaltyActive) {
+            throw bad('Loyalty rewards program is currently disabled for this store.');
+          }
           const custParty = await q.one<{ loyalty_points: number; loyaltyPoints: number }>(
             'SELECT loyalty_points FROM parties WHERE id = ? AND tenant_id = ? FOR UPDATE',
             [partyId, tenantId]
           );
           const currentPts = Number(custParty?.loyaltyPoints ?? custParty?.loyalty_points ?? 0);
+          if (currentPts < minRedeem) {
+            throw bad(`Minimum ${minRedeem} points required to redeem (customer has ${currentPts} points).`);
+          }
           if (currentPts < redeemedPoints) {
             throw bad(`Insufficient loyalty points. Customer has ${currentPts} points, requested to redeem ${redeemedPoints}.`);
           }

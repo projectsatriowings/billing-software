@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import type { Router, Ctx } from '../http.ts';
@@ -62,7 +64,28 @@ export function getLocalIpAddress(): string {
   return ips[0] || 'localhost';
 }
 
-let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || 'https://books-strike-objectives-holdem.trycloudflare.com';
+function loadPersistedTunnelUrl(): string {
+  try {
+    const file = path.resolve('.scanner-tunnel-url');
+    if (fs.existsSync(file)) {
+      return fs.readFileSync(file, 'utf8').trim();
+    }
+  } catch {}
+  return '';
+}
+
+function savePersistedTunnelUrl(url: string) {
+  try {
+    const file = path.resolve('.scanner-tunnel-url');
+    if (url) {
+      fs.writeFileSync(file, url.trim(), 'utf8');
+    } else if (fs.existsSync(file)) {
+      fs.unlinkSync(file);
+    }
+  } catch {}
+}
+
+let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || loadPersistedTunnelUrl();
 
 // Keep Cloudflare Tunnel alive & prevent Wi-Fi router NAT connection timeouts
 setInterval(() => {
@@ -76,6 +99,7 @@ setInterval(() => {
 
 export function setTunnelUrl(url: string) {
   activeTunnelUrl = url.trim();
+  savePersistedTunnelUrl(activeTunnelUrl);
 }
 
 export function getTunnelUrl(): string {
@@ -99,10 +123,18 @@ export function registerScannerBridge(r: Router) {
     };
   });
 
+  r.get('/api/scanner/recent-scans', (ctx: Ctx) => {
+    const list: any[] = [];
+    for (const [id, s] of sessions) {
+      list.push({ sessionId: id, scans: s.scans.slice(-10) });
+    }
+    return { list };
+  });
+
   // 1b. Update or configure public tunnel URL
   r.post('/api/scanner/tunnel', (ctx: Ctx) => {
     if (ctx.body?.url) {
-      activeTunnelUrl = String(ctx.body.url).trim();
+      setTunnelUrl(String(ctx.body.url));
     }
     return { ok: true, tunnelUrl: activeTunnelUrl };
   });
@@ -186,6 +218,21 @@ export function registerScannerBridge(r: Router) {
       try {
         listener([event]);
       } catch {}
+    }
+
+    // Fail-safe delivery: if this session had no listeners, forward to any active desktop terminal session
+    if (listeners.length === 0) {
+      for (const [otherId, otherSess] of sessions) {
+        if (otherId !== sessionId && otherSess.waitingListeners.length > 0) {
+          otherSess.scans.push(event);
+          const otherListeners = otherSess.waitingListeners.splice(0, otherSess.waitingListeners.length);
+          for (const l of otherListeners) {
+            try {
+              l([event]);
+            } catch {}
+          }
+        }
+      }
     }
 
     return {

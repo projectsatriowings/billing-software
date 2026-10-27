@@ -11,3 +11,5 @@ yarn-error.log*
 Thumbs.db
 scratch/
 backups/
+.scanner-tunnel-url
+

@@ -258,6 +258,10 @@ export function renderEan13Svg(barcode: string, includeText: boolean = true): st
   let code = barcode.trim();
   if (code.length === 12 && /^\d+$/.test(code)) {
     code += computeEan13CheckDigit(code);
+  } else if (code.length === 13 && /^\d+$/.test(code)) {
+    // Always enforce the correct GS1 EAN-13 check digit so phone cameras decode the bars without checksum rejection
+    const validCheck = computeEan13CheckDigit(code.slice(0, 12));
+    code = code.slice(0, 12) + String(validCheck);
   }
   if (code.length !== 13 || !/^\d+$/.test(code)) {
     return renderCode128Svg(code, includeText);

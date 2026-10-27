@@ -613,12 +613,13 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
 
                   {/* Barcode bars */}
                   <div
+                    className="barcode-preview-bars"
                     style={{
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
                       width: '100%',
-                      margin: '2px 0',
+                      margin: '4px 0',
                     }}
                     dangerouslySetInnerHTML={{ __html: barcodeSvgBarsOnly }}
                   />

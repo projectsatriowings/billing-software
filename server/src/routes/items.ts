@@ -126,6 +126,7 @@ export function registerItems(r: Router) {
     const code = (ctx.params.code ?? '').trim();
     if (!code) throw bad('Barcode is required', 'VALIDATION', { field: 'code' });
 
+    const prefix12 = code.length === 13 ? code.slice(0, 12) : code;
     const row = await ctx.db.one(
       `SELECT i.*,
               COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0) AS current_stock_milli
@@ -133,13 +134,44 @@ export function registerItems(r: Router) {
        WHERE i.tenant_id = ? AND i.active = true
          AND (
            i.barcode = ?
+           OR (length(?) = 13 AND i.barcode = ?)
+           OR (length(i.barcode) = 13 AND substr(i.barcode, 1, 12) = ?)
            OR EXISTS (
              SELECT 1 FROM product_barcodes pb
-             WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND pb.barcode = ?
+             WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id
+               AND (pb.barcode = ? OR (length(?) = 13 AND pb.barcode = ?))
            )
-         )`,
-      [tenantId, code, code],
+         )
+       LIMIT 1`,
+      [tenantId, code, code, prefix12, prefix12, code, code, prefix12],
     );
+    if (!row && code.length >= 8 && /^\d+$/.test(code)) {
+      const allRows = await ctx.db.query<{ id: string; barcode: string | null }>(
+        `SELECT id, barcode FROM items WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL`,
+        [tenantId],
+      );
+      const candidates = allRows.filter((r: { id: string; barcode: string | null }) => {
+        const itBc = (r.barcode || '').trim().replace(/[\s\-]/g, '');
+        if (itBc.length !== code.length) return false;
+        let diffs = 0;
+        for (let i = 0; i < code.length; i++) {
+          if (code[i] !== itBc[i]) {
+            diffs++;
+            if (diffs > 1) return false;
+          }
+        }
+        return diffs === 1;
+      });
+      if (candidates.length === 1) {
+        const candidateRow = await ctx.db.one(
+          `SELECT i.*, COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0) AS current_stock_milli
+           FROM items i WHERE i.id = ? AND i.tenant_id = ?`,
+          [candidates[0].id, tenantId],
+        );
+        if (candidateRow) return { item: formatItem(candidateRow) };
+      }
+    }
+
     if (!row) throw notFound('Item');
     return { item: formatItem(row) };
   });
