@@ -25,3 +25,11 @@ test('HSN Service: suggest HSN for medicines', () => {
   assert.ok(suggestions.length > 0, 'Should return suggestions for Paracetamol');
   assert.ok(suggestions.some((s) => s.code.startsWith('3004')), 'Should suggest 3004 for medicaments');
 });
+
+test('HSN Service: suggest correct HSN for potato chips', () => {
+  const suggestions = suggestHsnForProduct('potato chips', 'Snacks');
+  assert.ok(suggestions.length > 0, 'Should return suggestions for potato chips');
+  assert.equal(suggestions[0].code, '20052000', 'Top suggestion for potato chips must be 20052000');
+  assert.ok(suggestions[0].desc.includes('POTATO CHIPS'), 'Description should clarify potato chips');
+});
+
