@@ -10062,8 +10062,8 @@ export function App() {
                 </div>
               )}
 
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #334155', borderRadius: '8px', padding: '0.85rem', marginTop: '1rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ background: 'var(--surface-raised, rgba(255,255,255,0.03))', border: '1px solid var(--border, #cbd5e1)', borderRadius: '8px', padding: '0.85rem', marginTop: '1rem' }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text, #0f172a)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <span>🏬 Inventory Alert & Reorder Settings</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>

@@ -18,13 +18,12 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
   const loadData = async () => {
     setLoading(true);
     try {
-      if (activeSubTab === 'customer') {
-        const res = await api<{ payments: Payment[] }>('/api/payments?limit=50');
-        setCustomerPayments(res.payments || []);
-      } else {
-        const res = await api<{ payments: SupplierPaymentRecord[] }>('/api/suppliers/payments/history?limit=50').catch(() => ({ payments: [] }));
-        setSupplierPayments(res.payments || []);
-      }
+      const [custRes, suppRes] = await Promise.all([
+        api<{ payments: Payment[] }>('/api/payments?limit=100').catch(() => ({ payments: [] })),
+        api<{ payments: SupplierPaymentRecord[] }>('/api/suppliers/payments/history?limit=100').catch(() => ({ payments: [] })),
+      ]);
+      setCustomerPayments(custRes.payments || []);
+      setSupplierPayments(suppRes.payments || []);
     } catch {
       // Fallback
     } finally {
@@ -34,7 +33,7 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
 
   useEffect(() => {
     loadData();
-  }, [activeSubTab]);
+  }, []);
 
   const filteredCustomerPayments = customerPayments.filter((p) => {
     if (modeFilter !== 'ALL' && p.mode !== modeFilter) return false;
@@ -43,7 +42,8 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
       const matchName = (p.customerName || '').toLowerCase().includes(q);
       const matchRec = (p.receiptNumber || '').toLowerCase().includes(q);
       const matchRef = (p.referenceNo || '').toLowerCase().includes(q);
-      if (!matchName && !matchRec && !matchRef) return false;
+      const matchNote = (p.note || '').toLowerCase().includes(q);
+      if (!matchName && !matchRec && !matchRef && !matchNote) return false;
     }
     return true;
   });
@@ -54,7 +54,8 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
       const q = search.toLowerCase();
       const matchNum = (p.paymentNumber || '').toLowerCase().includes(q);
       const matchRef = (p.reference || '').toLowerCase().includes(q);
-      if (!matchNum && !matchRef) return false;
+      const matchSup = (p.supplierName || '').toLowerCase().includes(q);
+      if (!matchNum && !matchRef && !matchSup) return false;
     }
     return true;
   });
@@ -326,11 +327,12 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>
                     <th style={{ padding: '0.85rem 1rem' }}>Voucher #</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Date</th>
-                    <th style={{ padding: '0.85rem 1rem' }}>Recorded By</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Supplier</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Payment Method</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Reference #</th>
                     <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Amount Paid</th>
                     <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Status</th>
+                    <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -347,8 +349,8 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
                       <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>
                         {p.date}
                       </td>
-                      <td style={{ padding: '0.85rem 1rem', color: '#475569' }}>
-                        {p.recordedBy || 'Manager'}
+                      <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#1e293b' }}>
+                        {p.supplierName || 'Supplier'}
                       </td>
                       <td style={{ padding: '0.85rem 1rem' }}>
                         <span style={{
@@ -384,6 +386,18 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
                         }}>
                           ✓ Settled
                         </span>
+                      </td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                        {p.supplierId && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSupplierLedger && onOpenSupplierLedger(p.supplierId!)}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
+                          >
+                            View Ledger ➔
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

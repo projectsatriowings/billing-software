@@ -658,6 +658,8 @@ export interface SupplierPaymentRecord {
   recordedBy?: string | null;
   voidReason?: string | null;
   createdAt: string;
+  supplierId?: string;
+  supplierName?: string;
 }
 
 export interface SupplierLedger {
