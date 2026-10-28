@@ -1246,7 +1246,7 @@ body {
 .top-global-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1.5rem;
   padding-bottom: 1.1rem;
   margin-bottom: 1.25rem;
@@ -17607,7 +17607,7 @@ select.expense-input-control {
 }
 
 /* ==========================================================================
-   MODERN UPGRADED CUSTOMER DIRECTORY & KHATA SUITE
+   MODERN UPGRADED CUSTOMER DIRECTORY SUITE
    ========================================================================== */
 .customer-dir-root {
   display: flex;
@@ -18128,20 +18128,20 @@ select.expense-input-control {
   white-space: nowrap;
 }
 
-/* Khata Balance Cell */
-.khata-balance-cell {
+/* Dues Balance Cell */
+.dues-balance-cell {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.khata-amt {
+.dues-amt {
   font-size: 0.95rem;
   font-weight: 800;
 }
 
-.khata-amt.due { color: #b45309; }
-.khata-amt.overdue { color: #dc2626; }
+.dues-amt.due { color: #b45309; }
+.dues-amt.overdue { color: #dc2626; }
 
 .credit-usage-bar-wrap {
   width: 100px;
@@ -20679,14 +20679,6 @@ select.expense-input-control {
   border-radius: 4px;
 }
 
-.badge-cust-khata {
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
 
 .badge-cust-retail {
   background: #f1f5f9;
@@ -21445,6 +21437,61 @@ select.expense-input-control {
   font-weight: 700;
   padding: 0.35rem 0.85rem;
   border-radius: 9999px;
+}
+
+.dashboard-branch-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1rem;
+}
+
+.branch-selector-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.branch-selector-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.dashboard-branch-pill:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.dashboard-branch-pill.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
+}
+
+.dashboard-branch-pill .branch-icon {
+  font-size: 0.85rem;
 }
 
 /* Empty Alert Banner */
@@ -22379,4 +22426,22 @@ select.expense-input-control {
   .header-actions-area {
     width: 100%;
   }
+}
+
+/* Branch Card Edit Button Hover Styles */
+.branch-card-edit-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  transition: all 0.15s ease-in-out;
+}
+.branch-card-edit-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #6d4aff !important;
+  color: #6d4aff !important;
+  box-shadow: 0 2px 6px rgba(109, 74, 255, 0.18) !important;
+  transform: translateY(-1px);
+}
+.branch-card-edit-btn:active {
+  transform: translateY(0);
 }

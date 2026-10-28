@@ -19,7 +19,7 @@ import {
   type PurchaseStatus,
   type Payment,
   type PaymentAllocation,
-  type KhataOverview,
+  type CustomerDuesOverview,
   type CustomerLedger,
   type LedgerEvent,
   type DuesSummary,
@@ -522,7 +522,7 @@ export function App() {
   const [cart, setCart] = useState<{ item: Item; qty: number }[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [selectedPartyId, setSelectedPartyId] = useState<string>('');
-  const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'credit' | 'split'>('cash');
+  const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'split'>('cash');
   const [cashReceived, setCashReceived] = useState<string>('');
   const [splitMethod1, setSplitMethod1] = useState<'cash' | 'upi' | 'card' | 'bank'>('cash');
   const [splitAmount1, setSplitAmount1] = useState<string>('');
@@ -664,7 +664,7 @@ export function App() {
   const [resendPhoneError, setResendPhoneError] = useState('');
   const [resendSendState, setResendSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
-  // Khata Payment Collection States
+  // Customer Dues Payment Collection States
   const [duesSummary, setDuesSummary] = useState<DuesSummary | null>(null);
 
   // Collect Payment Modal State
@@ -676,7 +676,7 @@ export function App() {
   const [collectPaymentDate, setCollectPaymentDate] = useState<string>('');
   const [collectNote, setCollectNote] = useState<string>('');
   const [collectAllocations, setCollectAllocations] = useState<{ [invoiceId: string]: string }>({});
-  const [collectKhataData, setCollectKhataData] = useState<KhataOverview | null>(null);
+  const [collectCustomerDuesData, setCollectCustomerDuesData] = useState<CustomerDuesOverview | null>(null);
   const [collectLoading, setCollectLoading] = useState<boolean>(false);
   const [collectSaving, setCollectSaving] = useState<boolean>(false);
   const [collectError, setCollectError] = useState<string | null>(null);
@@ -1025,6 +1025,10 @@ export function App() {
       const hash = window.location.hash.replace('#', '');
       if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
         setView(hash as any);
+      } else if (hash === 'product-analysis' || hash === 'product-movement') {
+        setView('dashboard');
+        setActiveTab('product-movement');
+        setShowInventoryDropdown(true);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -1052,7 +1056,19 @@ export function App() {
         setShop(res.shop);
         initSettingsForm(res.shop);
         loadMyBusinesses();
-        if (currentHash === 'dashboard') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        const isProductAnalysisRoute =
+          ['product-analysis', 'product-movement'].includes(currentHash) ||
+          ['product-analysis', 'product-movement'].includes(tabParam || '') ||
+          window.location.pathname === '/product-analysis' ||
+          window.location.pathname === '/product-movement';
+
+        if (isProductAnalysisRoute) {
+          setView('dashboard');
+          setActiveTab('product-movement');
+          setShowInventoryDropdown(true);
+        } else if (currentHash === 'dashboard') {
           setView('dashboard');
         } else if (currentHash === 'selector') {
           setView('selector');
@@ -2311,28 +2327,7 @@ export function App() {
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
 
-    // Credit payment check
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
-    if (selectedPayMode === 'credit') {
-      if (!selectedCustomer) {
-        showToast('Please select a registered customer to bill on credit (Khata). Credit sales cannot be issued to Walk-in customers.', 'warning');
-        return;
-      }
-      if (selectedCustomer.creditLimitMinor && selectedCustomer.creditLimitMinor > 0) {
-        const currentBal = (selectedCustomer as any).balanceMinor || (selectedCustomer as any).duesMinor || 0;
-        if (currentBal + finalPayableMinor > selectedCustomer.creditLimitMinor) {
-          const proceed = window.confirm(
-            `⚠️ Customer Credit Limit Warning!\n\n` +
-            `Customer: ${selectedCustomer.name}\n` +
-            `Credit Limit: ₹${(selectedCustomer.creditLimitMinor / 100).toFixed(2)}\n` +
-            `Current Outstanding: ₹${(currentBal / 100).toFixed(2)}\n` +
-            `This Bill: ₹${(finalPayableMinor / 100).toFixed(2)}\n\n` +
-            `This invoice exceeds their assigned credit limit. Proceed anyway?`
-          );
-          if (!proceed) return;
-        }
-      }
-    }
 
     setIsCheckingOut(true);
     try {
@@ -2363,17 +2358,14 @@ export function App() {
       let paymentsPayload: { method: string; amountMinor: number }[] = [];
       let tenderPayload: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
 
-      if (selectedPayMode === 'credit') {
-        paymentsPayload = [];
-        tenderPayload = null;
-      } else if (selectedPayMode === 'split') {
+      if (selectedPayMode === 'split') {
         if (splitTotalMinor === 0) {
           showToast('Please enter split payment amounts');
           setIsCheckingOut(false);
           return;
         }
-        if (splitTotalMinor < finalPayableMinor && !selectedPartyId) {
-          showToast(`₹${((finalPayableMinor - splitTotalMinor) / 100).toFixed(2)} remaining. Allocate remaining or select a Customer for Khata.`);
+        if (splitTotalMinor !== finalPayableMinor) {
+          showToast(`₹${(Math.abs(finalPayableMinor - splitTotalMinor) / 100).toFixed(2)} ${splitTotalMinor < finalPayableMinor ? 'remaining' : 'over-allocated'}. Total split payments must match bill total.`);
           setIsCheckingOut(false);
           return;
         }
@@ -2887,7 +2879,7 @@ export function App() {
   };
 
   // =========================================================================
-  // KHATA PAYMENT COLLECTION HANDLERS
+  // CUSTOMER PAYMENT COLLECTION HANDLERS
   // =========================================================================
 
   const openCollectPayment = async (customer: Party, preselectedInvoiceId?: string) => {
@@ -2904,19 +2896,19 @@ export function App() {
     setCollectLoading(true);
 
     try {
-      const khata = await api<KhataOverview>(`/api/parties/${customer.id}/khata`);
-      setCollectKhataData(khata);
+      const dues = await api<CustomerDuesOverview>(`/api/parties/${customer.id}/dues`);
+      setCollectCustomerDuesData(dues);
 
       // Pre-fill amount to full dues (Section 5: Amount received pre-filled to full dues)
-      const duesRupees = (khata.totalDuesMinor / 100).toFixed(2);
-      const initAmount = khata.totalDuesMinor > 0 ? duesRupees : '';
+      const duesRupees = (dues.totalDuesMinor / 100).toFixed(2);
+      const initAmount = dues.totalDuesMinor > 0 ? duesRupees : '';
       setCollectAmountRupees(initAmount);
 
       // Default oldest-first allocation (preselected invoice first if specified)
       const initialAllocs: { [id: string]: string } = {};
-      let remaining = khata.totalDuesMinor;
+      let remaining = dues.totalDuesMinor;
 
-      let sorted = [...khata.unpaidInvoices];
+      let sorted = [...dues.unpaidInvoices];
       if (preselectedInvoiceId) {
         sorted.sort((a, b) => (a.id === preselectedInvoiceId ? -1 : b.id === preselectedInvoiceId ? 1 : 0));
       }
@@ -2940,7 +2932,7 @@ export function App() {
 
   const handleCollectAmountChange = (newAmtStr: string) => {
     setCollectAmountRupees(newAmtStr);
-    if (!collectKhataData) return;
+    if (!collectCustomerDuesData) return;
 
     const parsed = parseFloat(newAmtStr);
     const enteredMinor = Math.round((isNaN(parsed) ? 0 : Math.max(0, parsed)) * 100);
@@ -2948,7 +2940,7 @@ export function App() {
     let remaining = enteredMinor;
     const newAllocs: { [id: string]: string } = {};
 
-    let sorted = [...collectKhataData.unpaidInvoices];
+    let sorted = [...collectCustomerDuesData.unpaidInvoices];
     if (collectPreselectedInvoiceId) {
       sorted.sort((a, b) => (a.id === collectPreselectedInvoiceId ? -1 : b.id === collectPreselectedInvoiceId ? 1 : 0));
     }
@@ -2979,7 +2971,7 @@ export function App() {
       return;
     }
     setCollectPaymentCustomer(null);
-    setCollectKhataData(null);
+    setCollectCustomerDuesData(null);
     setCollectDiscardConfirm(false);
   };
 
@@ -3040,7 +3032,7 @@ export function App() {
 
       const cust = collectPaymentCustomer;
       setCollectPaymentCustomer(null);
-      setCollectKhataData(null);
+      setCollectCustomerDuesData(null);
 
       if (andAddAnother) {
         openCollectPayment(cust);
@@ -4231,49 +4223,60 @@ export function App() {
               </button>
             )}
 
-            {/* 5. Inventory Hub: Only for Store Manager and Super Admin */}
+            {/* 5. Inventory Hub with Submenu: Only for Store Manager and Super Admin */}
             {user.role !== 'cashier' && (
-              <button
-                type="button"
-                className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
-                onClick={() => setActiveTab('inventory')}
+              <div
+                ref={inventoryDropdownRef}
+                className={`sidebar-nav-group ${isInventorySubmenuVisible ? 'dropdown-open' : ''}`}
+                onMouseEnter={handleInventoryMouseEnter}
+                onMouseLeave={handleInventoryMouseLeave}
               >
-                <span className="nav-icon">🏬</span>
-                <span className="nav-text">Inventory Hub</span>
-                <div className="nav-trailing">
-                  {totalStockAlerts > 0 && (
-                    <span
-                      className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
-                      title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
-                    >
-                      {totalStockAlerts}
-                    </span>
-                  )}
-                  <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </span>
-                </div>
-              </button>
-            )}
-
-            {/* Inventory Submenu */}
-            {user.role !== 'cashier' && isInventorySubmenuVisible && (
-              <div className="sidebar-submenu-list" role="menu">
                 <button
                   type="button"
-                  role="menuitem"
-                  className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('product-movement');
-                    setShowInventoryDropdown(true);
-                  }}
-                  title="Product Analysis"
+                  className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
+                    activeTab === 'product-movement' ? 'has-active-child' : ''
+                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
+                  onClick={handleInventoryClick}
+                  aria-haspopup="true"
+                  aria-expanded={isInventorySubmenuVisible}
+                  title="Inventory Hub & Stock Operations"
                 >
-                  <span className="submenu-icon" aria-hidden="true">🚀</span>
-                  <span className="submenu-text">Product Analysis</span>
+                  <span className="nav-icon">🏬</span>
+                  <span className="nav-text">Inventory Hub</span>
+                  <div className="nav-trailing">
+                    {totalStockAlerts > 0 && (
+                      <span
+                        className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
+                        title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
+                      >
+                        {totalStockAlerts}
+                      </span>
+                    )}
+                    <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </span>
+                  </div>
                 </button>
+
+                {isInventorySubmenuVisible && (
+                  <div className="sidebar-submenu-list" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('product-movement');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Product Analysis"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">🚀</span>
+                      <span className="submenu-text">Product Analysis</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4582,21 +4585,6 @@ export function App() {
       <main className="main-content">
         {/* Top Global Bar Matching Image 2 */}
         <div className="top-global-bar">
-          <div className="top-global-search">
-            <span className="global-search-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </span>
-            <input
-              type="text"
-              className="global-search-input"
-              placeholder="Search products, barcode or customer..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
           <div className="top-global-actions">
             <button
               type="button"
@@ -4640,7 +4628,7 @@ export function App() {
                 {activeTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
                 {activeTab === 'items' && 'Product & Stock Catalog'}
                 {activeTab === 'inventory' && 'Inventory Hub & Stock Operations'}
-                {activeTab === 'product-movement' && 'Product Movement Analysis'}
+                {activeTab === 'product-movement' && 'Product Analysis'}
                 {activeTab === 'purchases' && 'Purchases & Stock Inward'}
                 {activeTab === 'invoices' && 'Sales Invoices & Bills'}
                 {activeTab === 'customers' && 'Customer Directory & Loyalty Points'}
@@ -4675,7 +4663,7 @@ export function App() {
                 {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
                 {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
                 {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
-                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and khata receivables'}
+                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
                 {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
                 {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
                 {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
@@ -6362,17 +6350,7 @@ export function App() {
                             </svg>
                           ),
                         },
-                        {
-                          id: 'credit',
-                          label: 'Khata',
-                          icon: (
-                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                              <circle cx="9" cy="7" r="4" />
-                              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                          ),
-                        },
+
                         {
                           id: 'split',
                           label: 'Split',
@@ -6798,7 +6776,6 @@ export function App() {
                                 {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
                                  selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
                                  selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
-                                 selectedPayMode === 'credit' ? 'Post to Khata & Bill' :
                                  'Proceed to Payment'}
                               </span>
                               <span className="checkout-arrow">
@@ -7869,6 +7846,10 @@ export function App() {
             businessType={shop?.businessType}
             allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
             onNavigateToCategories={() => setActiveTab('categories')}
+            onNavigateToProductAnalysis={() => {
+              setActiveTab('product-movement');
+              setShowInventoryDropdown(true);
+            }}
             onNavigateToPurchases={(supplierId) => {
               setActiveTab('purchases');
               if (supplierId) {
@@ -8567,9 +8548,9 @@ export function App() {
                 </div>
                 <div>
                   <div className="kpi-val mono" style={{ color: '#ea580c' }}>
-                    {formatRupees(report.today.khataCollectionsMinor || 0)}
+                    {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
                   </div>
-                  <div className="kpi-label">Today's Khata Collections</div>
+                  <div className="kpi-label">Today's Customer Collections</div>
                 </div>
               </div>
 
@@ -8692,7 +8673,7 @@ export function App() {
                   {(!duesSummary?.topDebtors || duesSummary.topDebtors.length === 0) && (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
-                        No pending customer dues. All Khata accounts are clear!
+                        No pending customer dues. All customer accounts are clear!
                       </td>
                     </tr>
                   )}
@@ -9178,7 +9159,7 @@ export function App() {
                     <ul className="pack-features-list">
                       <li>✓ B2B A4 GST Tax Invoice layout with terms</li>
                       <li>✓ Purchase Order (PO) & transport vehicle number</li>
-                      <li>✓ Customer Khata balance & credit limit locks</li>
+                      <li>✓ Customer balance & credit limit locks</li>
                       <li>✓ Bulk carton & sack unit measures</li>
                     </ul>
                   </div>
@@ -9228,7 +9209,7 @@ export function App() {
         {activeTab === 'payments' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <PaymentsView
-              onOpenCustomerKhata={(cid) => {
+              onOpenCustomerLedger={(cid) => {
                 const customer = parties.find((p) => p.id === cid || p.name === cid);
                 if (customer) {
                   setCustomerFilterMaster(customer.name);
@@ -12850,7 +12831,7 @@ export function App() {
         </div>
       )}
 
-      {/* Khata Payment Collection Modal (Section 5) */}
+      {/* Customer Payment Collection Modal (Section 5) */}
       {collectPaymentCustomer && (
         <div
           className="modal-backdrop"
@@ -12946,8 +12927,8 @@ export function App() {
                   >
                     <div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Total Dues</div>
-                      <div className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color: (collectKhataData?.totalDuesMinor || 0) > 0 ? '#ef4444' : '#16a34a' }}>
-                        {formatRupees(collectKhataData?.totalDuesMinor || 0)}
+                      <div className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color: (collectCustomerDuesData?.totalDuesMinor || 0) > 0 ? '#ef4444' : '#16a34a' }}>
+                        {formatRupees(collectCustomerDuesData?.totalDuesMinor || 0)}
                       </div>
                     </div>
                     <div>
@@ -12958,25 +12939,25 @@ export function App() {
                     </div>
                     <div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Balance After</div>
-                      <div className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color: Math.max(0, (collectKhataData?.totalDuesMinor || 0) - Math.round((parseFloat(collectAmountRupees) || 0) * 100)) > 0 ? '#b91c1c' : '#16a34a' }}>
-                        {formatRupees(Math.max(0, (collectKhataData?.totalDuesMinor || 0) - Math.round((parseFloat(collectAmountRupees) || 0) * 100)))}
+                      <div className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color: Math.max(0, (collectCustomerDuesData?.totalDuesMinor || 0) - Math.round((parseFloat(collectAmountRupees) || 0) * 100)) > 0 ? '#b91c1c' : '#16a34a' }}>
+                        {formatRupees(Math.max(0, (collectCustomerDuesData?.totalDuesMinor || 0) - Math.round((parseFloat(collectAmountRupees) || 0) * 100)))}
                       </div>
                     </div>
-                    {collectKhataData && Math.round((parseFloat(collectAmountRupees) || 0) * 100) > collectKhataData.totalDuesMinor && (
+                    {collectCustomerDuesData && Math.round((parseFloat(collectAmountRupees) || 0) * 100) > collectCustomerDuesData.totalDuesMinor && (
                       <div>
                         <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 600 }}>Advance Created</div>
                         <div className="mono" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#16a34a' }}>
-                          +{formatRupees(Math.round((parseFloat(collectAmountRupees) || 0) * 100) - collectKhataData.totalDuesMinor)}
+                          +{formatRupees(Math.round((parseFloat(collectAmountRupees) || 0) * 100) - collectCustomerDuesData.totalDuesMinor)}
                         </div>
                       </div>
                     )}
                   </div>
 
                   {/* Advance Warning if customer already has advance */}
-                  {(collectKhataData?.party.advanceMinor || 0) > 0 && (
+                  {(collectCustomerDuesData?.party.advanceMinor || 0) > 0 && (
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.6rem 0.85rem', marginBottom: '1rem', fontSize: '0.82rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span>ℹ️</span>
-                      <span>Customer already has <strong>{formatRupees(collectKhataData?.party.advanceMinor || 0)}</strong> in unallocated Advance.</span>
+                      <span>Customer already has <strong>{formatRupees(collectCustomerDuesData?.party.advanceMinor || 0)}</strong> in unallocated Advance.</span>
                     </div>
                   )}
 
@@ -12987,10 +12968,10 @@ export function App() {
                         <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
                           Amount Received (₹) <span style={{ color: '#ef4444' }}>*</span>
                         </label>
-                        {collectKhataData && collectKhataData.totalDuesMinor > 0 && (
+                        {collectCustomerDuesData && collectCustomerDuesData.totalDuesMinor > 0 && (
                           <button
                             type="button"
-                            onClick={() => handleCollectAmountChange((collectKhataData.totalDuesMinor / 100).toFixed(2))}
+                            onClick={() => handleCollectAmountChange((collectCustomerDuesData.totalDuesMinor / 100).toFixed(2))}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -13001,7 +12982,7 @@ export function App() {
                               padding: 0,
                             }}
                           >
-                            Pay Full Dues ({formatRupees(collectKhataData.totalDuesMinor)})
+                            Pay Full Dues ({formatRupees(collectCustomerDuesData.totalDuesMinor)})
                           </button>
                         )}
                       </div>
@@ -13112,7 +13093,7 @@ export function App() {
                       </span>
                     </div>
 
-                    {collectKhataData && collectKhataData.unpaidInvoices.length > 0 ? (
+                    {collectCustomerDuesData && collectCustomerDuesData.unpaidInvoices.length > 0 ? (
                       <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                           <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
@@ -13125,7 +13106,7 @@ export function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {collectKhataData.unpaidInvoices.map((inv) => (
+                            {collectCustomerDuesData.unpaidInvoices.map((inv) => (
                               <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                 <td style={{ padding: '6px 10px', fontWeight: 600 }}>{inv.number}</td>
                                 <td style={{ padding: '6px 10px', color: '#64748b' }}>{inv.bdate}</td>
@@ -13181,7 +13162,7 @@ export function App() {
                           onClick={() => {
                             setCollectDiscardConfirm(false);
                             setCollectPaymentCustomer(null);
-                            setCollectKhataData(null);
+                            setCollectCustomerDuesData(null);
                           }}
                           style={{ padding: '3px 8px', borderRadius: '4px', border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
                         >
@@ -13375,7 +13356,7 @@ export function App() {
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0', fontSize: '0.85rem' }}>
-                  <span style={{ color: '#64748b' }}>Remaining Khata Dues:</span>
+                  <span style={{ color: '#64748b' }}>Remaining Dues:</span>
                   <span className="mono" style={{ fontWeight: 700, color: (receiptSuccessPayment.balanceAfterMinor ?? 0) > 0 ? '#ef4444' : '#16a34a' }}>
                     {formatRupees(receiptSuccessPayment.balanceAfterMinor ?? 0)}
                   </span>
@@ -13535,7 +13516,7 @@ export function App() {
         </div>
       )}
 
-      {/* Customer Detail & Khata Ledger Modal (Section 11 & 12) */}
+      {/* Customer Detail & Ledger Modal (Section 11 & 12) */}
       {ledgerCustomer && (
         <div
           className="modal-backdrop"
@@ -13582,7 +13563,7 @@ export function App() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <span style={{ fontSize: '1.25rem' }}>📖</span>
                   <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-                    Khata Ledger — {ledgerCustomer.name}
+                    Customer Ledger — {ledgerCustomer.name}
                   </h3>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>

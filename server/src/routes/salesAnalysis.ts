@@ -518,7 +518,7 @@ export function registerSalesAnalysis(r: Router) {
       [tenantId, fromYMD, toYMD, ...filterObj.params],
     );
 
-    // Also calculate credit / khata sales (unpaid balance on posted sales)
+    // Also calculate credit sales (unpaid balance on posted sales)
     const creditSalesRes = await ctx.db.one<any>(
       `SELECT COALESCE(SUM(i.balance_minor), 0)::bigint AS credit_total
        FROM invoices i
@@ -571,7 +571,7 @@ export function registerSalesAnalysis(r: Router) {
       },
       {
         mode: 'credit',
-        label: 'Credit (Khata)',
+        label: 'Credit',
         totalMinor: modeTotals.credit,
         sharePct: totalPaid > 0 ? Math.round((modeTotals.credit / totalPaid) * 100) : 0,
         color: '#f59e0b',
@@ -613,7 +613,7 @@ export function registerSalesAnalysis(r: Router) {
       const creditLimit = Number(r.custCreditLimit ?? r.cust_credit_limit ?? 0);
       const dues = Number(r.pendingDues ?? r.pending_dues ?? 0);
       const isB2B = Boolean(gstin && gstin.trim().length === 15);
-      const isKhata = Boolean(creditLimit > 0 || dues > 0 || !isB2B);
+      const isKhata = false;
 
       return {
         id: r.custId || r.cust_id,
@@ -868,16 +868,16 @@ export function registerSalesAnalysis(r: Router) {
       });
     }
 
-    // Insight 4: Credit (Khata) & Uncollected Dues
+    // Insight 4: Credit & Uncollected Dues
     if (modeTotals.credit > 0) {
-      const creditCustCount = topCustomers.filter((c) => c.isKhata && (c.creditDuesMinor || 0) > 0).length;
+      const creditCustCount = topCustomers.filter((c) => (c.creditDuesMinor || 0) > 0).length;
       insights.push({
         id: 'credit-insight',
         type: 'credit',
         icon: '💳',
         theme: 'purple',
         title: `Credit sales at ${paymentModes.find((p) => p.mode === 'credit')?.sharePct || 0}%`,
-        description: `${fmtRupeesText(modeTotals.credit)} outstanding to collect ${creditCustCount > 0 ? `across ${creditCustCount} active Khata accounts` : 'from customer bills'}.`,
+        description: `${fmtRupeesText(modeTotals.credit)} outstanding to collect ${creditCustCount > 0 ? `across ${creditCustCount} active customer accounts` : 'from customer bills'}.`,
       });
     }
 

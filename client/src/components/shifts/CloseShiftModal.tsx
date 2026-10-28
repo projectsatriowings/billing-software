@@ -234,7 +234,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
                 <>
                   <span className="recon-op">+</span>
                   <div className="recon-term">
-                    <span className="term-label">Khata Collections</span>
+                    <span className="term-label">Customer Receipts</span>
                     <span className="term-val text-success">+{formatMoney(activeSummary.cashPaymentsMinor)}</span>
                   </div>
                 </>

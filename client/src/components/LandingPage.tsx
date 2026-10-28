@@ -478,7 +478,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="pillar-icon-box">⚡</div>
             <h3 className="pillar-title">Context-Adaptive POS Interface</h3>
             <p className="pillar-desc">
-              One shared engine that adapts dynamically: Pharmacy gets Batch/Expiry/Prescriptions, Restaurant gets KOT/Tables, Apparel gets Size/Colour variants, and Wholesale gets Bulk Sacks and Credit Khata.
+              One shared engine that adapts dynamically: Pharmacy gets Batch/Expiry/Prescriptions, Restaurant gets KOT/Tables, Apparel gets Size/Colour variants, and Wholesale gets Bulk Sacks and B2B Invoicing.
             </p>
           </div>
         </div>
@@ -507,8 +507,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <div className="feature-card">
             <div className="feat-icon-bubble">👥</div>
-            <h4 className="feat-title">Customer Khata & Credit Limits</h4>
-            <p className="feat-desc">Track customer credit balances, payment receipts, send instant WhatsApp bills, and enforce credit limits on wholesale buyers.</p>
+            <h4 className="feat-title">Customer Directory & Accounts</h4>
+            <p className="feat-desc">Track customer balances, payment receipts, send instant WhatsApp bills, and manage wholesale buyers.</p>
           </div>
 
           <div className="feature-card">
@@ -553,7 +553,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <li>✓ Up to 500 Inventory Items</li>
               <li>✓ Thermal Receipt Printing</li>
               <li>✓ 100% Integer GST Calculation</li>
-              <li>✓ Customer Khata Ledger</li>
+              <li>✓ Customer Account Ledger</li>
             </ul>
             <button type="button" onClick={() => onNavigateRegister('grocery')} className="pricing-cta-btn secondary">
               Get Started Free

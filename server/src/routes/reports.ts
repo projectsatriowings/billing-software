@@ -70,8 +70,8 @@ export function registerReports(r: Router) {
     const netGstMinor = Math.max(0, grossGstMinor - creditGstMinor);
     const returnRatePct = grossTotalMinor > 0 ? Number(((creditTotalMinor / grossTotalMinor) * 100).toFixed(2)) : 0;
 
-    // Today's Khata collections (excluding reversed payments)
-    const khataStats = await ctx.db.one<{ total: number }>(
+    // Today's customer collections (excluding reversed payments)
+    const collectionStats = await ctx.db.one<{ total: number }>(
       `SELECT COALESCE(SUM(amount_minor), 0)::bigint AS total
        FROM payments
        WHERE tenant_id = ?
@@ -188,7 +188,7 @@ export function registerReports(r: Router) {
     );
     const totalRefundsPaidMinor = refundsPaid.reduce((sum, r) => sum + Number(r.total), 0);
 
-    // Payment methods breakdown (reconciles checkout payments and Khata collections; credit applied to dues is NOT a collection!)
+    // Payment methods breakdown (reconciles checkout payments and collections; credit applied to dues is NOT a collection!)
     const paymentBreakdown = await ctx.db.query<{ method: string; total: number }>(
       `SELECT COALESCE(mode, method) AS method, SUM(amount_minor)::bigint AS total
        FROM payments
@@ -286,7 +286,8 @@ export function registerReports(r: Router) {
         totalMinor: netTotalMinor,
         taxableMinor: netTaxableMinor,
         gstMinor: netGstMinor,
-        khataCollectionsMinor: Number(khataStats?.total ?? 0),
+        customerCollectionsMinor: Number(collectionStats?.total ?? 0),
+        khataCollectionsMinor: Number(collectionStats?.total ?? 0),
         totalCreditNotesMinor: creditTotalMinor,
         creditNotesCount: Number(todayCredits?.count ?? 0),
         returnRatePct,

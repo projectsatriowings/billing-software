@@ -194,6 +194,23 @@ export function registerBranches(r: Router) {
         }
       }
 
+      // Owner can update code
+      let code = cur.code;
+      if (isOwner && b.code !== undefined) {
+        const rawCode = V.str(b.code, 'Branch Code', { required: true, max: 20 });
+        const sanitizedCode = rawCode.trim().toUpperCase().replace(/[^A-Z0-9_\-]/g, '');
+        if (!sanitizedCode) {
+          throw bad('Branch code must contain alphanumeric characters (e.g. BR-NORTH, T-NAGAR)', 'VALIDATION');
+        }
+        if (sanitizedCode !== cur.code) {
+          const dup = await q.one('SELECT id FROM branches WHERE tenant_id = ? AND code = ? AND id != ?', [tenantId, sanitizedCode, branchId]);
+          if (dup) {
+            throw conflict(`Branch with code "${sanitizedCode}" already exists in this company.`, 'DUPLICATE_BRANCH');
+          }
+          code = sanitizedCode;
+        }
+      }
+
       const name = isOwner && b.name !== undefined ? V.str(b.name, 'Branch Name', { required: true, max: 100 }) : cur.name;
       const address = isOwner && b.address !== undefined ? V.optStr(b.address, 'Address', 300) : cur.address;
       const phone = isOwner && b.phone !== undefined ? V.optStr(b.phone, 'Phone', 30) : cur.phone;
@@ -205,6 +222,9 @@ export function registerBranches(r: Router) {
           throw bad('A branch must have at least one counter.', 'VALIDATION');
         }
         counters = Array.from(new Set(b.counters.map((c: any) => V.str(c, 'Counter', { required: true, max: 30 }).trim().toUpperCase())));
+        if (counters.length === 0) {
+          throw bad('A branch must have at least one counter.', 'VALIDATION');
+        }
       }
 
       let managerId = cur.manager_id;
@@ -213,14 +233,54 @@ export function registerBranches(r: Router) {
         if (managerId) {
           const mgr = await q.one('SELECT id, role FROM users WHERE id = ? AND tenant_id = ?', [managerId, tenantId]);
           if (!mgr) throw notFound('Store Manager');
+          if (mgr.role !== 'manager' && mgr.role !== 'owner') {
+            throw bad('Selected user must have Store Manager or Owner role.', 'INVALID_ROLE');
+          }
         }
+      }
+
+      // If branch code changed, cascade update location in all related records
+      if (code !== cur.code) {
+        // Sync tenants.locations
+        const t = await q.one<any>('SELECT locations FROM tenants WHERE id = ?', [tenantId]);
+        const curLocs: string[] = Array.isArray(t?.locations)
+          ? t.locations
+          : (typeof t?.locations === 'string' ? JSON.parse(t.locations) : ['MAIN']);
+        const updatedLocs = curLocs.map((loc: string) => (loc === cur.code ? code : loc));
+        if (!updatedLocs.includes(code)) {
+          updatedLocs.push(code);
+        }
+        await q.exec('UPDATE tenants SET locations = ?::jsonb WHERE id = ?', [j(updatedLocs), tenantId]);
+
+        // Sync users assigned_location
+        await q.exec('UPDATE users SET assigned_location = ? WHERE tenant_id = ? AND assigned_location = ?', [code, tenantId, cur.code]);
+
+        // Sync users allowed_locations
+        const tenantUsers = await q.query<any>('SELECT id, allowed_locations FROM users WHERE tenant_id = ?', [tenantId]);
+        for (const u of tenantUsers) {
+          const userAllowed: string[] = Array.isArray(u.allowed_locations)
+            ? u.allowed_locations
+            : (typeof u.allowed_locations === 'string' ? JSON.parse(u.allowed_locations) : []);
+          if (userAllowed.includes(cur.code)) {
+            const newAllowed = userAllowed.map((l: string) => (l === cur.code ? code : l));
+            await q.exec('UPDATE users SET allowed_locations = ?::jsonb WHERE id = ?', [j(newAllowed), u.id]);
+          }
+        }
+
+        // Preserve and re-link transaction and movement records
+        await q.exec('UPDATE invoices SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
+        await q.exec('UPDATE payments SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
+        await q.exec('UPDATE shifts SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
+        await q.exec('UPDATE expenses SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
+        await q.exec('UPDATE stock_moves SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
+        await q.exec('UPDATE stock_counts SET location = ? WHERE tenant_id = ? AND location = ?', [code, tenantId, cur.code]);
       }
 
       await q.exec(
         `UPDATE branches 
-         SET name = ?, address = ?, phone = ?, active = ?, counters = ?::jsonb, manager_id = ?, updated_at = now()
+         SET code = ?, name = ?, address = ?, phone = ?, active = ?, counters = ?::jsonb, manager_id = ?, updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [name, address, phone, active, j(counters), managerId || null, branchId, tenantId],
+        [code, name, address, phone, active, j(counters), managerId || null, branchId, tenantId],
       );
 
       // If new manager assigned, ensure allowed_locations includes branch code
@@ -229,9 +289,23 @@ export function registerBranches(r: Router) {
         const mgrAllowed: string[] = Array.isArray(mgrUser?.allowedLocations || mgrUser?.allowed_locations)
           ? (mgrUser.allowedLocations || mgrUser.allowed_locations)
           : ['MAIN'];
-        if (!mgrAllowed.includes(cur.code)) {
-          mgrAllowed.push(cur.code);
+        if (!mgrAllowed.includes(code)) {
+          mgrAllowed.push(code);
           await q.exec('UPDATE users SET allowed_locations = ?::jsonb WHERE id = ?', [j(mgrAllowed), managerId]);
+        }
+      }
+
+      // If counters list changed, ensure active staff assigned to this branch have a valid counter
+      if (b.counters !== undefined && counters.length > 0) {
+        const primaryCounter = counters[0];
+        const staffInBranch = await q.query<any>(
+          'SELECT id, assigned_counter FROM users WHERE tenant_id = ? AND assigned_location = ?',
+          [tenantId, code],
+        );
+        for (const st of staffInBranch) {
+          if (!counters.includes(st.assigned_counter)) {
+            await q.exec('UPDATE users SET assigned_counter = ? WHERE id = ?', [primaryCounter, st.id]);
+          }
         }
       }
 
@@ -239,7 +313,10 @@ export function registerBranches(r: Router) {
         action: 'branch.update',
         entity: 'branch',
         entityId: branchId,
-        detail: { before: { name: cur.name, active: cur.active }, after: { name, active, counters, managerId } },
+        detail: {
+          before: { code: cur.code, name: cur.name, active: cur.active, counters: cur.counters, managerId: cur.manager_id },
+          after: { code, name, active, counters, managerId },
+        },
       });
 
       const updated = await q.one<any>(

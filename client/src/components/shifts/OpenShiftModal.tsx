@@ -175,6 +175,10 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
                 onChange={(e) => setLocation(e.target.value)}
               >
                 <option value="MAIN">Main Billing Counter (MAIN)</option>
+                {location && !['MAIN', 'GODOWN', 'COUNTER-1', 'COUNTER-2', 'COUNTER-3', 'EXPRESS'].includes(location) && (
+                  <option value={location}>{location}</option>
+                )}
+                <option value="GODOWN">Godown Branch (GODOWN)</option>
                 <option value="COUNTER-1">Counter 1</option>
                 <option value="COUNTER-2">Counter 2</option>
                 <option value="COUNTER-3">Counter 3</option>

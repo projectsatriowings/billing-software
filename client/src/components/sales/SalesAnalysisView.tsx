@@ -1563,8 +1563,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           <span className="meta-sep">•</span>
                           {cust.isB2B ? (
                             <span className="badge-cust-b2b">B2B</span>
-                          ) : cust.isKhata ? (
-                            <span className="badge-cust-khata">Khata</span>
                           ) : (
                             <span className="badge-cust-retail">Retail</span>
                           )}

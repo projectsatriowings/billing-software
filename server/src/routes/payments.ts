@@ -18,7 +18,7 @@ const VALID_MODES = ['cash', 'upi', 'card', 'bank', 'cheque'] as const;
 type PaymentMode = (typeof VALID_MODES)[number];
 
 export function registerPayments(r: Router) {
-  // 1. Create a Khata payment collection
+  // 1. Create a customer payment collection
   r.post('/api/payments', requirePerm('collect'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
@@ -292,8 +292,8 @@ export function registerPayments(r: Router) {
     };
   });
 
-  // 2. Customer Khata Overview (dues, advance, unpaid invoices list)
-  r.get('/api/parties/:id/khata', requirePerm('parties.view'), async (ctx) => {
+  // 2. Customer Dues Overview (dues, advance, unpaid invoices list)
+  const getCustomerDues = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
     const customerId = ctx.params.id;
 
@@ -350,7 +350,10 @@ export function registerPayments(r: Router) {
         createdAt: inv.createdAt ?? inv.created_at,
       })),
     };
-  });
+  };
+
+  r.get('/api/parties/:id/dues', requirePerm('parties.view'), getCustomerDues);
+  r.get('/api/parties/:id/khata', requirePerm('parties.view'), getCustomerDues);
 
   // 3. Customer Ledger Statement with Running Balance
   r.get('/api/parties/:id/ledger', requirePerm('parties.view'), async (ctx) => {

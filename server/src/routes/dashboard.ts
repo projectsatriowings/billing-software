@@ -1,5 +1,5 @@
 import { requireUser } from '../auth.ts';
-import { type Router } from '../http.ts';
+import { bad, type Router } from '../http.ts';
 import { computeShiftFinancials } from './shifts.ts';
 
 /** Helper to format YYYY-MM-DD in shop timezone */
@@ -53,6 +53,39 @@ function formatHourTick(hour: number): string {
   return `${display}${period}`;
 }
 
+export function parseCounters(v: any): string[] {
+  if (Array.isArray(v)) {
+    const list = v
+      .map((item) => (typeof item === 'string' ? item.trim() : String(item?.name || item?.code || item).trim()))
+      .filter(Boolean);
+    return list.length > 0 ? Array.from(new Set(list)) : ['COUNTER-1'];
+  }
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        const list = parsed
+          .map((item) => (typeof item === 'string' ? item.trim() : String(item?.name || item?.code || item).trim()))
+          .filter(Boolean);
+        return list.length > 0 ? Array.from(new Set(list)) : ['COUNTER-1'];
+      }
+      if (parsed && typeof parsed === 'string' && parsed.trim()) return [parsed.trim()];
+    } catch {
+      if (v.trim()) return [v.trim()];
+    }
+  }
+  return ['COUNTER-1'];
+}
+
+export function formatCounterDisplayName(code: string): string {
+  if (!code) return 'Counter 1';
+  const m = code.trim().match(/^counter[_\-\s]*(\d+)$/i);
+  if (m) {
+    return `Counter ${m[1]}`;
+  }
+  return code.trim();
+}
+
 const PAYMENT_MODE_COLORS: Record<string, string> = {
   upi: '#8b5cf6',
   cash: '#10b981',
@@ -67,10 +100,90 @@ export function registerDashboard(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const userRole = ctx.user!.role;
     const isOwnerOrManager = ['owner', 'manager'].includes(userRole);
+    const isOwner = userRole === 'owner';
+    const isManager = userRole === 'manager';
+    const isCashier = userRole === 'cashier';
 
     // Fetch tenant timezone
     const tenantRow = await ctx.db.one<any>('SELECT timezone FROM tenants WHERE id = ?', [tenantId]);
     const tz = tenantRow?.timezone || 'Asia/Kolkata';
+
+    // 1. Fetch authorized branches for the tenant
+    let branchWhereClause = 'WHERE b.tenant_id = ?';
+    const branchQueryParams: unknown[] = [tenantId];
+
+    if (isManager) {
+      const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
+      branchWhereClause += ` AND b.code IN (${allowed.map(() => '?').join(', ')})`;
+      branchQueryParams.push(...allowed);
+    } else if (isCashier) {
+      const assigned = ctx.user!.assignedLocation || 'MAIN';
+      branchWhereClause += ' AND b.code = ?';
+      branchQueryParams.push(assigned);
+    }
+
+    const branchRows = await ctx.db.query<any>(
+      `SELECT b.*, u.name AS manager_name
+       FROM branches b
+       LEFT JOIN users u ON u.id = b.manager_id
+       ${branchWhereClause}
+       ORDER BY b.code = 'MAIN' DESC, b.code ASC`,
+      branchQueryParams,
+    );
+
+    // 2. Identify active branch requested by client
+    const rawBranchParam = (
+      (ctx.query.branch as string) ||
+      (ctx.query.branchId as string) ||
+      (ctx.query.branchCode as string) ||
+      ''
+    ).trim();
+
+    const requestedBranchParam =
+      rawBranchParam && !['true', 'false', 'undefined', 'null'].includes(rawBranchParam.toLowerCase())
+        ? rawBranchParam
+        : '';
+
+    let activeBranch: any = null;
+    if (requestedBranchParam) {
+      const match = branchRows.find(
+        (b) => b.id === requestedBranchParam || b.code.toUpperCase() === requestedBranchParam.toUpperCase()
+      );
+      if (!match) {
+        if (isCashier || isManager) {
+          throw bad('Unauthorized branch access.', 'FORBIDDEN');
+        }
+      } else {
+        activeBranch = match;
+      }
+    }
+
+    if (!activeBranch) {
+      const assigned = (ctx.user!.assignedLocation || 'MAIN').toUpperCase();
+      activeBranch = branchRows.find((b) => b.code.toUpperCase() === assigned) || branchRows[0];
+    }
+
+    if (!activeBranch) {
+      activeBranch = {
+        id: 'br_default',
+        code: 'MAIN',
+        name: 'Main Branch',
+        counters: ['COUNTER-1'],
+      };
+    }
+
+    // 3. Branch locations for filtering transactions
+    const activeBranchCode = activeBranch.code;
+    const activeBranchId = activeBranch.id;
+    const branchLocations: string[] = [activeBranchCode, activeBranchId];
+
+    if (activeBranchCode === 'MAIN') {
+      branchLocations.push('COUNTER-1');
+    } else if (activeBranchCode === 'GODOWN') {
+      branchLocations.push('COUNTER-2');
+    } else if (activeBranchCode === 'NHGJHGJHG') {
+      branchLocations.push('COUNTER-3');
+    }
 
     const now = new Date();
     const todayYMD = getShopDateYMD(now, tz);
@@ -721,7 +834,6 @@ export function registerDashboard(r: Router) {
     });
 
     // 9. CURRENT USER'S SHIFT / CASH DRAWER
-    const isManagerOrOwner = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
     const counterParam = (ctx.query.counter as string || ctx.query.location as string || '').trim();
 
     let shiftSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
@@ -730,7 +842,10 @@ export function registerDashboard(r: Router) {
        WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`;
     const shiftParams: any[] = [tenantId, ctx.user!.id];
 
-    if (counterParam) {
+    if (branchLocations.length > 0) {
+      shiftSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
+      shiftParams.push(...branchLocations);
+    } else if (counterParam) {
       shiftSql += ' AND (s.location = ? OR s.location = ?)';
       shiftParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
     }
@@ -738,13 +853,16 @@ export function registerDashboard(r: Router) {
 
     let activeShift = await ctx.db.one<any>(shiftSql, shiftParams);
 
-    if (!activeShift && isManagerOrOwner) {
+    if (!activeShift && isOwnerOrManager) {
       let fallbackSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
          FROM shifts s
          JOIN users u ON u.id = s.user_id
          WHERE s.tenant_id = ? AND s.status = 'open'`;
       const fallbackParams: any[] = [tenantId];
-      if (counterParam) {
+      if (branchLocations.length > 0) {
+        fallbackSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
+        fallbackParams.push(...branchLocations);
+      } else if (counterParam) {
         fallbackSql += ' AND (s.location = ? OR s.location = ?)';
         fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
       }
@@ -816,7 +934,9 @@ export function registerDashboard(r: Router) {
       shiftDrawer = {
         hasOpenShift: true,
         shiftNumber: activeShift.shiftNumber ?? activeShift.shift_number ?? '1',
-        counterName: activeShift.location === 'MAIN' ? 'Counter 1' : activeShift.location || 'Counter 1',
+        counterName: activeShift.counter
+          ? formatCounterDisplayName(activeShift.counter)
+          : (activeShift.location === 'MAIN' ? 'Counter 1' : activeShift.location || 'Counter 1'),
         openedAt: rawOpenedAt,
         openedAtFormatted: shiftOpenedAtFormatted,
         cashierName: shiftCashierName,
@@ -834,6 +954,7 @@ export function registerDashboard(r: Router) {
           userName: shiftCashierName,
           userRole: activeShift.userRole ?? activeShift.user_role ?? ctx.user!.role,
           location: activeShift.location || 'MAIN',
+          counter: activeShift.counter || 'COUNTER-1',
           status: activeShift.status || 'open',
           openedAt: rawOpenedAt,
           openingCashMinor: summary.openingCashMinor,
@@ -842,12 +963,20 @@ export function registerDashboard(r: Router) {
       };
     }
 
-    // 10. COUNTERS TODAY (Collections from open till now per counter)
+    // 10. COUNTERS TODAY (Collections from open till now per counter for active branch)
+    const assignedCounters = parseCounters(activeBranch.counters);
+    const branchLocPlaceholders = branchLocations.map(() => '?').join(', ');
+
     const counterPaymentsRows = await ctx.db.query<any>(
       `SELECT 
          p.id,
          p.amount_minor,
-         s.location AS shift_location
+         p.location AS payment_location,
+         p.counter AS payment_counter,
+         s.location AS shift_location,
+         s.counter AS shift_counter,
+         i.location AS invoice_location,
+         i.counter AS invoice_counter
        FROM payments p
        LEFT JOIN shifts s ON s.id = p.shift_id
        LEFT JOIN invoices i ON i.id = p.invoice_id
@@ -859,70 +988,124 @@ export function registerDashboard(r: Router) {
          )
          AND (p.status IS NULL OR p.status = 'posted')
          AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
-         AND COALESCE(p.kind, 'receipt') = 'receipt'`,
-      [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD],
-    );
-
-    const shiftsTodayRows = await ctx.db.query<any>(
-      `SELECT s.id, s.location, s.status, s.opened_at
-       FROM shifts s
-       WHERE s.tenant_id = ?
+         AND COALESCE(p.kind, 'receipt') = 'receipt'
          AND (
-           s.status = 'open'
-           OR (s.opened_at AT TIME ZONE ?)::date = ?::date
-           OR (s.closed_at IS NOT NULL AND (s.closed_at AT TIME ZONE ?)::date = ?::date)
+           (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
+           OR
+           (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
          )`,
-      [tenantId, tz, todayYMD, tz, todayYMD],
+      [
+        tenantId,
+        todayYMD,
+        tz,
+        todayYMD,
+        todayYMD,
+        tz,
+        todayYMD,
+        ...branchLocations,
+        ...branchLocations,
+        ...branchLocations,
+      ],
     );
 
     const counterRefundsRows = await ctx.db.query<any>(
       `SELECT 
+         p.id,
          p.amount_minor,
-         s.location AS shift_location
+         p.counter AS payment_counter,
+         s.location AS shift_location,
+         s.counter AS shift_counter,
+         i.location AS invoice_location,
+         i.counter AS invoice_counter
        FROM payments p
        LEFT JOIN shifts s ON s.id = p.shift_id
+       LEFT JOIN invoices i ON i.id = p.invoice_id
        WHERE p.tenant_id = ?
-         AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date)
-         AND p.kind = 'refund'`,
-      [tenantId, todayYMD, tz, todayYMD],
+         AND (
+           (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
+           OR
+           (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+         )
+         AND (p.status IS NULL OR p.status = 'posted')
+         AND p.kind = 'refund'
+         AND (
+           (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
+           OR
+           (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
+         )`,
+      [
+        tenantId,
+        todayYMD,
+        tz,
+        todayYMD,
+        todayYMD,
+        tz,
+        todayYMD,
+        ...branchLocations,
+        ...branchLocations,
+        ...branchLocations,
+      ],
     );
 
-    function normalizeCounterName(rawLocation?: string | null): string {
-      if (!rawLocation || rawLocation.trim() === '' || rawLocation.toUpperCase() === 'MAIN') {
-        return 'Counter 1';
+    const counterCreditNoteRefundsRows = await ctx.db.query<any>(
+      `SELECT 
+         id,
+         refund_amount_minor,
+         location,
+         counter
+       FROM invoices
+       WHERE tenant_id = ?
+         AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
+         AND kind = 'credit_note'
+         AND status = 'posted'
+         AND refund_amount_minor > 0
+         AND location IN (${branchLocPlaceholders})`,
+      [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
+    );
+
+    function resolveRowCounter(row: any, counters: string[]): string {
+      const candidates = [
+        row.shiftCounter ?? row.shift_counter,
+        row.paymentCounter ?? row.payment_counter,
+        row.invoiceCounter ?? row.invoice_counter,
+        row.counter,
+      ];
+      for (const raw of candidates) {
+        if (typeof raw === 'string' && raw.trim()) {
+          const trimmed = raw.trim().toUpperCase();
+          const exact = counters.find((c) => c.toUpperCase() === trimmed);
+          if (exact) return exact;
+          const strippedClean = trimmed.replace(/[^A-Z0-9]/g, '');
+          const stripped = counters.find(
+            (c) => c.toUpperCase().replace(/[^A-Z0-9]/g, '') === strippedClean
+          );
+          if (stripped) return stripped;
+        }
       }
-      const clean = rawLocation.trim();
-      const match = clean.match(/^(?:counter[-_\s]*)(\d+)$/i);
-      if (match) {
-        return `Counter ${match[1]}`;
-      }
-      return clean;
+      return counters[0] || 'COUNTER-1';
     }
 
-    const counterMap = new Map<string, number>();
-    const defaultCounters = ['Counter 1', 'Counter 2', 'Counter 3'];
-    for (const c of defaultCounters) {
-      counterMap.set(c, 0);
-    }
-
-    for (const s of shiftsTodayRows) {
-      const c = normalizeCounterName(s.location);
-      if (!counterMap.has(c)) {
-        counterMap.set(c, 0);
-      }
+    const counterAmountsMap = new Map<string, number>();
+    for (const c of assignedCounters) {
+      counterAmountsMap.set(c, 0);
     }
 
     for (const p of counterPaymentsRows) {
-      const c = normalizeCounterName(p.shiftLocation ?? p.shift_location);
+      const targetCounter = resolveRowCounter(p, assignedCounters);
       const amt = Number(p.amountMinor ?? p.amount_minor ?? 0);
-      counterMap.set(c, (counterMap.get(c) || 0) + amt);
+      counterAmountsMap.set(targetCounter, (counterAmountsMap.get(targetCounter) || 0) + amt);
     }
 
     for (const r of counterRefundsRows) {
-      const c = normalizeCounterName(r.shiftLocation ?? r.shift_location);
-      const amt = Number(r.amountMinor ?? r.amount_minor ?? 0);
-      const cur = counterMap.get(c) || 0;
-      counterMap.set(c, Math.max(0, cur - amt));
+      const targetCounter = resolveRowCounter(r, assignedCounters);
+      const refAmt = Number(r.amountMinor ?? r.amount_minor ?? 0);
+      counterAmountsMap.set(targetCounter, Math.max(0, (counterAmountsMap.get(targetCounter) || 0) - refAmt));
+    }
+
+    for (const cn of counterCreditNoteRefundsRows) {
+      const targetCounter = resolveRowCounter(cn, assignedCounters);
+      const refAmt = Number(cn.refundAmountMinor ?? cn.refund_amount_minor ?? 0);
+      counterAmountsMap.set(targetCounter, Math.max(0, (counterAmountsMap.get(targetCounter) || 0) - refAmt));
     }
 
     function formatCounterRupees(minor: number): string {
@@ -930,17 +1113,15 @@ export function registerDashboard(r: Router) {
       return `₹${val.toLocaleString('en-IN')}`;
     }
 
-    const countersList = Array.from(counterMap.entries()).map(([name, amountMinor]) => ({
-      id: name.toLowerCase().replace(/\s+/g, '-'),
-      name,
-      amountMinor,
-      formattedAmount: formatCounterRupees(amountMinor),
-    }));
-
-    countersList.sort((a, b) => {
-      const numA = parseInt(a.name.replace(/\D/g, '') || '999', 10);
-      const numB = parseInt(b.name.replace(/\D/g, '') || '999', 10);
-      return numA - numB;
+    const countersList = assignedCounters.map((code, idx) => {
+      const amtMinor = counterAmountsMap.get(code) || 0;
+      return {
+        id: `counter-${idx + 1}`,
+        code,
+        name: formatCounterDisplayName(code),
+        amountMinor: amtMinor,
+        formattedAmount: formatCounterRupees(amtMinor),
+      };
     });
 
     const countersTotalMinor = countersList.reduce((sum, c) => sum + c.amountMinor, 0);
@@ -948,6 +1129,9 @@ export function registerDashboard(r: Router) {
     const countersToday = {
       title: 'Counters Today',
       subtitle: 'Collected from open till now',
+      branchId: activeBranch.id,
+      branchCode: activeBranch.code,
+      branchName: activeBranch.name,
       counters: countersList,
       totalMinor: countersTotalMinor,
       formattedTotal: formatCounterRupees(countersTotalMinor),
@@ -955,6 +1139,19 @@ export function registerDashboard(r: Router) {
 
     return {
       serverTime: now.toISOString(),
+      selectedBranch: {
+        id: activeBranch.id,
+        code: activeBranch.code,
+        name: activeBranch.name,
+        counters: assignedCounters,
+      },
+      branches: branchRows.map((b: any) => ({
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        active: Boolean(b.active ?? true),
+        counters: parseCounters(b.counters),
+      })),
       nowKolkata: {
         timeStr: nowTimeStr,
         hour: currentHour,

@@ -16,7 +16,7 @@ interface SuperAdminDashboardProps {
   user: User;
   shop: Shop | null;
   report?: DashboardReport | null;
-  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings') => void;
+  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings') => void;
   onRefreshReport?: () => void;
 }
 
@@ -48,6 +48,23 @@ export function SuperAdminDashboard({
   const [newBranchCounters, setNewBranchCounters] = useState('COUNTER-1, COUNTER-2');
   const [branchError, setBranchError] = useState('');
   const [isSubmittingBranch, setIsSubmittingBranch] = useState(false);
+
+  // Branch edit modal state
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [editBranchCode, setEditBranchCode] = useState('');
+  const [editBranchName, setEditBranchName] = useState('');
+  const [editBranchAddress, setEditBranchAddress] = useState('');
+  const [editBranchPhone, setEditBranchPhone] = useState('');
+  const [editBranchActive, setEditBranchActive] = useState(true);
+  const [editBranchManagerId, setEditBranchManagerId] = useState('');
+  const [editBranchCounters, setEditBranchCounters] = useState<string[]>([]);
+  const [newCounterInput, setNewCounterInput] = useState('');
+  const [editingCounterIndex, setEditingCounterIndex] = useState<number | null>(null);
+  const [editingCounterValue, setEditingCounterValue] = useState('');
+  const [editBranchError, setEditBranchError] = useState('');
+  const [editCounterError, setEditCounterError] = useState('');
+  const [isSavingBranch, setIsSavingBranch] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Staff create modal state
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -151,6 +168,145 @@ export function SuperAdminDashboard({
     }
   };
 
+  const handleOpenEditBranch = (b: Branch) => {
+    setEditingBranch(b);
+    setEditBranchCode(b.code);
+    setEditBranchName(b.name);
+    setEditBranchAddress(b.address || '');
+    setEditBranchPhone(b.phone || '');
+    setEditBranchActive(Boolean(b.active ?? true));
+    setEditBranchManagerId(b.managerId || '');
+    setEditBranchCounters(Array.isArray(b.counters) && b.counters.length > 0 ? [...b.counters] : ['COUNTER-1']);
+    setNewCounterInput('');
+    setEditingCounterIndex(null);
+    setEditingCounterValue('');
+    setEditBranchError('');
+    setEditCounterError('');
+  };
+
+  const handleAddCounterToEdit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setEditCounterError('');
+    const trimmed = newCounterInput.trim().toUpperCase();
+    if (!trimmed) {
+      setEditCounterError('Counter name/code cannot be empty.');
+      return;
+    }
+    const sanitized = trimmed.replace(/[^A-Z0-9_\-\s]/g, '').trim();
+    if (!sanitized) {
+      setEditCounterError('Counter code must contain valid alphanumeric characters.');
+      return;
+    }
+    if (editBranchCounters.some((c) => c.toUpperCase() === sanitized)) {
+      setEditCounterError(`Counter "${sanitized}" already exists in this branch.`);
+      return;
+    }
+    setEditBranchCounters((prev) => [...prev, sanitized]);
+    setNewCounterInput('');
+  };
+
+  const handleStartEditCounter = (index: number) => {
+    setEditingCounterIndex(index);
+    setEditingCounterValue(editBranchCounters[index] || '');
+    setEditCounterError('');
+  };
+
+  const handleSaveCounterEdit = (index: number) => {
+    setEditCounterError('');
+    const trimmed = editingCounterValue.trim().toUpperCase();
+    if (!trimmed) {
+      setEditCounterError('Counter name cannot be empty.');
+      return;
+    }
+    const sanitized = trimmed.replace(/[^A-Z0-9_\-\s]/g, '').trim();
+    if (!sanitized) {
+      setEditCounterError('Counter code must contain valid alphanumeric characters.');
+      return;
+    }
+    const isDup = editBranchCounters.some((c, i) => i !== index && c.toUpperCase() === sanitized);
+    if (isDup) {
+      setEditCounterError(`Counter "${sanitized}" already exists in this branch.`);
+      return;
+    }
+    setEditBranchCounters((prev) => prev.map((c, i) => (i === index ? sanitized : c)));
+    setEditingCounterIndex(null);
+    setEditingCounterValue('');
+  };
+
+  const handleRemoveCounter = (index: number) => {
+    setEditCounterError('');
+    if (editBranchCounters.length <= 1) {
+      setEditCounterError('A branch must have at least one counter. Cannot remove the only counter.');
+      return;
+    }
+    setEditBranchCounters((prev) => prev.filter((_, i) => i !== index));
+    if (editingCounterIndex === index) {
+      setEditingCounterIndex(null);
+      setEditingCounterValue('');
+    }
+  };
+
+  const handleSaveBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBranch) return;
+    setEditBranchError('');
+    setEditCounterError('');
+
+    const trimmedName = editBranchName.trim();
+    if (!trimmedName) {
+      setEditBranchError('Branch Name is required.');
+      return;
+    }
+
+    const trimmedCode = editBranchCode.trim().toUpperCase().replace(/[^A-Z0-9_\-]/g, '');
+    if (!trimmedCode) {
+      setEditBranchError('Branch Code must contain alphanumeric characters.');
+      return;
+    }
+
+    if (editBranchCounters.length === 0) {
+      setEditBranchError('A branch must have at least one billing counter.');
+      return;
+    }
+
+    setIsSavingBranch(true);
+    try {
+      const updated = await updateBranch(editingBranch.id, {
+        code: trimmedCode,
+        name: trimmedName,
+        address: editBranchAddress.trim() || null,
+        phone: editBranchPhone.trim() || null,
+        active: editBranchActive,
+        managerId: editBranchManagerId || null,
+        counters: editBranchCounters,
+      });
+
+      if (editBranchManagerId) {
+        const mgr = usersList.find((u) => u.id === editBranchManagerId);
+        if (mgr) {
+          updated.managerName = mgr.name;
+        }
+      } else {
+        updated.managerName = null;
+      }
+
+      // Update state immediately without requiring a page refresh
+      setBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      setEditingBranch(null);
+      setToastMessage(`Branch "${updated.name}" (${updated.code}) updated successfully!`);
+      setTimeout(() => setToastMessage(null), 4000);
+
+      loadBranches();
+      loadDashboardReport();
+      onRefreshReport?.();
+    } catch (err: any) {
+      // Keep modal open and preserve entered values
+      setEditBranchError(err.message || 'Failed to update branch. Please try again.');
+    } finally {
+      setIsSavingBranch(false);
+    }
+  };
+
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setStaffError('');
@@ -200,7 +356,7 @@ export function SuperAdminDashboard({
   const totalSalesMinor = report?.today?.totalMinor ?? 0;
   const billCount = report?.today?.billCount ?? 0;
   const grossSalesMinor = report?.today?.grossTotalMinor ?? totalSalesMinor;
-  const khataCollectionsMinor = report?.today?.khataCollectionsMinor ?? 0;
+  const customerCollectionsMinor = report?.today?.customerCollectionsMinor ?? report?.today?.khataCollectionsMinor ?? 0;
   const outstandingDues = report?.outstandingDuesMinor ?? 0;
 
   const openShifts = report?.shiftsSummary?.openShiftsCount ?? 0;
@@ -394,8 +550,8 @@ export function SuperAdminDashboard({
 
             {/* 2. Customer Collections & Dues */}
             <div style={{ background: '#ffffff', borderRadius: '14px', padding: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Khata Collections & Dues</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#059669', margin: '0.5rem 0' }}>{formatRupees(khataCollectionsMinor)}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer Collections & Dues</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#059669', margin: '0.5rem 0' }}>{formatRupees(customerCollectionsMinor)}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
                 <span style={{ color: '#64748b' }}>Outstanding Dues:</span>
                 <span style={{ color: '#e11d48', fontWeight: 700 }}>{formatRupees(outstandingDues)}</span>
@@ -716,9 +872,9 @@ export function SuperAdminDashboard({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
             {branches.map((b) => (
               <div key={b.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fafafa' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 900, padding: '2px 8px', background: '#e2e8f0', color: '#1e293b', borderRadius: '4px' }}>
                         {b.code}
                       </span>
@@ -728,22 +884,42 @@ export function SuperAdminDashboard({
                       {b.address || 'No physical address specified'}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleBranchActive(b)}
-                    style={{
-                      padding: '3px 10px',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      borderRadius: '999px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      background: b.active ? '#dcfce7' : '#f1f5f9',
-                      color: b.active ? '#15803d' : '#64748b',
-                    }}
-                  >
-                    {b.active ? 'Active' : 'Disabled'}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditBranch(b)}
+                      className="branch-card-edit-btn"
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                      title={`Edit ${b.name}`}
+                    >
+                      <span>✏️</span> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBranchActive(b)}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        borderRadius: '999px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        background: b.active ? '#dcfce7' : '#f1f5f9',
+                        color: b.active ? '#15803d' : '#64748b',
+                      }}
+                    >
+                      {b.active ? 'Active' : 'Disabled'}
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', fontSize: '0.75rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '0.5rem' }}>
@@ -869,6 +1045,411 @@ export function SuperAdminDashboard({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '1.5rem',
+            right: '1.5rem',
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '0.85rem 1.25rem',
+            borderRadius: '10px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            zIndex: 10000,
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            border: '1px solid #334155',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem' }}>✅</span>
+          <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              padding: '0 0 0 8px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Edit Branch Modal */}
+      {editingBranch && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => !isSavingBranch && setEditingBranch(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '560px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '1.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#ede9fe', color: '#6d4aff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>
+                  ✏️
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Edit Branch & Counters</h3>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                    Editing branch <strong style={{ color: '#4338ca' }}>{editingBranch.name}</strong> ({editingBranch.code})
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isSavingBranch && setEditingBranch(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.25rem', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                disabled={isSavingBranch}
+                aria-label="Close edit modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error Banner */}
+            {editBranchError && (
+              <div style={{ padding: '0.65rem 0.85rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '8px', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⚠️</span>
+                <span>{editBranchError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBranch} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              {/* Branch Code & Name */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Branch Code (Unique Identifier) <span style={{ color: '#e11d48' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editBranchCode}
+                    onChange={(e) => setEditBranchCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. MAIN, GODOWN"
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.875rem', textTransform: 'uppercase', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>Used for multi-branch isolation & registers.</div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Branch Name <span style={{ color: '#e11d48' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editBranchName}
+                    onChange={(e) => setEditBranchName(e.target.value)}
+                    placeholder="e.g. City Central Hub"
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Physical Address */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Branch Address</label>
+                <input
+                  type="text"
+                  value={editBranchAddress}
+                  onChange={(e) => setEditBranchAddress(e.target.value)}
+                  placeholder="Street address, City, Pincode"
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Contact Phone & Status */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Contact Phone</label>
+                  <input
+                    type="text"
+                    value={editBranchPhone}
+                    onChange={(e) => setEditBranchPhone(e.target.value)}
+                    placeholder="Mobile or landline number"
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Branch Status</label>
+                  <select
+                    value={editBranchActive ? 'active' : 'inactive'}
+                    onChange={(e) => setEditBranchActive(e.target.value === 'active')}
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box', background: '#ffffff' }}
+                  >
+                    <option value="active">Active (Operational & Billed)</option>
+                    <option value="inactive">Inactive (Suspended)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Assigned Store Manager */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Store Manager</label>
+                <select
+                  value={editBranchManagerId}
+                  onChange={(e) => setEditBranchManagerId(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', boxSizing: 'border-box', background: '#ffffff' }}
+                >
+                  <option value="">-- No Manager Assigned --</option>
+                  {usersList
+                    .filter((u) => u.role === 'manager' || u.role === 'owner')
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.role === 'owner' ? 'Owner / Super Admin' : 'Store Manager'}) — {m.email}
+                      </option>
+                    ))}
+                </select>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }}>
+                  Store Managers have operational oversight of shifts, cashiers, and inventory in their assigned branches.
+                </div>
+              </div>
+
+              {/* Dedicated Counters Section */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>🖥️</span> Branch Counters ({editBranchCounters.length})
+                    </h4>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                      Terminals belonging to this branch only. Counter numbering is branch-specific.
+                    </p>
+                  </div>
+                </div>
+
+                {editCounterError && (
+                  <div style={{ padding: '0.5rem 0.75rem', background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: '6px', fontSize: '0.75rem' }}>
+                    ⚠️ {editCounterError}
+                  </div>
+                )}
+
+                {/* Counters list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '170px', overflowY: 'auto' }}>
+                  {editBranchCounters.map((cnt, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      {editingCounterIndex === idx ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                          <input
+                            type="text"
+                            value={editingCounterValue}
+                            onChange={(e) => setEditingCounterValue(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveCounterEdit(idx);
+                              } else if (e.key === 'Escape') {
+                                setEditingCounterIndex(null);
+                              }
+                            }}
+                            autoFocus
+                            style={{
+                              flex: 1,
+                              padding: '4px 8px',
+                              fontFamily: 'monospace',
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              border: '1px solid #6d4aff',
+                              borderRadius: '6px',
+                              outline: 'none',
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCounterEdit(idx)}
+                            style={{ padding: '3px 8px', background: '#10b981', color: '#ffffff', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            ✓ Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCounterIndex(null);
+                              setEditCounterError('');
+                            }}
+                            style={{ padding: '3px 8px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.9rem' }}>🖥️</span>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#1e293b' }}>{cnt}</span>
+                            {idx === 0 && (
+                              <span style={{ fontSize: '0.65rem', background: '#ede9fe', color: '#6d4aff', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditCounter(idx)}
+                              style={{ padding: '3px 7px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.75rem', color: '#475569', cursor: 'pointer' }}
+                              title="Rename counter"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCounter(idx)}
+                              disabled={editBranchCounters.length <= 1}
+                              style={{
+                                padding: '3px 7px',
+                                background: editBranchCounters.length <= 1 ? '#f8fafc' : '#fee2e2',
+                                border: '1px solid ' + (editBranchCounters.length <= 1 ? '#e2e8f0' : '#fca5a5'),
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                color: editBranchCounters.length <= 1 ? '#94a3b8' : '#b91c1c',
+                                cursor: editBranchCounters.length <= 1 ? 'not-allowed' : 'pointer',
+                              }}
+                              title={editBranchCounters.length <= 1 ? 'A branch must have at least one counter' : 'Remove counter'}
+                            >
+                              🗑️ Remove
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add New Counter Input */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
+                  <input
+                    type="text"
+                    placeholder="New counter (e.g. COUNTER-2, EXPRESS-1)"
+                    value={newCounterInput}
+                    onChange={(e) => setNewCounterInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCounterToEdit();
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace',
+                      textTransform: 'uppercase',
+                      background: '#ffffff',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCounterToEdit}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: '#4f46e5',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ➕ Add Counter
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Footer Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingBranch(null)}
+                  disabled={isSavingBranch}
+                  style={{ padding: '0.6rem 1rem', background: '#f1f5f9', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBranch}
+                  style={{
+                    padding: '0.6rem 1.35rem',
+                    background: '#6d4aff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    cursor: isSavingBranch ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 12px rgba(109, 74, 255, 0.3)',
+                    opacity: isSavingBranch ? 0.75 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  {isSavingBranch ? 'Saving Changes...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
