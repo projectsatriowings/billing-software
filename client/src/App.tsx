@@ -655,6 +655,7 @@ export function App() {
   const [successSendState, setSuccessSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [successPhoneError, setSuccessPhoneError] = useState('');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [showWalkinWhatsapp, setShowWalkinWhatsapp] = useState(false);
 
   // WhatsApp Bill Sharing: Invoices Table Resend Popover State (Section 5)
   const [resendInvoice, setResendInvoice] = useState<Invoice | null>(null);
@@ -2396,6 +2397,11 @@ export function App() {
         }
       }
 
+      // Capture customer phone & name reliably before resetting search inputs
+      const cleanSearchDigits = customerSearch.trim().replace(/\D/g, '');
+      const checkoutPhone = selectedCustomer?.phone || (cleanSearchDigits.length >= 7 ? customerSearch.trim() : undefined);
+      const checkoutCustName = custName || (selectedCustomer ? selectedCustomer.name : (quickCustomerName.trim() || (checkoutPhone ? `Customer ${checkoutPhone.replace(/\D/g, '').slice(-4)}` : undefined)));
+
       const res = await api<{
         invoiceId: string;
         number: string;
@@ -2416,8 +2422,8 @@ export function App() {
           billDiscountMinor: discountMinor,
           payments: paymentsPayload,
           tender: tenderPayload,
-          customerName: custName || (customerSearch.trim() ? (quickCustomerName.trim() || `Customer ${customerSearch.replace(/\D/g, '').slice(-4)}`) : undefined),
-          customerPhone: selectedCustomer ? selectedCustomer.phone : (customerSearch.trim() || undefined),
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
           partyId: selectedPartyId || undefined,
           redeemedPoints: redeemPoints && pointsActuallyRedeemed > 0 ? pointsActuallyRedeemed : 0,
         }),
@@ -2439,7 +2445,7 @@ export function App() {
       loadItems(); // refresh stock
       const earnedPoints = res.earnedLoyaltyPoints ?? 0;
       let pointsMsg = '';
-      if (res.partyId || selectedPartyId || selectedCustomer?.phone) {
+      if (res.partyId || selectedPartyId || checkoutPhone) {
         if (pointsActuallyRedeemed > 0) {
           pointsMsg = ` • Redeemed ${pointsActuallyRedeemed} pts (-${formatRupees(pointsDiscountMinor)}) & earned +${earnedPoints} pts!`;
         } else if (earnedPoints > 0) {
@@ -2455,12 +2461,11 @@ export function App() {
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
       if (!isKot) {
-        const finalPhone = selectedCustomer?.phone || customerSearch.trim() || undefined;
         setCheckoutSuccess({
           invoiceId: res.invoiceId,
           number: res.number,
-          customerName: custName || (finalPhone ? `Customer ${finalPhone.slice(-4)}` : undefined),
-          customerPhone: finalPhone,
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
           itemCount: itemsInBillCount,
           totalMinor: res.totalMinor,
           paidMinor: res.paidMinor,
@@ -2470,10 +2475,11 @@ export function App() {
           tender: res.tender || tenderPayload,
           payments: paymentsPayload,
         });
-        setSuccessPhone(finalPhone || '');
+        setSuccessPhone(checkoutPhone || '');
         setSuccessLang((shop?.whatsappDefaultLang as any) || 'en');
         setSuccessSendState('idle');
         setSuccessPhoneError('');
+        setShowWalkinWhatsapp(false);
       }
     } catch (err: any) {
       showToast(err.message || 'Checkout failed', 'error');
@@ -2484,6 +2490,7 @@ export function App() {
 
   const handleStartNewBill = () => {
     setCheckoutSuccess(null);
+    setShowWalkinWhatsapp(false);
     setCart([]);
     setSelectedPartyId('');
     setCustomerSearch('');
@@ -4055,7 +4062,13 @@ export function App() {
                 <div className="business-dropdown-menu sidebar-dropdown-flyout">
                   <div className="dropdown-header">
                     <span>Store Profile</span>
-                    <span className="store-isolation-badge">🔒 Isolated Partition</span>
+                    <span className="store-isolation-badge">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      Isolated Partition
+                    </span>
                   </div>
 
                   <div style={{ padding: '0.65rem' }}>
@@ -4093,7 +4106,11 @@ export function App() {
                             setShowBusinessDropdown(false);
                           }}
                         >
-                          ⚙️ Store Profile & Settings
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                          Store Profile &amp; Settings
                         </button>
                         <button
                           type="button"
@@ -4103,7 +4120,12 @@ export function App() {
                             setShowBusinessDropdown(false);
                           }}
                         >
-                          🧾 Open POS Quick Billing
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                            <circle cx="9" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                          </svg>
+                          Open POS Quick Billing
                         </button>
                         <button
                           type="button"
@@ -4113,13 +4135,21 @@ export function App() {
                             setShowBusinessDropdown(false);
                           }}
                         >
-                          📊 Sales Reports & Analytics
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                            <line x1="18" y1="20" x2="18" y2="10" />
+                            <line x1="12" y1="20" x2="12" y2="4" />
+                            <line x1="6" y1="20" x2="6" y2="14" />
+                            <line x1="2" y1="20" x2="22" y2="20" />
+                          </svg>
+                          Sales Reports &amp; Analytics
                         </button>
                       </div>
                     </div>
 
                     <div className="store-single-tenant-note">
-                      <span>🛡️</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
                       <span>
                         <strong>Single-Business License Active:</strong> Your store data is strictly private to your account. No cross-store data leaks.
                       </span>
@@ -4135,7 +4165,11 @@ export function App() {
                         setActiveTab('settings');
                       }}
                     >
-                      ⚙️ Store Profile & Tax Settings
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      Store Profile &amp; Tax Settings
                     </button>
                   </div>
                 </div>
@@ -4212,7 +4246,13 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
                 onClick={() => setActiveTab('items')}
               >
-                <span className="nav-icon">📦</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                </span>
                 <span className="nav-text">Products</span>
                 <span className="nav-count-badge">{items.length}</span>
               </button>
@@ -4225,7 +4265,12 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
                 onClick={() => setActiveTab('categories')}
               >
-                <span className="nav-icon">🏷️</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                    <line x1="7" y1="7" x2="7.01" y2="7" />
+                  </svg>
+                </span>
                 <span className="nav-text">Categories</span>
                 <span className="nav-count-badge">{categoriesList.length}</span>
               </button>
@@ -4238,7 +4283,13 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
                 onClick={() => setActiveTab('inventory')}
               >
-                <span className="nav-icon">🏬</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
+                  </svg>
+                </span>
                 <span className="nav-text">Inventory Hub</span>
                 <div className="nav-trailing">
                   {totalStockAlerts > 0 && (
@@ -4271,7 +4322,12 @@ export function App() {
                   }}
                   title="Product Analysis"
                 >
-                  <span className="submenu-icon" aria-hidden="true">🚀</span>
+                  <span className="submenu-icon" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                      <polyline points="17 6 23 6 23 12" />
+                    </svg>
+                  </span>
                   <span className="submenu-text">Product Analysis</span>
                 </button>
               </div>
@@ -4284,7 +4340,14 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
                 onClick={() => setActiveTab('sales-analysis')}
               >
-                <span className="nav-icon">💰</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                    <line x1="2" y1="20" x2="22" y2="20" />
+                  </svg>
+                </span>
                 <span className="nav-text">Sales Analysis</span>
                 <span className="nav-badge-new">NEW</span>
               </button>
@@ -4297,7 +4360,15 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
                 onClick={() => setActiveTab('invoices')}
               >
-                <span className="nav-icon">📄</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </span>
                 <span className="nav-text">Recent Bills</span>
               </button>
             )}
@@ -4309,7 +4380,14 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
                 onClick={() => setActiveTab('customers')}
               >
-                <span className="nav-icon">👥</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </span>
                 <span className="nav-text">Customers</span>
                 <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
               </button>
@@ -4322,7 +4400,14 @@ export function App() {
                 className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
                 onClick={() => setActiveTab('suppliers')}
               >
-                <span className="nav-icon">🚚</span>
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="3" width="15" height="13" rx="1" />
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                    <circle cx="5.5" cy="18.5" r="2.5" />
+                    <circle cx="18.5" cy="18.5" r="2.5" />
+                  </svg>
+                </span>
                 <span className="nav-text">Suppliers</span>
                 <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
               </button>
@@ -4337,9 +4422,18 @@ export function App() {
                   onClick={() => setIsAccountsOpen(!isAccountsOpen)}
                   aria-expanded={isAccountsOpen}
                 >
-                  <span className="nav-icon">💼</span>
+                  <span className="nav-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                    </svg>
+                  </span>
                   <span className="nav-text">Accounts &amp; Finance</span>
-                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>▼</span>
+                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
                 </button>
                 
                 {isAccountsOpen && (
@@ -4349,7 +4443,14 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
                       onClick={() => setActiveTab('invoices')}
                     >
-                      <span className="nav-icon">🧾</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+                          <line x1="8" y1="8" x2="16" y2="8" />
+                          <line x1="8" y1="12" x2="16" y2="12" />
+                          <line x1="8" y1="16" x2="12" y2="16" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Sales &amp; Invoices</span>
                     </button>
 
@@ -4362,7 +4463,13 @@ export function App() {
                           loadPurchases();
                         }}
                       >
-                        <span className="nav-icon">📥</span>
+                        <span className="nav-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
                         <span className="nav-count-badge">{purchases.length}</span>
                       </button>
@@ -4373,7 +4480,12 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
                       onClick={() => setActiveTab('payments')}
                     >
-                      <span className="nav-icon">💳</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                          <line x1="1" y1="10" x2="23" y2="10" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Payments</span>
                     </button>
 
@@ -4382,7 +4494,13 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'expenses' ? 'active' : ''}`}
                       onClick={() => setActiveTab('expenses')}
                     >
-                      <span className="nav-icon">💼</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                          <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                          <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Expenses</span>
                     </button>
 
@@ -4391,7 +4509,17 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
                       onClick={() => setActiveTab('cashbank')}
                     >
-                      <span className="nav-icon">🏦</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="3" y1="21" x2="21" y2="21" />
+                          <line x1="4" y1="10" x2="20" y2="10" />
+                          <polyline points="12 3 2 10 22 10" />
+                          <line x1="6" y1="10" x2="6" y2="21" />
+                          <line x1="10" y1="10" x2="10" y2="21" />
+                          <line x1="14" y1="10" x2="14" y2="21" />
+                          <line x1="18" y1="10" x2="18" y2="21" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Cash &amp; Bank</span>
                     </button>
 
@@ -4400,7 +4528,12 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
                       onClick={() => setActiveTab('payables')}
                     >
-                      <span className="nav-icon">📉</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+                          <polyline points="17 18 23 18 23 12" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Payables</span>
                     </button>
 
@@ -4409,7 +4542,14 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
                       onClick={() => setActiveTab('reports')}
                     >
-                      <span className="nav-icon">📊</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="20" x2="18" y2="10" />
+                          <line x1="12" y1="20" x2="12" y2="4" />
+                          <line x1="6" y1="20" x2="6" y2="14" />
+                          <line x1="2" y1="20" x2="22" y2="20" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Financial Reports</span>
                     </button>
                   </div>
@@ -4426,9 +4566,17 @@ export function App() {
                   onClick={() => setIsGstOpen(!isGstOpen)}
                   aria-expanded={isGstOpen}
                 >
-                  <span className="nav-icon">🏛️</span>
+                  <span className="nav-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 21h18M3 10h18M5 10v11M9 10v11M15 10v11M19 10v11M12 2L2 7h20L12 2z" />
+                    </svg>
+                  </span>
                   <span className="nav-text">GST Filing</span>
-                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>▼</span>
+                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
                 </button>
                 
                 {isGstOpen && (
@@ -4438,7 +4586,13 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-overview' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-overview')}
                     >
-                      <span className="nav-icon">🏛️</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="m14 10-4 4" />
+                          <path d="M12 2v2M12 20v2M20 12h2M2 12h2" />
+                        </svg>
+                      </span>
                       <span className="nav-text">GST Overview</span>
                     </button>
 
@@ -4447,7 +4601,14 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-sales-register')}
                     >
-                      <span className="nav-icon">📋</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                          <line x1="8" y1="11" x2="16" y2="11" />
+                          <line x1="8" y1="15" x2="16" y2="15" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Sales Register</span>
                     </button>
 
@@ -4456,7 +4617,14 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-gstr1')}
                     >
-                      <span className="nav-icon">📑</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="16" y1="13" x2="8" y2="13" />
+                          <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                      </span>
                       <span className="nav-text">GSTR-1</span>
                     </button>
 
@@ -4465,7 +4633,13 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-purchase-register')}
                     >
-                      <span className="nav-icon">📦</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="21 8 21 21 3 21 3 8" />
+                          <rect x="1" y="3" width="22" height="5" rx="1" />
+                          <line x1="10" y1="12" x2="14" y2="12" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Purchase Register</span>
                     </button>
 
@@ -4474,7 +4648,15 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-itc-reconciliation')}
                     >
-                      <span className="nav-icon">⚖️</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+                          <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+                          <path d="M7 21h10" />
+                          <path d="M12 3v18" />
+                          <path d="M3 7h18" />
+                        </svg>
+                      </span>
                       <span className="nav-text">ITC Register &amp; Reconciliation</span>
                     </button>
 
@@ -4483,7 +4665,13 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-gstr3b' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-gstr3b')}
                     >
-                      <span className="nav-icon">📄</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <path d="m9 15 2 2 4-4" />
+                        </svg>
+                      </span>
                       <span className="nav-text">GSTR-3B Preparation</span>
                     </button>
 
@@ -4492,7 +4680,14 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-import-export')}
                     >
-                      <span className="nav-icon">📥</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Import &amp; Export</span>
                     </button>
 
@@ -4501,7 +4696,12 @@ export function App() {
                       className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
                       onClick={() => setActiveTab('gst-filing-history')}
                     >
-                      <span className="nav-icon">🕰️</span>
+                      <span className="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                      </span>
                       <span className="nav-text">Filing History</span>
                     </button>
                   </div>
@@ -4518,7 +4718,19 @@ export function App() {
                   className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
                   onClick={() => setActiveTab('settings')}
                 >
-                  <span className="nav-icon">⚙️</span>
+                  <span className="nav-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="21" x2="4" y2="14" />
+                      <line x1="4" y1="10" x2="4" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12" y2="3" />
+                      <line x1="20" y1="21" x2="20" y2="16" />
+                      <line x1="20" y1="12" x2="20" y2="3" />
+                      <line x1="1" y1="14" x2="7" y2="14" />
+                      <line x1="9" y1="8" x2="15" y2="8" />
+                      <line x1="17" y1="16" x2="23" y2="16" />
+                    </svg>
+                  </span>
                   <span className="nav-text">Business Packs</span>
                 </button>
               </>
@@ -4537,7 +4749,7 @@ export function App() {
               <span className="sidebar-user-name">{user.name}</span>
               <span className="sidebar-user-role">
                 <span className="user-status-dot"></span>
-                {user.role === 'owner' ? '👑 Super Admin' : user.role === 'manager' ? '🏪 Store Manager' : user.role === 'cashier' ? '💳 Cashier' : user.role}
+                {user.role === 'owner' ? 'Super Admin' : user.role === 'manager' ? 'Store Manager' : user.role === 'cashier' ? 'Cashier' : user.role}
               </span>
             </div>
           </div>
@@ -6064,7 +6276,7 @@ export function App() {
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
                                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                                 </svg>
-                                Customer Mobile
+                                Customer Mobile <span style={{ color: '#d97706', fontSize: '0.74rem', fontWeight: 700 }}>(Compulsory for Loyalty Points)</span>
                               </label>
                               <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                                 <input

@@ -206,8 +206,10 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
       if (!res.headersSent) send(code, { 'Content-Type': 'application/json; charset=utf-8' }, JSON.stringify(body));
     } finally {
       const isHeartbeatPoll =
+        url.pathname === '/api/cfd/heartbeat' ||
         url.pathname === '/api/cfd/update' ||
         url.pathname === '/api/cfd/state' ||
+        url.pathname === '/api/scanner/heartbeat' ||
         url.pathname === '/api/scanner/events' ||
         url.pathname === '/api/health';
 
