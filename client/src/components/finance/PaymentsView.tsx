@@ -3,11 +3,11 @@ import { api, type Payment, type SupplierPaymentRecord } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
 
 interface PaymentsViewProps {
-  onOpenCustomerKhata?: (customerId: string) => void;
+  onOpenCustomerLedger?: (customerId: string) => void;
   onOpenSupplierLedger?: (supplierId: string) => void;
 }
 
-export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: PaymentsViewProps) {
+export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: PaymentsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'customer' | 'supplier'>('supplier');
   const [customerPayments, setCustomerPayments] = useState<Payment[]>([]);
   const [supplierPayments, setSupplierPayments] = useState<SupplierPaymentRecord[]>([]);
@@ -81,7 +81,7 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
             {fmtMoney(totalCustomerReceived)}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#166534', marginTop: '0.25rem' }}>
-            Khata dues collected &amp; cash advances
+            Customer dues collected &amp; cash advances
           </div>
         </div>
 
@@ -242,7 +242,7 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
               <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🧾</div>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>No customer payment receipts found</div>
               <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
-                Customer receipts recorded via Khata collections will appear here automatically.
+                Customer receipts recorded via collections will appear here automatically.
               </div>
             </div>
           ) : (
@@ -297,11 +297,11 @@ export function PaymentsView({ onOpenCustomerKhata, onOpenSupplierLedger }: Paym
                         {p.customerId && (
                           <button
                             type="button"
-                            onClick={() => onOpenCustomerKhata && onOpenCustomerKhata(p.customerId)}
+                            onClick={() => onOpenCustomerLedger && onOpenCustomerLedger(p.customerId)}
                             className="btn btn-secondary"
                             style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
                           >
-                            View Khata ➔
+                            View Customer ➔
                           </button>
                         )}
                       </td>

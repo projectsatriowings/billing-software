@@ -205,6 +205,15 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   const [chartMetric, setChartMetric] = useState<ChartMetric>('sales');
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
+  const [selectedBranchCode, setSelectedBranchCode] = useState<string>(
+    user.assignedLocation || 'MAIN'
+  );
+  const selectedBranchCodeRef = useRef<string>(user.assignedLocation || 'MAIN');
+
+  useEffect(() => {
+    selectedBranchCodeRef.current = selectedBranchCode;
+  }, [selectedBranchCode]);
+
   // Modals state for cashier shift actions
   const [showOpenShiftModal, setShowOpenShiftModal] = useState<boolean>(false);
   const [showCashMovementModal, setShowCashMovementModal] = useState<boolean>(false);
@@ -222,32 +231,86 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   }, [data?.nowKolkata?.hour]);
 
   // Load dashboard data
-  const loadDashboard = useCallback(async (isInitial = false) => {
-    if (isInitial) setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchTodayDashboard();
-      setData(res);
-    } catch (err: any) {
-      console.error('Failed to load today dashboard:', err);
-      if (isInitial) {
-        setError(err.message || 'Failed to load dashboard data. Please try again.');
+  const loadDashboard = useCallback(
+    async (branchOrInitial?: string | boolean, isInitialParam = false) => {
+      let branchToLoad: string = selectedBranchCodeRef.current;
+      let isInitial = isInitialParam;
+
+      if (typeof branchOrInitial === 'boolean') {
+        isInitial = branchOrInitial;
+      } else if (typeof branchOrInitial === 'string' && branchOrInitial.trim() !== '') {
+        branchToLoad = branchOrInitial.trim();
       }
-    } finally {
-      if (isInitial) setLoading(false);
-    }
-  }, []);
+
+      if (isInitial) setLoading(true);
+      setError(null);
+      try {
+        const res = await fetchTodayDashboard(branchToLoad);
+        setData(res);
+        if (res.selectedBranch?.code) {
+          setSelectedBranchCode(res.selectedBranch.code);
+          selectedBranchCodeRef.current = res.selectedBranch.code;
+        }
+      } catch (err: any) {
+        console.error('Failed to load today dashboard:', err);
+        if (isInitial) {
+          setError(err.message || 'Failed to load dashboard data. Please try again.');
+        }
+      } finally {
+        if (isInitial) setLoading(false);
+      }
+    },
+    [],
+  );
+
+  const handleBranchChange = (newBranchCode: string) => {
+    if (newBranchCode === selectedBranchCode) return;
+    setSelectedBranchCode(newBranchCode);
+    selectedBranchCodeRef.current = newBranchCode;
+    // Prepare clean counter data for the selected branch to prevent cross-branch leakage
+    setData((prev) => {
+      if (!prev) return null;
+      const targetBranch = prev.branches?.find(
+        (b) => (b.code || '').toUpperCase() === newBranchCode.toUpperCase()
+      );
+      const targetCounters = targetBranch?.counters || [];
+      const initialCounters = targetCounters.map((c, i) => {
+        const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
+        const name = m ? `Counter ${m[1]}` : c.trim();
+        return {
+          id: `counter-${i + 1}`,
+          code: c,
+          name,
+          amountMinor: 0,
+          formattedAmount: '₹0',
+        };
+      });
+
+      return {
+        ...prev,
+        countersToday: {
+          title: 'Counters Today',
+          subtitle: 'Collected from open till now',
+          branchCode: newBranchCode,
+          counters: initialCounters,
+          totalMinor: 0,
+          formattedTotal: '₹0',
+        },
+      };
+    });
+    loadDashboard(newBranchCode, true);
+  };
 
   // Initial load
   useEffect(() => {
-    loadDashboard(true);
+    loadDashboard(undefined, true);
   }, [loadDashboard]);
 
   // 60-second background refresh while tab is visible
   useEffect(() => {
     const interval = setInterval(() => {
       if (!document.hidden) {
-        loadDashboard(false);
+        loadDashboard(selectedBranchCodeRef.current, false);
       }
     }, 60000);
     return () => clearInterval(interval);
@@ -256,7 +319,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   // Immediate refresh on bill completion event
   useEffect(() => {
     const onBillCompleted = () => {
-      loadDashboard(false);
+      loadDashboard(selectedBranchCodeRef.current, false);
     };
     window.addEventListener('bill_completed', onBillCompleted);
     window.addEventListener('shift_status_changed', onBillCompleted);
@@ -636,12 +699,35 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Subheader: Today pill */}
+        {/* Subheader: Today pill & Branch Switcher */}
         <div className="header-meta-row">
           <div className="header-today-pill">
             <span className="pill-calendar-icon">📅</span>
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
+
+          {data?.branches && data.branches.length > 1 && (
+            <div className="dashboard-branch-selector">
+              <span className="branch-selector-label">Branch:</span>
+              <div className="branch-selector-pills">
+                {data.branches.map((b) => {
+                  const isActive = (selectedBranchCode || '').toUpperCase() === (b.code || '').toUpperCase();
+                  return (
+                    <button
+                      key={b.id || b.code}
+                      type="button"
+                      className={`dashboard-branch-pill ${isActive ? 'active' : ''}`}
+                      onClick={() => handleBranchChange(b.code)}
+                      title={`Switch to ${b.name || b.code}`}
+                    >
+                      <span className="branch-icon">🏢</span>
+                      <span>{b.name || b.code}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1006,10 +1092,10 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                   textAnchor="middle"
                   fill="#ffffff"
                   fontSize="10"
-                  fontWeight="700"
-                  letterSpacing="0.5px"
+                  fontWeight="500"
+                  letterSpacing="0.2px"
                 >
-                  NOW {nowKolkata.timeStr}
+                   {nowKolkata.timeStr}
                 </text>
               </g>
 
@@ -1379,16 +1465,16 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           </div>
 
           <div className="counters-today-body">
-            {(countersToday?.counters || [
-              { id: 'counter-1', name: 'Counter 1', amountMinor: 0, formattedAmount: '₹0' },
-              { id: 'counter-2', name: 'Counter 2', amountMinor: 0, formattedAmount: '₹0' },
-              { id: 'counter-3', name: 'Counter 3', amountMinor: 0, formattedAmount: '₹0' },
-            ]).map((c) => (
-              <div key={c.name} className="counter-row-item">
-                <span className="counter-row-name">{c.name}</span>
-                <span className="counter-row-amount mono">{c.formattedAmount}</span>
-              </div>
-            ))}
+            {countersToday?.counters && countersToday.counters.length > 0 ? (
+              countersToday.counters.map((c) => (
+                <div key={c.id || c.name} className="counter-row-item">
+                  <span className="counter-row-name">{c.name}</span>
+                  <span className="counter-row-amount mono">{c.formattedAmount}</span>
+                </div>
+              ))
+            ) : (
+              <div className="empty-sub-card">No active counters configured for this branch.</div>
+            )}
 
             <div className="counter-total-row">
               <span className="counter-total-label">Total</span>
@@ -1408,6 +1494,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           onSuccess={handleShiftOpened}
           userName={user.name}
           userRole={user.role}
+          defaultLocation={selectedBranchCode}
+          defaultCounter="COUNTER-1"
         />
       )}
 

@@ -434,6 +434,7 @@ export interface DashboardReport {
     totalMinor: number;
     taxableMinor: number;
     gstMinor: number;
+    customerCollectionsMinor?: number;
     khataCollectionsMinor?: number;
     totalCreditNotesMinor?: number;
     creditNotesCount?: number;
@@ -526,7 +527,7 @@ export interface Payment {
   balanceAfterMinor?: number;
 }
 
-export interface KhataOverview {
+export interface CustomerDuesOverview {
   party: {
     id: string;
     name: string;
@@ -552,6 +553,7 @@ export interface KhataOverview {
     createdAt: string;
   }[];
 }
+export type KhataOverview = CustomerDuesOverview;
 
 export interface LedgerEvent {
   id: string;
@@ -1414,11 +1416,27 @@ export interface TodayDashboardData {
     expectedCashMinor: number;
     activeShift: any | null;
   };
+  selectedBranch?: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  branches?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    active: boolean;
+    counters?: string[];
+  }>;
   countersToday?: {
     title: string;
     subtitle: string;
+    branchId?: string;
+    branchCode?: string;
+    branchName?: string;
     counters: Array<{
       id: string;
+      code?: string;
       name: string;
       amountMinor: number;
       formattedAmount: string;
@@ -1428,7 +1446,8 @@ export interface TodayDashboardData {
   };
 }
 
-export const fetchTodayDashboard = () => api<TodayDashboardData>('/api/dashboard/today');
+export const fetchTodayDashboard = (branch?: string) =>
+  api<TodayDashboardData>(`/api/dashboard/today${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`);
 
 // --------------------------------------------------------------------------
 // HSN / SAC Directory APIs

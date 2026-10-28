@@ -18,7 +18,7 @@ const VALID_MODES = ['cash', 'upi', 'card', 'bank', 'cheque'] as const;
 type PaymentMode = (typeof VALID_MODES)[number];
 
 export function registerPayments(r: Router) {
-  // 1. Create a Khata payment collection
+  // 1. Create a customer payment collection
   r.post('/api/payments', requirePerm('collect'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
@@ -427,8 +427,8 @@ export function registerPayments(r: Router) {
   r.get('/api/suppliers/payments/history', requireUser, handleSupplierPayments);
   r.get('/api/suppliers/payments', requireUser, handleSupplierPayments);
 
-  // 2. Customer Khata Overview (dues, advance, unpaid invoices list)
-  r.get('/api/parties/:id/khata', requirePerm('parties.view'), async (ctx) => {
+  // 2. Customer Dues Overview (dues, advance, unpaid invoices list)
+  const getCustomerDues = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
     const customerId = ctx.params.id;
 
@@ -450,7 +450,7 @@ export function registerPayments(r: Router) {
     const totalDuesMinor = Math.max(0, totalUnpaidMinor - advanceMinor);
 
     // Lifetime billing and collection metrics
-    const stats = await ctx.db.one<{ totalBilled: number; totalCollected: number }>(
+    const stats: any = await ctx.db.one(
       `SELECT
         (SELECT COALESCE(SUM(total_minor), 0)::bigint FROM invoices WHERE tenant_id = ? AND party_id = ? AND status = 'posted') AS total_billed,
         (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM payments WHERE tenant_id = ? AND customer_id = ? AND (status IS NULL OR status = 'posted')) AS total_collected`,
@@ -473,8 +473,8 @@ export function registerPayments(r: Router) {
       totalUnpaidMinor,
       oldestInvoiceDate,
       unpaidCount: unpaidInvoices.length,
-      totalBilledMinor: Number(stats?.totalBilled ?? 0),
-      totalCollectedMinor: Number(stats?.totalCollected ?? 0),
+      totalBilledMinor: Number(stats?.totalBilled ?? stats?.total_billed ?? 0),
+      totalCollectedMinor: Number(stats?.totalCollected ?? stats?.total_collected ?? 0),
       unpaidInvoices: unpaidInvoices.map((inv: any) => ({
         id: inv.id,
         number: inv.number,
@@ -485,7 +485,10 @@ export function registerPayments(r: Router) {
         createdAt: inv.createdAt ?? inv.created_at,
       })),
     };
-  });
+  };
+
+  r.get('/api/parties/:id/dues', requirePerm('parties.view'), getCustomerDues);
+  r.get('/api/parties/:id/khata', requirePerm('parties.view'), getCustomerDues);
 
   // 3. Customer Ledger Statement with Running Balance
   r.get('/api/parties/:id/ledger', requirePerm('parties.view'), async (ctx) => {
