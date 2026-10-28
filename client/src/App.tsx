@@ -596,6 +596,12 @@ export function App() {
     } catch {}
   }, [heldOrders]);
 
+  useEffect(() => {
+    if (activeTab === 'pos') {
+      setIsSidebarCollapsed(true);
+    }
+  }, [activeTab]);
+
   // Specialized Business Fields
   // Restaurant:
   const [restaurantTable, setRestaurantTable] = useState('Table 1');
@@ -4007,25 +4013,28 @@ export function App() {
       )}
 
       {/* Left Sidebar Navigation */}
-      <aside className={`app-sidebar ${isSidebarCollapsed || activeTab === 'pos' ? 'icon-only' : ''}`}>
+      <aside className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''}`}>
         <div className="sidebar-top">
-          {/* Brand Logo & Title */}
-          <div
-            className="sidebar-brand"
-            onClick={() => navigateTo('landing')}
-            style={{ cursor: 'pointer' }}
-            title="View public Landing Page"
-          >
-            <div className="sidebar-brand-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 2L2 22h20L12 2z" />
-                <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
-              </svg>
+          {/* Header row with Brand & Collapse/Expand Toggle */}
+          <div className="sidebar-header-row">
+            <div
+              className="sidebar-brand"
+              onClick={() => navigateTo('landing')}
+              style={{ cursor: 'pointer' }}
+              title="View public Landing Page"
+            >
+              <div className="sidebar-brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 2L2 22h20L12 2z" />
+                  <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
+                </svg>
+              </div>
+              <div className="sidebar-brand-text">
+                <span className="sidebar-brand-title">Adaptive Billing</span>
+                <span className="sidebar-brand-subtitle">Cloud POS & GST</span>
+              </div>
             </div>
-            <div className="sidebar-brand-text">
-              <span className="sidebar-brand-title">Adaptive Billing</span>
-              <span className="sidebar-brand-subtitle">Cloud POS & GST</span>
-            </div>
+
             <button
               type="button"
               className="sidebar-collapse-toggle"
@@ -4033,10 +4042,11 @@ export function App() {
                 e.stopPropagation();
                 setIsSidebarCollapsed(!isSidebarCollapsed);
               }}
-              title={isSidebarCollapsed || activeTab === 'pos' ? "Expand sidebar" : "Collapse sidebar"}
+              title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
+              aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={isSidebarCollapsed || activeTab === 'pos' ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
               </svg>
             </button>
           </div>
@@ -4196,6 +4206,7 @@ export function App() {
               type="button"
               className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveTab('dashboard')}
+              title={user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
             >
               <span className="nav-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4215,6 +4226,7 @@ export function App() {
               type="button"
               className={`sidebar-nav-item ${activeTab === 'pos' ? 'active' : ''}`}
               onClick={() => setActiveTab('pos')}
+              title="POS Counter (F1)"
             >
               <span className="nav-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4232,6 +4244,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
                 onClick={() => setActiveTab('shifts')}
+                title="My Cashier Shift"
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4257,6 +4270,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
                 onClick={() => setActiveTab('items')}
+                title={`Products Inventory (${items.length} items)`}
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4276,6 +4290,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
                 onClick={() => setActiveTab('categories')}
+                title={`Categories (${categoriesList.length} categories)`}
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4362,6 +4377,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'sales-analysis' ? 'active' : ''}`}
                 onClick={() => setActiveTab('sales-analysis')}
+                title="Sales Analysis"
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4382,6 +4398,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
                 onClick={() => setActiveTab('invoices')}
+                title="Recent Bills"
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4402,6 +4419,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
                 onClick={() => setActiveTab('customers')}
+                title={`Customers Directory (${parties.filter((p) => p.type === 'customer').length})`}
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -4422,6 +4440,7 @@ export function App() {
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
                 onClick={() => setActiveTab('suppliers')}
+                title={`Suppliers Directory (${parties.filter((p) => p.type === 'supplier').length})`}
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
