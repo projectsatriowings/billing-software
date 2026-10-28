@@ -4056,7 +4056,14 @@ export function App() {
             <button
               type="button"
               className="sidebar-store-btn"
-              onClick={() => setShowBusinessDropdown(!showBusinessDropdown)}
+              onClick={() => {
+                if (isSidebarCollapsed) {
+                  setIsSidebarCollapsed(false);
+                  setShowBusinessDropdown(true);
+                } else {
+                  setShowBusinessDropdown(!showBusinessDropdown);
+                }
+              }}
               title="Click to view store profile and partition details"
             >
               <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0, boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }}>
@@ -4075,7 +4082,7 @@ export function App() {
               </div>
             </button>
 
-            {showBusinessDropdown && (
+            {!isSidebarCollapsed && showBusinessDropdown && (
               <>
                 <div
                   className="dropdown-backdrop"
@@ -5473,292 +5480,38 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Counter Customer Mobile Input / Linked Member Badge */}
-                    {!selectedParty ? (() => {
-                      const cleanDigits = customerSearch.replace(/\D/g, '');
-                      const last10 = cleanDigits.slice(-10);
-                      const counterMatches = customerSearch.trim().length >= 3
-                        ? parties.filter(p => p.type === 'customer' && (
-                            (p.phone && p.phone.replace(/\D/g, '').includes(cleanDigits)) ||
-                            p.name.toLowerCase().includes(customerSearch.trim().toLowerCase())
-                          )).slice(0, 3)
-                        : [];
-                      const hasExactMatch = cleanDigits.length >= 7 && parties.some(p => p.type === 'customer' && p.phone && (
-                        p.phone.replace(/\D/g, '') === cleanDigits ||
-                        p.phone.replace(/\D/g, '').endsWith(last10) ||
-                        cleanDigits.endsWith(p.phone.replace(/\D/g, '').slice(-10))
-                      ));
-
-                      return (
-                        <div className="bento-counter-mobile-box">
-                          <div className="counter-mobile-head">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                              <circle cx="12" cy="7" r="4" />
-                            </svg>
-                            <span className="mobile-title">Customer & Loyalty Rewards:</span>
-                            {customerSearch && <span className="mobile-val mono">{customerSearch}</span>}
-                          </div>
-
-                          <div className="counter-mobile-inputs-row" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '0.65rem' }}>
-                            <div className="counter-input-col">
-                              <label className="counter-col-label">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
-                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                </svg>
-                                Customer Mobile <span style={{ color: '#d97706', fontSize: '0.74rem', fontWeight: 700 }}>(Compulsory for Loyalty Points)</span>
-                              </label>
-                              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                                <input
-                                  type="tel"
-                                  maxLength={15}
-                                  autoComplete="off"
-                                  style={{ flex: 1, fontSize: '0.88rem', padding: '0.45rem 0.65rem' }}
-                                  placeholder="10-digit mobile number..."
-                                  value={customerSearch}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setCustomerSearch(val);
-                                    const d = val.replace(/\D/g, '');
-                                    if (d.length >= 10) {
-                                      const d10 = d.slice(-10);
-                                      const match = parties.find(p => p.type === 'customer' && p.phone && (
-                                        p.phone.replace(/\D/g, '') === d ||
-                                        p.phone.replace(/\D/g, '').endsWith(d10) ||
-                                        d.endsWith(p.phone.replace(/\D/g, '').slice(-10))
-                                      ));
-                                      if (match) {
-                                        setSelectedPartyId(match.id);
-                                        setCustomerSearch('');
-                                        setQuickCustomerName('');
-                                        showToast(`✓ Linked member: ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
-                                      } else {
-                                        api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`).then((res) => {
-                                          if (res?.party) {
-                                            setParties((prev) => (prev.some(p => p.id === res.party!.id) ? prev : [...prev, res.party!]));
-                                            setSelectedPartyId(res.party.id);
-                                            setCustomerSearch('');
-                                            setQuickCustomerName('');
-                                            showToast(`✓ Linked member: ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
-                                          }
-                                        }).catch(() => {});
-                                      }
-                                    }
-                                  }}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      const d = customerSearch.replace(/\D/g, '');
-                                      if (d.length >= 7) {
-                                        const d10 = d.slice(-10);
-                                        const match = parties.find(p => p.type === 'customer' && p.phone && (
-                                          p.phone.replace(/\D/g, '') === d ||
-                                          p.phone.replace(/\D/g, '').endsWith(d10) ||
-                                          d.endsWith(p.phone.replace(/\D/g, '').slice(-10))
-                                        ));
-                                        if (match) {
-                                          setSelectedPartyId(match.id);
-                                          setCustomerSearch('');
-                                          setQuickCustomerName('');
-                                          showToast(`✓ Linked ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
-                                        } else {
-                                          try {
-                                            const res = await api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`);
-                                            if (res?.party) {
-                                              setParties((prev) => (prev.some(p => p.id === res.party!.id) ? prev : [...prev, res.party!]));
-                                              setSelectedPartyId(res.party.id);
-                                              setCustomerSearch('');
-                                              setQuickCustomerName('');
-                                              showToast(`✓ Linked ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
-                                            }
-                                          } catch {}
-                                        }
-                                      }
-                                    }
-                                  }}
-                                />
-                                {customerSearch && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary compact"
-                                    style={{ padding: '0.45rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    onClick={() => {
-                                      setCustomerSearch('');
-                                      setSelectedPartyId('');
-                                      setQuickCustomerName('');
-                                    }}
-                                    title="Clear mobile number"
-                                  >
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <line x1="18" y1="6" x2="6" y2="18" />
-                                      <line x1="6" y1="6" x2="18" y2="18" />
-                                    </svg>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="counter-input-col">
-                              <label className="counter-col-label">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
-                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                  <circle cx="12" cy="7" r="4" />
-                                </svg>
-                                Customer Name
-                              </label>
-                              <input
-                                type="text"
-                                autoComplete="off"
-                                style={{ width: '100%', fontSize: '0.88rem', padding: '0.45rem 0.65rem' }}
-                                placeholder="Name (e.g. Ramesh)"
-                                value={quickCustomerName}
-                                onChange={(e) => setQuickCustomerName(e.target.value)}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Live Matched Customer Autocomplete Suggestions */}
-                          {counterMatches.length > 0 && (
-                            <div className="counter-matches-list">
-                              {counterMatches.map((m) => (
-                                <div
-                                  key={m.id}
-                                  className="counter-match-row"
-                                  onClick={() => {
-                                    setSelectedPartyId(m.id);
-                                    setCustomerSearch('');
-                                    setQuickCustomerName('');
-                                    showToast(`✓ Linked ${m.name} (${m.loyaltyPoints ?? 0} pts)`);
-                                  }}
-                                  title="Click to link customer and show loyalty points"
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                      <circle cx="12" cy="7" r="4" />
-                                    </svg>
-                                    <span className="counter-match-name">{m.name}</span>
-                                    <span className="counter-match-phone mono"> ({m.phone})</span>
-                                  </div>
-                                  <span className="counter-match-pts" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <circle cx="12" cy="12" r="9" />
-                                      <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
-                                    </svg>
-                                    {m.loyaltyPoints ?? 0} pts
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* If 10 digits typed and brand new customer */}
-                          {cleanDigits.length >= 7 && !hasExactMatch && (
-                            <div className="counter-new-customer-hint" style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                              <span><strong>New Customer:</strong> {quickCustomerName.trim() ? `"${quickCustomerName.trim()}"` : 'Customer'} ({cleanDigits}) will be automatically created in your database upon payment!</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })() : (
-                      <div className={`bento-counter-customer-linked ${redeemPoints ? 'redeemed' : ''}`}>
-                        <div className="cust-linked-main-row">
-                          <div className="cust-linked-left">
-                            <div className="cust-linked-avatar">
-                              {selectedParty.name ? selectedParty.name.trim().charAt(0).toUpperCase() : 'C'}
-                            </div>
-                            <div className="cust-linked-details">
-                              <div className="cust-linked-name-row">
-                                <span className="cust-linked-name" title={selectedParty.name}>{selectedParty.name}</span>
-                                <span className="cust-linked-badge">Member</span>
-                              </div>
-                              <div className="cust-linked-phone-row">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
-                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                </svg>
-                                <span className="cust-linked-phone mono">{selectedParty.phone || 'No mobile'}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="cust-linked-right">
-                            <div className="cust-linked-pts-badge" title={`${selectedPartyPoints} points available (Worth ₹${((selectedPartyPoints * shopPointValMinor) / 100).toFixed(2)})`}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
-                              </svg>
-                              <div className="pts-labels">
-                                <span className="pts-count mono">{selectedPartyPoints} pts</span>
-                                <span className="pts-worth">(₹{((selectedPartyPoints * shopPointValMinor) / 100).toFixed(2)})</span>
-                              </div>
-                            </div>
-
-                            {shopLoyaltyActive && selectedPartyPoints >= shopMinRedeem && cart.length > 0 && potentialDiscountMinor > 0 && (
-                              <button
-                                type="button"
-                                className={`counter-redeem-toggle-btn ${redeemPoints ? 'active' : ''}`}
-                                onClick={() => {
-                                  const next = !redeemPoints;
-                                  setRedeemPoints(next);
-                                  if (next) {
-                                    playSupermarketBeep();
-                                    showToast(`Redeemed ${maxRedeemablePoints} points (-₹${(potentialDiscountMinor / 100).toFixed(2)})`);
-                                  } else {
-                                    showToast('Points discount removed');
-                                  }
-                                }}
-                                title={redeemPoints ? 'Click to cancel discount' : `Click to redeem ${maxRedeemablePoints} points for ₹${(potentialDiscountMinor / 100).toFixed(2)} off`}
-                              >
-                                {redeemPoints ? (
-                                  <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                      <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                    <span>-₹{(pointsDiscountMinor / 100).toFixed(2)} Applied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                                    </svg>
-                                    <span>Redeem ₹{(potentialDiscountMinor / 100).toFixed(2)}</span>
-                                  </>
-                                )}
-                              </button>
+                    {/* Compact Customer & Member Status Chip in Billing Terminal */}
+                    <div className="bento-billing-customer-chip">
+                      <div className="cust-chip-info">
+                        <span className="cust-chip-icon">{selectedParty ? '👤' : '🛒'}</span>
+                        <span className="cust-chip-label">Customer:</span>
+                        {selectedParty ? (
+                          <>
+                            <span className="chip-walkin-text">{selectedParty.name}</span>
+                            {selectedParty.phone && <span className="chip-phone">({selectedParty.phone})</span>}
+                            <span className="chip-pts-badge">★ {selectedParty.loyaltyPoints ?? 0} pts</span>
+                            {redeemPoints && pointsDiscountMinor > 0 && (
+                              <span className="chip-discount-tag">-₹{(pointsDiscountMinor / 100).toFixed(2)} Points Discount</span>
                             )}
-
-                            <button
-                              type="button"
-                              className="cust-linked-clear"
-                              onClick={() => {
-                                setSelectedPartyId('');
-                                setCustomerSearch('');
-                                setRedeemPoints(false);
-                              }}
-                              title="Unlink customer / Switch to Walk-in"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Active points discount alert strip */}
-                        {redeemPoints && pointsDiscountMinor > 0 && (
-                          <div className="cust-linked-discount-strip">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            <span><strong>₹{(pointsDiscountMinor / 100).toFixed(2)} Loyalty Discount Applied!</strong> {pointsActuallyRedeemed} points will be deducted upon billing.</span>
-                          </div>
+                          </>
+                        ) : (
+                          <span className="chip-walkin-text">Walk-in Customer (Default)</span>
                         )}
                       </div>
-                    )}
+                      <button
+                        type="button"
+                        className="cust-chip-focus-btn"
+                        onClick={() => {
+                          const input = document.querySelector('.customer-input-wrap input') as HTMLInputElement;
+                          if (input) {
+                            input.focus();
+                            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }}
+                      >
+                        {selectedParty ? 'Change Member' : '+ Member / Loyalty'}
+                      </button>
+                    </div>
 
                     {/* Payment Tender Modes with Stylized Vector Icons */}
                     <div className="bento-payment-modes">
@@ -6664,7 +6417,13 @@ export function App() {
                       <button
                         type="button"
                         className="bento-find-product-btn"
-                        onClick={() => setShowProductCatalogDrawer(true)}
+                        onClick={() => {
+                          const el = document.getElementById('pos-catalog-search-side');
+                          if (el) {
+                            el.focus();
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }}
                         title="Search catalog or add items without barcode (F2)"
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -6675,467 +6434,217 @@ export function App() {
                       </button>
                     </div>
                   </div>
-                </div>
-              </div>
 
-            {/* Product Catalog Slide-In Flyout Drawer (When Barcode is Not on Item) */}
-            {showProductCatalogDrawer && (
-              <div className="bento-catalog-drawer-overlay" onClick={() => setShowProductCatalogDrawer(false)}>
-                <div className="bento-catalog-drawer" onClick={(e) => e.stopPropagation()}>
-                  <div className="bento-drawer-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                      <span className="bento-icon-circle indigo">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                          <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                        </svg>
-                      </span>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>Product Catalog</h3>
-                        <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                          Showing {filteredItems.length} items • Click + Add to bill without barcode
+                  {/* 3. QUICK PRODUCT CATALOG (In-Line on Side Column) */}
+                  <div className="bento-card bento-catalog-card">
+                    <div className="bento-card-header">
+                      <div className="bento-header-label">
+                        <span className="bento-icon-circle indigo">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                          </svg>
                         </span>
+                        <div>
+                          <h3 className="bento-card-title">Quick Product Catalog</h3>
+                          <span className="bento-card-subtitle">
+                            {filteredItems.length} items • Click + Add to bill
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      {can(user?.role as any, 'items.write') && (
+
+                      <div className="bento-catalog-header-actions">
                         <button
                           type="button"
-                          className="bento-add-btn"
-                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}
+                          className={`bento-all-cats-btn ${selectedCategory === 'ALL' ? 'active' : ''}`}
                           onClick={() => {
-                            openAddItemModal();
+                            setSelectedCategory('ALL');
+                            setSearchQuery('');
                           }}
                         >
-                          + New Item
+                          All ({items.length})
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="bento-drawer-close-btn"
-                        onClick={() => setShowProductCatalogDrawer(false)}
-                        title="Close (Esc)"
-                      >
-                        ✕
-                      </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Drawer Search Bar */}
-                  <div className="bento-drawer-search-bar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4">
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    <input
-                      ref={catalogSearchInputRef}
-                      type="text"
-                      autoFocus
-                      className="bento-drawer-search-input"
-                      placeholder="Fast product search by name, barcode, SKU..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') setShowProductCatalogDrawer(false);
-                        else if (e.key === 'Enter') {
-                          if (filteredItems.length === 1) {
+                    {/* Compact Search Bar in Side Panel */}
+                    <div className="bento-drawer-search-bar" style={{ padding: '0.5rem 0.85rem' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                      <input
+                        id="pos-catalog-search-side"
+                        ref={catalogSearchInputRef}
+                        type="text"
+                        className="bento-drawer-search-input"
+                        placeholder="Search items by name, barcode, SKU (F2)..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && filteredItems.length === 1) {
                             addToCart(filteredItems[0]);
                             playSupermarketBeep();
                             showToast(`Added ${filteredItems[0].name} to cart`);
                           }
-                        }
-                      }}
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem' }}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.85rem' }}>
-                    {/* ROW 2: Bento Quick Categories Grid */}
-                <div className="bento-card bento-categories-card">
-                  <div className="bento-card-header">
-                    <div className="bento-header-label">
-                      <span className="bento-icon-circle emerald">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                          <circle cx="7" cy="7" r="1.5" fill="currentColor"></circle>
-                        </svg>
-                      </span>
-                      <div>
-                        <h3 className="bento-card-title">Quick Categories</h3>
-                        <span className="bento-card-subtitle">Filter product inventory by department</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className={`bento-all-cats-btn ${selectedCategory === 'ALL' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedCategory('ALL');
-                        setSearchQuery('');
-                      }}
-                    >
-                      All Items ({items.length})
-                    </button>
-                  </div>
-
-                  <div className="bento-category-grid">
-                    {[
-                      {
-                        id: 'Groceries',
-                        label: 'Groceries',
-                        color: 'cat-groceries',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <circle cx="9" cy="21" r="1"></circle>
-                            <circle cx="20" cy="21" r="1"></circle>
-                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Fresh Produce',
-                        label: 'Produce',
-                        color: 'cat-produce',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
-                            <path d="M2 21c0-3 1.85-5.36 5.08-6"></path>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Beverages',
-                        label: 'Beverages',
-                        color: 'cat-beverages',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
-                            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
-                            <line x1="6" y1="1" x2="6" y2="4"></line>
-                            <line x1="10" y1="1" x2="10" y2="4"></line>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Snacks',
-                        label: 'Snacks',
-                        color: 'cat-snacks',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                            <path d="M2 17l10 5 10-5"></path>
-                            <path d="M2 12l10 5 10-5"></path>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Household',
-                        label: 'Household',
-                        color: 'cat-household',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Personal Care',
-                        label: 'Personal Care',
-                        color: 'cat-care',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Dairy',
-                        label: 'Dairy',
-                        color: 'cat-dairy',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M8 2h8v3H8z"></path>
-                            <path d="M6 5h12l2 16H4L6 5z"></path>
-                          </svg>
-                        ),
-                      },
-                      {
-                        id: 'Others',
-                        label: 'Others',
-                        color: 'cat-others',
-                        icon: (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-                            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-                            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-                            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-                          </svg>
-                        ),
-                      },
-                    ].map((cat) => {
-                      const count = items.filter(
-                        (i) => (i.category || '').toLowerCase() === cat.id.toLowerCase()
-                      ).length;
-                      const isSelected = selectedCategory === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          className={`bento-cat-tile ${cat.color} ${isSelected ? 'active' : ''}`}
-                          onClick={() => setSelectedCategory(isSelected ? 'ALL' : cat.id)}
-                        >
-                          <span className="cat-tile-icon">{cat.icon}</span>
-                          <span className="cat-tile-label">{cat.label}</span>
-                          <span className="cat-tile-count">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ROW 3: Bento Product Catalog Showcase */}
-                <div className="bento-card bento-catalog-card">
-                  <div className="bento-card-header">
-                    <div className="bento-header-label">
-                      <span className="bento-icon-circle indigo">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                          <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                        </svg>
-                      </span>
-                      <div>
-                        <h3 className="bento-card-title">Product Catalog</h3>
-                        <span className="bento-card-subtitle">
-                          Showing {filteredItems.length} available items {selectedCategory !== 'ALL' && `in ${selectedCategory}`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Fast Product Catalog Search & Actions */}
-                    <div className="bento-catalog-header-actions">
-                      <div className="bento-catalog-search-wrap">
-                        <div className="bento-catalog-search-box">
-                          <svg className="bento-catalog-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                          </svg>
-                          <input
-                            ref={catalogSearchInputRef}
-                            type="text"
-                            className="bento-catalog-search-input"
-                            placeholder="Fast product search by name, barcode, SKU..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
-                                setSearchQuery('');
-                                catalogSearchInputRef.current?.blur();
-                              } else if (e.key === 'Enter') {
-                                if (filteredItems.length === 1) {
-                                  addToCart(filteredItems[0]);
-                                  playSupermarketBeep();
-                                  showToast(`Added ${filteredItems[0].name} to cart`);
-                                }
-                              }
-                            }}
-                          />
-                          {searchQuery && (
-                            <button
-                              type="button"
-                              className="bento-catalog-search-clear"
-                              onClick={() => {
-                                setSearchQuery('');
-                                catalogSearchInputRef.current?.focus();
-                              }}
-                              title="Clear search"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        {searchQuery && (
-                          <span className="bento-search-badge">
-                            {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        className="bento-new-item-btn"
-                        onClick={() => setShowItemModal(true)}
-                      >
-                        + New Item
-                      </button>
-                    </div>
-                  </div>
-
-                  {filteredItems.length === 0 ? (
-                    <div className="bento-empty-catalog">
-                      <span className="empty-catalog-icon">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="11" cy="11" r="8"></circle>
-                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                      </span>
-                      <h4>No products found</h4>
-                      <p>Try searching with another keyword or barcode</p>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => {
-                          setSearchQuery('');
-                          setSelectedCategory('ALL');
                         }}
-                      >
-                        Reset Filters
-                      </button>
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.9rem' }}
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="bento-products-grid">
-                      {filteredItems.slice(0, 48).map((item) => {
-                        const mrp = getItemMrp(item);
-                        const storePrice = item.priceMinor;
-                        const savings = Math.max(0, mrp - storePrice);
-                        const discountPercent = mrp > storePrice && mrp > 0 ? Math.round((savings / mrp) * 100) : 0;
-                        const inCartCount = cart.find((c) => c.item.id === item.id)?.qty || 0;
-                        const isOutOfStock = item.currentStockMilli <= 0;
-                        // Clean up raw timestamps in demo item names if present
-                        const displayName = item.name.replace(/\s+\d{10,15}$/, '');
 
+                    {/* Quick Category Chips */}
+                    <div className="bento-category-grid">
+                      {[
+                        { id: 'Groceries', label: 'Groceries' },
+                        { id: 'Fresh Produce', label: 'Produce' },
+                        { id: 'Beverages', label: 'Beverages' },
+                        { id: 'Snacks', label: 'Snacks' },
+                        { id: 'Household', label: 'Household' },
+                        { id: 'Personal Care', label: 'Personal' },
+                        { id: 'Dairy', label: 'Dairy' },
+                        { id: 'Others', label: 'Others' },
+                      ].map((cat) => {
+                        const count = items.filter(
+                          (i) => (i.category || '').toLowerCase() === cat.id.toLowerCase()
+                        ).length;
+                        const isSelected = selectedCategory === cat.id;
                         return (
-                          <div
-                            key={item.id}
-                            className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''}`}
-                            onClick={() => {
-                              if (!isOutOfStock) addToCart(item);
-                            }}
-                            title={`Click to add ${displayName} to cart`}
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className={`bento-cat-tile ${isSelected ? 'active' : ''}`}
+                            onClick={() => setSelectedCategory(isSelected ? 'ALL' : cat.id)}
                           >
-                            {/* Top Badges Row */}
-                            <div className="bento-tile-top">
-                              <span className="bento-tile-cat" title={item.category || 'General'}>
-                                {item.category || 'General'}
-                              </span>
-                              {item.stockStatus === 'out_of_stock' || isOutOfStock ? (
-                                <span className="bento-stock-tag out">
-                                  <span className="stock-dot"></span> Out of Stock
-                                </span>
-                              ) : item.stockStatus === 'low_stock' ? (
-                                <span className="bento-stock-tag low">
-                                  <span className="stock-dot"></span> Low Stock
-                                </span>
-                              ) : (
-                                <span className="bento-stock-tag in">
-                                  <span className="stock-dot"></span> In Stock
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Product Title */}
-                            <div className="bento-tile-title" title={item.name}>
-                              {displayName}
-                            </div>
-
-                            {/* Clean Pricing Section - Completely Guaranteed Zero Overflow */}
-                            <div className="bento-tile-pricing">
-                              <div className="pricing-store-row">
-                                <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
-                                {mrp > storePrice && (
-                                  <span className="mrp-strikethrough mono">MRP {formatRupees(mrp)}</span>
-                                )}
-                              </div>
-                              <div className="pricing-sub-row">
-                                {savings > 0 ? (
-                                  <span className="pricing-save-badge">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <polyline points="20 6 9 17 4 12"></polyline>
-                                    </svg>
-                                    <span>Save {formatRupees(savings)}</span>
-                                    {discountPercent > 0 && <span className="save-pct">({discountPercent}% OFF)</span>}
-                                  </span>
-                                ) : (
-                                  <span className="pricing-standard-tag">Inclusive of All Taxes</span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Card Action Footer */}
-                            <div className="bento-tile-footer">
-                              <div className="bento-tile-sku mono" title={item.barcode || item.sku || ''}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                  <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14" />
-                                </svg>
-                                <span>{item.barcode ? (item.barcode.length > 10 ? `...${item.barcode.slice(-8)}` : item.barcode) : (item.sku || `GST ${item.taxRateBp / 100}%`)}</span>
-                              </div>
-
-                              {inCartCount > 0 ? (
-                                <div className="bento-tile-stepper" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    className="tile-stepper-btn minus"
-                                    onClick={() => updateCartQty(item.id, -1)}
-                                    title="Decrease quantity"
-                                  >
-                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                  </button>
-                                  <span className="tile-stepper-qty mono">{inCartCount}</span>
-                                  <button
-                                    type="button"
-                                    className="tile-stepper-btn plus"
-                                    onClick={() => updateCartQty(item.id, 1)}
-                                    title="Increase quantity"
-                                  >
-                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                      <line x1="12" y1="5" x2="12" y2="19"></line>
-                                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="bento-quick-add-btn"
-                                  disabled={isOutOfStock}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!isOutOfStock) addToCart(item);
-                                  }}
-                                  title={isOutOfStock ? "Out of stock" : "Add to cart"}
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                  </svg>
-                                  <span>Add</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                            <span className="cat-tile-label">{cat.label}</span>
+                            <span className="cat-tile-count">({count})</span>
+                          </button>
                         );
                       })}
                     </div>
-                  )}
+
+                    {/* Scrollable Products Grid in Side Column */}
+                    {filteredItems.length === 0 ? (
+                      <div className="bento-empty-catalog" style={{ padding: '1.5rem 1rem' }}>
+                        <span className="empty-catalog-icon">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                        </span>
+                        <h4 style={{ margin: '0.5rem 0 0.25rem' }}>No products found</h4>
+                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Try another name or barcode</p>
+                        <button
+                          type="button"
+                          className="btn btn-secondary compact"
+                          style={{ marginTop: '0.5rem' }}
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedCategory('ALL');
+                          }}
+                        >
+                          Reset Filter
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bento-products-grid">
+                        {filteredItems.slice(0, 36).map((item) => {
+                          const mrp = getItemMrp(item);
+                          const storePrice = item.priceMinor;
+                          const savings = Math.max(0, mrp - storePrice);
+                          const discountPercent = mrp > storePrice && mrp > 0 ? Math.round((savings / mrp) * 100) : 0;
+                          const inCartCount = cart.find((c) => c.item.id === item.id)?.qty || 0;
+                          const isOutOfStock = item.currentStockMilli <= 0;
+                          const displayName = item.name.replace(/\s+\d{10,15}$/, '');
+
+                          return (
+                            <div
+                              key={item.id}
+                              className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''}`}
+                              onClick={() => {
+                                if (!isOutOfStock) addToCart(item);
+                              }}
+                              title={`Click to add ${displayName} to cart`}
+                            >
+                              <div className="bento-tile-top">
+                                <span className="bento-tile-cat" title={item.category || 'General'}>
+                                  {item.category || 'General'}
+                                </span>
+                                {item.stockStatus === 'out_of_stock' || isOutOfStock ? (
+                                  <span className="bento-stock-tag out">Out</span>
+                                ) : (
+                                  <span className="bento-stock-tag in">In Stock</span>
+                                )}
+                              </div>
+
+                              <div className="bento-tile-title" title={item.name}>
+                                {displayName}
+                              </div>
+
+                              <div className="bento-tile-pricing">
+                                <div className="pricing-store-row">
+                                  <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
+                                  {mrp > storePrice && (
+                                    <span className="mrp-strikethrough mono">₹{(mrp/100).toFixed(0)}</span>
+                                  )}
+                                </div>
+                                {savings > 0 && (
+                                  <span className="pricing-save-badge">
+                                    Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="bento-tile-footer">
+                                <span className="bento-tile-sku mono">{item.barcode ? (item.barcode.length > 8 ? `..${item.barcode.slice(-6)}` : item.barcode) : item.sku || ''}</span>
+                                {inCartCount > 0 ? (
+                                  <div className="bento-tile-stepper" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      className="tile-stepper-btn minus"
+                                      onClick={() => updateCartQty(item.id, -1)}
+                                    >
+                                      -
+                                    </button>
+                                    <span className="tile-stepper-qty mono">{inCartCount}</span>
+                                    <button
+                                      type="button"
+                                      className="tile-stepper-btn plus"
+                                      onClick={() => updateCartQty(item.id, 1)}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="bento-quick-add-btn"
+                                    disabled={isOutOfStock}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!isOutOfStock) addToCart(item);
+                                    }}
+                                  >
+                                    + Add
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
             {/* ================= BOTTOM POS POWER DOCK ================= */}
             <div className="bento-pos-dock">
