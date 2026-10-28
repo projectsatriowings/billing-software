@@ -112,8 +112,13 @@ export async function connectPg(url: string): Promise<DB> {
     throw new Error('The "pg" package is not installed. Run "npm install" first.');
   }
   pg.types.setTypeParser(20, (v: string) => Number(v)); // int8 -> number (money is paise, always < 2^53)
+  let connUrl = url;
+  if (connUrl.includes('sslmode=') && !connUrl.includes('uselibpqcompat=')) {
+    const sep = connUrl.includes('?') ? '&' : '?';
+    connUrl = `${connUrl}${sep}uselibpqcompat=true`;
+  }
   const pool = new pg.Pool({
-    connectionString: url,
+    connectionString: connUrl,
     max: Number(process.env.DB_POOL_MAX ?? 10),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 20_000,
