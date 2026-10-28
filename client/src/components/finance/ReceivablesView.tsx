@@ -53,7 +53,7 @@ export function ReceivablesView({ onCollectPayment }: ReceivablesViewProps) {
             {data ? fmtMoney(data.totalReceivableMinor || 0) : '—'}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#9a3412', marginTop: '0.25rem' }}>
-            Pending customer khata credit balances
+            Pending customer credit balances
           </div>
         </div>
 
@@ -65,7 +65,7 @@ export function ReceivablesView({ onCollectPayment }: ReceivablesViewProps) {
           boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
         }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Customers with Overdue Khata
+            Customers with Overdue Balance
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1e293b', marginTop: '0.35rem' }}>
             {data?.customersCount ?? (customers.length || 0)}
@@ -142,7 +142,7 @@ export function ReceivablesView({ onCollectPayment }: ReceivablesViewProps) {
               All customer accounts are clear!
             </div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
-              No outstanding khata balances or overdue customer invoices found.
+              No outstanding balances or overdue customer invoices found.
             </div>
           </div>
         ) : (
@@ -198,7 +198,7 @@ export function ReceivablesView({ onCollectPayment }: ReceivablesViewProps) {
                         className="btn btn-primary"
                         style={{ padding: '0.35rem 0.8rem', fontSize: '0.78rem', borderRadius: '8px' }}
                       >
-                        Collect Khata ➔
+                        Collect Due ➔
                       </button>
                     </td>
                   </tr>

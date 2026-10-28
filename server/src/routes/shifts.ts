@@ -16,7 +16,7 @@ import type { CashMovement, Shift, ShiftClosingReport, ShiftSummary } from '../.
 /**
  * Computes authoritative financial metrics for a shift from database records.
  * Integrates:
- * 1. Payments (cash & non-cash collections from POS and Khata)
+ * 1. Payments (cash & non-cash collections from POS and customer receipts)
  * 2. Cash movements (authorized cash-in & cash-out)
  * 3. Cash refunds paid from the drawer on sales returns
  */
@@ -68,7 +68,7 @@ export async function computeShiftFinancials(
     }
   }
 
-  // 1. Fetch eligible payments (both POS checkouts and Khata collections)
+  // 1. Fetch eligible payments (both POS checkouts and customer receipts)
   // Authoritative filtering rules:
   // - Tenant isolation strictly enforced
   // - Scoped to this active cashier shift and cashier user

@@ -623,7 +623,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Other / Khata / Bank */}
+              {/* Other / Bank */}
               <div
                 style={{
                   background: '#f8fafc',
@@ -638,8 +638,8 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span style={{ fontSize: '1.2rem' }}>📑</span>
                   <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Other / Khata Credit</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Bank transfer or credit ledger</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Other / Bank Transfer</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Bank transfer or other payment methods</div>
                   </div>
                 </div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>

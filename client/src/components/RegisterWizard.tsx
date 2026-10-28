@@ -833,7 +833,7 @@ export const RegisterWizard: React.FC<RegisterWizardProps> = ({
                             checked={creditLimitEnforcement}
                             onChange={(e) => setCreditLimitEnforcement(e.target.checked)}
                           />
-                          <span>Buyer Credit Limits & Khata Overdue Alerts</span>
+                          <span>Buyer Credit Limits & Overdue Alerts</span>
                         </label>
                         <label className="checkbox-label">
                           <input

@@ -13,7 +13,7 @@ import {
 interface StoreManagerDashboardProps {
   user: User;
   shop: Shop | null;
-  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings') => void;
+  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings') => void;
 }
 
 const formatRupees = (paise: number = 0) => {
