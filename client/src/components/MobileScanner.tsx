@@ -26,6 +26,14 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<any[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [networkInfo, setNetworkInfo] = useState<{ tunnelUrl?: string; isTunnelAlive?: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/scanner/network-info')
+      .then((r) => r.json())
+      .then((d) => setNetworkInfo(d))
+      .catch(() => {});
+  }, []);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef<{ [code: string]: number }>({});
@@ -320,6 +328,83 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
           </div>
         </div>
       </header>
+
+      {/* HTTPS Upgrade Banner for Continuous Live Laser Barcode Scanner */}
+      {typeof window !== 'undefined' && window.location.protocol !== 'https:' && (
+        <div
+          style={{
+            margin: '10px 14px 4px',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            borderRadius: '14px',
+            padding: '12px 14px',
+            color: '#ffffff',
+            boxShadow: '0 4px 16px rgba(79, 70, 229, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.4rem' }}>⚡</span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.88rem' }}>Activate Live Laser Scanner</div>
+              <div style={{ fontSize: '0.72rem', opacity: 0.9, marginTop: '2px', lineHeight: 1.3 }}>
+                Switch to HTTPS to scan live continuously without taking photos.
+              </div>
+            </div>
+          </div>
+          {networkInfo?.tunnelUrl ? (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = `${networkInfo.tunnelUrl}/scanner?session=${encodeURIComponent(sessionId)}`;
+              }}
+              style={{
+                padding: '8px 14px',
+                background: '#ffffff',
+                color: '#4338ca',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+              }}
+            >
+              Switch Now ➜
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/scanner/restart-tunnel', { method: 'POST' });
+                  const data = await res.json();
+                  if (data.ok && data.tunnelUrl) {
+                    window.location.href = `${data.tunnelUrl}/scanner?session=${encodeURIComponent(sessionId)}`;
+                  }
+                } catch {}
+              }}
+              style={{
+                padding: '8px 14px',
+                background: '#ffffff',
+                color: '#4338ca',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+              }}
+            >
+              Launch Live ➜
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mode Selector Tabs */}
       <nav className="mobile-mode-tabs">

@@ -9,6 +9,17 @@ import {
   cancelStockCount,
   can,
 } from '../../api.ts';
+import {
+  ClipboardCheckIcon,
+  PlusIcon,
+  InfoIcon,
+  SaveIcon,
+  SlidersIcon,
+  AlertTriangleIcon,
+  XIcon,
+  CheckIcon,
+  SparklesIcon,
+} from './InventoryIcons.tsx';
 
 interface PhysicalStockCountViewProps {
   categories: string[];
@@ -308,8 +319,9 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                   setNewCountName(`Inventory Count - ${new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`);
                   setShowNewModal(true);
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               >
-                <span>➕</span> Start New Physical Count
+                <PlusIcon size={16} /> Start New Physical Count
               </button>
             )}
           </div>
@@ -321,7 +333,7 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
             </div>
           ) : counts.length === 0 ? (
             <div className="table-empty-state">
-              <span className="empty-icon">📋</span>
+              <ClipboardCheckIcon size={44} style={{ color: 'var(--text-dim)', marginBottom: '0.75rem' }} />
               <h3>No Physical Count Sessions Found</h3>
               <p>Start a new count session to audit inventory on your shelves and reconcile differences.</p>
               {isAuthorized && (
@@ -342,7 +354,7 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                   <tr>
                     <th>Session Number</th>
                     <th>Session Name</th>
-                    <th>Scope / Category</th>
+                    <th style={{ minWidth: '130px', textAlign: 'left', whiteSpace: 'nowrap' }}>Scope / Category</th>
                     <th>Status</th>
                     <th>Items Audited</th>
                     <th>Discrepancies</th>
@@ -361,7 +373,7 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                         <div style={{ fontWeight: 600 }}>{c.name}</div>
                         {c.notes && <div className="item-cell-sub">{c.notes}</div>}
                       </td>
-                      <td>
+                      <td style={{ minWidth: '130px', textAlign: 'left', whiteSpace: 'nowrap' }}>
                         <span className="category-pill">{c.category || 'All Products'}</span>
                       </td>
                       <td>
@@ -468,15 +480,17 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                     className="btn-secondary"
                     onClick={handleSaveDraft}
                     disabled={isSavingDraft}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                   >
-                    {isSavingDraft ? 'Saving Draft...' : '💾 Save Draft'}
+                    <SaveIcon size={14} /> {isSavingDraft ? 'Saving Draft...' : 'Save Draft'}
                   </button>
                   <button
                     type="button"
                     className="btn-primary"
                     onClick={() => setShowFinalizeModal(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                   >
-                    ⚖️ Finalize & Apply Adjustments
+                    <SlidersIcon size={15} /> Finalize & Apply Adjustments
                   </button>
                   <button type="button" className="btn-text-danger" onClick={handleCancel}>
                     Cancel Session
@@ -515,7 +529,9 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
 
           {/* Notice: Protected Workflow */}
           <div className="count-workflow-notice">
-            <span className="notice-icon">ℹ️</span>
+            <span className="notice-icon" style={{ display: 'flex', alignItems: 'center' }}>
+              <InfoIcon size={18} />
+            </span>
             <span>
               <strong>Inventory Protection Guard:</strong> System stock is <em>not</em> altered while you enter counts.
               Stock adjustments will be created only when an authorized user clicks <strong>Finalize & Apply Adjustments</strong>.
@@ -578,7 +594,7 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                 <thead>
                   <tr>
                     <th>Product & SKU / Barcode</th>
-                    <th>Category</th>
+                    <th style={{ minWidth: '130px', textAlign: 'left', whiteSpace: 'nowrap' }}>Category</th>
                     <th style={{ textAlign: 'right' }}>System Expected</th>
                     <th style={{ width: '180px' }}>Physical Count</th>
                     <th style={{ textAlign: 'right' }}>Difference</th>
@@ -605,7 +621,7 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                             {l.barcode ? `Barcode: ${l.barcode}` : ''}
                           </div>
                         </td>
-                        <td>
+                        <td style={{ minWidth: '130px', textAlign: 'left', whiteSpace: 'nowrap' }}>
                           <span className="category-pill">{l.category || 'General'}</span>
                         </td>
                         <td style={{ textAlign: 'right' }} className="mono">
@@ -640,7 +656,9 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                           {!isCounted ? (
                             <span className="diff-pill pending">Pending</span>
                           ) : Math.abs(diffUnits) < 0.001 ? (
-                            <span className="diff-pill match">✓ Match</span>
+                            <span className="diff-pill match" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckIcon size={12} /> Match
+                            </span>
                           ) : diffUnits < 0 ? (
                             <span className="diff-pill shortage">
                               ▼ {diffUnits.toFixed(1)} {l.unit}
@@ -687,21 +705,23 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
           >
             <div className="modal-header">
               <div className="modal-title-wrap">
-                <span className="modal-icon-badge purple">📋</span>
+                <span className="modal-icon-badge purple" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ClipboardCheckIcon size={20} />
+                </span>
                 <div>
                   <h2 className="modal-title">Start Physical Stock Count</h2>
                   <p className="modal-subtitle">Snapshot inventory for shelf auditing</p>
                 </div>
               </div>
               <button type="button" className="btn-close-modal" onClick={() => setShowNewModal(false)} aria-label="Close modal">
-                ✕
+                <XIcon size={18} />
               </button>
             </div>
 
             <form onSubmit={handleStartCount} className="modal-form-body">
               {newError && (
-                <div className="form-error-alert" style={{ marginBottom: '1rem' }}>
-                  <span className="error-icon">⚠️</span>
+                <div className="form-error-alert" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangleIcon size={16} />
                   <span>{newError}</span>
                 </div>
               )}
@@ -726,18 +746,18 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                   value={newCountCategory}
                   onChange={(e) => setNewCountCategory(e.target.value)}
                 >
-                  <option value="ALL">📦 All Tracked Products in Store</option>
+                  <option value="ALL">All Tracked Products in Store</option>
                   {categoriesList && categoriesList.length > 0
                     ? categoriesList
                         .filter((c) => c.active)
                         .map((c) => (
                           <option key={c.id} value={c.name}>
-                            📁 {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                            {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
                           </option>
                         ))
                     : categories.map((c) => (
                         <option key={c} value={c}>
-                          📁 Category: {c}
+                          Category: {c}
                         </option>
                       ))}
                 </select>
@@ -783,21 +803,23 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
           >
             <div className="modal-header">
               <div className="modal-title-wrap">
-                <span className="modal-icon-badge amber">⚖️</span>
+                <span className="modal-icon-badge amber" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <SlidersIcon size={20} />
+                </span>
                 <div>
                   <h2 className="modal-title">Finalize Physical Stock Count</h2>
                   <p className="modal-subtitle">Review differences before applying stock adjustments</p>
                 </div>
               </div>
               <button type="button" className="btn-close-modal" onClick={() => setShowFinalizeModal(false)} aria-label="Close modal">
-                ✕
+                <XIcon size={18} />
               </button>
             </div>
 
             <div className="modal-form-body">
               {finalizeError && (
-                <div className="form-error-alert" style={{ marginBottom: '1rem' }}>
-                  <span className="error-icon">⚠️</span>
+                <div className="form-error-alert" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangleIcon size={16} />
                   <span>{finalizeError}</span>
                 </div>
               )}
@@ -859,7 +881,9 @@ export const PhysicalStockCountView: React.FC<PhysicalStockCountViewProps> = ({
                 </div>
               ) : (
                 <div className="perfect-match-banner">
-                  <span>🎉</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', color: '#10b981' }}>
+                    <SparklesIcon size={18} />
+                  </span>
                   <span>All counted items match system quantities! No adjustments needed.</span>
                 </div>
               )}

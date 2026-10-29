@@ -508,7 +508,28 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '1.6rem' }}>🏷️</span>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5v14" />
+                <path d="M8 5v14" />
+                <path d="M12 5v14" />
+                <path d="M17 5v14" />
+                <path d="M21 5v14" />
+              </svg>
+            </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
@@ -561,9 +582,16 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                   cursor: 'pointer',
                   boxShadow: activeTab === 'select' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                   transition: 'all 0.15s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
                 }}
               >
-                📋 Select & Quantities ({selectedEntries.length})
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                <span>Select &amp; Quantities ({selectedEntries.length})</span>
               </button>
               <button
                 type="button"
@@ -585,9 +613,16 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                   cursor: 'pointer',
                   boxShadow: activeTab === 'preview' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                   transition: 'all 0.15s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
                 }}
               >
-                👁️ Preview ({totalLabels})
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span>Preview ({totalLabels})</span>
               </button>
             </div>
 
@@ -609,8 +644,12 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                 fontWeight: 700,
               }}
               title="Close modal (Esc)"
+              aria-label="Close"
             >
-              ✕
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -630,7 +669,11 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>⚠️</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
               <span>{validationError}</span>
             </div>
             <button
@@ -641,10 +684,16 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                 background: 'transparent',
                 color: '#991b1b',
                 cursor: 'pointer',
-                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '4px',
               }}
+              aria-label="Dismiss alert"
             >
-              ✕
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         )}
@@ -785,7 +834,14 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
               <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
                 {filteredItems.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94a3b8' }}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>🔍</div>
+                    <div style={{ marginBottom: '0.6rem', display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8" />
+                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                      </div>
+                    </div>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>No products match your search</div>
                     <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Try searching with a different name or SKU</div>
                   </div>
@@ -841,12 +897,24 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
 
                           <div style={{ marginTop: '3px', fontSize: '0.75rem' }}>
                             {hasBarcode ? (
-                              <span style={{ fontFamily: 'monospace', color: '#2563eb', fontWeight: 600 }}>
-                                ❚❚❚ {item.barcode}
+                              <span style={{ fontFamily: 'monospace', color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 5v14" />
+                                  <path d="M8 5v14" />
+                                  <path d="M12 5v14" />
+                                  <path d="M17 5v14" />
+                                  <path d="M21 5v14" />
+                                </svg>
+                                <span>{item.barcode}</span>
                               </span>
                             ) : (
-                              <span style={{ color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '1px 6px', borderRadius: '4px' }}>
-                                ⚠️ No barcode assigned (cannot print)
+                              <span style={{ color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                  <line x1="12" y1="9" x2="12" y2="13" />
+                                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                <span>No barcode assigned (cannot print)</span>
                               </span>
                             )}
                           </div>
@@ -991,7 +1059,13 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                       color: '#94a3b8',
                     }}
                   >
-                    <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>👈</div>
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                      </div>
+                    </div>
                     <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#475569' }}>
                       No products selected yet
                     </div>
@@ -1120,14 +1194,17 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                               color: '#94a3b8',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              fontSize: '0.9rem',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                             }}
                             title="Remove from print list"
+                            aria-label="Remove item"
                           >
-                            ✕
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1337,10 +1414,14 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                   borderRadius: '8px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
+                  gap: '0.45rem',
                 }}
               >
-                👁️ Preview Labels ({totalLabels})
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span>Preview Labels ({totalLabels})</span>
               </button>
             ) : (
               <button
@@ -1352,9 +1433,16 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                   fontSize: '0.85rem',
                   fontWeight: 600,
                   borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
                 }}
               >
-                ← Back to Selection
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+                <span>Back to Selection</span>
               </button>
             )}
 
@@ -1376,7 +1464,12 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                 cursor: selectedEntries.length === 0 ? 'not-allowed' : 'pointer',
               }}
             >
-              🖨️ Print {totalLabels > 0 ? `${totalLabels} Labels` : 'Labels'}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              <span>Print {totalLabels > 0 ? `${totalLabels} Labels` : 'Labels'}</span>
             </button>
           </div>
         </div>

@@ -378,6 +378,26 @@ export function registerItems(r: Router) {
          WHERE id = ? AND tenant_id = ?`,
         [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, item.id, tenantId],
       );
+
+      // Keep product_barcodes table synchronized
+      if (barcode !== item.barcode) {
+        if (item.barcode) {
+          await q.exec(
+            'DELETE FROM product_barcodes WHERE tenant_id = ? AND product_id = ? AND barcode = ?',
+            [tenantId, item.id, item.barcode],
+          );
+        }
+        if (barcode) {
+          const bType = barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER';
+          await q.exec(
+            `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (tenant_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
+            [newId('bc'), tenantId, item.id, barcode, bType],
+          );
+        }
+      }
+
       await audit(q, ctx, { action: 'item.update', entity: 'item', entityId: item.id, detail: { name, priceMinor, active } });
     });
 

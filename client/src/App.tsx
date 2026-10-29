@@ -62,6 +62,23 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import {
+  TagIcon,
+  PackageIcon,
+  CheckCircleIcon,
+  LayersIcon,
+  SearchIcon,
+  PlusIcon,
+  Edit3Icon,
+  Trash2Icon,
+  InfoIcon,
+  XIcon,
+  FolderIcon,
+  FolderTreeIcon,
+  UploadCloudIcon,
+  DownloadIcon,
+  ArrowRightIcon,
+} from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
@@ -70,6 +87,8 @@ import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
+import { ScanManufacturerBarcodeModal } from './components/ScanManufacturerBarcodeModal.tsx';
+import { type BarcodeTargetItem } from '../../shared/barcodeScannerUtils.ts';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
@@ -531,6 +550,10 @@ export function App() {
   const [splitCashTendered, setSplitCashTendered] = useState<string>('');
   const lastSplitEditedRef = useRef<1 | 2>(1);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
+  const customerMobileInputRef = useRef<HTMLInputElement>(null);
+  const customerNameInputRef = useRef<HTMLInputElement>(null);
+  const checkoutBtnRef = useRef<HTMLButtonElement>(null);
+  const [catalogSelectedIndex, setCatalogSelectedIndex] = useState<number>(-1);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [printModalInvoiceId, setPrintModalInvoiceId] = useState<string | null>(null);
 
@@ -539,6 +562,8 @@ export function App() {
   const [printBarcodeItem, setPrintBarcodeItem] = useState<Item | null>(null);
   const [showPrintBarcodeModal, setShowPrintBarcodeModal] = useState(false);
   const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
+  const [showScanMfrModal, setShowScanMfrModal] = useState(false);
+  const [scanMfrInitialItemId, setScanMfrInitialItemId] = useState<string | null>(null);
   const [togglingItemId, setTogglingItemId] = useState<string | null>(null);
 
   // Wireless Mobile Barcode Scanner State
@@ -574,6 +599,7 @@ export function App() {
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
   const [customItemForm, setCustomItemForm] = useState({ name: 'Custom Charge', price: '50', taxRateBp: 1800 });
   const [heldOrders, setHeldOrders] = useState<{ id: string; cart: { item: Item; qty: number }[]; timestamp: Date }[]>(() => {
     try {
@@ -817,6 +843,8 @@ export function App() {
   const [editingCatParentId, setEditingCatParentId] = useState('');
   const [catSearchTerm, setCatSearchTerm] = useState('');
   const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
+  const [modalCatSearch, setModalCatSearch] = useState('');
+  const [modalCatStatusFilter, setModalCatStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Bulk Category Import state
   const [showCatImportView, setShowCatImportView] = useState(false);
@@ -2242,42 +2270,88 @@ export function App() {
     showToast(`Added ${customItem.name} (${formatRupees(priceMinor)}) to cart`);
   };
 
-  // Global POS Hotkeys listener (F1, F4, F8, Alt+P, Alt+O, Alt+M, / or F2)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (activeTab !== 'pos') return;
-
-      const activeTag = document.activeElement?.tagName;
-      const isInputActive = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable;
-
-      if (e.key === 'F1') {
-        e.preventDefault();
-        setShowShortcutsModal((prev) => !prev);
-      } else if (e.key === 'F4') {
-        e.preventDefault();
-        handleHoldOrder();
-      } else if (e.key === 'F8') {
-        e.preventDefault();
-        setShowDiscountPicker(true);
-      } else if (e.altKey && (e.key === 'p' || e.key === 'P')) {
-        e.preventDefault();
-        handleReprintLastBill();
-      } else if (e.altKey && (e.key === 'o' || e.key === 'O')) {
-        e.preventDefault();
-        setShowCustomItemModal(true);
-      } else if (e.altKey && (e.key === 'm' || e.key === 'M')) {
-        e.preventDefault();
-        setShowMobileScannerModal(true);
-      } else if ((e.key === '/' || ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) || e.key === 'F2') && !isInputActive) {
-        e.preventDefault();
-        catalogSearchInputRef.current?.focus();
-        catalogSearchInputRef.current?.select();
+  // Fast input focusing helpers for cashier keyboard shortcuts
+  const focusProductSearch = () => {
+    if (catalogSearchInputRef.current) {
+      catalogSearchInputRef.current.focus();
+      catalogSearchInputRef.current.select();
+    } else {
+      const el = document.getElementById('pos-product-search-input') as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        el.select();
       }
-    };
+    }
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, cart, heldOrders, invoices]);
+  const focusBarcodeScanner = () => {
+    const el = document.getElementById('pos-product-search-input') as HTMLInputElement | null;
+    if (el) {
+      el.focus();
+      el.select();
+    } else if (catalogSearchInputRef.current) {
+      catalogSearchInputRef.current.focus();
+      catalogSearchInputRef.current.select();
+    }
+  };
+
+  const focusCustomerMobile = () => {
+    if (customerMobileInputRef.current) {
+      customerMobileInputRef.current.focus();
+      customerMobileInputRef.current.select();
+    } else {
+      const el = (document.getElementById('pos-customer-mobile-input') ||
+        document.getElementById('bento-customer-search-input')) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    }
+  };
+
+  const focusCustomerName = () => {
+    if (customerNameInputRef.current) {
+      customerNameInputRef.current.focus();
+      customerNameInputRef.current.select();
+    } else {
+      const el = (document.getElementById('pos-customer-name-input') ||
+        document.getElementById('pos-quick-enroll-name-input')) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    }
+  };
+
+  const focusProceedPayment = () => {
+    if (checkoutBtnRef.current) {
+      checkoutBtnRef.current.focus();
+    } else {
+      const el = document.getElementById('pos-proceed-payment-btn') as HTMLButtonElement | null;
+      if (el) el.focus();
+    }
+  };
+
+  const cyclePaymentMode = (direction: 'next' | 'prev') => {
+    const modes: Array<'cash' | 'upi' | 'card' | 'credit' | 'split'> = ['cash', 'upi', 'card', 'credit', 'split'];
+    const curIdx = modes.indexOf(selectedPayMode as any);
+    const nextIdx = direction === 'next'
+      ? (curIdx >= modes.length - 1 ? 0 : curIdx + 1)
+      : (curIdx <= 0 ? modes.length - 1 : curIdx - 1);
+    const nextMode = modes[nextIdx];
+    setSelectedPayMode(nextMode);
+    if (nextMode === 'split' && !splitAmount1 && !splitAmount2) {
+      handleSplitFiftyFifty();
+    }
+    const labels: Record<string, string> = {
+      cash: '💵 Payment: Cash',
+      upi: '📱 Payment: Dynamic UPI QR',
+      card: '💳 Payment: Card',
+      credit: '📒 Payment: Khata / Credit',
+      split: '⚖️ Payment: Split Payment',
+    };
+    showToast(labels[nextMode] || nextMode);
+  };
 
   const handleQuickEnrollCustomer = async (phone: string, name?: string) => {
     const cleanDigits = phone.replace(/\D/g, '').slice(-10);
@@ -2338,12 +2412,12 @@ export function App() {
     setIsCheckingOut(true);
     try {
       const lines = cart.map((c) => ({
-        itemId: c.item.id,
+        itemId: c.item.id?.startsWith('custom-') ? undefined : c.item.id,
         name: c.item.name,
-        qtyMilli: c.qty * 1000,
-        priceMinor: c.item.priceMinor,
+        qtyMilli: Math.round(c.qty * 1000),
+        priceMinor: Math.round(c.item.priceMinor),
         discountMinor: 0,
-        taxRateBp: c.item.taxRateBp,
+        taxRateBp: Math.round(c.item.taxRateBp || 0),
         inclusive: c.item.taxInclusive,
         unit: c.item.unit,
         hsn: c.item.hsn,
@@ -2388,11 +2462,15 @@ export function App() {
 
         tenderPayload = null;
       } else {
-        paymentsPayload = [{ method: selectedPayMode, amountMinor: finalPayableMinor }];
+        if (finalPayableMinor > 0) {
+          paymentsPayload = [{ method: selectedPayMode, amountMinor: Math.round(finalPayableMinor) }];
+        } else {
+          paymentsPayload = [];
+        }
         if (selectedPayMode === 'cash') {
           tenderPayload = {
-            cashReceivedMinor: cashReceivedValMinor,
-            changeReturnedMinor: changeDueMinor,
+            cashReceivedMinor: Math.round(cashReceivedValMinor),
+            changeReturnedMinor: Math.round(changeDueMinor),
           };
         }
       }
@@ -2419,13 +2497,13 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
-          billDiscountMinor: discountMinor,
+          billDiscountMinor: Math.round(discountMinor),
           payments: paymentsPayload,
           tender: tenderPayload,
           customerName: checkoutCustName,
           customerPhone: checkoutPhone,
           partyId: selectedPartyId || undefined,
-          redeemedPoints: redeemPoints && pointsActuallyRedeemed > 0 ? pointsActuallyRedeemed : 0,
+          redeemedPoints: redeemPoints && pointsActuallyRedeemed > 0 ? Math.round(pointsActuallyRedeemed) : 0,
         }),
       });
 
@@ -2482,6 +2560,7 @@ export function App() {
         setShowWalkinWhatsapp(false);
       }
     } catch (err: any) {
+      console.error('Checkout error:', err);
       showToast(err.message || 'Checkout failed', 'error');
     } finally {
       setIsCheckingOut(false);
@@ -2496,6 +2575,361 @@ export function App() {
     setCustomerSearch('');
     setAppliedDiscountPercent(0);
   };
+
+  const triggerProceedPayment = () => {
+    if (cart.length === 0) {
+      showToast('🛒 Cart is empty. Add products first (Press ← to search)', 'warning');
+      focusProductSearch();
+      return;
+    }
+    if (isCheckingOut) return;
+    handleCheckout(false);
+  };
+
+  // Cashier Keyboard Navigation: Pure Arrow Keys (↑, ↓, ←, →) + Enter
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'pos') return;
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName;
+      const activeId = activeEl?.id || '';
+      const isInputActive =
+        activeTag === 'INPUT' ||
+        activeTag === 'TEXTAREA' ||
+        activeEl?.isContentEditable;
+
+      // Handle Escape to dismiss modals
+      if (e.key === 'Escape') {
+        if (showShortcutsModal) {
+          e.preventDefault();
+          setShowShortcutsModal(false);
+          return;
+        }
+        if (showDiscountPicker) {
+          e.preventDefault();
+          setShowDiscountPicker(false);
+          return;
+        }
+      }
+
+      // If a popup modal is open, let user interact with modal
+      if (showShortcutsModal || showDiscountPicker || showHeldOrdersModal || showCustomItemModal || showPartyModal || showCfdModal) {
+        return;
+      }
+
+      // Helper to compute currently active filtered catalog products
+      const getActiveFilteredItems = () => {
+        const q = searchQuery.trim().toLowerCase();
+        return items.filter((item) => {
+          const matchesCat =
+            selectedCategory === 'ALL' ||
+            item.category === selectedCategory ||
+            (selectedCategory === 'Groceries' && /grocery|flour|grain|oil|sugar|salt|pulse/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Fresh Produce' && /produce|fruit|veg|fresh/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Beverages' && /beverage|tea|coffee|drink|juice/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Snacks' && /snack|biscuit|bakery|sweet|chip/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Household' && /household|clean|detergent|wash/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Personal Care' && /personal|soap|paste|cream|care/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Dairy' && /dairy|milk|butter|cheese|paneer|ghee/i.test(item.category || item.name)) ||
+            (selectedCategory === 'Others' && !/grocery|flour|grain|oil|sugar|salt|pulse|produce|fruit|veg|fresh|beverage|tea|coffee|snack|biscuit|bakery|household|personal|dairy/i.test(item.category || item.name));
+
+          const matchesSearch =
+            !q ||
+            item.name.toLowerCase().includes(q) ||
+            (item.barcode && item.barcode.toLowerCase().includes(q)) ||
+            (item.sku && item.sku.toLowerCase().includes(q)) ||
+            (item.hsn && item.hsn.toLowerCase().includes(q)) ||
+            (item.category && item.category.toLowerCase().includes(q));
+
+          return matchesCat && matchesSearch;
+        });
+      };
+
+      // =========================================================================
+      // 1. WHEN IN CATALOG SEARCH / PRODUCT SEARCH INPUT
+      // =========================================================================
+      if (activeId === 'pos-catalog-search-input' || activeId === 'pos-product-search-input') {
+        const input = activeEl as HTMLInputElement;
+        const textLen = input.value?.length || 0;
+        const selStart = input.selectionStart ?? 0;
+        const selEnd = input.selectionEnd ?? 0;
+
+        if (e.key === 'ArrowRight' && (selEnd === textLen || textLen === 0)) {
+          e.preventDefault();
+          focusCustomerMobile();
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const list = getActiveFilteredItems();
+          if (list.length > 0) {
+            setCatalogSelectedIndex((prev) => (prev < Math.min(list.length, 48) - 1 ? prev + 1 : 0));
+          }
+          return;
+        }
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const list = getActiveFilteredItems();
+          if (list.length > 0) {
+            setCatalogSelectedIndex((prev) => (prev > 0 ? prev - 1 : Math.min(list.length, 48) - 1));
+          }
+          return;
+        }
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (searchQuery.trim().length > 0) {
+            const list = getActiveFilteredItems();
+            if (list.length > 0) {
+              const idx = catalogSelectedIndex >= 0 && catalogSelectedIndex < list.length ? catalogSelectedIndex : 0;
+              const targetItem = list[idx];
+              if (targetItem && targetItem.currentStockMilli > 0) {
+                addToCart(targetItem);
+                playSupermarketBeep();
+                showToast(`✓ Added ${targetItem.name} to cart`);
+                setSearchQuery('');
+                setCatalogSelectedIndex(0);
+              } else if (targetItem) {
+                showToast(`${targetItem.name} is Out of Stock!`, 'warning');
+              }
+            } else {
+              handleBarcodeScanned(searchQuery.trim());
+              setSearchQuery('');
+            }
+          } else if (cart.length > 0) {
+            triggerProceedPayment();
+          } else {
+            focusCustomerMobile();
+          }
+          return;
+        }
+        return;
+      }
+
+      // =========================================================================
+      // 2. WHEN IN CUSTOMER MOBILE INPUT
+      // =========================================================================
+      if (activeId === 'pos-customer-mobile-input' || activeId === 'bento-customer-search-input') {
+        const input = activeEl as HTMLInputElement;
+        const textLen = input.value?.length || 0;
+        const selStart = input.selectionStart ?? 0;
+        const selEnd = input.selectionEnd ?? 0;
+
+        if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
+          e.preventDefault();
+          focusProductSearch();
+          return;
+        }
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusProductSearch();
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          focusCustomerName();
+          return;
+        }
+
+        if (e.key === 'ArrowRight' && (selEnd === textLen || textLen === 0)) {
+          e.preventDefault();
+          focusCustomerName();
+          return;
+        }
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const d = customerSearch.replace(/\D/g, '');
+          if (d.length >= 7) {
+            const d10 = d.slice(-10);
+            const match = parties.find(p => p.type === 'customer' && p.phone && (
+              p.phone.replace(/\D/g, '') === d ||
+              p.phone.replace(/\D/g, '').endsWith(d10) ||
+              d.endsWith(p.phone.replace(/\D/g, '').slice(-10))
+            ));
+            if (match) {
+              setSelectedPartyId(match.id);
+              setCustomerSearch('');
+              setQuickCustomerName('');
+              showToast(`✓ Linked member: ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
+              if (cart.length > 0) {
+                focusProceedPayment();
+              } else {
+                focusProductSearch();
+              }
+            } else {
+              api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`).then((res) => {
+                if (res?.party) {
+                  setParties((prev) => (prev.some(p => p.id === res.party!.id) ? prev : [...prev, res.party!]));
+                  setSelectedPartyId(res.party.id);
+                  setCustomerSearch('');
+                  setQuickCustomerName('');
+                  showToast(`✓ Linked member: ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
+                  if (cart.length > 0) {
+                    focusProceedPayment();
+                  } else {
+                    focusProductSearch();
+                  }
+                } else {
+                  focusCustomerName();
+                  showToast('New customer number. Enter name or press Enter/Down to proceed', 'info');
+                }
+              }).catch(() => {
+                focusCustomerName();
+              });
+            }
+          } else {
+            // Empty / short phone: if cart has items, proceed to payment & bill!
+            if (cart.length > 0) {
+              triggerProceedPayment();
+            } else {
+              focusCustomerName();
+            }
+          }
+          return;
+        }
+        return;
+      }
+
+      // =========================================================================
+      // 3. WHEN IN CUSTOMER NAME INPUT
+      // =========================================================================
+      if (activeId === 'pos-customer-name-input' || activeId === 'pos-quick-enroll-name-input') {
+        const input = activeEl as HTMLInputElement;
+        const selStart = input.selectionStart ?? 0;
+        const selEnd = input.selectionEnd ?? 0;
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusCustomerMobile();
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          focusProceedPayment();
+          return;
+        }
+
+        if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
+          e.preventDefault();
+          focusProductSearch();
+          return;
+        }
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const d = customerSearch.replace(/\D/g, '');
+          if (d.length >= 7) {
+            handleQuickEnrollCustomer(d, quickCustomerName);
+          }
+          if (cart.length > 0) {
+            triggerProceedPayment();
+          } else {
+            focusProductSearch();
+          }
+          return;
+        }
+        return;
+      }
+
+      // =========================================================================
+      // 4. WHEN ON PROCEED TO PAYMENT BUTTON
+      // =========================================================================
+      if (activeId === 'pos-proceed-payment-btn') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          triggerProceedPayment();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (quickCustomerName) {
+            focusCustomerName();
+          } else {
+            focusCustomerMobile();
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          cyclePaymentMode('prev');
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          cyclePaymentMode('next');
+          return;
+        }
+        return;
+      }
+
+      // =========================================================================
+      // 5. GLOBAL UN-FOCUSED STATE (ANYWHERE IN POS)
+      // =========================================================================
+      if (!isInputActive) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          focusProductSearch();
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          focusCustomerMobile();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (cart.length > 0) {
+            focusProceedPayment();
+          } else {
+            focusCustomerMobile();
+          }
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusProductSearch();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (cart.length > 0) {
+            triggerProceedPayment();
+          } else {
+            focusProductSearch();
+          }
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    activeTab,
+    cart,
+    items,
+    selectedCategory,
+    catalogSelectedIndex,
+    searchQuery,
+    customerSearch,
+    quickCustomerName,
+    parties,
+    selectedPayMode,
+    isCheckingOut,
+    showShortcutsModal,
+    showDiscountPicker,
+    showHeldOrdersModal,
+    showCustomItemModal,
+    showPartyModal,
+    showCfdModal,
+  ]);
 
   const handleSendWhatsAppFromSuccessModal = async () => {
     if (isSendingWhatsApp || !checkoutSuccess) return;
@@ -2610,6 +3044,46 @@ export function App() {
   };
 
   // Master Data: Item Handlers
+  const catalogBarcodeTargets = useMemo<BarcodeTargetItem[]>(() => {
+    return items.map((it, idx) => ({
+      id: it.id,
+      rowNum: idx + 1,
+      name: it.name,
+      sku: it.sku || '',
+      barcode: it.barcode || '',
+      barcodeType: (it.barcode && it.barcode.startsWith('20') && it.barcode.length === 13) ? ('INTERNAL' as const) : (it.barcode ? ('MANUFACTURER' as const) : null),
+      category: it.category || '',
+      priceFormatted: `₹${(it.priceMinor / 100).toFixed(2)}`,
+      priceMinor: it.priceMinor,
+      unit: it.unit,
+    }));
+  }, [items]);
+
+  const handleAssignCatalogBarcode = async (
+    id: number | string,
+    newBarcode: string | null,
+    barcodeType?: 'MANUFACTURER' | 'INTERNAL' | null
+  ) => {
+    try {
+      await api(`/api/items/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ barcode: newBarcode || null }),
+      });
+      setItems((prev) =>
+        prev.map((it) => (it.id === id ? { ...it, barcode: newBarcode || undefined } : it))
+      );
+      showToast(
+        newBarcode
+          ? `Assigned barcode "${newBarcode}" to product!`
+          : 'Barcode removed from product.'
+      );
+      loadItems();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update barcode');
+      throw err;
+    }
+  };
+
   const openAddItemModal = () => {
     setEditingItem(null);
     setItemFormName('');
@@ -4212,7 +4686,7 @@ export function App() {
                 </svg>
               </span>
               <span className="nav-text">POS Counter</span>
-              <span className="nav-tag-shortcut">F1</span>
+              
             </button>
             {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
             {user.role === 'cashier' && (
@@ -5046,6 +5520,7 @@ export function App() {
               </div>
 
               <div className="bento-top-right">
+
                 {/* Customer Display Button */}
                 <button
                   type="button"
@@ -5141,23 +5616,27 @@ export function App() {
                           </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="bento-add-btn"
-                        onClick={() => setShowPartyModal(true)}
-                        title="Add New Customer"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span>Customer</span>
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        
+                        <button
+                          type="button"
+                          className="bento-add-btn"
+                          onClick={() => setShowPartyModal(true)}
+                          title="Add New Customer"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>Customer</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="bento-customer-body">
                       <div className="customer-input-wrap">
                         <input
+                          id="bento-customer-search-input"
                           type="text"
                           className="bento-input"
                           placeholder="📱 Enter customer mobile or name..."
@@ -5242,6 +5721,7 @@ export function App() {
                                     </div>
                                     <div className="pos-quick-enroll-inputs">
                                       <input
+                                        id="pos-quick-enroll-name-input"
                                         type="text"
                                         className="bento-input pos-enroll-name-input"
                                         placeholder="Customer Name (optional)"
@@ -5485,13 +5965,24 @@ export function App() {
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && searchQuery.trim()) {
+                            if (e.key === 'Enter') {
                               e.preventDefault();
-                              handleBarcodeScanned(searchQuery.trim());
-                              setSearchQuery('');
+                              if (searchQuery.trim()) {
+                                handleBarcodeScanned(searchQuery.trim());
+                                setSearchQuery('');
+                              } else if (cart.length > 0) {
+                                triggerProceedPayment();
+                              }
+                            } else if (e.key === 'ArrowRight') {
+                              const input = e.currentTarget;
+                              if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+                                e.preventDefault();
+                                focusCustomerMobile();
+                              }
                             }
                           }}
                         />
+                        
                         {searchQuery && (
                           <button
                             type="button"
@@ -5713,24 +6204,64 @@ export function App() {
                           </svg>
                           <input
                             ref={catalogSearchInputRef}
+                            id="pos-catalog-search-input"
                             type="text"
                             className="bento-catalog-search-input"
                             placeholder="Fast product search by name, barcode, SKU..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => {
+                              setSearchQuery(e.target.value);
+                              setCatalogSelectedIndex(0);
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') {
                                 setSearchQuery('');
+                                setCatalogSelectedIndex(-1);
                                 catalogSearchInputRef.current?.blur();
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                if (filteredItems.length > 0) {
+                                  setCatalogSelectedIndex((prev) => (prev < Math.min(filteredItems.length, 48) - 1 ? prev + 1 : 0));
+                                }
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                if (filteredItems.length > 0) {
+                                  setCatalogSelectedIndex((prev) => (prev > 0 ? prev - 1 : Math.min(filteredItems.length, 48) - 1));
+                                }
+                              } else if (e.key === 'ArrowRight') {
+                                const input = e.currentTarget;
+                                if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+                                  e.preventDefault();
+                                  focusCustomerMobile();
+                                }
                               } else if (e.key === 'Enter') {
-                                if (filteredItems.length === 1) {
-                                  addToCart(filteredItems[0]);
-                                  playSupermarketBeep();
-                                  showToast(`Added ${filteredItems[0].name} to cart`);
+                                e.preventDefault();
+                                if (searchQuery.trim().length > 0) {
+                                  if (filteredItems.length > 0) {
+                                    const idx = catalogSelectedIndex >= 0 && catalogSelectedIndex < filteredItems.length ? catalogSelectedIndex : 0;
+                                    const targetItem = filteredItems[idx];
+                                    if (targetItem && targetItem.currentStockMilli > 0) {
+                                      addToCart(targetItem);
+                                      playSupermarketBeep();
+                                      showToast(`✓ Added ${targetItem.name} to cart`);
+                                      setSearchQuery('');
+                                      setCatalogSelectedIndex(0);
+                                    } else if (targetItem) {
+                                      showToast(`${targetItem.name} is Out of Stock!`, 'warning');
+                                    }
+                                  } else {
+                                    handleBarcodeScanned(searchQuery.trim());
+                                    setSearchQuery('');
+                                  }
+                                } else if (cart.length > 0) {
+                                  triggerProceedPayment();
+                                } else {
+                                  focusCustomerMobile();
                                 }
                               }
                             }}
                           />
+                          
                           {searchQuery && (
                             <button
                               type="button"
@@ -5788,20 +6319,21 @@ export function App() {
                     </div>
                   ) : (
                     <div className="bento-products-grid">
-                      {filteredItems.slice(0, 48).map((item) => {
+                      {filteredItems.slice(0, 48).map((item, index) => {
                         const mrp = getItemMrp(item);
                         const storePrice = item.priceMinor;
                         const savings = Math.max(0, mrp - storePrice);
                         const discountPercent = mrp > storePrice && mrp > 0 ? Math.round((savings / mrp) * 100) : 0;
                         const inCartCount = cart.find((c) => c.item.id === item.id)?.qty || 0;
                         const isOutOfStock = item.currentStockMilli <= 0;
+                        const isKeyboardSelected = catalogSelectedIndex === index;
                         // Clean up raw timestamps in demo item names if present
                         const displayName = item.name.replace(/\s+\d{10,15}$/, '');
 
                         return (
                           <div
                             key={item.id}
-                            className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''}`}
+                            className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''} ${isKeyboardSelected ? 'keyboard-selected' : ''}`}
                             onClick={() => {
                               if (!isOutOfStock) addToCart(item);
                             }}
@@ -6270,16 +6802,20 @@ export function App() {
                             {customerSearch && <span className="mobile-val mono">{customerSearch}</span>}
                           </div>
 
-                          <div className="counter-mobile-inputs-row" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '0.65rem' }}>
-                            <div className="counter-input-col">
-                              <label className="counter-col-label">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                          <div className="counter-mobile-inputs-row" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                            <div className="counter-input-col" style={{ width: '100%' }}>
+                              <label className="counter-col-label" style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px', flexShrink: 0 }}>
                                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                                 </svg>
-                                Customer Mobile <span style={{ color: '#d97706', fontSize: '0.74rem', fontWeight: 700 }}>(Compulsory for Loyalty Points)</span>
+                                <span>Customer Mobile</span>
+                                
+                                <span style={{ color: '#d97706', fontSize: '0.74rem', fontWeight: 700 }}>(Compulsory for Loyalty Points)</span>
                               </label>
                               <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                                 <input
+                                  ref={customerMobileInputRef}
+                                  id="pos-customer-mobile-input"
                                   type="tel"
                                   maxLength={15}
                                   autoComplete="off"
@@ -6331,6 +6867,11 @@ export function App() {
                                           setCustomerSearch('');
                                           setQuickCustomerName('');
                                           showToast(`✓ Linked ${match.name} (${match.loyaltyPoints ?? 0} pts)`);
+                                          if (cart.length > 0) {
+                                            triggerProceedPayment();
+                                          } else {
+                                            catalogSearchInputRef.current?.focus();
+                                          }
                                         } else {
                                           try {
                                             const res = await api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`);
@@ -6340,8 +6881,26 @@ export function App() {
                                               setCustomerSearch('');
                                               setQuickCustomerName('');
                                               showToast(`✓ Linked ${res.party.name} (${res.party.loyaltyPoints ?? 0} pts)`);
+                                              if (cart.length > 0) {
+                                                triggerProceedPayment();
+                                              } else {
+                                                catalogSearchInputRef.current?.focus();
+                                              }
+                                            } else {
+                                              customerNameInputRef.current?.focus();
+                                              customerNameInputRef.current?.select();
+                                              showToast('New customer phone entered. Enter name or press Enter/Down to proceed', 'info');
                                             }
-                                          } catch {}
+                                          } catch {
+                                            customerNameInputRef.current?.focus();
+                                            customerNameInputRef.current?.select();
+                                          }
+                                        }
+                                      } else {
+                                        if (cart.length > 0) {
+                                          triggerProceedPayment();
+                                        } else {
+                                          customerNameInputRef.current?.focus();
                                         }
                                       }
                                     }
@@ -6368,21 +6927,39 @@ export function App() {
                               </div>
                             </div>
 
-                            <div className="counter-input-col">
-                              <label className="counter-col-label">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px' }}>
+                            <div className="counter-input-col" style={{ width: '100%' }}>
+                              <label className="counter-col-label" style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: '-1px', flexShrink: 0 }}>
                                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                   <circle cx="12" cy="7" r="4" />
                                 </svg>
-                                Customer Name
+                                <span>Customer Name</span>
+                                
+                                <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 500, textTransform: 'none' }}>(Optional)</span>
                               </label>
                               <input
+                                ref={customerNameInputRef}
+                                id="pos-customer-name-input"
                                 type="text"
                                 autoComplete="off"
                                 style={{ width: '100%', fontSize: '0.88rem', padding: '0.45rem 0.65rem' }}
-                                placeholder="Name (e.g. Ramesh)"
+                                placeholder="Customer name (optional)..."
                                 value={quickCustomerName}
                                 onChange={(e) => setQuickCustomerName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const d = customerSearch.replace(/\D/g, '');
+                                    if (d.length >= 7) {
+                                      handleQuickEnrollCustomer(d, quickCustomerName);
+                                    }
+                                    if (cart.length > 0) {
+                                      triggerProceedPayment();
+                                    } else {
+                                      catalogSearchInputRef.current?.focus();
+                                    }
+                                  }
+                                }}
                               />
                             </div>
                           </div>
@@ -6608,6 +7185,7 @@ export function App() {
                               handleSplitFiftyFifty();
                             }
                           }}
+                          title={`Select ${label} payment mode`}
                         >
                           {icon}
                           <span>{label}</span>
@@ -6997,15 +7575,19 @@ export function App() {
                           </button>
                         )}
                         <button
+                          ref={checkoutBtnRef}
+                          id="pos-proceed-payment-btn"
                           type="button"
                           className="bento-checkout-btn"
                           disabled={cart.length === 0 || isCheckingOut}
                           onClick={() => handleCheckout(false)}
+                          title="Proceed to Payment & Generate Bill (Press Enter ↵)"
                         >
                           {isCheckingOut ? (
                             <span>Processing...</span>
                           ) : (
                             <>
+                              <span className="checkout-kbd-tag">Enter ↵</span>
                               <span>
                                 {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
                                  selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
@@ -7075,7 +7657,8 @@ export function App() {
                     <rect x="6" y="4" width="4" height="16"></rect>
                     <rect x="14" y="4" width="4" height="16"></rect>
                   </svg>
-                  <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall Order (${heldOrders.length})` : 'Hold Order')}</span>
+                  <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall (${heldOrders.length})` : 'Hold Order')}</span>
+                  
                   {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
                 </button>
 
@@ -7100,13 +7683,14 @@ export function App() {
                   type="button"
                   className="dock-action-btn"
                   onClick={() => setShowCustomItemModal(true)}
-                  title="Add open item custom charge (Carry bag, delivery, etc.)"
+                  title="Add open item custom charge (Carry bag, delivery, etc.) (Alt+O)"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  <span>+ Custom Charge</span>
+                  <span>+ Charge</span>
+                  <span className="dock-kbd" style={{ marginLeft: '4px', opacity: 0.85, fontSize: '0.65rem', fontWeight: 800 }}>Alt+O</span>
                 </button>
 
                 <button
@@ -7114,14 +7698,15 @@ export function App() {
                   className="dock-action-btn"
                   onClick={handleReprintLastBill}
                   disabled={!invoices || invoices.length === 0}
-                  title="Reprint the most recently issued thermal invoice"
+                  title="Reprint the most recently issued thermal invoice (Alt+R)"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                     <polyline points="6 9 6 2 18 2 18 9"></polyline>
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                     <rect x="6" y="14" width="12" height="8"></rect>
                   </svg>
-                  <span>Reprint Last Bill</span>
+                  <span>Reprint</span>
+                  <span className="dock-kbd" style={{ marginLeft: '4px', opacity: 0.85, fontSize: '0.65rem', fontWeight: 800 }}>Alt+R</span>
                 </button>
 
                 <button
@@ -7135,7 +7720,8 @@ export function App() {
                     <circle cx="6.5" cy="6.5" r="2.5"></circle>
                     <circle cx="17.5" cy="17.5" r="2.5"></circle>
                   </svg>
-                  <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
+                  <span>% Disc {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
+                  
                 </button>
 
                 <button
@@ -7224,14 +7810,30 @@ export function App() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    style={{ width: '180px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                    placeholder="Search items, SKU, HS..."
-                    value={itemSearchMaster}
-                    onChange={(e) => setItemSearchMaster(e.target.value)}
-                  />
+                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ position: 'absolute', left: '0.65rem', pointerEvents: 'none' }}
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: '185px', padding: '0.45rem 0.75rem 0.45rem 2rem', fontSize: '0.85rem' }}
+                      placeholder="Search items, SKU, HS..."
+                      value={itemSearchMaster}
+                      onChange={(e) => setItemSearchMaster(e.target.value)}
+                    />
+                  </div>
                   <select
                     className="form-input"
                     style={{ width: '140px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
@@ -7245,8 +7847,16 @@ export function App() {
                       </option>
                     ))}
                   </select>
-                  <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
-                    🏷️ Categories
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowCategoryModal(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontWeight: 600, padding: '0.45rem 0.85rem' }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                      <line x1="7" y1="7" x2="7.01" y2="7" />
+                    </svg>
+                    <span>Categories</span>
                   </button>
                   <button
                     id="bulk-import-open-btn"
@@ -7255,31 +7865,80 @@ export function App() {
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
+                      gap: '0.45rem',
                       fontWeight: 600,
                       padding: '0.45rem 0.85rem',
                     }}
                     title="Bulk import products from Excel or spreadsheet"
                   >
-                    📥 Import Products
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Import Products</span>
                   </button>
-                  <button
+                                    <button
+                    id="scan-manufacturer-barcodes-catalog-btn"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setScanMfrInitialItemId(null);
+                      setShowScanMfrModal(true);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      fontWeight: 600,
+                      padding: '0.45rem 0.85rem',
+                      color: '#0f766e',
+                      borderColor: '#99f6e4',
+                      background: '#f0fdfa',
+                    }}
+                    title="Scan and assign manufacturer barcodes using Camera, USB Scanner, or Phone"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0f766e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                    <span>Scan Barcodes</span>
+                  </button>
+<button
                     id="bulk-print-custom-labels-btn"
                     className="btn btn-secondary"
                     onClick={() => setShowBulkBarcodeModal(true)}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
+                      gap: '0.45rem',
                       fontWeight: 600,
                       padding: '0.45rem 0.85rem',
                     }}
                     title="Select multiple products and set custom label quantities for each"
                   >
-                    🏷️ Bulk Print Labels
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <polyline points="6 9 6 2 18 2 18 9" />
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                      <rect x="6" y="14" width="12" height="8" />
+                    </svg>
+                    <span>Bulk Print Labels</span>
                   </button>
-                  <button className="btn btn-primary" onClick={openAddItemModal}>
-                    + Add New Item
+                  <button
+                    className="btn btn-primary"
+                    onClick={openAddItemModal}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      fontWeight: 700,
+                      padding: '0.45rem 1rem',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Add New Item</span>
                   </button>
                 </div>
               </div>
@@ -7335,7 +7994,7 @@ export function App() {
                           </td>
                           <td className="col-nowrap" style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.4rem 0.5rem' }}>
                             {i.barcode && i.barcode.trim() ? (
-                              <div style={{ display: 'inline-flex', justifyContent: 'center', alignItems: 'center' }}>
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                                 <div
                                   className="barcode-svg-preview"
                                   style={{
@@ -7348,36 +8007,110 @@ export function App() {
                                     border: '1px solid #e2e8f0',
                                     maxWidth: '140px',
                                     overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  title="Click to scan or change manufacturer barcode"
+                                  onClick={() => {
+                                    setScanMfrInitialItemId(i.id);
+                                    setShowScanMfrModal(true);
                                   }}
                                   dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(i.barcode) }}
                                 />
+                                <button
+                                  type="button"
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#0d9488',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    padding: '1px 4px',
+                                    borderRadius: '3px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                  }}
+                                  onClick={() => {
+                                    setScanMfrInitialItemId(i.id);
+                                    setShowScanMfrModal(true);
+                                  }}
+                                  title="Scan new packaging barcode"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                    <circle cx="12" cy="13" r="4" />
+                                  </svg>
+                                  <span>Scan Mfr</span>
+                                </button>
                               </div>
                             ) : (
                               <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
                                 <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
                                   No barcode
                                 </span>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem', color: '#4f46e5', fontWeight: 600, borderRadius: '4px' }}
-                                  onClick={async () => {
-                                    const code = '20' + Date.now().toString().slice(-10);
-                                    let sum = 0;
-                                    for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
-                                    const fullBc = code + ((10 - (sum % 10)) % 10);
-                                    try {
-                                      await api(`/api/items/${i.id}`, { method: 'PATCH', body: JSON.stringify({ barcode: fullBc }) });
-                                      showToast(`Generated barcode for ${i.name} & saved to DB!`);
-                                      loadItems();
-                                    } catch (err: any) {
-                                      showToast(err.message || 'Failed to generate barcode');
-                                    }
-                                  }}
-                                  title="Generate and save an internal retail barcode to database"
-                                >
-                                  + Generate
-                                </button>
+                                <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{
+                                      padding: '0.2rem 0.45rem',
+                                      fontSize: '0.7rem',
+                                      color: '#4f46e5',
+                                      fontWeight: 600,
+                                      borderRadius: '4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                    }}
+                                    onClick={async () => {
+                                      const code = '20' + Date.now().toString().slice(-10);
+                                      let sum = 0;
+                                      for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
+                                      const fullBc = code + ((10 - (sum % 10)) % 10);
+                                      try {
+                                        await api(`/api/items/${i.id}`, { method: 'PATCH', body: JSON.stringify({ barcode: fullBc }) });
+                                        showToast(`Generated barcode for ${i.name} & saved to DB!`);
+                                        loadItems();
+                                      } catch (err: any) {
+                                        showToast(err.message || 'Failed to generate barcode');
+                                      }
+                                    }}
+                                    title="Generate and save an internal retail barcode to database"
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="12" y1="5" x2="12" y2="19" />
+                                      <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span>Generate</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{
+                                      padding: '0.2rem 0.45rem',
+                                      fontSize: '0.7rem',
+                                      color: '#0d9488',
+                                      fontWeight: 600,
+                                      borderRadius: '4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                    }}
+                                    onClick={() => {
+                                      setScanMfrInitialItemId(i.id);
+                                      setShowScanMfrModal(true);
+                                    }}
+                                    title="Scan manufacturer packaging barcode"
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                      <circle cx="12" cy="13" r="4" />
+                                    </svg>
+                                    <span>Scan</span>
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </td>
@@ -7385,19 +8118,43 @@ export function App() {
                             <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                style={{
+                                  padding: '0.25rem 0.55rem',
+                                  fontSize: '0.75rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  fontWeight: 600,
+                                }}
                                 onClick={() => openEditItemModal(i)}
                                 title="Edit product"
                               >
-                                ✏️ Edit
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 20h9" />
+                                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                </svg>
+                                <span>Edit</span>
                               </button>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#2563eb' }}
+                                style={{
+                                  padding: '0.25rem 0.55rem',
+                                  fontSize: '0.75rem',
+                                  color: '#2563eb',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  fontWeight: 600,
+                                }}
                                 onClick={() => setActiveTab('inventory')}
                                 title="Open Inventory Hub"
                               >
-                                🏬 Stock
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                                </svg>
+                                <span>Stock</span>
                               </button>
                               <ToggleSwitch
                                 id={`toggle-item-active-${i.id}`}
@@ -7470,18 +8227,26 @@ export function App() {
                 <div>
                   Showing {filteredMasterItems.length} of {items.length} products
                 </div>
-                <div style={{ color: '#94a3b8' }}>
-                  Scroll inside the table ↔ ↕ to see every column
+                <div style={{ color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 8 22 12 18 16" />
+                    <polyline points="6 8 2 12 6 16" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                  </svg>
+                  <span>Scroll horizontally to view all columns</span>
                 </div>
               </div>
             </div>
           );
         })()}
 
-        {/* TAB 2b: CATEGORY MANAGEMENT MODULE */}
+        {/* TAB 2b: CATEGORY MANAGEMENT MODULE - BENTO REDESIGN */}
         {activeTab === 'categories' && (() => {
           const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
           const subCategories = categoriesList.filter((c) => c.parentId && c.active);
+          const activeCategoriesCount = categoriesList.filter((c) => c.active).length;
+          const inactiveCategoriesCount = categoriesList.length - activeCategoriesCount;
+
           const filteredCategories = categoriesList.filter((cat) => {
             if (catTypeFilter === 'main' && cat.parentId) return false;
             if (catTypeFilter === 'sub' && !cat.parentId) return false;
@@ -7495,86 +8260,75 @@ export function App() {
           });
 
           return (
-            <div className="category-module-container">
-              {/* Category Management Hero Header */}
-              <div className="card" style={{ borderTop: '3px solid #6366f1' }}>
-                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '1.25rem' }}>🏷️</span>
-                      <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>
-                        Category Management Module
-                      </span>
-                      <span className="badge badge-blue">{categoriesList.length} Total</span>
-                      <span className="badge badge-emerald">{mainCategories.length} Main</span>
-                      <span className="badge badge-blue">{subCategories.length} Sub</span>
+            <div className="cat-bento-module-wrapper">
+              {/* 1. Bento Header Card */}
+              <div className="cat-bento-header-card">
+                <div className="cat-bento-header-content">
+                  <div className="cat-bento-title-group">
+                    <div className="cat-bento-icon-box">
+                      <TagIcon size={20} />
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '3px' }}>
-                      Manage main categories, subcategories, bulk CSV import, and synchronize catalog organization for {shop?.name}
+                    <div>
+                      <div className="cat-bento-title-row">
+                        <h1 className="cat-bento-title">Category Management</h1>
+                        <span className="cat-badge-live-sync" title="Synchronized with Neon PostgreSQL item catalog">
+                          <span className="live-indicator-dot"></span>
+                          Neon PostgreSQL Live
+                        </span>
+                      </div>
+                      <p className="cat-bento-subtitle">
+                        Organize main product departments, nested subcategories, and POS catalog taxonomy for {shop?.name}
+                      </p>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="cat-bento-header-actions">
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className="cat-btn-outline"
                       onClick={handleDownloadCategoryTemplate}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                      title="Download sample CSV category structure template"
                     >
-                      <span>📄</span> Download Sample Template
+                      <DownloadIcon size={15} /> Download Sample Template
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="cat-btn-primary"
                       onClick={() => setShowCatImportView(!showCatImportView)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                      title="Upload or import bulk category CSV file"
                     >
-                      <span>📥</span> {showCatImportView ? 'Close Import Drawer' : 'Import Categories (CSV)'}
+                      <UploadCloudIcon size={15} /> {showCatImportView ? 'Close Import Drawer' : 'Import Categories (CSV)'}
                     </button>
                   </div>
                 </div>
 
-                {/* Bulk Import Drawer */}
+                {/* Bulk Import Drawer (Bento Styled) */}
                 {showCatImportView && (
-                  <div
-                    style={{
-                      marginTop: '1.25rem',
-                      padding: '1.25rem',
-                      background: '#f8fafc',
-                      borderRadius: '10px',
-                      border: '1.5px dashed #cbd5e1',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                      <div>
-                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <span>📥</span> Bulk Category CSV Import
+                  <div className="cat-import-drawer-bento">
+                    <div className="cat-import-drawer-header">
+                      <div className="cat-import-drawer-title-box">
+                        <div className="cat-icon-badge indigo">
+                          <UploadCloudIcon size={16} />
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                          Supports 1,000+ categories. Subcategories can appear anywhere in the file.
+                        <div>
+                          <div className="cat-import-title">Bulk Category CSV Import</div>
+                          <div className="cat-import-subtitle">
+                            Supports 1,000+ categories. Subcategories can appear anywhere in the file.
+                          </div>
                         </div>
                       </div>
                       <button
                         type="button"
+                        className="cat-import-close-btn"
                         onClick={() => setShowCatImportView(false)}
-                        style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.1rem', cursor: 'pointer' }}
                       >
-                        ✕
+                        <XIcon size={16} />
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-                      <label
-                        className="btn btn-secondary"
-                        style={{
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.45rem',
-                          padding: '0.55rem 1rem',
-                        }}
-                      >
-                        <span>📁</span>
+                    <div className="cat-import-controls-row">
+                      <label className="cat-file-upload-btn">
+                        <FolderIcon size={16} />
                         <span>{catImportFileName || 'Choose CSV File to Upload...'}</span>
                         <input
                           type="file"
@@ -7588,7 +8342,7 @@ export function App() {
                         />
                       </label>
 
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.85rem', cursor: 'pointer', color: '#334155' }}>
+                      <label className="cat-checkbox-label">
                         <input
                           type="checkbox"
                           checked={catImportUpdateExisting}
@@ -7599,73 +8353,64 @@ export function App() {
                     </div>
 
                     {catImportLoading && (
-                      <div style={{ padding: '1rem', color: '#6366f1', fontWeight: 600, fontSize: '0.88rem' }}>
+                      <div className="cat-import-loading-state">
                         Processing category file... Please wait.
                       </div>
                     )}
 
                     {/* Pre-flight Import Preview Card */}
                     {catImportPreview && (
-                      <div
-                        style={{
-                          background: '#ffffff',
-                          padding: '1rem',
-                          borderRadius: '8px',
-                          border: `1.5px solid ${catImportPreview.errorCount > 0 ? '#fca5a5' : '#86efac'}`,
-                          marginBottom: '1rem',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                      <div className={`cat-preflight-card ${catImportPreview.errorCount > 0 ? 'has-errors' : 'valid'}`}>
+                        <div className="cat-preflight-header">
+                          <span className="cat-preflight-title">
                             Pre-flight Import Preview: {catImportFileName}
                           </span>
-                          <span className={`badge ${catImportPreview.errorCount > 0 ? 'badge-amber' : 'badge-emerald'}`}>
+                          <span className={`kpi-sub-badge ${catImportPreview.errorCount > 0 ? 'amber' : 'green'}`}>
                             {catImportPreview.errorCount > 0 ? `${catImportPreview.errorCount} Errors Found` : 'Ready to Import'}
                           </span>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Total Rows</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{catImportPreview.total}</div>
+                        <div className="cat-preflight-stats-grid">
+                          <div className="cat-preflight-stat-tile">
+                            <span className="cat-preflight-stat-label">Total Rows</span>
+                            <span className="cat-preflight-stat-val">{catImportPreview.total}</span>
                           </div>
-                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Main Categories</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{catImportPreview.mainCategoriesCount}</div>
+                          <div className="cat-preflight-stat-tile">
+                            <span className="cat-preflight-stat-label">Main Categories</span>
+                            <span className="cat-preflight-stat-val text-green">{catImportPreview.mainCategoriesCount}</span>
                           </div>
-                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Subcategories</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{catImportPreview.subcategoriesCount}</div>
+                          <div className="cat-preflight-stat-tile">
+                            <span className="cat-preflight-stat-label">Subcategories</span>
+                            <span className="cat-preflight-stat-val text-blue">{catImportPreview.subcategoriesCount}</span>
                           </div>
-                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Existing in Store</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{catImportPreview.duplicateCount}</div>
+                          <div className="cat-preflight-stat-tile">
+                            <span className="cat-preflight-stat-label">Existing in Store</span>
+                            <span className="cat-preflight-stat-val text-amber">{catImportPreview.duplicateCount}</span>
                           </div>
-                          <div style={{ background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Errors</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: catImportPreview.errorCount > 0 ? '#dc2626' : '#16a34a' }}>
+                          <div className="cat-preflight-stat-tile">
+                            <span className="cat-preflight-stat-label">Errors</span>
+                            <span className={`cat-preflight-stat-val ${catImportPreview.errorCount > 0 ? 'text-red' : 'text-green'}`}>
                               {catImportPreview.errorCount}
-                            </div>
+                            </span>
                           </div>
                         </div>
 
                         {catImportPreview.errors.length > 0 && (
-                          <div style={{ marginBottom: '0.75rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>
+                          <div className="cat-import-errors-box">
+                            <div className="cat-import-errors-header">
+                              <span className="cat-errors-title">
                                 Validation Errors ({catImportPreview.errors.length}) — Fix before importing:
                               </span>
                               <button
                                 type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                                className="cat-btn-outline-sm"
                                 onClick={handleDownloadImportErrors}
                               >
-                                📥 Download Error Report CSV
+                                <DownloadIcon size={12} /> Download Error Report CSV
                               </button>
                             </div>
-                            <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #fee2e2', borderRadius: '6px' }}>
-                              <table className="data-table" style={{ fontSize: '0.78rem' }}>
+                            <div className="cat-errors-table-scroll">
+                              <table className="cat-errors-table">
                                 <thead>
                                   <tr>
                                     <th style={{ width: '60px' }}>Row</th>
@@ -7676,9 +8421,9 @@ export function App() {
                                 <tbody>
                                   {catImportPreview.errors.map((e, idx) => (
                                     <tr key={idx}>
-                                      <td className="mono" style={{ color: '#dc2626', fontWeight: 700 }}>#{e.row}</td>
+                                      <td className="mono text-red">#{e.row}</td>
                                       <td>{e.name || '—'}</td>
-                                      <td style={{ color: '#dc2626' }}>{e.error}</td>
+                                      <td className="text-red">{e.error}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -7687,10 +8432,10 @@ export function App() {
                           </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                        <div className="cat-preflight-actions">
                           <button
                             type="button"
-                            className="btn btn-secondary"
+                            className="cat-btn-secondary"
                             onClick={() => {
                               setCatImportPreview(null);
                               setCatImportCsv('');
@@ -7701,7 +8446,7 @@ export function App() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-primary"
+                            className="cat-btn-primary"
                             disabled={catImportPreview.errorCount > 0 || catImportLoading}
                             onClick={handleCommitCategoryImport}
                           >
@@ -7713,18 +8458,11 @@ export function App() {
 
                     {/* Final Import Result Card */}
                     {catImportResult && (
-                      <div
-                        style={{
-                          background: '#ecfdf5',
-                          border: '1.5px solid #a7f3d0',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                        }}
-                      >
-                        <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem', marginBottom: '0.4rem' }}>
-                          ✓ Bulk Category Import Successful!
+                      <div className="cat-import-success-card">
+                        <div className="cat-import-success-title">
+                          <CheckCircleIcon size={16} /> Bulk Category Import Successful!
                         </div>
-                        <div style={{ fontSize: '0.84rem', color: '#047857', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div className="cat-import-success-details">
                           <span><strong>{catImportResult.created}</strong> new categories created</span>
                           <span><strong>{catImportResult.updated}</strong> updated</span>
                           <span><strong>{catImportResult.skipped}</strong> skipped (already existing)</span>
@@ -7735,150 +8473,291 @@ export function App() {
                 )}
               </div>
 
-              {/* Add New Category Card - Enhanced Responsive Grid & Proportional Button */}
-              <div className="category-add-card">
-                <div className="category-card-header">
-                  <div className="category-card-title">
-                    <span style={{ fontSize: '1.05rem', color: '#4f46e5' }}>➕</span>
-                    <span>Add New Category or Subcategory</span>
+              {/* 2. Bento KPI Metric Cards Row (4 Bento Tiles) */}
+              <div className="cat-bento-kpi-grid">
+                {/* Tile 1: Total Categories */}
+                <div
+                  className={`cat-bento-kpi-card ${catTypeFilter === 'all' ? 'active-filter' : ''}`}
+                  onClick={() => setCatTypeFilter('all')}
+                  title="Click to view all categories"
+                >
+                  <div className="cat-kpi-header">
+                    <div className="cat-kpi-header-left">
+                      <div className="cat-icon-badge indigo">
+                        <TagIcon size={15} />
+                      </div>
+                      <span className="cat-kpi-title">Total Categories</span>
+                    </div>
+                    <span className="kpi-sub-badge purple">All Taxa</span>
                   </div>
-                  <div className="category-card-hint">
-                    <span>💡</span>
-                    <span>Leave parent empty for a Top-Level Main Category, or select a parent to create a Subcategory.</span>
+                  <div className="cat-kpi-num mono">
+                    {categoriesList.length}
+                  </div>
+                  <div className="cat-kpi-footer">
+                    <span>Store classifications</span>
+                    <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
                   </div>
                 </div>
 
-                <form onSubmit={handleCreateCategory} className="category-form-grid">
-                  <div className="category-field-group">
-                    <label className="category-field-label">
-                      Category Name <span className="req">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="category-field-input"
-                      required
-                      placeholder="e.g. Beverages, Dairy, Pulses..."
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                    />
+                {/* Tile 2: Main Categories */}
+                <div
+                  className={`cat-bento-kpi-card ${catTypeFilter === 'main' ? 'active-filter' : ''}`}
+                  onClick={() => setCatTypeFilter('main')}
+                  title="Click to filter top-level main categories"
+                >
+                  <div className="cat-kpi-header">
+                    <div className="cat-kpi-header-left">
+                      <div className="cat-icon-badge green">
+                        <FolderIcon size={15} />
+                      </div>
+                      <span className="cat-kpi-title">Main Categories</span>
+                    </div>
+                    <span className="kpi-sub-badge green">Top-Level</span>
                   </div>
+                  <div className="cat-kpi-num mono text-green">
+                    {mainCategories.length}
+                  </div>
+                  <div className="cat-kpi-footer">
+                    <span>Root department shelves</span>
+                    <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
+                  </div>
+                </div>
 
-                  <div className="category-field-group">
-                    <label className="category-field-label">
-                      Parent Category <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
-                    </label>
-                    <select
-                      className="category-field-input"
-                      value={newCatParentId}
-                      onChange={(e) => setNewCatParentId(e.target.value)}
-                    >
-                      <option value="">📁 None (Top-Level Main Category)</option>
-                      {mainCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          ↳ Subcategory of {c.name}
-                        </option>
-                      ))}
-                    </select>
+                {/* Tile 3: Subcategories */}
+                <div
+                  className={`cat-bento-kpi-card ${catTypeFilter === 'sub' ? 'active-filter' : ''}`}
+                  onClick={() => setCatTypeFilter('sub')}
+                  title="Click to filter nested subcategories"
+                >
+                  <div className="cat-kpi-header">
+                    <div className="cat-kpi-header-left">
+                      <div className="cat-icon-badge blue">
+                        <FolderTreeIcon size={15} />
+                      </div>
+                      <span className="cat-kpi-title">Subcategories</span>
+                    </div>
+                    <span className="kpi-sub-badge purple">Nested</span>
                   </div>
+                  <div className="cat-kpi-num mono text-blue">
+                    {subCategories.length}
+                  </div>
+                  <div className="cat-kpi-footer">
+                    <span>Child classifications</span>
+                    <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
+                  </div>
+                </div>
 
-                  <div className="category-field-group">
-                    <label className="category-field-label">
-                      Description <span style={{ color: '#94a3b8', fontWeight: 400 }}>(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="category-field-input"
-                      placeholder="Optional notes or shelf location..."
-                      value={newCatDesc}
-                      onChange={(e) => setNewCatDesc(e.target.value)}
-                    />
+                {/* Tile 4: Active Ratio */}
+                <div
+                  className="cat-bento-kpi-card"
+                  title="Active vs Inactive category status"
+                >
+                  <div className="cat-kpi-header">
+                    <div className="cat-kpi-header-left">
+                      <div className="cat-icon-badge amber">
+                        <CheckCircleIcon size={15} />
+                      </div>
+                      <span className="cat-kpi-title">Active Status</span>
+                    </div>
+                    <span className="kpi-sub-badge green">
+                      {Math.round((activeCategoriesCount / (categoriesList.length || 1)) * 100)}% Live
+                    </span>
                   </div>
-
-                  <div className="category-field-group">
-                    <button
-                      type="submit"
-                      className="category-submit-btn"
-                    >
-                      <span>➕</span>
-                      <span>Add Category</span>
-                    </button>
+                  <div className="cat-kpi-num mono">
+                    {activeCategoriesCount} <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {categoriesList.length}</span>
                   </div>
-                </form>
+                  <div className="cat-kpi-footer">
+                    <span>{inactiveCategoriesCount} inactive / disabled</span>
+                    <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
+                  </div>
+                </div>
               </div>
 
-              {/* Category Catalog Table Card */}
-              <div className="card">
-                <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b' }}>Store Category Hierarchy</span>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b', background: '#f1f5f9', padding: '0.2rem 0.55rem', borderRadius: '9999px', fontWeight: 600 }}>
+              {/* 3. Bento Middle Row (Asymmetrical Grid: Form 7fr + Guide 5fr) */}
+              <div className="cat-bento-middle-grid">
+                {/* Left Bento: Category Creator Box */}
+                <div className="cat-bento-card cat-creator-card">
+                  <div className="cat-card-header">
+                    <div className="cat-card-header-left">
+                      <div className="cat-icon-badge purple">
+                        <PlusIcon size={15} />
+                      </div>
+                      <div>
+                        <span className="cat-card-heading">Add New Category or Subcategory</span>
+                        <span className="cat-card-subheading">Create root department or nested taxonomy</span>
+                      </div>
+                    </div>
+                    <span className="cat-hint-pill" title="Parent-child classification tip">
+                      <InfoIcon size={13} />
+                      Leave parent empty for Main Category
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleCreateCategory} className="cat-creator-form">
+                    <div className="cat-form-row">
+                      <div className="cat-form-field">
+                        <label className="cat-form-label">
+                          Category Name <span className="req">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="cat-form-input"
+                          required
+                          placeholder="e.g. Beverages, Dairy, Pulses..."
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="cat-form-field">
+                        <label className="cat-form-label">
+                          Parent Category <span className="cat-opt-label">(Optional)</span>
+                        </label>
+                        <select
+                          className="cat-form-select"
+                          value={newCatParentId}
+                          onChange={(e) => setNewCatParentId(e.target.value)}
+                        >
+                          <option value="">None (Top-Level Main Category)</option>
+                          {mainCategories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              ↳ Subcategory of {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="cat-form-row align-bottom">
+                      <div className="cat-form-field flex-1">
+                        <label className="cat-form-label">
+                          Description <span className="cat-opt-label">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="cat-form-input"
+                          placeholder="Optional notes or shelf location..."
+                          value={newCatDesc}
+                          onChange={(e) => setNewCatDesc(e.target.value)}
+                        />
+                      </div>
+
+                      <button type="submit" className="cat-submit-btn">
+                        <PlusIcon size={15} />
+                        <span>Add Category</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right Bento: Best Practices / Quick Navigator */}
+                <div className="cat-bento-card cat-guide-card">
+                  <div className="cat-card-header">
+                    <div className="cat-card-header-left">
+                      <div className="cat-icon-badge amber">
+                        <LayersIcon size={15} />
+                      </div>
+                      <div>
+                        <span className="cat-card-heading">Taxonomy Best Practices</span>
+                        <span className="cat-card-subheading">Optimized store organization</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="cat-guide-items">
+                    <div className="cat-guide-item">
+                      <div className="cat-guide-dot green"></div>
+                      <div>
+                        <strong>Main Categories</strong> appear as top-level department tabs on the POS billing screen and GST monthly reports.
+                      </div>
+                    </div>
+                    <div className="cat-guide-item">
+                      <div className="cat-guide-dot blue"></div>
+                      <div>
+                        <strong>Subcategories</strong> provide granular stocktaking, reorder buffer auditing, and inventory valuation.
+                      </div>
+                    </div>
+                    <div className="cat-guide-item">
+                      <div className="cat-guide-dot purple"></div>
+                      <div>
+                        <strong>CSV Bulk Import</strong> allows syncing 1,000+ items with parent-child links in one click.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="cat-guide-footer">
+                    <button
+                      type="button"
+                      className="cat-guide-link-btn"
+                      onClick={() => setShowCatImportView(true)}
+                    >
+                      <UploadCloudIcon size={13} />
+                      <span>Launch Bulk CSV Importer</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Bento Bottom Card: Store Category Hierarchy Table */}
+              <div className="cat-bento-card cat-table-card">
+                <div className="cat-table-toolbar">
+                  <div className="cat-toolbar-left">
+                    <span className="cat-table-title">Store Category Hierarchy</span>
+                    <span className="cat-count-badge">
                       {filteredCategories.length} listed
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Quick Filter Pills */}
-                    <div className="category-filter-pills">
+                  <div className="cat-toolbar-right">
+                    {/* Segmented Filter Pills */}
+                    <div className="cat-segmented-tabs">
                       <button
                         type="button"
-                        className={`category-filter-pill ${catTypeFilter === 'all' ? 'active' : ''}`}
+                        className={`cat-segment-btn ${catTypeFilter === 'all' ? 'active' : ''}`}
                         onClick={() => setCatTypeFilter('all')}
                       >
                         All ({categoriesList.length})
                       </button>
                       <button
                         type="button"
-                        className={`category-filter-pill ${catTypeFilter === 'main' ? 'active' : ''}`}
+                        className={`cat-segment-btn ${catTypeFilter === 'main' ? 'active' : ''}`}
                         onClick={() => setCatTypeFilter('main')}
                       >
-                        📁 Main ({mainCategories.length})
+                        <FolderIcon size={13} /> Main ({mainCategories.length})
                       </button>
                       <button
                         type="button"
-                        className={`category-filter-pill ${catTypeFilter === 'sub' ? 'active' : ''}`}
+                        className={`cat-segment-btn ${catTypeFilter === 'sub' ? 'active' : ''}`}
                         onClick={() => setCatTypeFilter('sub')}
                       >
-                        ↳ Sub ({subCategories.length})
+                        <FolderTreeIcon size={13} /> Sub ({subCategories.length})
                       </button>
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div className="cat-search-box">
+                      <SearchIcon size={14} className="cat-search-icon" />
                       <input
                         type="text"
-                        className="form-input"
-                        style={{ width: '220px', padding: '0.42rem 0.75rem 0.42rem 2rem', fontSize: '0.84rem' }}
+                        className="cat-search-input"
                         placeholder="Search categories..."
                         value={catSearchTerm}
                         onChange={(e) => setCatSearchTerm(e.target.value)}
                       />
-                      <span style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#94a3b8' }}>
-                        🔍
-                      </span>
                       {catSearchTerm && (
                         <button
                           type="button"
+                          className="cat-clear-search-btn"
                           onClick={() => setCatSearchTerm('')}
-                          style={{
-                            position: 'absolute',
-                            right: '0.5rem',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'none',
-                            border: 'none',
-                            color: '#94a3b8',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                          }}
                         >
-                          ✕
+                          <XIcon size={12} />
                         </button>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ overflowX: 'auto', width: '100%' }}>
-                  <table className="data-table">
+                <div className="cat-table-wrapper">
+                  <table className="cat-data-table">
                     <thead>
                       <tr>
                         <th>Category Name & Hierarchy</th>
@@ -7891,25 +8770,23 @@ export function App() {
                     </thead>
                     <tbody>
                       {filteredCategories.map((cat) => (
-                        <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
+                        <tr key={cat.id} className={!cat.active ? 'row-inactive' : ''}>
                           <td>
                             {editingCatId === cat.id ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <div className="cat-inline-edit-box">
                                 <input
                                   type="text"
-                                  className="form-input"
-                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                  className="cat-inline-input"
                                   value={editingCatName}
                                   onChange={(e) => setEditingCatName(e.target.value)}
                                   placeholder="Category name..."
                                 />
                                 <select
-                                  className="form-input"
-                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                  className="cat-inline-select"
                                   value={editingCatParentId}
                                   onChange={(e) => setEditingCatParentId(e.target.value)}
                                 >
-                                  <option value="">📁 None (Top-Level Main Category)</option>
+                                  <option value="">None (Top-Level Main Category)</option>
                                   {categoriesList
                                     .filter((c) => c.id !== cat.id && !c.parentId && c.active)
                                     .map((c) => (
@@ -7923,12 +8800,18 @@ export function App() {
                               <div className="cat-hierarchy-tree">
                                 {cat.parentName ? (
                                   <>
-                                    <span className="cat-parent-tag">📁 {cat.parentName}</span>
+                                    <span className="cat-parent-tag">
+                                      <FolderIcon size={12} /> {cat.parentName}
+                                    </span>
                                     <span className="cat-tree-branch">→</span>
-                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{cat.name}</span>
+                                    <span className="cat-sub-name">
+                                      <FolderTreeIcon size={14} /> {cat.name}
+                                    </span>
                                   </>
                                 ) : (
-                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>📁 {cat.name}</span>
+                                  <span className="cat-main-name">
+                                    <FolderIcon size={15} /> {cat.name}
+                                  </span>
                                 )}
                               </div>
                             )}
@@ -7936,18 +8819,17 @@ export function App() {
 
                           <td>
                             {cat.parentId ? (
-                              <span className="badge badge-blue">Subcategory</span>
+                              <span className="kpi-sub-badge purple">Subcategory</span>
                             ) : (
-                              <span className="badge badge-emerald">Main Category</span>
+                              <span className="kpi-sub-badge green">Main Category</span>
                             )}
                           </td>
 
-                          <td style={{ color: '#64748b' }}>
+                          <td className="cat-desc-cell">
                             {editingCatId === cat.id ? (
                               <input
                                 type="text"
-                                className="form-input"
-                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                                className="cat-inline-input"
                                 value={editingCatDesc}
                                 onChange={(e) => setEditingCatDesc(e.target.value)}
                                 placeholder="Description..."
@@ -7966,7 +8848,7 @@ export function App() {
                               }}
                               title="Click to view products in this category"
                             >
-                              📦 {cat.itemCount || 0} Products ↗
+                              <PackageIcon size={13} /> {cat.itemCount || 0} Products ↗
                             </span>
                           </td>
 
@@ -7985,13 +8867,13 @@ export function App() {
                           </td>
 
                           <td>
-                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+                            <div className="cat-actions-cell">
                               {editingCatId === cat.id ? (
                                 <>
                                   <button
                                     type="button"
                                     className="btn btn-primary"
-                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem' }}
                                     onClick={() => handleUpdateCategory(cat.id)}
                                   >
                                     Save
@@ -7999,7 +8881,7 @@ export function App() {
                                   <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem' }}
                                     onClick={() => {
                                       setEditingCatId(null);
                                       setEditingCatParentId('');
@@ -8021,7 +8903,7 @@ export function App() {
                                     }}
                                     title="Edit Category Name, Parent, or Description"
                                   >
-                                    <span style={{ fontSize: '0.85rem' }}>✏️</span>
+                                    <Edit3Icon size={13} />
                                     <span>Edit</span>
                                   </button>
                                   <button
@@ -8030,7 +8912,7 @@ export function App() {
                                     onClick={() => handleDeleteCategory(cat)}
                                     title={`Delete "${cat.name}" category`}
                                   >
-                                    🗑️
+                                    <Trash2Icon size={14} />
                                   </button>
                                 </>
                               )}
@@ -8041,15 +8923,20 @@ export function App() {
 
                       {filteredCategories.length === 0 && (
                         <tr>
-                          <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                              <span style={{ fontSize: '1.5rem' }}>🔍</span>
-                              <span>No categories found matching your search / filter.</span>
+                          <td colSpan={6} style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#94a3b8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.65rem' }}>
+                              <SearchIcon size={28} style={{ color: '#cbd5e1' }} />
+                              <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                No categories found matching your search / filter
+                              </span>
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                Try adjusting your search keyword or clearing the subcategory filter.
+                              </span>
                               {(catSearchTerm || catTypeFilter !== 'all') && (
                                 <button
                                   type="button"
                                   className="btn btn-secondary"
-                                  style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}
+                                  style={{ fontSize: '0.82rem', marginTop: '0.45rem' }}
                                   onClick={() => {
                                     setCatSearchTerm('');
                                     setCatTypeFilter('all');
@@ -9610,6 +10497,223 @@ export function App() {
         </div>
       )}
 
+      {/* CASHIER KEYBOARD SHORTCUTS CHEATSHEET MODAL */}
+      {showShortcutsModal && (
+        <div className="modal-overlay" onClick={() => setShowShortcutsModal(false)}>
+          <div className="modal-content pos-shortcuts-modal" style={{ maxWidth: '720px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span className="modal-icon-badge blue">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <polyline points="12 19 12 5"></polyline>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="modal-title">Cashier Arrow Keys & Enter Guide</h3>
+                  <span className="modal-subtitle">Fast 100% keyboard billing — no F-keys needed!</span>
+                </div>
+              </div>
+              <button type="button" className="modal-close-btn" onClick={() => setShowShortcutsModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '1.25rem' }}>
+              {/* Visual Pipeline Box */}
+              <div className="arrow-flow-card">
+                <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#065f46', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⚡ 1-Second Cashier Pipeline Flow:</span>
+                </div>
+                <div className="arrow-flow-steps">
+                  <div className="arrow-flow-step">
+                    <kbd>← Left</kbd>
+                    <span>1. Search</span>
+                  </div>
+                  <div className="arrow-flow-arrow">➔</div>
+                  <div className="arrow-flow-step">
+                    <kbd>↑ / ↓</kbd>
+                    <span>2. Select Item</span>
+                  </div>
+                  <div className="arrow-flow-arrow">➔</div>
+                  <div className="arrow-flow-step">
+                    <kbd>Enter ↵</kbd>
+                    <span>3. Add Item</span>
+                  </div>
+                  <div className="arrow-flow-arrow">➔</div>
+                  <div className="arrow-flow-step">
+                    <kbd>→ Right</kbd>
+                    <span>4. Mobile</span>
+                  </div>
+                  <div className="arrow-flow-arrow">➔</div>
+                  <div className="arrow-flow-step">
+                    <kbd>↓ Down</kbd>
+                    <span>5. Name</span>
+                  </div>
+                  <div className="arrow-flow-arrow">➔</div>
+                  <div className="arrow-flow-step">
+                    <kbd>Enter ↵</kbd>
+                    <span>6. Pay & Bill</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="shortcuts-grid">
+                {/* 1. Products */}
+                <div className="shortcuts-card-block">
+                  <h4 className="shortcuts-group-title">
+                    <span>📦 1. Products (Search & Add)</span>
+                  </h4>
+                  <div className="shortcuts-list">
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Jump to Product Search</span>
+                      <span className="shortcut-keys"><kbd>←</kbd> (Left Arrow)</span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Move Through Items</span>
+                      <span className="shortcut-keys"><kbd>↓</kbd> / <kbd>↑</kbd></span>
+                    </div>
+                    <div className="shortcut-row highlight">
+                      <span className="shortcut-desc"><strong>Add Highlighted Item to Cart</strong></span>
+                      <span className="shortcut-keys"><kbd className="primary">Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Barcode Scan Add</span>
+                      <span className="shortcut-keys"><kbd>Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Advance to Customer Mobile</span>
+                      <span className="shortcut-keys"><kbd>→</kbd> (Right Arrow)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Customer */}
+                <div className="shortcuts-card-block">
+                  <h4 className="shortcuts-group-title">
+                    <span>👤 2. Customer Phone & Name</span>
+                  </h4>
+                  <div className="shortcuts-list">
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Jump to Customer Mobile</span>
+                      <span className="shortcut-keys"><kbd>→</kbd> (Right Arrow)</span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Link Member & Advance</span>
+                      <span className="shortcut-keys"><kbd className="primary">Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Move Down to Customer Name</span>
+                      <span className="shortcut-keys"><kbd>↓</kbd> (Down Arrow)</span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Save Name & Advance to Pay</span>
+                      <span className="shortcut-keys"><kbd className="primary">Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Back to Product Search</span>
+                      <span className="shortcut-keys"><kbd>←</kbd> or <kbd>↑</kbd></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Proceed to Payment */}
+                <div className="shortcuts-card-block">
+                  <h4 className="shortcuts-group-title">
+                    <span>💳 3. Proceed to Payment</span>
+                  </h4>
+                  <div className="shortcuts-list">
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Focus Proceed to Payment</span>
+                      <span className="shortcut-keys"><kbd>↓</kbd> (Down Arrow)</span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Change Payment Mode (Cash/UPI/Card)</span>
+                      <span className="shortcut-keys"><kbd>←</kbd> / <kbd>→</kbd></span>
+                    </div>
+                    <div className="shortcut-row highlight">
+                      <span className="shortcut-desc"><strong>Complete Sale & Print Bill</strong></span>
+                      <span className="shortcut-keys"><kbd className="primary">Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Move Back to Customer Desk</span>
+                      <span className="shortcut-keys"><kbd>↑</kbd> (Up Arrow)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Tips */}
+                <div className="shortcuts-card-block">
+                  <h4 className="shortcuts-group-title">
+                    <span>⚡ 4. Speed Billing Tips</span>
+                  </h4>
+                  <div className="shortcuts-list">
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Walk-In Checkout (No Phone)</span>
+                      <span className="shortcut-keys"><kbd>→</kbd> then <kbd>Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Anywhere: Instant Bill</span>
+                      <span className="shortcut-keys"><kbd>Enter ↵</kbd></span>
+                    </div>
+                    <div className="shortcut-row">
+                      <span className="shortcut-desc">Dismiss Modals / Clear</span>
+                      <span className="shortcut-keys"><kbd>Esc</kbd></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>💡 Pro tip: Ring up entire customer orders in seconds using only the 4 arrow keys and Enter!</span>
+              <button type="button" className="btn btn-primary" onClick={() => setShowShortcutsModal(false)}>Got It (Esc)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BILL DISCOUNT PICKER MODAL */}
+      {showDiscountPicker && (
+        <div className="modal-overlay" onClick={() => setShowDiscountPicker(false)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="modal-icon-badge amber">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                    <line x1="19" y1="5" x2="5" y2="19"></line>
+                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="modal-title">Apply Bill Discount</h3>
+                  <span className="modal-subtitle">Quick percentage discount on this invoice</span>
+                </div>
+              </div>
+              <button type="button" className="modal-close-btn" onClick={() => setShowDiscountPicker(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginBottom: '1rem' }}>
+                {[0, 5, 10, 15, 20, 25].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    className={`btn ${appliedDiscountPercent === pct ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.75rem', fontWeight: 700, fontSize: '0.95rem' }}
+                    onClick={() => {
+                      setAppliedDiscountPercent(pct);
+                      setShowDiscountPicker(false);
+                      showToast(pct > 0 ? `${pct}% bill discount applied!` : 'Discount cleared');
+                    }}
+                  >
+                    {pct === 0 ? '0% (None)' : `${pct}% OFF`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HELD ORDERS MODAL */}
       {showHeldOrdersModal && (
         <div className="modal-overlay" onClick={() => setShowHeldOrdersModal(false)}>
@@ -9814,13 +10918,32 @@ export function App() {
         />
       )}
 
+      {/* SCAN MANUFACTURER BARCODES MODAL */}
+      {showScanMfrModal && (
+        <ScanManufacturerBarcodeModal
+          targets={catalogBarcodeTargets}
+          initialSelectedId={scanMfrInitialItemId}
+          shopName={shop?.name}
+          onAssign={handleAssignCatalogBarcode}
+          onClose={() => {
+            setShowScanMfrModal(false);
+            setScanMfrInitialItemId(null);
+          }}
+        />
+      )}
+
       {/* DELETE PRODUCT CONFIRMATION MODAL */}
       {deletingItem && (
         <div className="modal-overlay" style={{ zIndex: 1200 }}>
           <div className="modal-content" style={{ maxWidth: '480px', borderRadius: '12px' }}>
             <div className="modal-header" style={{ borderBottom: '1px solid #fee2e2', background: '#fff1f2', borderRadius: '12px 12px 0 0', padding: '1rem 1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.25rem' }}>🗑️</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
                 <h3 style={{ margin: 0, color: '#991b1b', fontSize: '1.1rem', fontWeight: 700 }}>
                   Delete Product
                 </h3>
@@ -9830,8 +10953,13 @@ export function App() {
                 className="btn-close"
                 onClick={() => { if (!isDeleting) { setDeletingItem(null); setDeleteError(null); } }}
                 disabled={isDeleting}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                aria-label="Close"
               >
-                ✕
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -9840,14 +10968,24 @@ export function App() {
                 Are you sure you want to permanently delete <strong>"{deletingItem.name}"</strong>?
               </p>
 
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4 }}>
-                ℹ️ Deleting this product may affect its associated barcode mappings and inventory records. Products with sales history or purchase records cannot be deleted and should be deactivated instead.
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.82rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                <span>Deleting this product may affect its associated barcode mappings and inventory records. Products with sales history or purchase records cannot be deleted and should be deactivated instead.</span>
               </div>
 
               {deleteError && (
                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{ color: '#991b1b', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                    ⚠️ Cannot Delete Product
+                  <div style={{ color: '#991b1b', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>Cannot Delete Product</span>
                   </div>
                   <div style={{ color: '#b91c1c', fontSize: '0.82rem', lineHeight: 1.4, marginBottom: '0.75rem' }}>
                     {deleteError}
@@ -9904,19 +11042,51 @@ export function App() {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '600px' }}>
             <div className="modal-header">
-              <div>
-                <h3 className="card-title" style={{ margin: 0 }}>
-                  {editingItem ? `✏️ Edit Product: ${editingItem.name}` : `📦 Add New Item to ${shop?.name}`}
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
-                  {editingItem ? 'Update product details, pricing, tax rates and units' : 'Register a new item with unit, tax rate, and opening stock'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {editingItem ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <h3 className="card-title" style={{ margin: 0 }}>
+                    {editingItem ? `Edit Product: ${editingItem.name}` : `Add New Item to ${shop?.name}`}
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                    {editingItem ? 'Update product details, pricing, tax rates and units' : 'Register a new item with unit, tax rate, and opening stock'}
+                  </div>
                 </div>
               </div>
               <button
-                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', borderRadius: '6px' }}
                 onClick={() => setShowItemModal(false)}
+                title="Close"
+                aria-label="Close"
               >
-                ✕
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
             <form onSubmit={handleSaveItem} className="modal-body">
@@ -9933,16 +11103,31 @@ export function App() {
                 {!itemFormHsn && hsnSuggestions.length > 0 && (
                   <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>💡 Suggested HSN for "{itemFormName}":</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2v4" />
+                          <path d="M12 18v4" />
+                          <path d="M4.93 4.93l2.83 2.83" />
+                          <path d="M16.24 16.24l2.83 2.83" />
+                          <path d="M2 12h4" />
+                          <path d="M18 12h4" />
+                          <path d="M4.93 19.07l2.83-2.83" />
+                          <path d="M16.24 7.76l2.83-2.83" />
+                        </svg>
+                        <span>Suggested HSN for "{itemFormName}":</span>
+                      </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
                         <button
                           type="button"
                           onClick={() => setHsnSuggestions([])}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', padding: '0 3px', lineHeight: 1 }}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'inline-flex', alignItems: 'center' }}
                           title="Dismiss"
                         >
-                          ✕
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
                         </button>
                       </div>
                     </div>
@@ -10007,7 +11192,7 @@ export function App() {
                     <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
                     <button
                       type="button"
-                      style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                      style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                       onClick={() => {
                         const code = '20' + Date.now().toString().slice(-10);
                         let sum = 0;
@@ -10017,7 +11202,10 @@ export function App() {
                       }}
                       title="Generate a unique 13-digit EAN retail barcode"
                     >
-                      ⚡ Auto-Generate
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                      <span>Auto-Generate</span>
                     </button>
                   </div>
                   <input
@@ -10048,8 +11236,12 @@ export function App() {
                       </option>
                     ))}
                   </select>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
-                    Categories are managed and imported in the <strong>🏷️ Categories</strong> module.
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                      <line x1="7" y1="7" x2="7.01" y2="7" />
+                    </svg>
+                    <span>Categories are managed and imported in the <strong>Categories</strong> module.</span>
                   </div>
                 </div>
                 <div className="form-group">
@@ -10099,8 +11291,24 @@ export function App() {
                 <div className="form-group" style={{ position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                     <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
-                    <span style={{ fontSize: '0.72rem', color: '#38bdf8' }}>
-                      {isHsnSearching ? '🔍 Searching 22k+ items...' : '⚡ GST Directory'}
+                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      {isHsnSearching ? (
+                        <>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          <span>Searching 22k+ items...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                          </svg>
+                          <span>GST Directory</span>
+                        </>
+                      )}
                     </span>
                   </div>
                   <input
@@ -10152,9 +11360,13 @@ export function App() {
                         <button
                           type="button"
                           onClick={() => setShowHsnDropdown(false)}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem' }}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                         >
-                          ✕ Close
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          <span>Close</span>
                         </button>
                       </div>
                       {hsnSearchResults.map((item) => (
@@ -10214,7 +11426,9 @@ export function App() {
                         lineHeight: '1.2',
                       }}
                     >
-                      <span>✓</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {selectedHsnDesc}
                       </span>
@@ -10268,15 +11482,25 @@ export function App() {
                   </div>
                 </div>
               ) : (
-                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd' }}>
-                  ℹ️ Current Ledger Stock: <strong>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>.
-                  Opening stock cannot be modified here to protect stock movement audit history.
+                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd', display: 'flex', alignItems: 'flex-start', gap: '0.45rem' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <span>
+                    Current Ledger Stock: <strong>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>. Opening stock cannot be modified here to protect stock movement audit history.
+                  </span>
                 </div>
               )}
 
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #334155', borderRadius: '8px', padding: '0.85rem', marginTop: '1rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>🏬 Inventory Alert & Reorder Settings</span>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  <span>Inventory Alert &amp; Reorder Settings</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -10867,181 +12091,410 @@ export function App() {
         </div>
       )}
 
-      {/* MASTER DATA: CATEGORIES MANAGER MODAL */}
-      {showCategoryModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <div>
-                <h3 className="card-title" style={{ margin: 0 }}>🏷️ Product Categories Manager</h3>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
-                  Organize your inventory with categories and track live item counts
+      {/* MASTER DATA: CATEGORIES MANAGER MODAL - BENTO RECTANGLE REDESIGN */}
+      {showCategoryModal && (() => {
+        const totalCats = categoriesList.length;
+        const activeCats = categoriesList.filter((c) => c.active).length;
+        const totalProducts = categoriesList.reduce((sum, c) => sum + (c.itemCount || 0), 0);
+        const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
+
+        const filteredList = categoriesList.filter((cat) => {
+          if (modalCatStatusFilter === 'active' && !cat.active) return false;
+          if (modalCatStatusFilter === 'inactive' && cat.active) return false;
+          const q = modalCatSearch.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            cat.name.toLowerCase().includes(q) ||
+            (cat.parentName && cat.parentName.toLowerCase().includes(q)) ||
+            (cat.description && cat.description.toLowerCase().includes(q))
+          );
+        });
+
+        const quickPresets = [
+          'Grains & Staples',
+          'Dairy Products',
+          'Snacks & Bakery',
+          'Beverages',
+          'Household Essentials',
+          'Personal Care',
+          'Spices & Masalas',
+          'Edible Oils',
+        ];
+
+        return (
+          <div className="modal-overlay" style={{ backdropFilter: 'blur(4px)', background: 'rgba(15, 23, 42, 0.45)' }}>
+            <div className="cat-bento-dialog">
+              {/* Header */}
+              <div className="cat-bento-header">
+                <div className="cat-bento-header-left">
+                  <div className="cat-bento-icon-badge">
+                    <TagIcon size={18} />
+                  </div>
+                  <div className="cat-bento-title-wrap">
+                    <h3>Product Categories Manager</h3>
+                    <p>Organize your catalog with smart categories and track live inventory counts</p>
+                  </div>
+                </div>
+                <div className="cat-bento-header-actions">
+                  <span className="badge badge-blue" style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.55rem' }}>
+                    {totalCats} Categories
+                  </span>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px',
+                      borderRadius: '6px',
+                    }}
+                    onClick={() => setShowCategoryModal(false)}
+                    title="Close"
+                    aria-label="Close"
+                  >
+                    <XIcon size={16} />
+                  </button>
                 </div>
               </div>
-              <button
-                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}
-                onClick={() => setShowCategoryModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="modal-body">
-              {/* Add Category Quick Form */}
-              <form
-                onSubmit={handleCreateCategory}
-                style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px' }}
-              >
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ flex: 1 }}
-                  required
-                  placeholder="New category name (e.g. Beverages, Dairy, Pulses)..."
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="form-input"
-                  style={{ flex: 1 }}
-                  placeholder="Optional description..."
-                  value={newCatDesc}
-                  onChange={(e) => setNewCatDesc(e.target.value)}
-                />
-                <button type="submit" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>
-                  + Add Category
-                </button>
-              </form>
 
-              {/* Categories Table */}
-              <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                <table className="data-table" style={{ fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr>
-                      <th>Category Name</th>
-                      <th>Description</th>
-                      <th>Items Count</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {categoriesList.map((cat) => (
-                      <tr key={cat.id} style={{ opacity: !cat.active ? 0.6 : 1 }}>
-                        <td style={{ fontWeight: 600 }}>
-                          {editingCatId === cat.id ? (
-                            <input
-                              type="text"
-                              className="form-input"
-                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.85rem' }}
-                              value={editingCatName}
-                              onChange={(e) => setEditingCatName(e.target.value)}
-                            />
-                          ) : (
-                            cat.name
-                          )}
-                        </td>
-                        <td style={{ color: '#94a3b8' }}>
-                          {editingCatId === cat.id ? (
-                            <input
-                              type="text"
-                              className="form-input"
-                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.85rem' }}
-                              value={editingCatDesc}
-                              onChange={(e) => setEditingCatDesc(e.target.value)}
-                            />
-                          ) : (
-                            cat.description || '—'
-                          )}
-                        </td>
-                        <td>
-                          <span className="badge badge-blue">
-                            {cat.itemCount || 0} products
-                          </span>
-                        </td>
-                        <td>
+              {/* Bento Body */}
+              <div className="cat-bento-body">
+                {/* 4-Card Bento KPI Ribbon */}
+                <div className="cat-bento-kpi-grid">
+                  <div className="cat-bento-kpi-card">
+                    <div className="cat-bento-kpi-icon indigo">
+                      <LayersIcon size={14} />
+                    </div>
+                    <div className="cat-bento-kpi-data">
+                      <span className="cat-bento-kpi-label">Total Categories</span>
+                      <span className="cat-bento-kpi-val">{totalCats}</span>
+                    </div>
+                  </div>
+
+                  <div className="cat-bento-kpi-card">
+                    <div className="cat-bento-kpi-icon green">
+                      <CheckCircleIcon size={14} />
+                    </div>
+                    <div className="cat-bento-kpi-data">
+                      <span className="cat-bento-kpi-label">Active Categories</span>
+                      <span className="cat-bento-kpi-val text-green">{activeCats}</span>
+                    </div>
+                  </div>
+
+                  <div className="cat-bento-kpi-card">
+                    <div className="cat-bento-kpi-icon purple">
+                      <PackageIcon size={14} />
+                    </div>
+                    <div className="cat-bento-kpi-data">
+                      <span className="cat-bento-kpi-label">Products Linked</span>
+                      <span className="cat-bento-kpi-val">{totalProducts}</span>
+                    </div>
+                  </div>
+
+                  <div className="cat-bento-kpi-card" style={{ padding: '0.4rem 0.65rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', width: '100%' }}>
+                      <span className="cat-bento-kpi-label">Status Filter</span>
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        {(['all', 'active', 'inactive'] as const).map((st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={() => setModalCatStatusFilter(st)}
+                            style={{
+                              flex: 1,
+                              padding: '0.2rem 0.4rem',
+                              fontSize: '0.66rem',
+                              fontWeight: 700,
+                              borderRadius: '4px',
+                              border: '1px solid',
+                              borderColor: modalCatStatusFilter === st ? '#6366f1' : '#e2e8f0',
+                              background: modalCatStatusFilter === st ? '#ede9fe' : '#ffffff',
+                              color: modalCatStatusFilter === st ? '#4f46e5' : '#64748b',
+                              cursor: 'pointer',
+                              textTransform: 'capitalize',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Dual-Column Bento Area */}
+                <div className="cat-bento-main-grid">
+                  {/* Left Column: Quick Add Category */}
+                  <div className="cat-bento-creator-card">
+                    <div className="cat-bento-creator-header">
+                      <PlusIcon size={15} style={{ color: '#4f46e5' }} />
+                      <span>Add New Category</span>
+                    </div>
+
+                    <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      <div className="cat-bento-form-group">
+                        <label className="cat-bento-form-label">
+                          Category Name <span style={{ color: '#f43f5e' }}>*</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="cat-bento-input"
+                          required
+                          placeholder="e.g. Beverages, Dairy..."
+                          value={newCatName}
+                          onChange={(e) => setNewCatName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="cat-bento-form-group">
+                        <label className="cat-bento-form-label">
+                          Parent Department <span style={{ color: '#94a3b8', fontWeight: 500 }}>(Optional)</span>
+                        </label>
+                        <select
+                          className="cat-bento-input"
+                          value={newCatParentId}
+                          onChange={(e) => setNewCatParentId(e.target.value)}
+                        >
+                          <option value="">None (Top-Level Category)</option>
+                          {mainCategories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              ↳ Subcategory of {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="cat-bento-form-group">
+                        <label className="cat-bento-form-label">
+                          Description <span style={{ color: '#94a3b8', fontWeight: 500 }}>(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="cat-bento-input"
+                          placeholder="Optional notes or details..."
+                          value={newCatDesc}
+                          onChange={(e) => setNewCatDesc(e.target.value)}
+                        />
+                      </div>
+
+                      <button type="submit" className="cat-bento-submit-btn">
+                        <PlusIcon size={14} />
+                        <span>Add Category</span>
+                      </button>
+                    </form>
+
+                    {/* Quick Presets */}
+                    <div className="cat-bento-presets-wrap">
+                      <div className="cat-bento-presets-title">Supermarket Quick Presets</div>
+                      <div className="cat-bento-presets-list">
+                        {quickPresets.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className="cat-bento-preset-pill"
+                            onClick={() => setNewCatName(preset)}
+                            title={`Click to fill "${preset}"`}
+                          >
+                            + {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Category Directory & Live Table */}
+                  <div className="cat-bento-catalog-card">
+                    <div className="cat-bento-catalog-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-main)' }}>Category Directory</span>
+                        <span className="badge badge-neutral" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+                          {filteredList.length} shown
+                        </span>
+                      </div>
+
+                      <div className="cat-bento-search-box">
+                        <SearchIcon size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                        <input
+                          type="text"
+                          placeholder="Search categories..."
+                          value={modalCatSearch}
+                          onChange={(e) => setModalCatSearch(e.target.value)}
+                        />
+                        {modalCatSearch && (
                           <button
                             type="button"
-                            className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
-                            onClick={() => handleToggleCategoryActive(cat)}
-                            title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
+                            onClick={() => setModalCatSearch('')}
+                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
                           >
-                            <span className="cat-toggle-track">
-                              <span className="cat-toggle-thumb" />
-                            </span>
-                            <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
+                            <XIcon size={12} />
                           </button>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                            {editingCatId === cat.id ? (
-                              <>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="cat-bento-table-scroll">
+                      <table className="cat-bento-table">
+                        <thead>
+                          <tr>
+                            <th style={{ minWidth: '150px', textAlign: 'left' }}>Category Name</th>
+                            <th style={{ minWidth: '130px', textAlign: 'left' }}>Description</th>
+                            <th style={{ minWidth: '120px', textAlign: 'left' }}>Items Count</th>
+                            <th style={{ minWidth: '95px', textAlign: 'center' }}>Status</th>
+                            <th style={{ minWidth: '85px', textAlign: 'right' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredList.map((cat) => (
+                            <tr key={cat.id} style={{ opacity: !cat.active ? 0.65 : 1 }}>
+                              <td style={{ fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+                                {editingCatId === cat.id ? (
+                                  <input
+                                    type="text"
+                                    className="cat-bento-input"
+                                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+                                    value={editingCatName}
+                                    onChange={(e) => setEditingCatName(e.target.value)}
+                                  />
+                                ) : (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <TagIcon size={12} style={{ color: '#6366f1', opacity: 0.7, flexShrink: 0 }} />
+                                    {cat.parentName && <span className="cat-parent-tag">{cat.parentName} →</span>}
+                                    <span>{cat.name}</span>
+                                  </div>
+                                )}
+                              </td>
+
+                              <td style={{ color: '#64748b', fontSize: '0.78rem' }}>
+                                {editingCatId === cat.id ? (
+                                  <input
+                                    type="text"
+                                    className="cat-bento-input"
+                                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+                                    value={editingCatDesc}
+                                    onChange={(e) => setEditingCatDesc(e.target.value)}
+                                  />
+                                ) : (
+                                  <span title={cat.description || ''}>
+                                    {cat.description || '—'}
+                                  </span>
+                                )}
+                              </td>
+
+                              <td>
+                                <span className={`cat-product-count-pill ${(cat.itemCount || 0) === 0 ? 'zero' : ''}`}>
+                                  <PackageIcon size={11} style={{ opacity: 0.75, flexShrink: 0 }} />
+                                  <span>{cat.itemCount || 0} Products</span>
+                                </span>
+                              </td>
+
+                              <td style={{ textAlign: 'center' }}>
                                 <button
                                   type="button"
-                                  className="btn btn-primary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => handleUpdateCategory(cat.id)}
+                                  className={`cat-toggle-switch ${cat.active ? 'on' : 'off'}`}
+                                  onClick={() => handleToggleCategoryActive(cat)}
+                                  title={cat.active ? 'Status: ON (Active) — Click to Turn OFF' : 'Status: OFF (Inactive) — Click to Turn ON'}
                                 >
-                                  Save
+                                  <span className="cat-toggle-track">
+                                    <span className="cat-toggle-thumb" />
+                                  </span>
+                                  <span className="cat-toggle-state-text">{cat.active ? 'ON' : 'OFF'}</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => setEditingCatId(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="cat-edit-btn"
-                                  onClick={() => {
-                                    setEditingCatId(cat.id);
-                                    setEditingCatName(cat.name);
-                                    setEditingCatDesc(cat.description || '');
-                                  }}
-                                  title="Edit Category"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  type="button"
-                                  className="cat-delete-btn"
-                                  style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}
-                                  onClick={() => handleDeleteCategory(cat)}
-                                  title={`Delete "${cat.name}" category`}
-                                >
-                                  🗑️
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {categoriesList.length === 0 && (
-                      <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
-                          No categories defined yet. Add one above!
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                              </td>
+
+                              <td style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                  {editingCatId === cat.id ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+                                        onClick={() => handleUpdateCategory(cat.id)}
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+                                        onClick={() => setEditingCatId(null)}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="cat-edit-btn"
+                                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => {
+                                          setEditingCatId(cat.id);
+                                          setEditingCatName(cat.name);
+                                          setEditingCatDesc(cat.description || '');
+                                        }}
+                                        title="Edit Category"
+                                        aria-label="Edit Category"
+                                      >
+                                        <Edit3Icon size={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="cat-delete-btn"
+                                        style={{ width: '28px', height: '28px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => handleDeleteCategory(cat)}
+                                        title={`Delete "${cat.name}" category`}
+                                        aria-label={`Delete "${cat.name}" category`}
+                                      >
+                                        <Trash2Icon size={12} />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+
+                          {filteredList.length === 0 && (
+                            <tr>
+                              <td colSpan={5} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                                {categoriesList.length === 0
+                                  ? 'No categories defined yet. Use the form on the left to add your first category!'
+                                  : 'No categories matched your search/filter criteria.'}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCategoryModal(false)}>
+              {/* Modal Footer */}
+              <div className="cat-bento-footer">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#64748b' }}>
+                  <InfoIcon size={13} style={{ color: '#6366f1' }} />
+                  <span>Categories are automatically synchronized across POS billing and inventory hubs.</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setShowCategoryModal(false)}
+                  style={{ minWidth: '90px', padding: '0.45rem 1.25rem', fontWeight: 700 }}
+                >
                   Done
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* PURCHASES: NEW PURCHASE BILL & STOCK INWARD MODAL (SECTION 5) */}
       {showPurchaseModal && (() => {
@@ -12527,6 +13980,11 @@ export function App() {
           className="modal-overlay"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setCheckoutSuccess(null);
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleStartNewBill();
+              focusProductSearch();
+            }
           }}
           tabIndex={-1}
         >
@@ -12833,9 +14291,12 @@ export function App() {
                   <button
                     type="button"
                     className="btn btn-primary checkout-start-btn"
-                    onClick={handleStartNewBill}
+                    onClick={() => {
+                      handleStartNewBill();
+                      focusProductSearch();
+                    }}
                   >
-                    + Start New Bill
+                    + Start New Bill (Enter ↵)
                   </button>
                 </div>
               </div>
