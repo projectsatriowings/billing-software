@@ -70,3 +70,51 @@ export function verifyToken(token: string, secret: string, nowSec = Math.floor(D
  * Changing or resetting a password changes the fingerprint, so older tokens stop working (session revocation).
  */
 export const passwordStamp = (passwordHash: string): string => crypto.createHash('sha256').update(passwordHash).digest('hex').slice(0, 16);
+
+// ---------------------------------------------------------------- authenticated secret encryption at rest (AES-256-GCM)
+export function encryptSecret(plainText: string, masterKey: string): string {
+  if (!plainText) return '';
+  const key = crypto.createHash('sha256').update(masterKey).digest(); // 32 bytes
+  const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc$${iv.toString('base64url')}$${tag.toString('base64url')}$${encrypted.toString('base64url')}`;
+}
+
+export function decryptSecret(cipherText: string | null | undefined, masterKey: string): string | null {
+  if (!cipherText || !cipherText.startsWith('enc$')) return null;
+  const parts = cipherText.split('$');
+  if (parts.length !== 4) return null;
+  const [, ivB64, tagB64, dataB64] = parts;
+  try {
+    const key = crypto.createHash('sha256').update(masterKey).digest();
+    const iv = Buffer.from(ivB64, 'base64url');
+    const tag = Buffer.from(tagB64, 'base64url');
+    const encrypted = Buffer.from(dataB64, 'base64url');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validates a webhook signature against the raw request body and secret.
+ * Uses timingSafeEqual to protect against timing attacks.
+ */
+export function verifyWebhookSignature(rawBody: Buffer | string, signature: string | undefined | null, secret: string): boolean {
+  if (!signature || !secret || !rawBody) return false;
+  try {
+    const bodyBuf = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf8');
+    const expected = crypto.createHmac('sha256', secret).update(bodyBuf).digest('hex');
+    const sigClean = signature.trim();
+    if (expected.length !== sigClean.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sigClean, 'hex'));
+  } catch {
+    return false;
+  }
+}
+

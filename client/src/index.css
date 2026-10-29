@@ -123,7 +123,6 @@ body {
   min-width: 72px;
   max-width: 72px;
   padding: 1rem 0.45rem;
-  overflow-x: hidden !important;
 }
 
 .app-sidebar.icon-only .sidebar-header-row {
@@ -195,10 +194,7 @@ body {
 
 .app-sidebar.icon-only .sidebar-store-info,
 .app-sidebar.icon-only .sidebar-store-badge,
-.app-sidebar.icon-only .sidebar-store-btn svg:last-child,
-.app-sidebar.icon-only .business-dropdown-menu,
-.app-sidebar.icon-only .sidebar-dropdown-flyout,
-.app-sidebar.icon-only .dropdown-backdrop {
+.app-sidebar.icon-only .sidebar-store-btn svg:last-child {
   display: none !important;
 }
 
@@ -228,6 +224,31 @@ body {
 .app-sidebar.icon-only .sidebar-nav-item:hover,
 .app-sidebar.icon-only .sidebar-nav-item.active {
   transform: none !important;
+}
+
+/* Floating tooltip in rail mode */
+.app-sidebar.icon-only .sidebar-nav-item[title]:hover::after {
+  content: attr(title);
+  position: fixed;
+  left: 78px;
+  background: #1e1b4b;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 0.01em;
+  animation: railTooltipIn 0.15s ease-out;
+}
+
+@keyframes railTooltipIn {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .app-sidebar.icon-only .sidebar-nav-item .nav-text,
@@ -499,27 +520,49 @@ body {
 }
 
 .dropdown-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-  background: transparent;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9990 !important;
+  background: rgba(15, 23, 42, 0.25) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
 }
 
+/* Store Profile Dropdown Flyout - Floating Menu in both Full and Rail modes */
 .sidebar-dropdown-flyout {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  z-index: 120;
-  overflow: hidden;
-  animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  color: var(--text-main);
+  position: fixed !important;
+  top: 130px !important;
+  left: 16px !important;
+  width: 320px !important;
+  min-width: 300px !important;
+  max-width: min(340px, calc(100vw - 32px)) !important;
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  z-index: 9999 !important;
+  overflow: hidden !important;
+  animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  color: var(--text-main) !important;
+}
+
+/* In Icon-Only / Collapsed Sidebar: Pop out cleanly to the right of the 72px rail */
+.app-sidebar.icon-only .sidebar-dropdown-flyout,
+.app-sidebar.collapsed .sidebar-dropdown-flyout,
+.app-sidebar.is-collapsed .sidebar-dropdown-flyout {
+  position: fixed !important;
+  top: 72px !important;
+  left: 80px !important;
+  width: 330px !important;
+  min-width: 310px !important;
+  max-width: min(340px, calc(100vw - 92px)) !important;
+  animation: flyoutSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes flyoutSlideIn {
+  from { opacity: 0; transform: translateX(-8px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 /* Sidebar Navigation Items */
@@ -1539,11 +1582,88 @@ body {
 .top-global-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 1.5rem;
-  padding-bottom: 1.1rem;
-  margin-bottom: 1.25rem;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.95rem;
+  margin-bottom: 1.15rem;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/* Top Global Bar Left Controls */
+.top-global-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 38px;
+  padding: 0 0.75rem;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-main);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.topbar-sidebar-toggle-btn:hover {
+  background: #f8fafc;
+  border-color: #6d4aff;
+  color: #6d4aff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.15);
+}
+
+.topbar-sidebar-toggle-btn:active {
+  transform: translateY(0);
+}
+
+.topbar-toggle-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-store-name {
+  font-weight: 800;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.topbar-breadcrumb-sep {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.topbar-current-page {
+  font-weight: 600;
+  color: #6d4aff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .top-global-search {
@@ -2758,6 +2878,12 @@ body {
 .sidebar-action-row-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+
+.sidebar-action-row-btn.active {
+  background: rgba(99, 102, 241, 0.28);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.4);
 }
 
 .sidebar-action-row-btn.signout {
@@ -6744,8 +6870,10 @@ body {
   font-size: 0.92rem;
   font-weight: 800;
   color: var(--text-main);
-  line-height: 1.25;
-  word-break: break-word;
+  line-height: 1.35;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
 }
 
 .store-profile-meta-grid {
@@ -11103,8 +11231,8 @@ body {
 /* ================= 2. MAIN BENTO GRID ================= */
 .bento-pos-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(430px, 1fr);
-  gap: 1.15rem;
+  grid-template-columns: minmax(0, 1.48fr) minmax(360px, 400px);
+  gap: 0.85rem;
   align-items: start;
   width: 100%;
   max-width: 100%;
@@ -11126,160 +11254,14 @@ body {
 }
 
 .bento-side-col {
+  position: sticky;
+  top: 0.85rem;
   display: flex;
   flex-direction: column;
-  gap: 0.95rem;
+  gap: 0.85rem;
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-}
-
-/* Compact Customer Status Indicator Chip */
-.bento-billing-customer-chip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
-  padding: 0.55rem 0.85rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  margin: 0.75rem 0 0.85rem;
-  box-sizing: border-box;
-}
-
-.bento-billing-customer-chip .cust-chip-info {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex: 1;
-  min-width: 0;
-  font-size: 0.82rem;
-  flex-wrap: wrap;
-}
-
-.bento-billing-customer-chip .cust-chip-label {
-  color: #64748b;
-  font-weight: 700;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.bento-billing-customer-chip .chip-walkin-text {
-  color: #334155;
-  font-weight: 700;
-}
-
-.bento-billing-customer-chip .chip-phone {
-  color: #64748b;
-  font-family: monospace;
-  font-size: 0.78rem;
-}
-
-.bento-billing-customer-chip .chip-pts-badge {
-  background: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fde68a;
-  padding: 0.12rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.bento-billing-customer-chip .chip-discount-tag {
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #a7f3d0;
-  padding: 0.12rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.bento-billing-customer-chip .cust-chip-focus-btn {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #4338ca;
-  font-size: 0.76rem;
-  font-weight: 700;
-  padding: 0.28rem 0.75rem;
-  border-radius: 7px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.bento-billing-customer-chip .cust-chip-focus-btn:hover {
-  background: #eef2ff;
-  border-color: #a5b4fc;
-  color: #3730a3;
-}
-
-/* Products Grid styles */
-.bento-products-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.65rem;
-  padding: 0.75rem 0.95rem;
-  box-sizing: border-box;
-}
-
-.bento-side-col .bento-catalog-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.bento-side-col .bento-catalog-card .bento-card-header {
-  padding: 0.65rem 0.85rem;
-}
-
-.bento-side-col .bento-products-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-  padding: 0.65rem 0.85rem;
-  max-height: 480px;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-.bento-side-col .bento-category-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
-  padding: 0.5rem 0.85rem 0.35rem;
-}
-
-.bento-side-col .bento-cat-tile {
-  padding: 0.35rem 0.45rem;
-  gap: 0.3rem;
-  border-radius: 8px;
-}
-
-.bento-side-col .cat-tile-label {
-  font-size: 0.7rem;
-}
-
-.bento-side-col .cat-tile-count {
-  font-size: 0.66rem;
-}
-
-.bento-side-col .bento-product-tile {
-  padding: 0.65rem;
-}
-
-.bento-side-col .bento-tile-title {
-  font-size: 0.82rem;
-  line-height: 1.25;
-  height: 2.5em;
-}
-
-.bento-side-col .bento-tile-pricing {
-  padding: 0.4rem 0.55rem;
-}
-
-.bento-side-col .pricing-store-val {
-  font-size: 0.88rem;
 }
 
 /* Fallback backward-compatibility classes */
@@ -12674,6 +12656,7 @@ body {
   border-color: #cbd5e1;
   width: 100%;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .bento-terminal-header {
@@ -12952,8 +12935,9 @@ body {
 .bento-cart-rows-scroll {
   display: flex;
   flex-direction: column;
-  max-height: 240px;
+  max-height: 220px;
   overflow-y: auto;
+  scroll-behavior: smooth;
   min-width: 0;
   box-sizing: border-box;
 }
@@ -12962,12 +12946,33 @@ body {
   display: grid;
   grid-template-columns: minmax(110px, 1.5fr) 70px 62px 82px 84px 24px;
   gap: 0.45rem;
-  padding: 0.55rem 0.75rem;
+  padding: 0.52rem 0.75rem;
   border-bottom: 1px solid #f1f5f9;
   align-items: center;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-left-color 0.2s ease;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.bento-cart-row.just-added-highlight {
+  animation: justAddedPulse 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes justAddedPulse {
+  0% {
+    background-color: #dcfce7;
+    border-left: 4px solid #16a34a;
+    transform: translateY(-2px);
+  }
+  50% {
+    background-color: #f0fdf4;
+    border-left: 4px solid #22c55e;
+  }
+  100% {
+    background-color: transparent;
+    border-left: 4px solid transparent;
+    transform: translateY(0);
+  }
 }
 
 .bento-cart-row:hover {
@@ -13300,14 +13305,23 @@ body {
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
 }
 
-/* Checkout Row */
+/* Checkout Row - sticky pinned at bottom so Grand Total & Bill Button are ALWAYS visible */
 .bento-checkout-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding-top: 0.25rem;
+  padding: 0.65rem 0.85rem;
   box-sizing: border-box;
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  z-index: 20;
+  margin: 0.2rem -1rem -0.75rem -1rem;
+  border-top: 1.5px solid #e2e8f0;
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .bento-grand-total {
@@ -19493,11 +19507,11 @@ select.expense-input-control {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 0.6rem 0.85rem;
-  margin-bottom: 0.75rem;
+  padding: 0.42rem 0.65rem;
+  margin-bottom: 0.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.25rem;
 }
 
 .counter-mobile-head {
@@ -23068,3 +23082,210 @@ select.expense-input-control {
 .branch-card-edit-btn:active {
   transform: translateY(0);
 }
+
+/* ==========================================================================
+   GLOBAL APP SHELL RESPONSIVE & ADAPTIVE LAYOUT SYSTEM
+   ========================================================================== */
+
+/* Mobile Sidebar Backdrop */
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 998;
+  animation: fadeInBackdrop 0.2s ease-out;
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Tablet & Mobile Screens (<= 900px) */
+@media (max-width: 900px) {
+  .app-container {
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.26s ease !important;
+    box-shadow: none !important;
+  }
+
+  .app-sidebar.mobile-open {
+    transform: translateX(0) !important;
+    box-shadow: 12px 0 36px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  /* When on mobile drawer, display full readable navigation even if collapsed class exists */
+  .app-sidebar.mobile-open.icon-only {
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-brand-text,
+  .app-sidebar.mobile-open.icon-only .sidebar-store-info,
+  .app-sidebar.mobile-open.icon-only .sidebar-store-badge,
+  .app-sidebar.mobile-open.icon-only .sidebar-section-label,
+  .app-sidebar.mobile-open.icon-only .nav-text,
+  .app-sidebar.mobile-open.icon-only .nav-trailing,
+  .app-sidebar.mobile-open.icon-only .nav-count-badge,
+  .app-sidebar.mobile-open.icon-only .nav-tag-shortcut,
+  .app-sidebar.mobile-open.icon-only .nav-shift-badge,
+  .app-sidebar.mobile-open.icon-only .sidebar-chevron,
+  .app-sidebar.mobile-open.icon-only .sidebar-user-meta,
+  .app-sidebar.mobile-open.icon-only .sidebar-action-row-btn span:last-child {
+    display: inline-block !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-header-row {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-nav-item {
+    width: 100% !important;
+    height: auto !important;
+    padding: 0.65rem 0.85rem !important;
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-store-btn {
+    width: 100% !important;
+    height: auto !important;
+    padding: 0.6rem 0.75rem !important;
+    justify-content: flex-start !important;
+  }
+
+  .main-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.85rem 0.85rem 2rem !important;
+  }
+
+  .bento-pos-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bento-side-col {
+    position: static !important;
+  }
+}
+
+/* Small Tablets and Mobile Screens (<= 640px) */
+@media (max-width: 640px) {
+  .top-global-bar {
+    gap: 0.65rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .topbar-breadcrumb {
+    font-size: 0.78rem;
+  }
+
+  .topbar-store-name {
+    max-width: 110px;
+  }
+
+  .topbar-current-page {
+    max-width: 120px;
+  }
+
+  .top-user-details {
+    display: none !important;
+  }
+
+  .top-user-chip {
+    padding: 0.25rem 0.35rem !important;
+  }
+
+  .bento-top-bar {
+    padding: 0.5rem 0.65rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .bento-badge-sub {
+    display: none;
+  }
+
+  .bento-pos-badge {
+    gap: 0.45rem;
+  }
+
+  .bento-badge-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+
+  .bento-badge-title {
+    font-size: 0.88rem;
+  }
+
+  .card {
+    padding: 0.85rem !important;
+    overflow-x: auto;
+  }
+
+  .data-table {
+    min-width: 550px;
+  }
+
+  .modal-content {
+    max-width: 96vw !important;
+    margin: 0.5rem !important;
+    max-height: 94vh !important;
+  }
+}
+
+/* Small Mobile Screens (<= 520px) */
+@media (max-width: 520px) {
+  .bento-cart-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bento-cart-table-header,
+  .bento-cart-row {
+    min-width: 420px;
+  }
+}
+
+/* Extra Small Phones (<= 420px) */
+@media (max-width: 420px) {
+  .main-content {
+    padding: 0.5rem 0.5rem 1.5rem !important;
+  }
+
+  .topbar-toggle-text {
+    display: none;
+  }
+
+  .topbar-breadcrumb-sep,
+  .topbar-store-name {
+    display: none;
+  }
+
+  .topbar-current-page {
+    max-width: 140px;
+    font-size: 0.8rem;
+  }
+}
+

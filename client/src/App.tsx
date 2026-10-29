@@ -36,6 +36,15 @@ import {
   searchHsnSac,
   suggestHsnForProduct,
   type HsnItem,
+  getPaymentSettings,
+  updatePaymentSettings,
+  createPaymentAttempt,
+  getPaymentAttemptStatus,
+  verifyPaymentAttempt,
+  manualVerifyPaymentAttempt,
+  cancelPaymentAttempt,
+  type PublicPaymentSettings,
+  type PaymentAttempt,
 } from './api';
 import { moneyInWords } from '../../shared/money.ts';
 import { qrSvg } from '../../shared/qr.ts';
@@ -89,6 +98,7 @@ import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
 import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
 import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx';
 import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
+import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
 
 export interface ToastItem {
   id: string;
@@ -524,12 +534,55 @@ export function App() {
   const [selectedPartyId, setSelectedPartyId] = useState<string>('');
   const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'split'>('cash');
   const [cashReceived, setCashReceived] = useState<string>('');
-  const [splitMethod1, setSplitMethod1] = useState<'cash' | 'upi' | 'card' | 'bank'>('cash');
+  const [splitMethod1, setSplitMethod1] = useState<'cash' | 'upi' | 'card'>('cash');
   const [splitAmount1, setSplitAmount1] = useState<string>('');
-  const [splitMethod2, setSplitMethod2] = useState<'cash' | 'upi' | 'card' | 'bank'>('upi');
+  const [splitMethod2, setSplitMethod2] = useState<'cash' | 'upi' | 'card'>('upi');
   const [splitAmount2, setSplitAmount2] = useState<string>('');
   const [splitCashTendered, setSplitCashTendered] = useState<string>('');
   const lastSplitEditedRef = useRef<1 | 2>(1);
+
+  // Shop-specific UPI & QR Payment Configuration & State
+  const [posPaymentConfig, setPosPaymentConfig] = useState<PublicPaymentSettings | null>(null);
+  // Payments & Integrations Settings State
+  const [paySettingsSubTab, setPaySettingsSubTab] = useState<'methods' | 'razorpay' | 'paytm' | 'phonepe' | 'qr' | 'bank' | 'terminal'>('methods');
+  const [payMethodsEnabled, setPayMethodsEnabled] = useState<string[]>(['cash', 'upi', 'card', 'bank', 'credit']);
+  const [payUpiEnabled, setPayUpiEnabled] = useState(true);
+  const [payQrType, setPayQrType] = useState<'static' | 'dynamic'>('static');
+  const [payProvider, setPayProvider] = useState<'manual' | 'razorpay' | 'paytm' | 'phonepe'>('razorpay');
+  const [payStaticUpiId, setPayStaticUpiId] = useState('');
+  const [payStaticMerchantName, setPayStaticMerchantName] = useState('');
+  const [payRzpEnabled, setPayRzpEnabled] = useState(false);
+  const [payRzpMode, setPayRzpMode] = useState<'test' | 'live'>('test');
+  const [payRzpKeyId, setPayRzpKeyId] = useState('');
+  const [payRzpKeySecret, setPayRzpKeySecret] = useState('');
+  const [payRzpWebhookSecret, setPayRzpWebhookSecret] = useState('');
+  const [payRzpExpiryMinutes, setPayRzpExpiryMinutes] = useState(15);
+  const [showRzpSecret, setShowRzpSecret] = useState(false);
+  const [payPaytmEnabled, setPayPaytmEnabled] = useState(false);
+  const [payPaytmMode, setPayPaytmMode] = useState<'test' | 'live'>('test');
+  const [payPaytmMid, setPayPaytmMid] = useState('');
+  const [payPaytmMerchantKey, setPayPaytmMerchantKey] = useState('');
+  const [payPaytmWebsite, setPayPaytmWebsite] = useState('WEBSTAGING');
+  const [showPaytmSecret, setShowPaytmSecret] = useState(false);
+  const [payPhonePeEnabled, setPayPhonePeEnabled] = useState(false);
+  const [payPhonePeMode, setPayPhonePeMode] = useState<'test' | 'live'>('test');
+  const [payPhonePeMid, setPayPhonePeMid] = useState('');
+  const [payPhonePeSaltKey, setPayPhonePeSaltKey] = useState('');
+  const [payPhonePeSaltIndex, setPayPhonePeSaltIndex] = useState('1');
+  const [showPhonePeSecret, setShowPhonePeSecret] = useState(false);
+  const [payBankEnabled, setPayBankEnabled] = useState(false);
+  const [payBankAccountName, setPayBankAccountName] = useState('');
+  const [payBankAccountNo, setPayBankAccountNo] = useState('');
+  const [payBankIfsc, setPayBankIfsc] = useState('');
+  const [payBankName, setPayBankName] = useState('');
+  const [payBankBranch, setPayBankBranch] = useState('');
+  const [isSavingPaySettings, setIsSavingPaySettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [paySettingsStatusMsg, setPaySettingsStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeQrAttempt, setActiveQrAttempt] = useState<PaymentAttempt | null>(null);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [isVerifyingQr, setIsVerifyingQr] = useState(false);
+  const [upiManualRef, setUpiManualRef] = useState('');
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [printModalInvoiceId, setPrintModalInvoiceId] = useState<string | null>(null);
@@ -642,6 +695,7 @@ export function App() {
   const [settingsLoyaltyPointsPer100, setSettingsLoyaltyPointsPer100] = useState(10);
   const [settingsLoyaltyPointValueRupees, setSettingsLoyaltyPointValueRupees] = useState(0.10);
   const [settingsLoyaltyMinRedeem, setSettingsLoyaltyMinRedeem] = useState(10);
+  const [showPosLoyaltyModal, setShowPosLoyaltyModal] = useState(false);
 
   // WhatsApp Bill Sharing: Checkout Success Modal State (Section 4)
   const [checkoutSuccess, setCheckoutSuccess] = useState<{
@@ -657,6 +711,8 @@ export function App() {
     partyId?: string;
     tender?: { cashReceivedMinor: number; changeReturnedMinor: number } | null;
     payments?: { method: string; amountMinor: number }[];
+    earnedLoyaltyPoints?: number;
+    redeemedLoyaltyPoints?: number;
   } | null>(null);
   const [successPhone, setSuccessPhone] = useState('');
   const [successLang, setSuccessLang] = useState<'en' | 'hi' | 'ta'>('en');
@@ -1603,6 +1659,7 @@ export function App() {
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsSavedMsg('');
+    setIsSavingSettings(true);
     try {
       const updated = await api<Shop>('/api/shop', {
         method: 'PUT',
@@ -1630,6 +1687,8 @@ export function App() {
       showToast('Store settings saved successfully!');
     } catch (err: any) {
       alert(err.message || 'Failed to update settings');
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -2087,13 +2146,14 @@ export function App() {
     } catch {}
 
     // Determine status
-    let status: 'idle' | 'billing' | 'payment_upi' | 'payment_cash' | 'payment_card' | 'completed' = 'idle';
+    let status: 'idle' | 'billing' | 'payment_upi' | 'payment_cash' | 'payment_card' | 'payment_bank' | 'completed' = 'idle';
     if (checkoutSuccess) {
       status = 'completed';
     } else if (cart.length > 0) {
       if (selectedPayMode === 'upi') status = 'payment_upi';
       else if (selectedPayMode === 'cash') status = 'payment_cash';
       else if (selectedPayMode === 'card') status = 'payment_card';
+      else if (selectedPayMode === 'bank') status = 'payment_bank';
       else status = 'billing';
     }
 
@@ -2338,6 +2398,182 @@ export function App() {
     }
   };
 
+  // Load shop-isolated payment settings
+  useEffect(() => {
+    if (!shop) return;
+    getPaymentSettings()
+      .then((cfg) => {
+        setPosPaymentConfig(cfg);
+        setPayUpiEnabled(cfg.upiEnabled);
+        setPayQrType(cfg.qrType);
+        setPayProvider(cfg.provider || (cfg.paytmEnabled ? 'paytm' : 'razorpay'));
+        setPayStaticUpiId(cfg.staticUpiId || shop.upiId || '');
+        setPayStaticMerchantName(cfg.staticMerchantName || shop.name || '');
+        setPayRzpEnabled(cfg.rzpEnabled);
+        setPayRzpMode(cfg.rzpMode);
+        setPayRzpKeyId(cfg.rzpKeyId || '');
+        setPayRzpExpiryMinutes(cfg.rzpQrExpiryMinutes || 15);
+        setPayPaytmEnabled(Boolean(cfg.paytmEnabled));
+        setPayPaytmMode(cfg.paytmMode || 'test');
+        setPayPaytmMid(cfg.paytmMid || '');
+        setPayPhonePeEnabled(Boolean(cfg.phonepeEnabled));
+        setPayPhonePeMode(cfg.phonepeMode || 'test');
+        setPayPhonePeMid(cfg.phonepeMid || '');
+        setPayPhonePeSaltIndex(cfg.phonepeSaltIndex || '1');
+        setPayPaytmWebsite(cfg.paytmWebsite || (cfg.paytmMode === 'live' ? 'DEFAULT' : 'WEBSTAGING'));
+        setPayBankEnabled(Boolean(cfg.bankEnabled));
+        setPayBankAccountName(cfg.bankAccountName || '');
+        setPayBankAccountNo(cfg.bankAccountNo || '');
+        setPayBankIfsc(cfg.bankIfsc || '');
+        setPayBankName(cfg.bankName || '');
+        setPayBankBranch(cfg.bankBranch || '');
+        if (cfg.enabledMethods && cfg.enabledMethods.length > 0) {
+          setPayMethodsEnabled(cfg.enabledMethods);
+        }
+        if (cfg.upiEnabled === false && selectedPayMode === 'upi') {
+          setSelectedPayMode('cash');
+        }
+        if (cfg.bankEnabled === false && selectedPayMode === 'bank') {
+          setSelectedPayMode('cash');
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load shop payment settings:', err);
+      });
+  }, [shop, activeTab]);
+
+  // Dynamic QR auto-poll when status is pending
+  useEffect(() => {
+    if (!activeQrAttempt || activeQrAttempt.status !== 'pending' || activeQrAttempt.qrType !== 'dynamic') {
+      return;
+    }
+    const timer = setInterval(async () => {
+      try {
+        const res = await getPaymentAttemptStatus(activeQrAttempt.attemptId);
+        setActiveQrAttempt((prev) => prev ? {
+          ...prev,
+          status: res.status,
+          providerPaymentId: res.providerPaymentId || prev.providerPaymentId,
+        } : null);
+        if (res.status === 'paid') {
+          showToast('Payment verified successfully via UPI QR!');
+        }
+      } catch {
+        // ignore background poll errors
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [activeQrAttempt?.attemptId, activeQrAttempt?.status, activeQrAttempt?.qrType]);
+
+  const handleGenerateDynamicQr = async () => {
+    if (finalPayableMinor <= 0) {
+      showToast('Cannot generate QR for ₹0 amount', 'error');
+      return;
+    }
+    setIsGeneratingQr(true);
+    try {
+      const attempt = await createPaymentAttempt({
+        amountMinor: finalPayableMinor,
+        qrType: 'dynamic',
+      });
+      setActiveQrAttempt(attempt);
+      showToast('Dynamic UPI QR generated!');
+    } catch (err: any) {
+      showToast(`Failed to generate Dynamic QR: ${err.message || 'Error'}`, 'error');
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  };
+
+  const handleVerifyDynamicQr = async () => {
+    if (!activeQrAttempt) return;
+    setIsVerifyingQr(true);
+    try {
+      const res = await verifyPaymentAttempt(activeQrAttempt.attemptId);
+      setActiveQrAttempt((prev) => prev ? {
+        ...prev,
+        status: res.status as any,
+        providerPaymentId: res.providerPaymentId || prev.providerPaymentId,
+      } : null);
+      if (res.status === 'paid') {
+        showToast('Payment confirmed and verified!');
+      } else {
+        showToast(`Payment status: ${res.status}`);
+      }
+    } catch (err: any) {
+      showToast(`Verification: ${err.message || 'Status check failed'}`, 'error');
+    } finally {
+      setIsVerifyingQr(false);
+    }
+  };
+
+  const handleSavePaymentSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!user || user.role === 'cashier') {
+      showToast('Only Owner or Store Manager can modify payment settings', 'error');
+      return;
+    }
+    setIsSavingPaySettings(true);
+    setPaySettingsStatusMsg(null);
+    try {
+      const updated = await updatePaymentSettings({
+        upiEnabled: payUpiEnabled,
+        qrType: payQrType,
+        provider: payQrType === 'dynamic' ? payProvider : (payRzpEnabled ? 'razorpay' : payPaytmEnabled ? 'paytm' : 'manual'),
+        staticUpiId: payStaticUpiId.trim() || null,
+        staticMerchantName: payStaticMerchantName.trim() || null,
+        rzpEnabled: payRzpEnabled,
+        rzpMode: payRzpMode,
+        rzpKeyId: payRzpKeyId.trim() || null,
+        rzpKeySecret: payRzpKeySecret.trim() ? payRzpKeySecret.trim() : undefined,
+        rzpWebhookSecret: payRzpWebhookSecret.trim() ? payRzpWebhookSecret.trim() : undefined,
+        rzpQrExpiryMinutes: Number(payRzpExpiryMinutes) || 15,
+        paytmEnabled: payPaytmEnabled,
+        paytmMode: payPaytmMode,
+        paytmMid: payPaytmMid.trim() || null,
+        paytmMerchantKey: payPaytmMerchantKey.trim() ? payPaytmMerchantKey.trim() : undefined,
+        paytmWebsite: payPaytmWebsite.trim() || (payPaytmMode === 'live' ? 'DEFAULT' : 'WEBSTAGING'),
+        phonepeEnabled: payPhonePeEnabled,
+        phonepeMode: payPhonePeMode,
+        phonepeMid: payPhonePeMid.trim() || null,
+        phonepeSaltKey: payPhonePeSaltKey.trim() ? payPhonePeSaltKey.trim() : undefined,
+        phonepeSaltIndex: payPhonePeSaltIndex.trim() || '1',
+        bankEnabled: payBankEnabled,
+        bankAccountName: payBankAccountName.trim() || null,
+        bankAccountNo: payBankAccountNo.trim() || null,
+        bankIfsc: payBankIfsc.trim() || null,
+        bankName: payBankName.trim() || null,
+        bankBranch: payBankBranch.trim() || null,
+        enabledMethods: payBankEnabled
+          ? Array.from(new Set([...payMethodsEnabled, 'bank']))
+          : payMethodsEnabled.filter((m) => m !== 'bank'),
+      });
+
+      setPosPaymentConfig(updated);
+      setActiveQrAttempt(null);
+      if (updated.staticUpiId && shop) {
+        setShop((prev) => prev ? { ...prev, upiId: updated.staticUpiId || prev.upiId } : null);
+      }
+      setPayRzpKeySecret('');
+      setPayRzpWebhookSecret('');
+      setPayPaytmMerchantKey('');
+      setPayPhonePeSaltKey('');
+      setPaySettingsStatusMsg({
+        type: 'success',
+        text: `Payment settings saved successfully! Status: ${updated.status === 'connected' ? 'Connected' : updated.status === 'error' ? 'Validation Error' : 'Configured'}`
+      });
+      showToast(`Payment settings saved (${updated.status})`);
+    } catch (err: any) {
+      setPaySettingsStatusMsg({
+        type: 'error',
+        text: err.message || 'Failed to update payment settings',
+      });
+      showToast(err.message || 'Failed to save payment settings', 'error');
+    } finally {
+      setIsSavingPaySettings(false);
+    }
+  };
+
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
 
@@ -2369,7 +2605,7 @@ export function App() {
         custName = `${custName || 'Client'} [Ref: ${jobRef}]`;
       }
 
-      let paymentsPayload: { method: string; amountMinor: number }[] = [];
+      let paymentsPayload: { method: string; amountMinor: number; reference?: string }[] = [];
       let tenderPayload: { cashReceivedMinor: number; changeReturnedMinor: number } | null = null;
 
       if (selectedPayMode === 'split') {
@@ -2393,7 +2629,14 @@ export function App() {
 
         tenderPayload = null;
       } else {
-        paymentsPayload = [{ method: selectedPayMode, amountMinor: finalPayableMinor }];
+        const upiRef = (selectedPayMode === 'upi' || selectedPayMode === 'bank')
+          ? (activeQrAttempt?.providerPaymentId || (upiManualRef.trim() ? upiManualRef.trim() : undefined))
+          : undefined;
+        paymentsPayload = [{
+          method: selectedPayMode,
+          amountMinor: finalPayableMinor,
+          reference: upiRef,
+        }];
         if (selectedPayMode === 'cash') {
           tenderPayload = {
             cashReceivedMinor: cashReceivedValMinor,
@@ -2436,9 +2679,20 @@ export function App() {
 
       setRedeemPoints(false);
 
+      if (selectedPayMode === 'upi' && activeQrAttempt && activeQrAttempt.status !== 'paid') {
+        if (posPaymentConfig?.qrType === 'static' || !posPaymentConfig?.rzpEnabled) {
+          try {
+            await manualVerifyPaymentAttempt(activeQrAttempt.attemptId, upiManualRef.trim() || undefined);
+          } catch {
+            // non-fatal
+          }
+        }
+      }
       const itemsInBillCount = cart.reduce((acc, c) => acc + c.qty, 0);
       setCart([]);
       setCashReceived('');
+      setActiveQrAttempt(null);
+      setUpiManualRef('');
       setSplitAmount1('');
       setSplitAmount2('');
       setSplitCashTendered('');
@@ -2479,6 +2733,8 @@ export function App() {
           partyId: res.partyId || selectedPartyId || undefined,
           tender: res.tender || tenderPayload,
           payments: paymentsPayload,
+          earnedLoyaltyPoints: res.earnedLoyaltyPoints ?? (res.partyId || selectedPartyId ? pointsToEarnOnBill : 0),
+          redeemedLoyaltyPoints: res.redeemedLoyaltyPoints ?? (redeemPoints ? pointsActuallyRedeemed : 0),
         });
         setSuccessPhone(checkoutPhone || '');
         setSuccessLang((shop?.whatsappDefaultLang as any) || 'en');
@@ -4246,7 +4502,7 @@ export function App() {
               <span className="nav-tag-shortcut">F1</span>
             </button>
             {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
-            {user.role === 'cashier' && (
+            {user?.role === 'cashier' && (
               <button
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
@@ -4400,7 +4656,7 @@ export function App() {
             )}
 
             {/* Cashier Recent Bills */}
-            {user.role === 'cashier' && (
+            {user?.role === 'cashier' && (
               <button
                 type="button"
                 className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
@@ -4758,33 +5014,6 @@ export function App() {
               </>
             )}
 
-            {/* Management Section: Only for Super Admin */}
-            {user.role === 'owner' && (
-              <>
-                <div className="sidebar-section-label" style={{ marginTop: '0.75rem' }}>CONFIGURATION</div>
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('settings')}
-                >
-                  <span className="nav-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="4" y1="21" x2="4" y2="14" />
-                      <line x1="4" y1="10" x2="4" y2="3" />
-                      <line x1="12" y1="21" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12" y2="3" />
-                      <line x1="20" y1="21" x2="20" y2="16" />
-                      <line x1="20" y1="12" x2="20" y2="3" />
-                      <line x1="1" y1="14" x2="7" y2="14" />
-                      <line x1="9" y1="8" x2="15" y2="8" />
-                      <line x1="17" y1="16" x2="23" y2="16" />
-                    </svg>
-                  </span>
-                  <span className="nav-text">Business Packs</span>
-                </button>
-              </>
-            )}
-
           </nav>
         </div>
 
@@ -4798,7 +5027,7 @@ export function App() {
               <span className="sidebar-user-name">{user.name}</span>
               <span className="sidebar-user-role">
                 <span className="user-status-dot"></span>
-                {user.role === 'owner' ? 'Super Admin' : user.role === 'manager' ? 'Store Manager' : user.role === 'cashier' ? 'Cashier' : user.role}
+                {user.role === 'owner' ? 'Super Admin' : user.role === 'manager' ? 'Store Manager' : user?.role === 'cashier' ? 'Cashier' : user.role}
               </span>
             </div>
           </div>
@@ -5025,7 +5254,7 @@ export function App() {
                     onNavigate={setActiveTab}
                   />
                 )}
-                {user.role === 'cashier' && (
+                {user?.role === 'cashier' && (
                   <CashierDashboard
                     user={user}
                     shop={shop}
@@ -5075,6 +5304,55 @@ export function App() {
                   <div className="bento-shift-pill closed" onClick={() => setShowPosOpenShiftModal(true)}>
                     <span className="bento-pulse-dot amber"></span>
                     <span>Register Closed • Click to Open Shift</span>
+                  </div>
+                )}
+
+                {/* POS Loyalty Program Status Pill */}
+                {shopLoyaltyActive ? (
+                  <div
+                    className="bento-loyalty-pill active"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '5px 12px',
+                      borderRadius: '20px',
+                      background: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)',
+                      border: '1.2px solid #d946ef',
+                      color: '#86198f',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 4px rgba(217, 70, 239, 0.15)',
+                    }}
+                    onClick={() => setShowPosLoyaltyModal(true)}
+                    title={`Customer Loyalty Active: Earn ${shopPointsPer100} pts per ₹100 spent (1 pt = ${formatRupees(shopPointValMinor)}). Click to view or adjust scheme.`}
+                  >
+                    <span style={{ fontSize: '0.9rem' }}>🎁</span>
+                    <span>Loyalty: <strong>{shopPointsPer100} pts</strong> / ₹100</span>
+                    <span style={{ fontSize: '0.68rem', background: '#d946ef', color: '#fff', padding: '1px 6px', borderRadius: '10px' }}>Active</span>
+                  </div>
+                ) : (
+                  <div
+                    className="bento-loyalty-pill paused"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      background: '#f8fafc',
+                      border: '1.2px dashed #cbd5e1',
+                      color: '#64748b',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setShowPosLoyaltyModal(true)}
+                    title="Customer Loyalty Rewards is paused. Click to enable and configure scheme."
+                  >
+                    <span>⏸️</span>
+                    <span>Loyalty Paused</span>
                   </div>
                 )}
               </div>
@@ -5183,6 +5461,8 @@ export function App() {
                         onClick={() => {
                           setCart([]);
                           setCashReceived('');
+                          setActiveQrAttempt(null);
+                          setUpiManualRef('');
                           setSplitAmount1('');
                           setSplitAmount2('');
                           setSplitCashTendered('');
@@ -5456,6 +5736,38 @@ export function App() {
                         </div>
                       )}
 
+                      {/* LOYALTY POINTS EARNED ON BILL */}
+                      {shopLoyaltyActive && cart.length > 0 && (
+                        <div
+                          className="bento-summary-row loyalty-earn-row"
+                          style={{
+                            background: 'linear-gradient(135deg, #faf5ff 0%, #fdf4ff 100%)',
+                            padding: '0.35rem 0.65rem',
+                            borderRadius: '6px',
+                            border: '1px solid #f0abfc',
+                            margin: '3px 0',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '0.85rem' }}>🎁</span>
+                            <span className="summary-label" style={{ color: '#86198f', fontWeight: 700 }}>
+                              Loyalty Points on Bill
+                            </span>
+                            <span style={{ fontSize: '0.68rem', color: '#a21caf', fontWeight: 600 }}>
+                              ({shopPointsPer100} pts/₹100)
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span className="summary-val mono" style={{ color: '#86198f', fontWeight: 800 }}>
+                              +{pointsToEarnOnBill} pts
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#15803d', fontWeight: 700 }}>
+                              (≈ {formatRupees(pointsToEarnOnBill * shopPointValMinor)})
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* CONSOLIDATED OVERALL GST WITH TAX BREAKDOWN */}
                       <div className="bento-summary-row tax-row">
                         <div className="tax-label-group">
@@ -5489,13 +5801,26 @@ export function App() {
                           <>
                             <span className="chip-walkin-text">{selectedParty.name}</span>
                             {selectedParty.phone && <span className="chip-phone">({selectedParty.phone})</span>}
-                            <span className="chip-pts-badge">★ {selectedParty.loyaltyPoints ?? 0} pts</span>
+                            <span className="chip-pts-badge" style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}>
+                              🪙 {selectedParty.loyaltyPoints ?? 0} pts ({formatRupees((selectedParty.loyaltyPoints ?? 0) * shopPointValMinor)})
+                            </span>
                             {redeemPoints && pointsDiscountMinor > 0 && (
                               <span className="chip-discount-tag">-₹{(pointsDiscountMinor / 100).toFixed(2)} Points Discount</span>
                             )}
                           </>
                         ) : (
-                          <span className="chip-walkin-text">Walk-in Customer (Default)</span>
+                          <>
+                            <span className="chip-walkin-text">Walk-in Customer (Default)</span>
+                            {shopLoyaltyActive && (
+                              <span
+                                className="chip-pts-badge"
+                                style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}
+                                title={`Store loyalty active: Earn ${shopPointsPer100} pts per ₹100 spent`}
+                              >
+                                🎁 Loyalty: {shopPointsPer100} pts/₹100
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       <button
@@ -5519,6 +5844,7 @@ export function App() {
                         {
                           id: 'cash',
                           label: 'Cash',
+                          disabled: false,
                           icon: (
                             <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -5529,7 +5855,8 @@ export function App() {
                         },
                         {
                           id: 'upi',
-                          label: 'UPI',
+                          label: 'UPI / QR',
+                          disabled: posPaymentConfig?.upiEnabled === false,
                           icon: (
                             <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="5" y="2" width="14" height="20" rx="3" />
@@ -5540,6 +5867,7 @@ export function App() {
                         {
                           id: 'card',
                           label: 'Card',
+                          disabled: false,
                           icon: (
                             <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="2" y="5" width="20" height="14" rx="2" />
@@ -5550,17 +5878,18 @@ export function App() {
                         },
                         {
                           id: 'bank',
-                          label: 'Bank',
+                          label: 'Bank Transfer',
+                          disabled: posPaymentConfig?.bankEnabled === false,
                           icon: (
                             <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 21h18M3 10h18M5 10v11M9 10v11M15 10v11M19 10v11M12 3l9 7H3l9-7z" />
+                              <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M14 10v11M12 2L2 7h20L12 2z" />
                             </svg>
                           ),
                         },
-
                         {
                           id: 'split',
                           label: 'Split',
+                          disabled: false,
                           icon: (
                             <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="18" cy="18" r="3" />
@@ -5570,12 +5899,16 @@ export function App() {
                             </svg>
                           ),
                         },
-                      ].map(({ id, label, icon }) => (
+                      ].map(({ id, label, icon, disabled }) => (
                         <button
                           key={id}
                           type="button"
-                          className={`bento-pay-mode-btn ${selectedPayMode === id ? 'active' : ''}`}
+                          disabled={disabled}
+                          title={disabled ? (id === 'upi' ? 'UPI is disabled in shop settings' : id === 'bank' ? 'Bank Transfer is disabled in shop settings' : 'Disabled in shop settings') : undefined}
+                          className={`bento-pay-mode-btn ${selectedPayMode === id ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+                          style={disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                           onClick={() => {
+                            if (disabled) return;
                             setSelectedPayMode(id as any);
                             if (id === 'split' && !splitAmount1 && !splitAmount2) {
                               handleSplitFiftyFifty();
@@ -5588,7 +5921,6 @@ export function App() {
                       ))}
                     </div>
 
-                    {/* CASH TENDER & CHANGE RETURN ASSISTANT */}
                     {selectedPayMode === 'cash' && cart.length > 0 && (
                       <div className="bento-cash-tender-card">
                         <div className="bento-tender-header">
@@ -5693,7 +6025,7 @@ export function App() {
                       </div>
                     )}
 
-                    {/* DYNAMIC UPI QR & CUSTOMER DISPLAY CARD */}
+                    {/* DYNAMIC OR STATIC UPI QR & CUSTOMER DISPLAY CARD */}
                     {selectedPayMode === 'upi' && cart.length > 0 && (
                       <div className="bento-upi-tender-card">
                         <div className="upi-tender-header">
@@ -5703,7 +6035,11 @@ export function App() {
                                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                               </svg>
                             </span>
-                            <span>Dynamic UPI QR Scanner</span>
+                            <span>
+                              {posPaymentConfig?.qrType === 'dynamic' && (posPaymentConfig?.rzpEnabled || posPaymentConfig?.paytmEnabled || posPaymentConfig?.phonepeEnabled)
+                                ? `Dynamic UPI QR (${posPaymentConfig.provider === 'paytm' ? `Paytm ${posPaymentConfig.paytmMode === 'live' ? 'Live' : 'Test'}` : posPaymentConfig.provider === 'phonepe' ? `PhonePe ${posPaymentConfig.phonepeMode === 'live' ? 'Live' : 'Test'}` : `Razorpay ${posPaymentConfig.rzpMode === 'live' ? 'Live' : 'Test'}`})`
+                                : 'Shop UPI QR (Manual Verification)'}
+                            </span>
                           </div>
                           <div className="upi-tender-status">
                             <button
@@ -5722,63 +6058,348 @@ export function App() {
                           </div>
                         </div>
 
-                        <div className="upi-tender-body">
-                          <div className="upi-qr-display-wrap">
-                            <div
-                              className="upi-qr-code"
-                              dangerouslySetInnerHTML={{
-                                __html: qrSvg(
-                                  `upi://pay?pa=${encodeURIComponent(shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis'))}&pn=${encodeURIComponent(shop?.name || 'Retail Store')}&am=${(finalPayableMinor / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Bill at ${shop?.name || 'Retail Store'}`)}`,
-                                  { size: 130, margin: 1 }
-                                ),
-                              }}
-                            />
-                            <span className="upi-qr-brand-label">GPay • PhonePe • Paytm</span>
+                        {posPaymentConfig?.upiEnabled === false ? (
+                          <div style={{ padding: '1.25rem', textAlign: 'center', color: '#64748b' }}>
+                            <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>UPI Payments Disabled</p>
+                            <p style={{ fontSize: '0.85rem' }}>UPI payments are disabled in Store Settings &gt; Payments.</p>
                           </div>
+                        ) : posPaymentConfig?.qrType === 'dynamic' && (posPaymentConfig?.rzpEnabled || posPaymentConfig?.paytmEnabled || posPaymentConfig?.phonepeEnabled) ? (
+                          /* DYNAMIC QR FLOW */
+                          <div className="upi-tender-body">
+                            {!activeQrAttempt ? (
+                              <div style={{ width: '100%', padding: '1rem', textAlign: 'center' }}>
+                                <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                                  Generate a single-use amount-locked Dynamic QR code for ₹{(finalPayableMinor / 100).toFixed(2)} via {posPaymentConfig.provider === 'paytm' ? 'Paytm' : posPaymentConfig.provider === 'phonepe' ? 'PhonePe' : 'Razorpay'}.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  style={{
+                                    padding: '9px 18px',
+                                    background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: 700,
+                                    fontSize: '0.88rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(109, 74, 255, 0.28)',
+                                  }}
+                                  disabled={isGeneratingQr}
+                                  onClick={handleGenerateDynamicQr}
+                                >
+                                  {isGeneratingQr ? 'Generating QR...' : `⚡ Generate Dynamic QR (${posPaymentConfig.provider === 'paytm' ? 'Paytm' : posPaymentConfig.provider === 'phonepe' ? 'PhonePe' : 'Razorpay'} - ₹${(finalPayableMinor / 100).toFixed(2)})`}
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="upi-qr-display-wrap">
+                                  {activeQrAttempt.qrImageUrl ? (
+                                    <img
+                                      src={activeQrAttempt.qrImageUrl}
+                                      alt="Dynamic UPI QR"
+                                      style={{ width: 130, height: 130, objectFit: 'contain', background: '#fff', padding: '4px', borderRadius: '8px' }}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="upi-qr-code"
+                                      dangerouslySetInnerHTML={{
+                                        __html: qrSvg(activeQrAttempt.qrPayload || '', { size: 130, margin: 1 }),
+                                      }}
+                                    />
+                                  )}
+                                  <span className="upi-qr-brand-label">GPay • PhonePe • Paytm</span>
+                                </div>
 
-                          <div className="upi-tender-info">
-                            <div className="upi-amount-row">
-                              <span className="upi-label">Payable Amount:</span>
-                              <strong className="upi-val">₹{(finalPayableMinor / 100).toFixed(2)}</strong>
-                            </div>
+                                <div className="upi-tender-info">
+                                  <div className="upi-amount-row">
+                                    <span className="upi-label">Payable Amount:</span>
+                                    <strong className="upi-val">₹{(activeQrAttempt.amountMinor / 100).toFixed(2)}</strong>
+                                  </div>
 
-                            <div className="upi-vpa-row">
-                              <span className="upi-vpa-label">Shop VPA:</span>
-                              <span className="upi-vpa-code">{shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis')}</span>
-                              <button
-                                type="button"
-                                className="upi-edit-vpa-btn"
-                                onClick={async () => {
-                                  const current = shop?.upiId || '';
-                                  const input = window.prompt('Enter your Shop UPI ID / VPA (e.g. yourstore@okaxis, 9876543210@paytm):', current);
-                                  if (input !== null && shop) {
-                                    try {
-                                      const updated = await api<Shop>('/api/shop', {
-                                        method: 'PUT',
-                                        body: JSON.stringify({ ...shop, upiId: input.trim() || null }),
-                                      });
-                                      setShop(updated);
-                                      showToast(`✅ Shop UPI ID updated to ${input.trim() || 'default'}`);
-                                    } catch (e: any) {
-                                      alert(e.message || 'Failed to update UPI ID');
-                                    }
-                                  }
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Status:</span>
+                                    {activeQrAttempt.status === 'paid' && (
+                                      <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                        ✅ Paid & Verified
+                                      </span>
+                                    )}
+                                    {activeQrAttempt.status === 'pending' && (
+                                      <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                        ⏳ Waiting for Payment...
+                                      </span>
+                                    )}
+                                    {activeQrAttempt.status === 'expired' && (
+                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                        ⚠️ QR Expired
+                                      </span>
+                                    )}
+                                    {activeQrAttempt.status === 'failed' && (
+                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                        ❌ Payment Failed
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {activeQrAttempt.expiresAt && (
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                      Expires: {new Date(activeQrAttempt.expiresAt).toLocaleTimeString()}
+                                    </div>
+                                  )}
+
+                                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                                    <button
+                                      type="button"
+                                      disabled={isVerifyingQr}
+                                      onClick={handleVerifyDynamicQr}
+                                      style={{
+                                        padding: '5px 12px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 600,
+                                        background: 'var(--primary)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {isVerifyingQr ? 'Checking...' : '🔄 Check Status'}
+                                    </button>
+                                    {(activeQrAttempt.status === 'expired' || activeQrAttempt.status === 'failed') && (
+                                      <button
+                                        type="button"
+                                        disabled={isGeneratingQr}
+                                        onClick={handleGenerateDynamicQr}
+                                        style={{
+                                          padding: '5px 12px',
+                                          fontSize: '0.78rem',
+                                          fontWeight: 600,
+                                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                                          color: '#fff',
+                                          border: 'none',
+                                          borderRadius: '6px',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        ⚡ New QR
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          /* STATIC QR FLOW (With explicit manual verification notice) */
+                          <div className="upi-tender-body">
+                            <div className="upi-qr-display-wrap">
+                              <div
+                                className="upi-qr-code"
+                                dangerouslySetInnerHTML={{
+                                  __html: qrSvg(
+                                    `upi://pay?pa=${encodeURIComponent(posPaymentConfig?.staticUpiId?.trim() || shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis'))}&pn=${encodeURIComponent(posPaymentConfig?.staticMerchantName?.trim() || shop?.name || 'Retail Store')}&am=${(finalPayableMinor / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Bill at ${posPaymentConfig?.staticMerchantName?.trim() || shop?.name || 'Retail Store'}`)}`,
+                                    { size: 130, margin: 1 }
+                                  ),
                                 }}
-                                title="Edit Shop UPI VPA"
-                              >
-                                ✏️ Edit VPA
-                              </button>
+                              />
+                              <span className="upi-qr-brand-label">GPay • PhonePe • Paytm</span>
                             </div>
 
-                            <div className="upi-dual-hint">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="12" y1="16" x2="12" y2="12"></line>
-                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                              </svg>
-                              <span>Customer sees this QR on their screen. After payment confirmation, click <strong>Proceed to Payment</strong>.</span>
+                            <div className="upi-tender-info">
+                              <div className="upi-amount-row">
+                                <span className="upi-label">Payable Amount:</span>
+                                <strong className="upi-val">₹{(finalPayableMinor / 100).toFixed(2)}</strong>
+                              </div>
+
+                              <div className="upi-vpa-row">
+                                <span className="upi-vpa-label">Shop VPA:</span>
+                                <span className="upi-vpa-code">{posPaymentConfig?.staticUpiId?.trim() || shop?.upiId?.trim() || (shop?.phone ? `${shop.phone.replace(/\D/g, '').slice(-10)}@upi` : 'merchant@okaxis')}</span>
+                                <button
+                                  type="button"
+                                  className="upi-edit-vpa-btn"
+                                  onClick={async () => {
+                                    const current = posPaymentConfig?.staticUpiId || shop?.upiId || '';
+                                    const input = window.prompt('Enter your Shop UPI ID / VPA (e.g. yourstore@okaxis, 9876543210@paytm):', current);
+                                    if (input !== null && shop) {
+                                      try {
+                                        const updated = await api<Shop>('/api/shop', {
+                                          method: 'PUT',
+                                          body: JSON.stringify({ ...shop, upiId: input.trim() || null }),
+                                        });
+                                        setShop(updated);
+                                        showToast(`✅ Shop UPI ID updated to ${input.trim() || 'default'}`);
+                                      } catch (e: any) {
+                                        alert(e.message || 'Failed to update UPI ID');
+                                      }
+                                    }
+                                  }}
+                                  title="Edit Shop UPI VPA"
+                                >
+                                  ✏️ Edit VPA
+                                </button>
+                              </div>
+
+                              {/* Strict safety rule: Manual verification notice */}
+                              <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', marginTop: '6px', fontSize: '0.74rem', color: '#92400e', lineHeight: 1.3 }}>
+                                <strong>⚠️ Manual Verification:</strong> Verify receipt in your UPI/Bank app. Do not mark paid based solely on customer screenshots.
+                              </div>
+
+                              <div style={{ marginTop: '6px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap' }}>UTR / Ref:</span>
+                                <input
+                                  type="text"
+                                  placeholder="12-digit UTR (optional)"
+                                  value={upiManualRef}
+                                  onChange={(e) => setUpiManualRef(e.target.value)}
+                                  style={{ flex: 1, padding: '3px 6px', fontSize: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                />
+                              </div>
                             </div>
                           </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* BANK TRANSFER (DIRECT NEFT / IMPS / RTGS) CARD */}
+                    {selectedPayMode === 'bank' && cart.length > 0 && (
+                      <div className="bento-bank-tender-card" style={{
+                        background: '#ffffff',
+                        border: '1.5px solid #e0e7ff',
+                        borderRadius: '14px',
+                        padding: '1.25rem',
+                        marginTop: '0.85rem',
+                        boxShadow: '0 4px 16px rgba(109, 74, 255, 0.06)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', paddingBottom: '0.65rem', borderBottom: '1px solid #eef2ff' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '9px',
+                              background: '#eef2ff',
+                              color: 'var(--primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1.15rem'
+                            }}>
+                              🏦
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                                Bank Transfer
+                              </div>
+                              <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                                Direct NEFT / RTGS / IMPS / NetBanking
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Amount</div>
+                            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--primary)' }}>
+                              ₹{(finalPayableMinor / 100).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bank Details Container */}
+                        <div style={{
+                          background: '#faf9ff',
+                          border: '1px solid #e0e7ff',
+                          borderRadius: '10px',
+                          padding: '1rem',
+                          marginBottom: '0.85rem'
+                        }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#312e81', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span>Shop Bank Details</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const details = `Account Name: ${posPaymentConfig?.bankAccountName || shop?.name || ''}\nAccount No: ${posPaymentConfig?.bankAccountNo || 'Not Configured'}\nIFSC: ${posPaymentConfig?.bankIfsc || ''}\nBank: ${posPaymentConfig?.bankName || ''}${posPaymentConfig?.bankBranch ? ` (${posPaymentConfig.bankBranch})` : ''}\nAmount: ₹${(finalPayableMinor / 100).toFixed(2)}`;
+                                navigator.clipboard.writeText(details);
+                                showToast('📋 Bank details copied to clipboard!');
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 10px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                background: '#6d4aff',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 6px rgba(109, 74, 255, 0.25)'
+                              }}
+                            >
+                              📋 Copy Details
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', fontSize: '0.83rem' }}>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Account Name</span>
+                              <strong style={{ color: 'var(--text-main)', fontSize: '0.88rem' }}>
+                                {posPaymentConfig?.bankAccountName || shop?.name || 'Not Configured'}
+                              </strong>
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Account Number</span>
+                              <strong style={{ color: 'var(--text-main)', fontSize: '0.92rem', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                                {posPaymentConfig?.bankAccountNo || 'Not Configured'}
+                              </strong>
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>IFSC Code</span>
+                              <strong style={{ color: 'var(--text-main)', fontSize: '0.88rem', fontFamily: 'monospace' }}>
+                                {posPaymentConfig?.bankIfsc || 'Not Configured'}
+                              </strong>
+                            </div>
+                            {(posPaymentConfig?.bankName || posPaymentConfig?.bankBranch) && (
+                              <div>
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>Bank & Branch</span>
+                                <strong style={{ color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                                  {[posPaymentConfig?.bankName, posPaymentConfig?.bankBranch].filter(Boolean).join(', ')}
+                                </strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Reference / UTR Input */}
+                        <div style={{ marginBottom: '0.75rem' }}>
+                          <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px' }}>
+                            Payment Reference / UTR Number (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter 12-digit UTR or Bank Transaction Ref"
+                            value={upiManualRef}
+                            onChange={(e) => setUpiManualRef(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border)',
+                              fontSize: '0.85rem',
+                              background: '#ffffff',
+                              color: 'var(--text-main)'
+                            }}
+                          />
+                        </div>
+
+                        <div style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          fontSize: '0.76rem',
+                          color: '#475569',
+                          lineHeight: 1.35
+                        }}>
+                          ℹ️ Customer transfers amount via Net Banking / IMPS / NEFT and provides UTR. Cashier verifies bank deposit before completing sale.
                         </div>
                       </div>
                     )}
@@ -5826,7 +6447,6 @@ export function App() {
                                 <option value="cash">Cash</option>
                                 <option value="upi">UPI</option>
                                 <option value="card">Card</option>
-                                <option value="bank">Bank</option>
                               </select>
                               <button
                                 type="button"
@@ -5875,7 +6495,6 @@ export function App() {
                                 <option value="upi">UPI</option>
                                 <option value="cash">Cash</option>
                                 <option value="card">Card</option>
-                                <option value="bank">Bank</option>
                               </select>
                               <button
                                 type="button"
@@ -5983,6 +6602,7 @@ export function App() {
                                 {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
                                  selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
                                  selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
+                                 selectedPayMode === 'bank' ? 'Bank Transfer Received & Generate Bill' :
                                  'Proceed to Payment'}
                               </span>
                               <span className="checkout-arrow">
@@ -6013,22 +6633,48 @@ export function App() {
                         <div>
                           <h3 className="bento-card-title">Customer & Loyalty Rewards</h3>
                           <span className="bento-card-subtitle">
-                            {selectedParty ? 'Earn 1 pt per ₹10 • Instant counter discount' : 'Enter mobile to credit points automatically'}
+                            {shopLoyaltyActive
+                              ? `Earn ${shopPointsPer100} pts per ₹100 (1 pt = ${formatRupees(shopPointValMinor)}) • Redeem at checkout`
+                              : 'Loyalty rewards paused in store settings'}
                           </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="bento-add-btn"
-                        onClick={() => setShowPartyModal(true)}
-                        title="Add New Customer"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span>Customer</span>
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <button
+                          type="button"
+                          className="bento-loyalty-scheme-btn"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '0.35rem 0.65rem',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            color: '#6b21a8',
+                            background: '#faf5ff',
+                            border: '1.2px solid #d8b4fe',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setShowPosLoyaltyModal(true)}
+                          title="View & Configure Loyalty Rewards Scheme"
+                        >
+                          <span>🎁</span>
+                          <span>Scheme ({shopPointsPer100} pts/₹100)</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="bento-add-btn"
+                          onClick={() => setShowPartyModal(true)}
+                          title="Add New Customer"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>Customer</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="bento-customer-body">
@@ -6253,14 +6899,18 @@ export function App() {
                             </button>
                           )}
 
-                          {shopLoyaltyActive && selectedPartyPoints > 0 && selectedPartyPoints < shopMinRedeem && (
+                          {shopLoyaltyActive && selectedPartyPoints < shopMinRedeem && (
                             <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px dashed #cbd5e1', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10" />
                                 <line x1="12" y1="16" x2="12" y2="12" />
                                 <line x1="12" y1="8" x2="12.01" y2="8" />
                               </svg>
-                              <span>Min. {shopMinRedeem} pts required to redeem (Current: {selectedPartyPoints} pts)</span>
+                              <span>
+                                {selectedPartyPoints === 0
+                                  ? `First-time member! Min. ${shopMinRedeem} pts required to redeem.`
+                                  : `Min. ${shopMinRedeem} pts required to redeem (Current: ${selectedPartyPoints} pts).`}
+                              </span>
                             </div>
                           )}
 
@@ -6287,26 +6937,102 @@ export function App() {
                           )}
                         </div>
                       ) : (
-                        <div className="bento-customer-quick-row">
-                          <div className="bento-walkin-pill">
-                            <span className="walkin-dot"></span>
-                            <span>Walk-in Customer</span>
-                            <span className="walkin-tag">Default</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div className="bento-customer-quick-row">
+                            <div className="bento-walkin-pill">
+                              <span className="walkin-dot"></span>
+                              <span>Walk-in Customer</span>
+                              <span className="walkin-tag">Default</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="bento-cust-count-badge"
+                              onClick={() => setShowPartyModal(true)}
+                              title="Open Customer Accounts Directory"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                              </svg>
+                              <span>{parties.length} Saved</span>
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="bento-cust-count-badge"
-                            onClick={() => setShowPartyModal(true)}
-                            title="Open Customer Accounts Directory"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                              <circle cx="9" cy="7" r="4"></circle>
-                              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                            <span>{parties.length} Saved</span>
-                          </button>
+
+                          {/* Loyalty Program Active Notice in POS Walk-in View */}
+                          {shopLoyaltyActive && (
+                            <div
+                              className="bento-pos-loyalty-promo"
+                              style={{
+                                padding: '0.65rem 0.85rem',
+                                borderRadius: '8px',
+                                background: 'linear-gradient(135deg, #faf5ff 0%, #fdf4ff 100%)',
+                                border: '1.2px solid #e9d5ff',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.35rem',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 700, fontSize: '0.78rem', color: '#6b21a8' }}>
+                                  <span>🎁</span>
+                                  <span>Customer Loyalty Rewards Active</span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #a7f3d0' }}>
+                                  {shopPointsPer100} pts / ₹100
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#4b5563', lineHeight: 1.4 }}>
+                                Customers earn <strong>{shopPointsPer100} points</strong> for every ₹100 spent (1 pt = {formatRupees(shopPointValMinor)} discount).
+                              </div>
+                              {cart.length > 0 ? (
+                                <div
+                                  style={{
+                                    marginTop: '0.2rem',
+                                    padding: '0.35rem 0.6rem',
+                                    background: '#f0fdf4',
+                                    border: '1px dashed #86efac',
+                                    borderRadius: '6px',
+                                    fontSize: '0.73rem',
+                                    color: '#166534',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                  }}
+                                >
+                                  <span>✨ This bill will earn: <strong>+{pointsToEarnOnBill} pts</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const input = document.querySelector('.customer-input-wrap input') as HTMLInputElement;
+                                      if (input) {
+                                        input.focus();
+                                        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }
+                                    }}
+                                    style={{
+                                      background: '#16a34a',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      padding: '2px 8px',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    + Link Member
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: '0.7rem', color: '#7c3aed', fontStyle: 'italic' }}>
+                                  💡 Enter customer mobile above or add items to calculate points!
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -8635,6 +9361,1436 @@ export function App() {
               </form>
             </div>
 
+            {/* Section: Payments & Integrations (Shop Specific) - Theme Styled & Fully Responsive */}
+            <div className="card settings-section" style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 4px 16px rgba(49, 46, 129, 0.05)', padding: '1.75rem', marginBottom: '2rem' }}>
+              {/* Header with Title and Modern Status Badge */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
+                      💳
+                    </div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
+                      Payments & Integrations
+                    </h3>
+                  </div>
+                  <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '5px' }}>
+                    Configure payment tender methods, dynamic UPI QR gateways, and merchant credentials for <strong style={{ color: 'var(--text-main)' }}>{shop?.name || 'this shop'}</strong>.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Status:</span>
+                  <span style={{
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    background: posPaymentConfig?.status === 'connected' ? '#ecfdf5' : posPaymentConfig?.status === 'error' ? '#fef2f2' : '#f8fafc',
+                    color: posPaymentConfig?.status === 'connected' ? '#047857' : posPaymentConfig?.status === 'error' ? '#b91c1c' : '#64748b',
+                    border: `1px solid ${posPaymentConfig?.status === 'connected' ? '#a7f3d0' : posPaymentConfig?.status === 'error' ? '#fecaca' : '#cbd5e1'}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    {posPaymentConfig?.status === 'connected' ? '● Connected & Active' : posPaymentConfig?.status === 'error' ? '✕ Configuration Error' : '○ Not Configured'}
+                  </span>
+                </div>
+              </div>
+
+              {paySettingsStatusMsg && (
+                <div style={{
+                  background: paySettingsStatusMsg.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                  border: `1px solid ${paySettingsStatusMsg.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                  color: paySettingsStatusMsg.type === 'success' ? '#065f46' : '#991b1b',
+                  padding: '0.75rem 1.15rem',
+                  borderRadius: '10px',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span>{paySettingsStatusMsg.type === 'success' ? '✓' : '✕'}</span>
+                  <span>{paySettingsStatusMsg.text}</span>
+                </div>
+              )}
+
+              {/* Subtabs Bar with Responsive Horizontal Scroll */}
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                borderBottom: '1px solid var(--border)',
+                marginBottom: '1.5rem',
+                paddingBottom: '0.75rem',
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none'
+              }}>
+                {[
+                  { id: 'methods', label: 'Payment Methods', icon: '💳' },
+                  { id: 'razorpay', label: 'Razorpay', icon: '⚡' },
+                  { id: 'paytm', label: 'Paytm Gateway', icon: '🅿️' },
+                  { id: 'phonepe', label: 'PhonePe Gateway', icon: '🟣' },
+                  { id: 'qr', label: 'UPI QR', icon: '📱' },
+                  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
+                  { id: 'terminal', label: 'Card Terminal', icon: '📠' },
+                ].map((tab) => {
+                  const isActive = paySettingsSubTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setPaySettingsSubTab(tab.id as any)}
+                      className="btn"
+                      style={{
+                        background: isActive ? 'var(--primary)' : '#ffffff',
+                        color: isActive ? '#ffffff' : 'var(--text-main)',
+                        border: isActive ? '1px solid var(--primary)' : '1px solid var(--border)',
+                        padding: '0.55rem 1.1rem',
+                        fontSize: '0.86rem',
+                        fontWeight: isActive ? 700 : 500,
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        whiteSpace: 'nowrap',
+                        boxShadow: isActive ? '0 4px 12px rgba(109, 74, 255, 0.28)' : '0 1px 3px rgba(0,0,0,0.02)',
+                        transition: 'all 0.18s ease',
+                      }}
+                    >
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Subtab 1: Payment Methods (Responsive 2-Column Layout) */}
+              {paySettingsSubTab === 'methods' && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                  gap: '1.75rem',
+                  alignItems: 'start'
+                }}>
+                  {/* Left Column: Enable Payment Methods */}
+                  <div>
+                    <div style={{ marginBottom: '1rem' }}>
+                      <h4 style={{ fontSize: '1.02rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
+                        Enable Payment Methods
+                      </h4>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                        Active methods toggled on here will appear directly in your POS counter checkout.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      {[
+                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: '💵' },
+                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: '📱' },
+                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: '💳' },
+                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: '🏦' },
+                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: '👤' },
+                      ].map((item) => {
+                        const isChecked = item.id === 'bank' ? payBankEnabled : payMethodsEnabled.includes(item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0.9rem 1.15rem',
+                              background: isChecked ? '#faf9ff' : '#ffffff',
+                              borderRadius: '12px',
+                              border: isChecked ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                              boxShadow: isChecked ? '0 2px 8px rgba(109, 74, 255, 0.08)' : '0 1px 3px rgba(0,0,0,0.02)',
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                              <div style={{
+                                width: '42px',
+                                height: '42px',
+                                borderRadius: '10px',
+                                background: isChecked ? 'var(--primary-light)' : '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.25rem',
+                              }}>
+                                {item.icon}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                                  {item.label}
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                  {item.desc}
+                                </div>
+                              </div>
+                            </div>
+                            <ToggleSwitch
+                              checked={isChecked}
+                              disabled={item.id === 'cash' || user?.role === 'cashier'}
+                              onChange={() => {
+                                if (item.id === 'bank') {
+                                  const next = !payBankEnabled;
+                                  setPayBankEnabled(next);
+                                  if (next) {
+                                    setPayMethodsEnabled([...payMethodsEnabled, 'bank']);
+                                  } else {
+                                    setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== 'bank'));
+                                  }
+                                } else {
+                                  if (isChecked) {
+                                    setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== item.id));
+                                  } else {
+                                    setPayMethodsEnabled([...payMethodsEnabled, item.id]);
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Quick Setup Card (Razorpay Preview) */}
+                  <div style={{
+                    background: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 4px 14px rgba(49, 46, 129, 0.04)',
+                    padding: '1.4rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #f1f5f9' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                          Razorpay Configuration
+                        </h4>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          Quick credentials setup & mode toggle
+                        </div>
+                      </div>
+                      <ToggleSwitch
+                        checked={payRzpEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => setPayRzpEnabled(!payRzpEnabled)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>Mode:</span>
+                        <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
+                          <button
+                            type="button"
+                            disabled={user?.role === 'cashier'}
+                            onClick={() => setPayRzpMode('test')}
+                            style={{
+                              padding: '4px 14px',
+                              fontSize: '0.8rem',
+                              fontWeight: payRzpMode === 'test' ? 700 : 500,
+                              borderRadius: '6px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              background: payRzpMode === 'test' ? '#ffffff' : 'transparent',
+                              color: payRzpMode === 'test' ? '#2563eb' : '#64748b',
+                              boxShadow: payRzpMode === 'test' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            Test Mode
+                          </button>
+                          <button
+                            type="button"
+                            disabled={user?.role === 'cashier'}
+                            onClick={() => setPayRzpMode('live')}
+                            style={{
+                              padding: '4px 14px',
+                              fontSize: '0.8rem',
+                              fontWeight: payRzpMode === 'live' ? 700 : 500,
+                              borderRadius: '6px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              background: payRzpMode === 'live' ? '#10b981' : 'transparent',
+                              color: payRzpMode === 'live' ? '#ffffff' : '#64748b',
+                              boxShadow: payRzpMode === 'live' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            Live Mode
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                          Key ID
+                        </label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            fontSize: '0.86rem',
+                            borderRadius: '8px',
+                            border: '1.5px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: 'var(--text-main)',
+                          }}
+                          placeholder={payRzpMode === 'live' ? 'rzp_live_7XXXXXX' : 'rzp_test_...'}
+                          value={payRzpKeyId}
+                          onChange={(e) => setPayRzpKeyId(e.target.value)}
+                          disabled={user?.role === 'cashier'}
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            Key Secret {posPaymentConfig?.hasKeySecret && <span style={{ color: '#059669', fontSize: '0.78rem' }}>(✓ Configured)</span>}
+                          </label>
+                          <span
+                            style={{ fontSize: '0.76rem', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={() => setShowRzpSecret(!showRzpSecret)}
+                          >
+                            {showRzpSecret ? 'Hide' : 'Show'}
+                          </span>
+                        </div>
+                        <input
+                          type={showRzpSecret ? 'text' : 'password'}
+                          className="form-input"
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            fontSize: '0.86rem',
+                            borderRadius: '8px',
+                            border: '1.5px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: 'var(--text-main)',
+                          }}
+                          placeholder={posPaymentConfig?.hasKeySecret ? '••••••••••••••••••••• (Enter to rotate)' : 'Enter Razorpay Key Secret'}
+                          value={payRzpKeySecret}
+                          onChange={(e) => setPayRzpKeySecret(e.target.value)}
+                          disabled={user?.role === 'cashier'}
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{
+                          width: '100%',
+                          padding: '0.7rem',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                          cursor: 'pointer',
+                          marginTop: '0.5rem',
+                        }}
+                        disabled={isSavingPaySettings || user?.role === 'cashier'}
+                        onClick={() => handleSavePaymentSettings()}
+                      >
+                        {isSavingPaySettings ? 'Saving...' : 'Save Settings'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab 2: Razorpay Full Configuration (Matching Image 3: Live Key Change) */}
+              {paySettingsSubTab === 'razorpay' && (
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  boxShadow: '0 4px 16px rgba(49, 46, 129, 0.04)',
+                  padding: '1.6rem',
+                  maxWidth: '680px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 3px 0' }}>
+                        Razorpay Configuration
+                      </h4>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        Shop owner can update Razorpay live keys anytime without downtime.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>Enable Razorpay</span>
+                      <ToggleSwitch
+                        checked={payRzpEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => setPayRzpEnabled(!payRzpEnabled)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', width: '60px' }}>Mode:</span>
+                      <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => setPayRzpMode('test')}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payRzpMode === 'test' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payRzpMode === 'test' ? '#ffffff' : 'transparent',
+                            color: payRzpMode === 'test' ? '#2563eb' : '#64748b',
+                            boxShadow: payRzpMode === 'test' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Test Mode
+                        </button>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => setPayRzpMode('live')}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payRzpMode === 'live' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payRzpMode === 'live' ? '#10b981' : 'transparent',
+                            color: payRzpMode === 'live' ? '#ffffff' : '#64748b',
+                            boxShadow: payRzpMode === 'live' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Live Mode
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Key ID
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder={payRzpMode === 'live' ? 'rzp_live_7XXXXXX' : 'rzp_test_...'}
+                        value={payRzpKeyId}
+                        onChange={(e) => setPayRzpKeyId(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          Key Secret {posPaymentConfig?.hasKeySecret && <span style={{ color: '#059669', fontSize: '0.78rem' }}>(✓ Configured)</span>}
+                        </label>
+                        <span
+                          style={{ fontSize: '0.76rem', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => setShowRzpSecret(!showRzpSecret)}
+                        >
+                          {showRzpSecret ? 'Hide' : 'Show'}
+                        </span>
+                      </div>
+                      <input
+                        type={showRzpSecret ? 'text' : 'password'}
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder={posPaymentConfig?.hasKeySecret ? '••••••••••••••••••••• (Enter new secret to rotate)' : 'Enter Razorpay Key Secret'}
+                        value={payRzpKeySecret}
+                        onChange={(e) => setPayRzpKeySecret(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Webhook Secret {posPaymentConfig?.hasWebhookSecret && <span style={{ color: '#059669', fontSize: '0.78rem' }}>(✓ Configured)</span>}
+                      </label>
+                      <input
+                        type="password"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder="Webhook secret for signature validation"
+                        value={payRzpWebhookSecret}
+                        onChange={(e) => setPayRzpWebhookSecret(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '5px', background: '#f8f7ff', border: '1px solid #ede9fe', padding: '6px 10px', borderRadius: '6px' }}>
+                        Webhook URL: <code style={{ color: '#4338ca', fontWeight: 600 }}>{`${window.location.origin}/api/webhooks/razorpay/${shop?.id || 'tenantId'}`}</code>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Dynamic QR Expiry (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="60"
+                        className="form-input"
+                        style={{
+                          width: '130px',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        value={payRzpExpiryMinutes}
+                        onChange={(e) => setPayRzpExpiryMinutes(Number(e.target.value))}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{
+                          padding: '0.7rem 1.6rem',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                          cursor: 'pointer'
+                        }}
+                        disabled={isSavingPaySettings || user?.role === 'cashier'}
+                        onClick={() => handleSavePaymentSettings()}
+                      >
+                        {isSavingPaySettings ? 'Validating & Saving...' : 'Update Keys'}
+                      </button>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                        Changes will be effective immediately for this shop only. Keys are validated server-side before activation.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab 3: Paytm Full Configuration */}
+              {paySettingsSubTab === 'paytm' && (
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  boxShadow: '0 4px 16px rgba(49, 46, 129, 0.04)',
+                  padding: '1.6rem',
+                  maxWidth: '680px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 3px 0' }}>
+                        Paytm Payment Gateway
+                      </h4>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        Configure Paytm Merchant account for Dynamic UPI QR & online payments.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>Enable Paytm</span>
+                      <ToggleSwitch
+                        checked={payPaytmEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => setPayPaytmEnabled(!payPaytmEnabled)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', width: '60px' }}>Mode:</span>
+                      <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => {
+                            setPayPaytmMode('test');
+                            if (!payPaytmWebsite || payPaytmWebsite === 'DEFAULT') setPayPaytmWebsite('WEBSTAGING');
+                          }}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payPaytmMode === 'test' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payPaytmMode === 'test' ? '#ffffff' : 'transparent',
+                            color: payPaytmMode === 'test' ? '#2563eb' : '#64748b',
+                            boxShadow: payPaytmMode === 'test' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Staging / Test
+                        </button>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => {
+                            setPayPaytmMode('live');
+                            if (!payPaytmWebsite || payPaytmWebsite === 'WEBSTAGING') setPayPaytmWebsite('DEFAULT');
+                          }}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payPaytmMode === 'live' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payPaytmMode === 'live' ? '#10b981' : 'transparent',
+                            color: payPaytmMode === 'live' ? '#ffffff' : '#64748b',
+                            boxShadow: payPaytmMode === 'live' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Production / Live
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Merchant ID (MID)
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder="e.g. YOUR_PAYTM_MID_123"
+                        value={payPaytmMid}
+                        onChange={(e) => setPayPaytmMid(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          Merchant Key {posPaymentConfig?.hasPaytmKey && <span style={{ color: '#059669', fontSize: '0.78rem' }}>(✓ Configured)</span>}
+                        </label>
+                        <span
+                          style={{ fontSize: '0.76rem', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => setShowPaytmSecret(!showPaytmSecret)}
+                        >
+                          {showPaytmSecret ? 'Hide' : 'Show'}
+                        </span>
+                      </div>
+                      <input
+                        type={showPaytmSecret ? 'text' : 'password'}
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder={posPaymentConfig?.hasPaytmKey ? '••••••••••••••••••••• (Enter new key to rotate)' : 'Enter Paytm Merchant Key'}
+                        value={payPaytmMerchantKey}
+                        onChange={(e) => setPayPaytmMerchantKey(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Website Name
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder={payPaytmMode === 'live' ? 'DEFAULT' : 'WEBSTAGING'}
+                        value={payPaytmWebsite}
+                        onChange={(e) => setPayPaytmWebsite(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Paytm Callback / Webhook URL
+                      </label>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', background: '#f8f7ff', border: '1px solid #ede9fe', padding: '6px 10px', borderRadius: '6px' }}>
+                        <code>{`${window.location.origin}/api/webhooks/paytm/${shop?.id || 'tenantId'}`}</code>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{
+                          padding: '0.7rem 1.6rem',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                          cursor: 'pointer'
+                        }}
+                        disabled={isSavingPaySettings || user?.role === 'cashier'}
+                        onClick={() => handleSavePaymentSettings()}
+                      >
+                        {isSavingPaySettings ? 'Validating & Saving...' : 'Update Paytm Keys'}
+                      </button>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                        Credentials are encrypted at rest with AES-256-GCM and validated before activation.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab 4: PhonePe Full Configuration */}
+              {paySettingsSubTab === 'phonepe' && (
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  boxShadow: '0 4px 16px rgba(49, 46, 129, 0.04)',
+                  padding: '1.6rem',
+                  maxWidth: '680px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 3px 0' }}>
+                        PhonePe Payment Gateway
+                      </h4>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        Configure PhonePe Merchant account for Dynamic UPI QR & online payments.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>Enable PhonePe</span>
+                      <ToggleSwitch
+                        checked={payPhonePeEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => setPayPhonePeEnabled(!payPhonePeEnabled)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', width: '60px' }}>Mode:</span>
+                      <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => setPayPhonePeMode('test')}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payPhonePeMode === 'test' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payPhonePeMode === 'test' ? '#ffffff' : 'transparent',
+                            color: payPhonePeMode === 'test' ? '#2563eb' : '#64748b',
+                            boxShadow: payPhonePeMode === 'test' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Sandbox / Test (UAT)
+                        </button>
+                        <button
+                          type="button"
+                          disabled={user?.role === 'cashier'}
+                          onClick={() => setPayPhonePeMode('live')}
+                          style={{
+                            padding: '5px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: payPhonePeMode === 'live' ? 700 : 500,
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: payPhonePeMode === 'live' ? '#10b981' : 'transparent',
+                            color: payPhonePeMode === 'live' ? '#ffffff' : '#64748b',
+                            boxShadow: payPhonePeMode === 'live' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Production / Live
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Merchant ID (MID)
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder="e.g. PGTESTPAYUAT or Your Live MID"
+                        value={payPhonePeMid}
+                        onChange={(e) => setPayPhonePeMid(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          Salt Key {posPaymentConfig?.hasPhonePeSaltKey && <span style={{ color: '#059669', fontSize: '0.78rem' }}>(✓ Configured)</span>}
+                        </label>
+                        <span
+                          style={{ fontSize: '0.76rem', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => setShowPhonePeSecret(!showPhonePeSecret)}
+                        >
+                          {showPhonePeSecret ? 'Hide' : 'Show'}
+                        </span>
+                      </div>
+                      <input
+                        type={showPhonePeSecret ? 'text' : 'password'}
+                        className="form-input"
+                        style={{
+                          width: '100%',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder={posPaymentConfig?.hasPhonePeSaltKey ? '••••••••••••••••••••• (Enter new salt key to rotate)' : 'Enter PhonePe Salt Key'}
+                        value={payPhonePeSaltKey}
+                        onChange={(e) => setPayPhonePeSaltKey(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        Salt Index
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{
+                          width: '120px',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.86rem',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: 'var(--text-main)',
+                        }}
+                        placeholder="e.g. 1"
+                        value={payPhonePeSaltIndex}
+                        onChange={(e) => setPayPhonePeSaltIndex(e.target.value)}
+                        disabled={user?.role === 'cashier'}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                        PhonePe Callback / Webhook URL
+                      </label>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', background: '#f8f7ff', border: '1px solid #ede9fe', padding: '6px 10px', borderRadius: '6px' }}>
+                        <code>{`${window.location.origin}/api/webhooks/phonepe/${shop?.id || 'tenantId'}`}</code>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{
+                          padding: '0.7rem 1.6rem',
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                          cursor: 'pointer'
+                        }}
+                        disabled={isSavingPaySettings || user?.role === 'cashier'}
+                        onClick={() => handleSavePaymentSettings()}
+                      >
+                        {isSavingPaySettings ? 'Validating & Saving...' : 'Update PhonePe Keys'}
+                      </button>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                        Salt keys are encrypted at rest with AES-256-GCM and validated before activation.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab 5: UPI / QR Configuration (Responsive 2-Column) */}
+              {paySettingsSubTab === 'qr' && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                  gap: '1.75rem',
+                  alignItems: 'start'
+                }}>
+                  <div style={{
+                    background: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 4px 16px rgba(49, 46, 129, 0.04)',
+                    padding: '1.6rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                      <div>
+                        <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)' }}>Enable UPI Payments</span>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Toggle UPI QR tender in POS checkout</div>
+                      </div>
+                      <ToggleSwitch
+                        checked={payUpiEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => setPayUpiEnabled(!payUpiEnabled)}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+                          QR Mode Type
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                          <div
+                            onClick={() => { if (user?.role !== 'cashier') setPayQrType('dynamic'); }}
+                            style={{
+                              padding: '0.75rem 0.9rem',
+                              borderRadius: '10px',
+                              border: payQrType === 'dynamic' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                              background: payQrType === 'dynamic' ? '#faf9ff' : '#ffffff',
+                              cursor: user?.role === 'cashier' ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'dynamic' ? 'var(--primary)' : 'var(--text-main)' }}>
+                              ⚡ Dynamic QR
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Auto-generated & locked to bill amount
+                            </div>
+                          </div>
+
+                          <div
+                            onClick={() => { if (user?.role !== 'cashier') setPayQrType('static'); }}
+                            style={{
+                              padding: '0.75rem 0.9rem',
+                              borderRadius: '10px',
+                              border: payQrType === 'static' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                              background: payQrType === 'static' ? '#faf9ff' : '#ffffff',
+                              cursor: user?.role === 'cashier' ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)' }}>
+                              📱 Static QR
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Shop VPA with manual cashier verification
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {payQrType === 'dynamic' && (
+                        <div style={{ padding: '0.9rem', background: '#faf9ff', borderRadius: '10px', border: '1px solid #ede9fe' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '8px' }}>
+                            Dynamic QR Gateway Provider
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem' }}>
+                            {[
+                              { id: 'razorpay', label: 'Razorpay', icon: '⚡', active: posPaymentConfig?.rzpEnabled },
+                              { id: 'paytm', label: 'Paytm', icon: '🅿️', active: posPaymentConfig?.paytmEnabled },
+                              { id: 'phonepe', label: 'PhonePe', icon: '🟣', active: posPaymentConfig?.phonepeEnabled },
+                            ].map((prov) => {
+                              const isSel = payProvider === prov.id;
+                              return (
+                                <button
+                                  key={prov.id}
+                                  type="button"
+                                  disabled={user?.role === 'cashier'}
+                                  onClick={() => setPayProvider(prov.id as any)}
+                                  style={{
+                                    padding: '0.6rem 0.8rem',
+                                    borderRadius: '8px',
+                                    border: isSel ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                                    background: isSel ? '#ffffff' : 'transparent',
+                                    color: isSel ? 'var(--primary)' : 'var(--text-main)',
+                                    fontWeight: isSel ? 700 : 500,
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    boxShadow: isSel ? '0 2px 6px rgba(109, 74, 255, 0.15)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  <span>{prov.icon} {prov.label}</span>
+                                  <span style={{ fontSize: '0.7rem', color: prov.active ? '#059669' : '#94a3b8', fontWeight: 600 }}>
+                                    {prov.active ? '●' : '○'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                          Shop UPI ID / VPA
+                        </label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            fontSize: '0.86rem',
+                            borderRadius: '8px',
+                            border: '1.5px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: 'var(--text-main)',
+                          }}
+                          placeholder="e.g. yourstore@okaxis or 9876543210@paytm"
+                          value={payStaticUpiId}
+                          onChange={(e) => setPayStaticUpiId(e.target.value)}
+                          disabled={user?.role === 'cashier'}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                          Merchant Display Name
+                        </label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{
+                            width: '100%',
+                            padding: '0.55rem 0.75rem',
+                            fontSize: '0.86rem',
+                            borderRadius: '8px',
+                            border: '1.5px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: 'var(--text-main)',
+                          }}
+                          placeholder={shop?.name || 'Retail Store'}
+                          value={payStaticMerchantName}
+                          onChange={(e) => setPayStaticMerchantName(e.target.value)}
+                          disabled={user?.role === 'cashier'}
+                        />
+                      </div>
+
+                      {/* Manual verification safety note */}
+                      <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.8rem', color: '#92400e', lineHeight: 1.45 }}>
+                        <strong>⚠️ Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{
+                          width: 'fit-content',
+                          padding: '0.65rem 1.4rem',
+                          fontSize: '0.88rem',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                          cursor: 'pointer'
+                        }}
+                        disabled={isSavingPaySettings || user?.role === 'cashier'}
+                        onClick={() => handleSavePaymentSettings()}
+                      >
+                        {isSavingPaySettings ? 'Saving...' : 'Save QR Settings'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right side: Live QR Preview Card */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '2rem 1.5rem',
+                    background: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 4px 16px rgba(49, 46, 129, 0.05)',
+                  }}>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.75rem' }}>
+                      Live QR Preview ({payQrType === 'dynamic' ? 'Dynamic Amount-Locked' : 'Static Shop VPA'})
+                    </div>
+                    <div
+                      style={{
+                        padding: '12px',
+                        background: '#ffffff',
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: qrSvg(
+                          `upi://pay?pa=${encodeURIComponent(payStaticUpiId.trim() || 'merchant@okaxis')}&pn=${encodeURIComponent(payStaticMerchantName.trim() || shop?.name || 'Store')}&cu=INR`,
+                          { size: 150, margin: 1 }
+                        ),
+                      }}
+                    />
+                    <div style={{ fontSize: '0.82rem', color: 'var(--primary)', marginTop: '0.85rem', fontWeight: 700 }}>
+                      {payStaticUpiId.trim() || 'merchant@okaxis'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {payStaticMerchantName.trim() || shop?.name || 'Store'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab: Bank Transfer Details Section */}
+              {paySettingsSubTab === 'bank' && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                  gap: '1.75rem',
+                  alignItems: 'start'
+                }}>
+                  {/* Left Column: Bank Account Details Form */}
+                  <div style={{
+                    background: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 4px 16px rgba(49, 46, 129, 0.04)',
+                    padding: '1.6rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 3px 0' }}>
+                          Bank Account Details
+                        </h4>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          Direct Bank Transfer / NEFT / IMPS / RTGS
+                        </div>
+                      </div>
+                      <ToggleSwitch
+                        checked={payBankEnabled}
+                        disabled={user?.role === 'cashier'}
+                        onChange={() => {
+                          const next = !payBankEnabled;
+                          setPayBankEnabled(next);
+                          if (next) {
+                            setPayMethodsEnabled([...payMethodsEnabled, 'bank']);
+                          } else {
+                            setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== 'bank'));
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                      These bank details will be shown to cashiers and customers at the POS counter when "Bank Transfer" tender is selected.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                          Account Holder Name
+                        </label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. Sri Krishna Supermarket"
+                          value={payBankAccountName}
+                          disabled={user?.role === 'cashier'}
+                          onChange={(e) => setPayBankAccountName(e.target.value)}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                            Bank Name
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. State Bank of India"
+                            value={payBankName}
+                            disabled={user?.role === 'cashier'}
+                            onChange={(e) => setPayBankName(e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                            Branch Name
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. Main Branch, MG Road"
+                            value={payBankBranch}
+                            disabled={user?.role === 'cashier'}
+                            onChange={(e) => setPayBankBranch(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                            Account Number
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. 123456789012"
+                            value={payBankAccountNo}
+                            disabled={user?.role === 'cashier'}
+                            onChange={(e) => setPayBankAccountNo(e.target.value)}
+                            style={{ fontFamily: 'monospace', letterSpacing: '0.5px' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
+                            IFSC Code
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. SBIN0001234"
+                            value={payBankIfsc}
+                            disabled={user?.role === 'cashier'}
+                            onChange={(e) => setPayBankIfsc(e.target.value.toUpperCase())}
+                            style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{
+                            padding: '9px 24px',
+                            background: 'var(--primary)',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            fontSize: '0.88rem',
+                            border: 'none',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                            cursor: 'pointer'
+                          }}
+                          disabled={isSavingPaySettings || user?.role === 'cashier'}
+                          onClick={() => handleSavePaymentSettings()}
+                        >
+                          {isSavingPaySettings ? 'Saving...' : 'Save Bank Settings'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Bank Details Live Preview Card */}
+                  <div style={{
+                    background: '#f8fafc',
+                    borderRadius: '14px',
+                    border: '1.5px solid #e2e8f0',
+                    padding: '1.5rem',
+                    position: 'sticky',
+                    top: '1rem',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
+                      <span style={{ fontSize: '1.4rem' }}>🏦</span>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                          Customer Payment Slip Preview
+                        </h4>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          How bank details appear on invoice & counter
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#ffffff',
+                      borderRadius: '10px',
+                      border: '1px solid #cbd5e1',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.65rem',
+                      fontSize: '0.82rem',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.35rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Beneficiary:</span>
+                        <strong style={{ color: 'var(--text-main)' }}>{payBankAccountName || shop?.name || '—'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.35rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Account No:</span>
+                        <strong className="mono" style={{ color: 'var(--text-main)', letterSpacing: '0.5px' }}>{payBankAccountNo || '—'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.35rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>IFSC:</span>
+                        <strong className="mono" style={{ color: 'var(--text-main)' }}>{payBankIfsc || '—'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.35rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Bank Name:</span>
+                        <strong style={{ color: 'var(--text-main)' }}>{payBankName || '—'}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Branch:</span>
+                        <strong style={{ color: 'var(--text-main)' }}>{payBankBranch || '—'}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subtab 6: Card Terminal */}
+              {paySettingsSubTab === 'terminal' && (
+                <div style={{ maxWidth: '640px' }}>
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
+                    Card Payment Terminal (Swipe / Tap)
+                  </h4>
+                  <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                    Configure external EDC card machine or integrated POS terminal for credit and debit cards.
+                  </p>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.9rem 1.15rem',
+                    background: '#faf9ff',
+                    border: '1px solid #ede9fe',
+                    borderRadius: '12px',
+                    marginBottom: '1.25rem'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                        Card Payment in POS Checkout
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Shows card tender option during billing
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={payMethodsEnabled.includes('card')}
+                      disabled={user?.role === 'cashier'}
+                      onChange={() => {
+                        if (payMethodsEnabled.includes('card')) {
+                          setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== 'card'));
+                        } else {
+                          setPayMethodsEnabled([...payMethodsEnabled, 'card']);
+                        }
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.7rem 1.5rem',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => handleSavePaymentSettings()}
+                  >
+                    Save Card Settings
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* WhatsApp Bill Sharing Settings Card (Section 9.1) */}
             <div className="card settings-section">
               <div className="card-title">
@@ -8659,404 +10815,66 @@ export function App() {
                       <div>
                         <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Enable WhatsApp Sharing</div>
                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                          When enabled, shows WhatsApp block in checkout modal and resend button on invoices.
+                          Show WhatsApp share button and options upon completing checkout
                         </div>
                       </div>
                     </label>
                   </div>
 
-                  {/* Default message language */}
+                  {/* Language selection */}
                   <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <label className="form-label" style={{ marginBottom: '0.4rem', fontWeight: 600 }}>
+                    <label style={{ fontWeight: 600, fontSize: '0.95rem', display: 'block', marginBottom: '6px' }}>
                       Default Message Language
                     </label>
                     <select
                       className="form-input"
-                      disabled={user?.role !== 'owner'}
+                      style={{ width: '100%' }}
+                      disabled={user?.role !== 'owner' || !settingsWhatsAppEnabled}
                       value={settingsWhatsAppDefaultLang}
-                      onChange={(e) => setSettingsWhatsAppDefaultLang(e.target.value as any)}
+                      onChange={(e) => setSettingsWhatsAppDefaultLang(e.target.value as 'en' | 'hi' | 'ta')}
                     >
-                      <option value="en">English (Default)</option>
-                      <option value="hi">हिन्दी (Hindi)</option>
-                      <option value="ta">தமிழ் (Tamil)</option>
+                      <option value="en">English (EN)</option>
+                      <option value="hi">Hindi (हिन्दी)</option>
+                      <option value="ta">Tamil (தமிழ்)</option>
                     </select>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                      Pre-selected language for checkout success modal and resend popover
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
+                      Auto-composes customer message in this language
                     </div>
                   </div>
 
-                  {/* Include bill link in message */}
+                  {/* Include digital bill link */}
                   <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: user?.role === 'owner' ? 'pointer' : 'default' }}>
                       <input
                         type="checkbox"
                         style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#16a34a' }}
-                        disabled={user?.role !== 'owner'}
+                        disabled={user?.role !== 'owner' || !settingsWhatsAppEnabled}
                         checked={settingsWhatsAppIncludeLink}
                         onChange={(e) => setSettingsWhatsAppIncludeLink(e.target.checked)}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Include Hosted Bill Link</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Include Digital Bill Link</div>
                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                          Adds a direct link for customer to view / download the full bill online without logging in.
+                          Append public web link to the online receipt in message
                         </div>
                       </div>
                     </label>
                   </div>
                 </div>
 
-                {user?.role !== 'owner' ? (
-                  <div style={{ fontSize: '0.85rem', color: '#b45309', background: '#fffbeb', padding: '0.6rem 0.85rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
-                    ℹ️ Only business owners can change WhatsApp Bill Sharing settings.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="submit" className="btn btn-primary" style={{ padding: '0.55rem 1.25rem' }}>
-                      Save Bill Sharing Settings
-                    </button>
-                  </div>
+                {user?.role === 'owner' && (
+                  <button type="submit" className="btn btn-primary" disabled={isSavingSettings}>
+                    {isSavingSettings ? 'Saving...' : 'Save WhatsApp Settings'}
+                  </button>
                 )}
               </form>
-            </div>
-
-            {/* Customer Loyalty & Rewards Scheme (Section 9.2) */}
-            <div className="card settings-section">
-              <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div>
-                  <span>🪙 Customer Loyalty & Rewards Scheme</span>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '3px', fontWeight: 'normal' }}>
-                    Set custom point earning rates (e.g. 100 ₹ = 10 pts, 5 pts) and cash discount per point for this shop
-                  </div>
-                </div>
-                <span className={`biz-badge ${settingsLoyaltyEnabled ? 'biz-retail' : 'biz-general'}`} style={{ fontSize: '0.75rem' }}>
-                  {settingsLoyaltyEnabled ? '● Scheme Active' : '○ Scheme Paused'}
-                </span>
-              </div>
-
-              <form onSubmit={handleSaveSettings}>
-                {/* Master Toggle */}
-                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: user?.role === 'owner' ? 'pointer' : 'default' }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#2563eb' }}
-                      disabled={user?.role !== 'owner'}
-                      checked={settingsLoyaltyEnabled}
-                      onChange={(e) => setSettingsLoyaltyEnabled(e.target.checked)}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Enable Customer Loyalty Rewards Program</div>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                        When enabled, registered customers automatically accrue points on billing and can redeem them for discounts at POS.
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
-                  {/* Points Earning Rate */}
-                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Points per ₹100 Purchase</span>
-                      <span className="mono bold" style={{ color: '#2563eb' }}>{settingsLoyaltyPointsPer100} pts</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      className="form-input"
-                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                      value={settingsLoyaltyPointsPer100}
-                      onChange={(e) => setSettingsLoyaltyPointsPer100(Math.max(0, parseInt(e.target.value) || 0))}
-                    />
-                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                      {[2, 5, 10, 15, 20].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            fontSize: '0.72rem',
-                            background: settingsLoyaltyPointsPer100 === preset ? '#dbeafe' : '#ffffff',
-                            borderColor: settingsLoyaltyPointsPer100 === preset ? '#3b82f6' : '#cbd5e1',
-                            color: settingsLoyaltyPointsPer100 === preset ? '#1d4ed8' : '#475569',
-                            fontWeight: settingsLoyaltyPointsPer100 === preset ? 700 : 500,
-                          }}
-                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                          onClick={() => setSettingsLoyaltyPointsPer100(preset)}
-                        >
-                          {preset} pts
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
-                      Example: On a ₹500 bill, customer earns <strong>{Math.floor((500 * (settingsLoyaltyPointsPer100 || 0)) / 100)} points</strong>.
-                    </div>
-                  </div>
-
-                  {/* Cash Value per Point */}
-                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Point Redemption Value</span>
-                      <span className="mono bold" style={{ color: '#059669' }}>₹{settingsLoyaltyPointValueRupees.toFixed(2)} / pt</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={0.01}
-                      max={10.0}
-                      step={0.05}
-                      className="form-input"
-                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                      value={settingsLoyaltyPointValueRupees}
-                      onChange={(e) => setSettingsLoyaltyPointValueRupees(Math.max(0.01, parseFloat(e.target.value) || 0.1))}
-                    />
-                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                      {[0.10, 0.20, 0.50, 1.00].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            fontSize: '0.72rem',
-                            background: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#dcfce7' : '#ffffff',
-                            borderColor: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#10b981' : '#cbd5e1',
-                            color: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? '#047857' : '#475569',
-                            fontWeight: Math.abs(settingsLoyaltyPointValueRupees - preset) < 0.001 ? 700 : 500,
-                          }}
-                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                          onClick={() => setSettingsLoyaltyPointValueRupees(preset)}
-                        >
-                          ₹{preset.toFixed(2)}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
-                      Example: 100 points = <strong>₹{(100 * settingsLoyaltyPointValueRupees).toFixed(2)} discount</strong>.
-                    </div>
-                  </div>
-
-                  {/* Minimum Points to Redeem */}
-                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <label className="form-label" style={{ fontWeight: 600, marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Min. Points to Redeem</span>
-                      <span className="mono bold" style={{ color: '#d97706' }}>{settingsLoyaltyMinRedeem} pts</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={1000}
-                      step={5}
-                      className="form-input"
-                      disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                      value={settingsLoyaltyMinRedeem}
-                      onChange={(e) => setSettingsLoyaltyMinRedeem(Math.max(0, parseInt(e.target.value) || 0))}
-                    />
-                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                      {[0, 10, 25, 50, 100].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{
-                            padding: '0.2rem 0.55rem',
-                            fontSize: '0.72rem',
-                            background: settingsLoyaltyMinRedeem === preset ? '#fef3c7' : '#ffffff',
-                            borderColor: settingsLoyaltyMinRedeem === preset ? '#f59e0b' : '#cbd5e1',
-                            color: settingsLoyaltyMinRedeem === preset ? '#b45309' : '#475569',
-                            fontWeight: settingsLoyaltyMinRedeem === preset ? 700 : 500,
-                          }}
-                          disabled={user?.role !== 'owner' || !settingsLoyaltyEnabled}
-                          onClick={() => setSettingsLoyaltyMinRedeem(preset)}
-                        >
-                          {preset === 0 ? 'No Min' : `${preset} pts`}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.5rem' }}>
-                      Threshold required before points redemption button appears at checkout.
-                    </div>
-                  </div>
-                </div>
-
-                {/* Live Preview Box */}
-                <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)', padding: '0.85rem 1.1rem', borderRadius: '10px', border: '1px solid #bfdbfe', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <span style={{ fontSize: '1.4rem' }}>✨</span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e3a8a' }}>Active Rule Formula:</div>
-                      <div style={{ fontSize: '0.8rem', color: '#334155' }}>
-                        ₹100 spent = <strong>{settingsLoyaltyPointsPer100} pts</strong> &nbsp;•&nbsp; 1 pt = <strong>₹{settingsLoyaltyPointValueRupees.toFixed(2)}</strong> &nbsp;•&nbsp; Min: <strong>{settingsLoyaltyMinRedeem} pts</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#15803d', background: '#dcfce7', padding: '0.3rem 0.75rem', borderRadius: '20px' }}>
-                    Cashback Yield: {((settingsLoyaltyPointsPer100 * settingsLoyaltyPointValueRupees)).toFixed(1)}%
-                  </div>
-                </div>
-
-                {user?.role !== 'owner' ? (
-                  <div style={{ fontSize: '0.85rem', color: '#b45309', background: '#fffbeb', padding: '0.6rem 0.85rem', borderRadius: '6px', border: '1px solid #fef3c7' }}>
-                    ℹ️ Only business owners can change Loyalty Scheme settings.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button type="submit" className="btn btn-primary" style={{ padding: '0.55rem 1.25rem' }}>
-                      Save Loyalty Scheme Settings
-                    </button>
-                  </div>
-                )}
-              </form>
-            </div>
-
-            {/* Section 2: Explore Industry Packs */}
-            <div className="card settings-section">
-              <div className="card-title">
-                <span>📦 Pre-Configured Industry Business Packs</span>
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                  Switch your business instantly into any specialized industry flow
-                </span>
-              </div>
-
-              <div className="settings-grid">
-                {/* Pack 1: Retail */}
-                <div className={`pack-card ${shop?.businessType === 'retail' ? 'active-pack' : ''}`}>
-                  <div>
-                    <div className="pack-card-header">
-                      <span className="pack-card-title">🛒 Retail & Kirana</span>
-                      <span className="biz-badge biz-retail">Thermal 80mm</span>
-                    </div>
-                    <p className="pack-card-desc">
-                      Fast counter barcode checkout, thermal slips, instant UPI scan & pay, cash drawer integration.
-                    </p>
-                    <ul className="pack-features-list">
-                      <li>✓ Rapid barcode scanner & SKU lookup</li>
-                      <li>✓ Thermal 80mm / 58mm compact receipts</li>
-                      <li>✓ Dynamic UPI QR code on bill</li>
-                      <li>✓ Cashier discount safeguard limits</li>
-                    </ul>
-                  </div>
-                  <button
-                    className={`btn ${shop?.businessType === 'retail' ? 'btn-secondary' : 'btn-primary'}`}
-                    disabled={shop?.businessType === 'retail'}
-                    onClick={() => handleSwitchPackType('retail')}
-                  >
-                    {shop?.businessType === 'retail' ? '✓ Currently Active' : 'Activate Retail Mode'}
-                  </button>
-                </div>
-
-                {/* Pack 2: Pharmacy */}
-                <div className={`pack-card ${shop?.businessType === 'pharmacy' ? 'active-pack' : ''}`}>
-                  <div>
-                    <div className="pack-card-header">
-                      <span className="pack-card-title">💊 Pharmacy & Medicals</span>
-                      <span className="biz-badge biz-pharmacy">Drug License</span>
-                    </div>
-                    <p className="pack-card-desc">
-                      Batch number & expiry date tracking (FEFO), doctor name on bills, Drug License display, Schedule H/H1 alerts.
-                    </p>
-                    <ul className="pack-features-list">
-                      <li>✓ Batch number and expiry date on every line</li>
-                      <li>✓ Schedule H & H1 warning tags on medicines</li>
-                      <li>✓ Doctor name & prescription reference</li>
-                      <li>✓ Rack & shelf storage location finder</li>
-                    </ul>
-                  </div>
-                  <button
-                    className={`btn ${shop?.businessType === 'pharmacy' ? 'btn-secondary' : 'btn-primary'}`}
-                    disabled={shop?.businessType === 'pharmacy'}
-                    onClick={() => handleSwitchPackType('pharmacy')}
-                  >
-                    {shop?.businessType === 'pharmacy' ? '✓ Currently Active' : 'Activate Pharmacy Mode'}
-                  </button>
-                </div>
-
-                {/* Pack 3: Restaurant */}
-                <div className={`pack-card ${shop?.businessType === 'restaurant' ? 'active-pack' : ''}`}>
-                  <div>
-                    <div className="pack-card-header">
-                      <span className="pack-card-title">🍽️ Restaurant & Cafe</span>
-                      <span className="biz-badge biz-restaurant">Table & KOT</span>
-                    </div>
-                    <p className="pack-card-desc">
-                      Table management, Kitchen Order Tickets (KOT), Dine-in / Takeaway / Delivery options, 5% Food GST.
-                    </p>
-                    <ul className="pack-features-list">
-                      <li>✓ Table 1-12 selector & Dine-in / Takeaway modes</li>
-                      <li>✓ One-click Kitchen Order Ticket (KOT) print</li>
-                      <li>✓ Split food menu categories & fast tiffin counter</li>
-                      <li>✓ Flexible negative stock for kitchen prep</li>
-                    </ul>
-                  </div>
-                  <button
-                    className={`btn ${shop?.businessType === 'restaurant' ? 'btn-secondary' : 'btn-primary'}`}
-                    disabled={shop?.businessType === 'restaurant'}
-                    onClick={() => handleSwitchPackType('restaurant')}
-                  >
-                    {shop?.businessType === 'restaurant' ? '✓ Currently Active' : 'Activate Restaurant Mode'}
-                  </button>
-                </div>
-
-                {/* Pack 4: Wholesale */}
-                <div className={`pack-card ${shop?.businessType === 'wholesale' ? 'active-pack' : ''}`}>
-                  <div>
-                    <div className="pack-card-header">
-                      <span className="pack-card-title">📦 Wholesale & B2B</span>
-                      <span className="biz-badge biz-wholesale">A4 GST Invoices</span>
-                    </div>
-                    <p className="pack-card-desc">
-                      B2B sales, PO numbers, vehicle tracking, delivery routes, customer credit limits, HSN compliance.
-                    </p>
-                    <ul className="pack-features-list">
-                      <li>✓ B2B A4 GST Tax Invoice layout with terms</li>
-                      <li>✓ Purchase Order (PO) & transport vehicle number</li>
-                      <li>✓ Customer balance & credit limit locks</li>
-                      <li>✓ Bulk carton & sack unit measures</li>
-                    </ul>
-                  </div>
-                  <button
-                    className={`btn ${shop?.businessType === 'wholesale' ? 'btn-secondary' : 'btn-primary'}`}
-                    disabled={shop?.businessType === 'wholesale'}
-                    onClick={() => handleSwitchPackType('wholesale')}
-                  >
-                    {shop?.businessType === 'wholesale' ? '✓ Currently Active' : 'Activate Wholesale Mode'}
-                  </button>
-                </div>
-
-                {/* Pack 5: Services */}
-                <div className={`pack-card ${shop?.businessType === 'service' ? 'active-pack' : ''}`}>
-                  <div>
-                    <div className="pack-card-header">
-                      <span className="pack-card-title">💼 Professional Services</span>
-                      <span className="biz-badge biz-service">SAC & Due Dates</span>
-                    </div>
-                    <p className="pack-card-desc">
-                      Time & project based billing, SAC codes (998314 etc.), job reference numbers, payment due dates.
-                    </p>
-                    <ul className="pack-features-list">
-                      <li>✓ Hourly, monthly AMC and milestone billing units</li>
-                      <li>✓ SAC code tax reporting (18% GST)</li>
-                      <li>✓ Job / Project reference tracking</li>
-                      <li>✓ Payment due date (Net 15/30) printed on bill</li>
-                    </ul>
-                  </div>
-                  <button
-                    className={`btn ${shop?.businessType === 'service' ? 'btn-secondary' : 'btn-primary'}`}
-                    disabled={shop?.businessType === 'service'}
-                    onClick={() => handleSwitchPackType('service')}
-                  >
-                    {shop?.businessType === 'service' ? '✓ Currently Active' : 'Activate Services Mode'}
-                  </button>
-                </div>
-              </div>
             </div>
 
             {/* Strict Multi-Tenant Data Isolation Banner (Settings Tab Only) */}
             <StrictIsolationBanner />
           </div>
         )}
+
 
         {/* ACCOUNTS & FINANCE TAB VIEWS */}
         {activeTab === 'payments' && (
@@ -10353,6 +12171,18 @@ export function App() {
       )}
 
       {/* MASTER DATA: ADD / EDIT PARTY MODAL (CUSTOMERS & SUPPLIERS) */}
+      {/* POS & GLOBAL LOYALTY SCHEME CONFIGURATION MODAL */}
+      <LoyaltySchemeModal
+        isOpen={showPosLoyaltyModal}
+        onClose={() => setShowPosLoyaltyModal(false)}
+        shop={shop}
+        onSave={handleUpdateLoyaltySettings}
+        onRefresh={() => {
+          loadParties();
+          loadInvoices();
+        }}
+      />
+
       {showPartyModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '540px' }}>
@@ -12235,16 +14065,21 @@ export function App() {
                   </div>
 
                   {/* Loyalty Points Automatically Credited */}
-                  {Math.floor((checkoutSuccess.totalMinor || 0) / 1000) > 0 && checkoutSuccess.customerName && checkoutSuccess.customerName !== 'Walk-in Customer' && (
-                    <div style={{ padding: '0.45rem 0.75rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', color: '#92400e' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}>
-                        🪙 Loyalty Points Credited:
-                      </span>
-                      <span className="mono" style={{ fontWeight: 800, fontSize: '0.88rem', color: '#d97706' }}>
-                        +{Math.floor((checkoutSuccess.totalMinor || 0) / 1000)} pts (₹{(Math.floor((checkoutSuccess.totalMinor || 0) / 1000) * 0.1).toFixed(2)})
-                      </span>
-                    </div>
-                  )}
+                  {shopLoyaltyActive && ((checkoutSuccess.earnedLoyaltyPoints ?? 0) > 0 || (checkoutSuccess.customerName && checkoutSuccess.customerName !== 'Walk-in Customer' && Math.floor(((checkoutSuccess.totalMinor || 0) * shopPointsPer100) / 10000) > 0)) && (() => {
+                    const pts = (checkoutSuccess.earnedLoyaltyPoints ?? 0) > 0
+                      ? checkoutSuccess.earnedLoyaltyPoints!
+                      : Math.floor(((checkoutSuccess.totalMinor || 0) * shopPointsPer100) / 10000);
+                    return (
+                      <div style={{ padding: '0.45rem 0.75rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', color: '#92400e' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}>
+                          🪙 Loyalty Points Credited:
+                        </span>
+                        <span className="mono" style={{ fontWeight: 800, fontSize: '0.88rem', color: '#d97706' }}>
+                          +{pts} pts ({formatRupees(pts * shopPointValMinor)})
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Multiple / Split Payments Breakdown */}
                   {checkoutSuccess.payments && checkoutSuccess.payments.length > 1 && (

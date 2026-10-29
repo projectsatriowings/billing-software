@@ -150,6 +150,7 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method ?? '')) {
           if (ct.includes('application/json')) {
             const buf = await readBody(req, 5 * 1024 * 1024);
+            ctx.raw = buf;
             try { ctx.body = buf.length ? JSON.parse(buf.toString('utf8')) : {}; } catch { throw bad('Request body is not valid JSON', 'BAD_JSON'); }
           } else if (ct.includes('octet-stream')) {
             ctx.raw = await readBody(req, 25 * 1024 * 1024);

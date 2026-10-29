@@ -495,7 +495,7 @@ export const RegisterWizard: React.FC<RegisterWizardProps> = ({
                   </div>
                   <h2 className="step-heading">Trade-Specific Configuration</h2>
                   <p className="step-subheading">
-                    Customize workflows for {selectedMeta.title}. You can always adjust these settings later from Business Packs.
+                    Customize workflows for {selectedMeta.title}. You can always adjust these settings later from Settings.
                   </p>
                 </div>
 
