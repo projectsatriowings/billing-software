@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ProductMovementAnalysisData, ProductMovementItem, ProductMovementStatus } from '../../api.ts';
 import { fetchProductMovementAnalysis } from '../../api.ts';
+import {
+  CalendarIcon,
+  AlertTriangleIcon,
+  ZapIcon,
+  HourglassIcon,
+  AlertOctagonIcon,
+  PackageIcon,
+  TrophyIcon,
+  TrendingDownIcon,
+  CheckIcon,
+  SearchIcon,
+  DownloadIcon,
+} from './InventoryIcons.tsx';
 
 interface ProductMovementAnalysisViewProps {
   categories: string[];
@@ -317,7 +330,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 gap: '4px',
               }}
             >
-              <span>📅</span> Custom Range
+              <CalendarIcon size={14} /> Custom Range
             </button>
           </div>
 
@@ -406,7 +419,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             justifyContent: 'space-between',
           }}
         >
-          <span>⚠️ {error}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <AlertTriangleIcon size={16} /> {error}
+          </span>
           <button
             type="button"
             className="btn btn-secondary"
@@ -447,10 +462,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 letterSpacing: '0.04em',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
               }}
             >
-              <span>⚡</span> FAST-MOVING PRODUCTS
+              <ZapIcon size={14} color="#f59e0b" /> FAST-MOVING PRODUCTS
             </div>
             <div
               style={{
@@ -489,10 +504,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 letterSpacing: '0.04em',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
               }}
             >
-              <span>🐢</span> SLOW-MOVING PRODUCTS
+              <HourglassIcon size={14} color="#f97316" /> SLOW-MOVING PRODUCTS
             </div>
             <div
               style={{
@@ -531,10 +546,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 letterSpacing: '0.04em',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
               }}
             >
-              <span>⛔</span> NON-MOVING PRODUCTS
+              <AlertOctagonIcon size={14} color="#ef4444" /> NON-MOVING PRODUCTS
             </div>
             <div
               style={{
@@ -573,10 +588,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 letterSpacing: '0.04em',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
               }}
             >
-              <span>📦</span> TOTAL UNITS SOLD
+              <PackageIcon size={14} color="#6366f1" /> TOTAL UNITS SOLD
             </div>
             <div
               style={{
@@ -808,8 +823,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     fontSize: '0.8rem',
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span>🏆</span> Best seller: {data.insights.bestSeller.name}
+                  <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrophyIcon size={15} color="#b45309" /> Best seller: {data.insights.bestSeller.name}
                   </div>
                   <div style={{ color: '#78350f', fontSize: '0.76rem', lineHeight: 1.35 }}>
                     {data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit} in {data.insights.bestSeller.salesTxns} bills.
@@ -849,8 +864,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     fontSize: '0.8rem',
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span>📉</span> {data.insights.slowingProduct.name}
+                  <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrendingDownIcon size={15} color="#1e40af" /> {data.insights.slowingProduct.name}
                   </div>
                   <div style={{ color: '#1e3a8a', fontSize: '0.76rem', lineHeight: 1.35 }}>
                     {data.insights.slowingProduct.message}
@@ -865,9 +880,12 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     padding: '0.65rem 0.85rem',
                     fontSize: '0.78rem',
                     color: '#15803d',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
                   }}
                 >
-                  ✓ No severe slow-moving inventory bottlenecks detected.
+                  <CheckIcon size={14} color="#15803d" /> No severe slow-moving inventory bottlenecks detected.
                 </div>
               )}
 
@@ -881,8 +899,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   fontSize: '0.8rem',
                 }}
               >
-                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>📦</span> {data.insights.nonMovingSummary.count} products haven&apos;t sold in {data.insights.nonMovingSummary.days} days
+                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <PackageIcon size={15} color="#991b1b" /> {data.insights.nonMovingSummary.count} products haven&apos;t sold in {data.insights.nonMovingSummary.days} days
                 </div>
                 <div style={{ color: '#7f1d1d', fontSize: '0.76rem', lineHeight: 1.35 }}>
                   {data.insights.nonMovingSummary.tiedCapitalMinor > 0 ? (
@@ -938,7 +956,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem',
+              gap: '6px',
               padding: '0.4rem 0.85rem',
               fontSize: '0.8rem',
               fontWeight: 600,
@@ -950,7 +968,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               transition: 'all 0.15s ease',
             }}
           >
-            <span>⬇</span> Export CSV
+            <DownloadIcon size={14} /> Export CSV
           </button>
         </div>
 
@@ -968,8 +986,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         >
           {/* Search input */}
           <div style={{ flex: '1 1 200px', maxWidth: '300px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#94a3b8' }}>
-              🔍
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
+              <SearchIcon size={14} />
             </span>
             <input
               type="text"
@@ -1158,7 +1176,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              gap: '5px',
                               background: '#ecfdf5',
                               color: '#065f46',
                               border: '1px solid #a7f3d0',
@@ -1168,7 +1186,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                               fontWeight: 700,
                             }}
                           >
-                            <span>⚡</span> Fast-moving
+                            <ZapIcon size={12} color="#065f46" /> Fast-moving
                           </span>
                         )}
                         {p.movementStatus === 'slow_moving' && (
@@ -1176,7 +1194,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              gap: '5px',
                               background: '#fffbeb',
                               color: '#b45309',
                               border: '1px solid #fde68a',
@@ -1186,7 +1204,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                               fontWeight: 700,
                             }}
                           >
-                            <span>🐢</span> Slow-moving
+                            <HourglassIcon size={12} color="#b45309" /> Slow-moving
                           </span>
                         )}
                         {p.movementStatus === 'non_moving' && (
@@ -1194,7 +1212,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              gap: '5px',
                               background: '#fef2f2',
                               color: '#b91c1c',
                               border: '1px solid #fecaca',
@@ -1204,7 +1222,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                               fontWeight: 700,
                             }}
                           >
-                            <span>⛔</span> Non-moving
+                            <AlertOctagonIcon size={12} color="#b91c1c" /> Non-moving
                           </span>
                         )}
                       </td>

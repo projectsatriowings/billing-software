@@ -532,22 +532,71 @@ export function registerItemsBulk(r: Router) {
             );
           }
 
-          // Preserve existing barcode mappings for products identified as restocks
-          if (row.barcode) {
-            const bcTrim = row.barcode.trim();
-            const existingBc = await q.one<{ id: string; productId: string }>(
+          const matchedItemInfo = existingMatchedItems.get(itemId);
+          const oldPrimaryBarcode = matchedItemInfo?.barcode || null;
+          const newBarcodeTrim = row.barcode ? row.barcode.trim() : null;
+
+          // If row specifies a barcode or explicitly cleared, update primary barcode on items table
+          if (newBarcodeTrim !== oldPrimaryBarcode) {
+            if (newBarcodeTrim) {
+              const conflictItem = await q.one<{ id: string; name: string }>(
+                'SELECT id, name FROM items WHERE tenant_id = ? AND barcode = ? AND id <> ?',
+                [tenantId, newBarcodeTrim, itemId],
+              );
+              if (!conflictItem) {
+                await q.exec(
+                  'UPDATE items SET barcode = ?, updated_at = now() WHERE id = ? AND tenant_id = ?',
+                  [newBarcodeTrim, itemId, tenantId],
+                );
+              }
+            } else if (row.barcode === null || row.barcode === '') {
+              await q.exec(
+                'UPDATE items SET barcode = NULL, updated_at = now() WHERE id = ? AND tenant_id = ?',
+                [itemId, tenantId],
+              );
+            }
+
+            // If the old barcode was in product_barcodes, remove unless retained in additionalBarcodes
+            if (oldPrimaryBarcode && oldPrimaryBarcode !== newBarcodeTrim) {
+              const keepInAdditional = (row.additionalBarcodes || []).some(
+                (ab) => ab.barcode && ab.barcode.trim() === oldPrimaryBarcode,
+              );
+              if (!keepInAdditional) {
+                await q.exec(
+                  'DELETE FROM product_barcodes WHERE tenant_id = ? AND product_id = ? AND barcode = ?',
+                  [tenantId, itemId, oldPrimaryBarcode],
+                );
+              }
+            }
+          }
+
+          // Register new barcode in product_barcodes table
+          if (newBarcodeTrim) {
+            const bType =
+              row.barcodeType ||
+              (newBarcodeTrim.startsWith('20') && newBarcodeTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
+            const existingBc = await q.one<{ id: string; product_id: string }>(
               'SELECT id, product_id FROM product_barcodes WHERE tenant_id = ? AND barcode = ?',
-              [tenantId, bcTrim],
+              [tenantId, newBarcodeTrim],
             );
             if (!existingBc) {
-              const bType = row.barcodeType || (bcTrim.startsWith('20') && bcTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
               await q.exec(
                 `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
                  VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT (tenant_id, barcode) DO NOTHING`,
-                [newId('bc'), tenantId, itemId, bcTrim, bType],
+                 ON CONFLICT (tenant_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
+                [newId('bc'), tenantId, itemId, newBarcodeTrim, bType],
               );
               barcodesSaved++;
+            } else if (existingBc.product_id !== itemId) {
+              await q.exec(
+                'UPDATE product_barcodes SET product_id = ?, barcode_type = ? WHERE id = ?',
+                [itemId, bType, existingBc.id],
+              );
+            } else {
+              await q.exec(
+                'UPDATE product_barcodes SET barcode_type = ? WHERE id = ?',
+                [bType, existingBc.id],
+              );
             }
           }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { StockMove, StockMoveKind, Item } from '../../api.ts';
 import { fetchStockLedger } from '../../api.ts';
+import { LockIcon, FileTextIcon, XIcon, UserIcon } from './InventoryIcons.tsx';
 
 interface StockLedgerViewProps {
   initialItemId?: string;
@@ -110,8 +111,10 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({
                     setSearchQuery('');
                     setPage(1);
                   }}
+                  title="Clear search"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  ✕
+                  <XIcon size={13} />
                 </button>
               )}
             </div>
@@ -212,7 +215,9 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({
 
       {/* Audit Banner */}
       <div className="ledger-audit-banner">
-        <span className="banner-icon">🔒</span>
+        <span className="banner-icon" style={{ display: 'flex', alignItems: 'center' }}>
+          <LockIcon size={16} style={{ color: 'var(--primary)' }} />
+        </span>
         <span>
           <strong>Immutable Stock Ledger:</strong> Historical stock movements cannot be directly edited or deleted.
           Corrections are preserved as linked adjustment movements with audit trails.
@@ -228,7 +233,7 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({
           </div>
         ) : moves.length === 0 ? (
           <div className="table-empty-state">
-            <span className="empty-icon">📜</span>
+            <FileTextIcon size={44} style={{ color: 'var(--text-dim)', marginBottom: '0.75rem' }} />
             <h3>No Stock Movements Found</h3>
             <p>No transactions match your current filters. Try resetting the filters above.</p>
           </div>
@@ -244,8 +249,8 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({
                 <th style={{ textAlign: 'right' }}>Out (-)</th>
                 <th style={{ textAlign: 'right' }}>Prev Balance</th>
                 <th style={{ textAlign: 'right' }}>New Balance</th>
-                <th>Operator</th>
-                <th>Reason / Notes</th>
+                <th style={{ minWidth: '135px', width: '150px', textAlign: 'left', whiteSpace: 'nowrap' }}>Operator</th>
+                <th style={{ minWidth: '150px', textAlign: 'left' }}>Reason / Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -306,11 +311,14 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({
                         {newUnits.toFixed(1)} {unit}
                       </span>
                     </td>
-                    <td>
-                      <span className="operator-chip">{m.userName || 'System'}</span>
+                    <td style={{ minWidth: '135px', width: '150px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      <span className="operator-chip" title={`Operator: ${m.userName || 'System'}`}>
+                        <UserIcon size={12} style={{ opacity: 0.65, flexShrink: 0 }} />
+                        <span>{m.userName || 'System'}</span>
+                      </span>
                     </td>
-                    <td style={{ maxWidth: '200px' }}>
-                      <div className="notes-wrap" title={m.notes || m.reason || ''}>
+                    <td style={{ minWidth: '150px', maxWidth: '240px', verticalAlign: 'middle' }}>
+                      <div className="notes-wrap" title={m.notes || m.reason || ''} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {m.reason && <span className="reason-tag-inline">{m.reason}</span>}
                         {m.notes && <span className="notes-text">{m.notes}</span>}
                         {!m.reason && !m.notes && <span style={{ color: 'var(--text-dim)' }}>--</span>}
