@@ -125,6 +125,7 @@ import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx'
 import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
 import { DiscountsPromotionsView } from './components/promotions/DiscountsPromotionsView.tsx';
 import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
+import { fetchPromotions, type PublicPaymentSettings, type PaymentAttempt, type Branch } from './api';
 import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
 
@@ -10662,6 +10663,8 @@ export function App() {
                       </p>
                     </div>
 
+                    <div style={{ display: 'flex', flexDirection: 'colu
+... [truncated for diff preview]
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {[
                         { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: '💵' },
