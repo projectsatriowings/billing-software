@@ -89,6 +89,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 
 let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || loadPersistedTunnelUrl();
 let activeTunnelProcess: ChildProcess | null = null;
+let tunnelLaunchPromise: Promise<string> | null = null;
 
 export async function isTunnelHealthy(url?: string): Promise<boolean> {
   const target = url || activeTunnelUrl;
@@ -96,7 +97,7 @@ export async function isTunnelHealthy(url?: string): Promise<boolean> {
   try {
     const res = await fetch(`${target}/api/health`, {
       headers: { 'User-Agent': 'Billing-Tunnel-KeepAlive/1.0' },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(2500),
     });
     return res.ok;
   } catch {
@@ -104,62 +105,97 @@ export async function isTunnelHealthy(url?: string): Promise<boolean> {
   }
 }
 
-export function launchTunnel(port = 3001): Promise<string> {
-  return new Promise((resolve, reject) => {
-    try {
-      if (activeTunnelProcess) {
-        try { activeTunnelProcess.kill(); } catch {}
-        activeTunnelProcess = null;
+export function launchTunnel(port = 3001, force = false): Promise<string> {
+  if (tunnelLaunchPromise) {
+    return tunnelLaunchPromise;
+  }
+
+  tunnelLaunchPromise = (async () => {
+    // If not forced and activeTunnelUrl is already healthy, return it directly
+    if (!force && activeTunnelUrl) {
+      const healthy = await isTunnelHealthy(activeTunnelUrl);
+      if (healthy) {
+        return activeTunnelUrl;
       }
-      const child = spawn('npx', ['-y', 'cloudflared', 'tunnel', '--protocol', 'http2', '--url', `http://localhost:${port}`], {
-        shell: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      activeTunnelProcess = child;
-
-      let resolved = false;
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Tunnel startup timed out after 15 seconds'));
-        }
-      }, 15000);
-
-      const onData = (chunk: Buffer) => {
-        const text = chunk.toString();
-        const match = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-        if (match && !resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          const url = match[0];
-          setTunnelUrl(url);
-          resolve(url);
-        }
-      };
-
-      child.stdout?.on('data', onData);
-      child.stderr?.on('data', onData);
-      child.on('error', (err) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          reject(err);
-        }
-      });
-    } catch (err) {
-      reject(err);
     }
+
+    return new Promise<string>((resolve, reject) => {
+      try {
+        if (activeTunnelProcess) {
+          try {
+            if (process.platform === 'win32' && activeTunnelProcess.pid) {
+              spawn('taskkill', ['/pid', activeTunnelProcess.pid.toString(), '/f', '/t']);
+            } else {
+              activeTunnelProcess.kill();
+            }
+          } catch {}
+          activeTunnelProcess = null;
+        }
+
+        const child = spawn('npx', ['-y', 'cloudflared', 'tunnel', '--protocol', 'http2', '--url', `http://localhost:${port}`], {
+          shell: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        activeTunnelProcess = child;
+
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('Tunnel startup timed out after 20 seconds'));
+          }
+        }, 20000);
+
+        const onData = (chunk: Buffer) => {
+          const text = chunk.toString();
+          const match = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+          if (match && !resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            const url = match[0];
+            setTunnelUrl(url);
+            resolve(url);
+          }
+        };
+
+        child.stdout?.on('data', onData);
+        child.stderr?.on('data', onData);
+        child.on('error', (err) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            reject(err);
+          }
+        });
+        child.on('exit', () => {
+          if (activeTunnelProcess === child) {
+            activeTunnelProcess = null;
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  })().finally(() => {
+    tunnelLaunchPromise = null;
   });
+
+  return tunnelLaunchPromise;
 }
 
-// Keep Cloudflare Tunnel alive & detect dead tunnels
+// Keep Cloudflare Tunnel alive & auto-heal dead tunnels
 setInterval(async () => {
   if (activeTunnelUrl && activeTunnelUrl.startsWith('https://')) {
     const alive = await isTunnelHealthy(activeTunnelUrl);
     if (!alive) {
       activeTunnelUrl = '';
       savePersistedTunnelUrl('');
+      const port = Number(process.env.PORT ?? 3001);
+      launchTunnel(port, true).catch(() => {});
     }
+  } else if (!activeTunnelUrl) {
+    const port = Number(process.env.PORT ?? 3001);
+    launchTunnel(port, false).catch(() => {});
   }
 }, 25_000);
 
@@ -190,6 +226,11 @@ export function registerScannerBridge(r: Router) {
       }
     }
 
+    // Auto-spawn tunnel in background if not alive so QR code is ready
+    if (!validTunnelUrl) {
+      launchTunnel(httpPort, false).catch(() => {});
+    }
+
     return {
       localIp,
       availableIps,
@@ -218,10 +259,11 @@ export function registerScannerBridge(r: Router) {
   });
 
   // 1c. Start or restart public tunnel on demand
-  r.post('/api/scanner/restart-tunnel', async () => {
+  r.post('/api/scanner/restart-tunnel', async (ctx: Ctx) => {
     const httpPort = Number(process.env.PORT ?? 3001);
+    const force = ctx.body?.force !== false;
     try {
-      const url = await launchTunnel(httpPort);
+      const url = await launchTunnel(httpPort, force);
       return { ok: true, tunnelUrl: url };
     } catch (err: any) {
       return { ok: false, error: err?.message || 'Failed to start tunnel' };

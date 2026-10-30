@@ -36,6 +36,7 @@ import {
   LightbulbIcon,
   ArrowRightIcon,
   BrainIcon,
+  ImageIcon,
 } from './InventoryIcons.tsx';
 
 interface InventoryDashboardProps {
@@ -709,6 +710,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               <table className="inventory-data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '64px', minWidth: '64px', textAlign: 'center' }}>Image</th>
                     <th style={{ minWidth: '170px' }}>Product & Identifiers</th>
                     <th style={{ minWidth: '140px', width: '150px', textAlign: 'left', whiteSpace: 'nowrap' }}>Category</th>
                     <th style={{ minWidth: '100px', textAlign: 'right' }}>Current Stock</th>
@@ -730,6 +732,29 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
                     return (
                       <tr key={item.id} className="item-row">
+                        <td style={{ width: '64px', minWidth: '64px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem' }}>
+                          <div className="product-table-image-cell">
+                            {item.imageUrl || (item as any).image ? (
+                              <img
+                                src={item.imageUrl || (item as any).image}
+                                alt={item.name}
+                                className="product-thumb-img"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                  const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
+                                  if (placeholder) placeholder.style.display = 'inline-flex';
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="product-thumb-placeholder"
+                              style={{ display: item.imageUrl || (item as any).image ? 'none' : 'inline-flex' }}
+                              title="Product Image Placeholder"
+                            >
+                              <ImageIcon size={18} />
+                            </div>
+                          </div>
+                        </td>
                         <td style={{ minWidth: '170px', maxWidth: '240px' }}>
                           <div className="item-cell-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
                           <div className="item-cell-sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -972,6 +997,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               <table className="inventory-data-table replenishment-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '64px', minWidth: '64px', textAlign: 'center' }}>Image</th>
                     <th>Product & Identifiers</th>
                     <th style={{ minWidth: '140px', width: '150px', textAlign: 'left', whiteSpace: 'nowrap' }}>Category</th>
                     <th style={{ textAlign: 'right' }}>Current Stock</th>
@@ -1000,6 +1026,35 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
                     return (
                       <tr key={r.itemId}>
+                        <td style={{ width: '64px', minWidth: '64px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem' }}>
+                          {(() => {
+                            const matchedItem = items.find((it) => it.id === r.itemId);
+                            const imgUrl = matchedItem?.imageUrl || (matchedItem as any)?.image || (r as any).imageUrl || (r as any).image;
+                            return (
+                              <div className="product-table-image-cell">
+                                {imgUrl ? (
+                                  <img
+                                    src={imgUrl}
+                                    alt={r.name}
+                                    className="product-thumb-img"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
+                                      if (placeholder) placeholder.style.display = 'inline-flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <div
+                                  className="product-thumb-placeholder"
+                                  style={{ display: imgUrl ? 'none' : 'inline-flex' }}
+                                  title="Product Image Placeholder"
+                                >
+                                  <ImageIcon size={18} />
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td>
                           <div className="item-cell-title">{r.name}</div>
                           <div className="item-cell-sub">

@@ -194,4 +194,25 @@ export function registerUsers(r: Router) {
     });
     return { ok: true, message: 'Password reset successfully' };
   });
+
+  // Permanently delete user & reclaim DB storage
+  r.delete('/api/users/:id', requirePerm('users'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const target = await ctx.db.one('SELECT * FROM users WHERE (id = ? OR lower(email) = lower(?)) AND tenant_id = ?', [ctx.params.id, ctx.params.id, tenantId]);
+    if (!target) throw notFound('User');
+    if (target.id === ctx.user!.id) throw conflict('You cannot delete your own account.', 'SELF_DELETE');
+
+    if (target.role === 'owner') {
+      const others = await ctx.db.one<{ n: number }>(`SELECT count(*) AS n FROM users WHERE tenant_id = ? AND role = 'owner' AND active AND id <> ?`, [tenantId, target.id]);
+      if (!others || others.n < 1) throw conflict('Cannot delete the only owner account of this store.', 'LAST_OWNER');
+    }
+
+    await ctx.db.tx(async (q) => {
+      await q.exec('UPDATE branches SET manager_id = NULL WHERE manager_id = ? AND tenant_id = ?', [target.id, tenantId]);
+      await q.exec('DELETE FROM users WHERE id = ? AND tenant_id = ?', [target.id, tenantId]);
+      await audit(q, ctx, { action: 'user.delete', entity: 'user', entityId: target.id, detail: { name: target.name, email: target.email, role: target.role } });
+    });
+
+    return { ok: true, deleted: target.id };
+  });
 }

@@ -398,18 +398,20 @@ export function registerParties(r: Router) {
     return { ok: true, party: formatParty({ ...party, loyalty_points: updatedPoints }), loyaltyPoints: updatedPoints };
   });
 
-  // Deactivate party (instead of delete)
+  // Permanently delete party & reclaim DB storage
   r.delete('/api/parties/:id', requirePerm('parties.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const party = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
     if (!party) throw notFound('Party');
 
     await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE parties SET active = false WHERE id = ? AND tenant_id = ?', [party.id, tenantId]);
-      await audit(q, ctx, { action: 'party.deactivate', entity: 'party', entityId: party.id });
+      await q.exec('UPDATE invoices SET party_id = NULL WHERE party_id = ? AND tenant_id = ?', [party.id, tenantId]);
+      await q.exec('UPDATE purchases SET supplier_id = NULL WHERE supplier_id = ? AND tenant_id = ?', [party.id, tenantId]);
+      await q.exec('DELETE FROM parties WHERE id = ? AND tenant_id = ?', [party.id, tenantId]);
+      await audit(q, ctx, { action: 'party.delete', entity: 'party', entityId: party.id, detail: { name: party.name, type: party.type } });
     });
 
-    return { ok: true };
+    return { ok: true, deleted: party.id };
   });
 
   // Supplier Payables Summary & Ageing (0-30, 31-60, 60+ days)

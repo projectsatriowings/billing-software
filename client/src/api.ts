@@ -198,6 +198,8 @@ export interface Item {
   stockValueMinor?: number | null;
   favorite: boolean;
   active?: boolean;
+  imageUrl?: string | null;
+  image?: string | null;
   custom?: Record<string, any>;
 }
 
