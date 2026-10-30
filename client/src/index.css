@@ -28989,18 +28989,18 @@ select.expense-input-control {
   transform: translateY(-2px) !important;
 }
 
-/* Bulletproof Sidebar Rail Mode Badges & Text suppression */
-.app-sidebar.icon-only .nav-count-badge,
-.app-sidebar.icon-only .nav-shift-badge,
-.app-sidebar.icon-only .nav-badge-new,
-.app-sidebar.icon-only .nav-tag-shortcut,
-.app-sidebar.icon-only .nav-trailing,
-.app-sidebar.icon-only .sidebar-chevron,
-.app-sidebar.icon-only .sidebar-brand-text,
-.app-sidebar.icon-only .sidebar-store-info,
-.app-sidebar.icon-only .sidebar-store-badge,
-.app-sidebar.icon-only .sidebar-user-meta,
-.app-sidebar.icon-only .sidebar-action-row-btn span:last-child {
+/* Bulletproof Sidebar Rail Mode Badges & Text suppression when NOT hovered/expanded */
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .nav-count-badge,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .nav-shift-badge,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .nav-badge-new,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .nav-tag-shortcut,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .nav-trailing,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-chevron,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-brand-text,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-store-info,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-store-badge,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-user-meta,
+.app-sidebar.icon-only:not(:hover):not(.hover-expanded) .sidebar-action-row-btn span:last-child {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -29008,4 +29008,231 @@ select.expense-input-control {
   width: 0 !important;
   height: 0 !important;
   overflow: hidden !important;
+}
+
+/* ==========================================================================
+   COLLAPSED SIDEBAR HOVER EXPANSION (Smooth Reveal for Shop Staff)
+   When staff hover over the collapsed rail, smoothly expand it to 275px
+   so they can read all section names, counts, and descriptions.
+   ========================================================================== */
+
+.app-sidebar.icon-only:hover,
+.app-sidebar.icon-only.hover-expanded {
+  width: 275px !important;
+  min-width: 275px !important;
+  max-width: 275px !important;
+  padding: 1.25rem 1rem !important;
+  box-shadow: 12px 0 36px rgba(15, 23, 42, 0.45) !important;
+  z-index: 100 !important;
+}
+
+/* Header row layout */
+.app-sidebar.icon-only:hover .sidebar-header-row,
+.app-sidebar.icon-only.hover-expanded .sidebar-header-row {
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.25rem 0 0.85rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  margin-bottom: 0.85rem !important;
+  width: 100% !important;
+}
+
+/* Brand icon & text */
+.app-sidebar.icon-only:hover .sidebar-brand,
+.app-sidebar.icon-only.hover-expanded .sidebar-brand {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.75rem !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-brand-text,
+.app-sidebar.icon-only.hover-expanded .sidebar-brand-text {
+  display: flex !important;
+  flex-direction: column !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Store profile switcher */
+.app-sidebar.icon-only:hover .sidebar-store-wrapper,
+.app-sidebar.icon-only.hover-expanded .sidebar-store-wrapper {
+  margin-bottom: 0.85rem !important;
+  width: 100% !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-store-btn,
+.app-sidebar.icon-only.hover-expanded .sidebar-store-btn {
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.6rem 0.75rem !important;
+  margin: 0 !important;
+  justify-content: flex-start !important;
+  border-radius: 12px !important;
+  gap: 0.75rem !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-store-info,
+.app-sidebar.icon-only.hover-expanded .sidebar-store-info,
+.app-sidebar.icon-only:hover .sidebar-store-badge,
+.app-sidebar.icon-only.hover-expanded .sidebar-store-badge,
+.app-sidebar.icon-only:hover .sidebar-store-btn svg:last-child,
+.app-sidebar.icon-only.hover-expanded .sidebar-store-btn svg:last-child {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Nav items list */
+.app-sidebar.icon-only:hover .sidebar-section-label,
+.app-sidebar.icon-only.hover-expanded .sidebar-section-label {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-nav,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav {
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-nav-item,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item {
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.65rem 0.85rem !important;
+  margin: 0 0 0.35rem 0 !important;
+  justify-content: flex-start !important;
+  gap: 0.75rem !important;
+  border-radius: 12px !important;
+  text-align: left !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-text,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-text {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  flex: 1 !important;
+  white-space: nowrap !important;
+  pointer-events: auto !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-trailing,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-trailing,
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-count-badge,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-count-badge,
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-tag-shortcut,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-tag-shortcut,
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-shift-badge,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-shift-badge,
+.app-sidebar.icon-only:hover .sidebar-nav-item .nav-badge-new,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item .nav-badge-new,
+.app-sidebar.icon-only:hover .sidebar-chevron,
+.app-sidebar.icon-only.hover-expanded .sidebar-chevron {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Submenu items */
+.app-sidebar.icon-only:hover .sidebar-sub-items,
+.app-sidebar.icon-only.hover-expanded .sidebar-sub-items {
+  padding-left: 0.85rem !important;
+  margin-left: 0.65rem !important;
+  border-left: 2px solid rgba(255, 255, 255, 0.12) !important;
+  align-items: stretch !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-sub-items .sidebar-nav-item,
+.app-sidebar.icon-only.hover-expanded .sidebar-sub-items .sidebar-nav-item {
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.55rem 0.75rem !important;
+  justify-content: flex-start !important;
+  gap: 0.65rem !important;
+}
+
+/* Footer: User profile card & action buttons */
+.app-sidebar.icon-only:hover .sidebar-footer,
+.app-sidebar.icon-only.hover-expanded .sidebar-footer {
+  padding: 0.85rem 0 0.25rem !important;
+  align-items: stretch !important;
+  gap: 0.65rem !important;
+  width: 100% !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-user-card,
+.app-sidebar.icon-only.hover-expanded .sidebar-user-card {
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.65rem 0.85rem !important;
+  justify-content: flex-start !important;
+  gap: 0.75rem !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-user-meta,
+.app-sidebar.icon-only.hover-expanded .sidebar-user-meta {
+  display: flex !important;
+  flex-direction: column !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-footer-buttons-list,
+.app-sidebar.icon-only.hover-expanded .sidebar-footer-buttons-list {
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-action-row-btn,
+.app-sidebar.icon-only.hover-expanded .sidebar-action-row-btn {
+  width: 100% !important;
+  height: auto !important;
+  padding: 0.6rem 0.85rem !important;
+  justify-content: flex-start !important;
+  gap: 0.75rem !important;
+}
+
+.app-sidebar.icon-only:hover .sidebar-action-row-btn span:last-child,
+.app-sidebar.icon-only.hover-expanded .sidebar-action-row-btn span:last-child {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Suppress single-item rail tooltips while entire sidebar is hovered/expanded */
+.app-sidebar.icon-only:hover .sidebar-nav-item[title]::after,
+.app-sidebar.icon-only.hover-expanded .sidebar-nav-item[title]::after {
+  display: none !important;
 }

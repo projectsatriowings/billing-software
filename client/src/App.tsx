@@ -86,6 +86,8 @@ import {
   PhonePeIcon,
   WhatsAppIcon,
   AlertTriangleIcon,
+  SettingsIcon,
+  StoreIcon,
 } from './components/terminal/PaymentIcons.tsx';
 import {
   TagIcon,
@@ -389,12 +391,12 @@ export const buildWhatsAppMessage = (opts: {
 // Business Type Helper Functions
 export const getBusinessIcon = (type?: string) => {
   switch (type) {
-    case 'pharmacy': return '💊';
-    case 'restaurant': return '🍽️';
-    case 'wholesale': return '📦';
-    case 'service': return '💼';
-    case 'retail': return '🛒';
-    default: return '🏢';
+    case 'pharmacy': return '';
+    case 'restaurant': return '';
+    case 'wholesale': return '';
+    case 'service': return '';
+    case 'retail': return '';
+    default: return '';
   }
 };
 
@@ -688,6 +690,8 @@ export function App() {
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const isSidebarVisuallyExpanded = !isSidebarCollapsed || isSidebarHovered;
   const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
   const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
@@ -4875,7 +4879,15 @@ export function App() {
       )}
 
       {/* Left Sidebar Navigation */}
-      <aside className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''}`}>
+      <aside
+        className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''} ${isSidebarCollapsed && isSidebarHovered ? 'hover-expanded' : ''}`}
+        onMouseEnter={() => {
+          if (isSidebarCollapsed) setIsSidebarHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsSidebarHovered(false);
+        }}
+      >
         <div className="sidebar-top">
           {/* Header row with Brand & Collapse/Expand Toggle */}
           <div className="sidebar-header-row">
@@ -4904,12 +4916,13 @@ export function App() {
                 e.stopPropagation();
                 setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
+                setIsSidebarHovered(false);
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
               aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
+                <polyline points={!isSidebarVisuallyExpanded ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
               </svg>
             </button>
           </div>
@@ -4945,7 +4958,7 @@ export function App() {
               </div>
             </button>
 
-            {!isSidebarCollapsed && showBusinessDropdown && (
+            {isSidebarVisuallyExpanded && showBusinessDropdown && (
               <>
                 <div
                   className="dropdown-backdrop"
@@ -5124,7 +5137,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">My Cashier Shift</span>
-                {!isSidebarCollapsed && activeShiftNumber ? (
+                {isSidebarVisuallyExpanded && activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
                   </span>
@@ -5150,7 +5163,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                {!isSidebarCollapsed && <span className="nav-count-badge">{items.length}</span>}
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{items.length}</span>}
               </button>
             )}
 
@@ -5169,7 +5182,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                {!isSidebarCollapsed && <span className="nav-count-badge">{categoriesList.length}</span>}
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{categoriesList.length}</span>}
               </button>
             )}
 
@@ -5200,7 +5213,7 @@ export function App() {
                   </span>
                   <span className="nav-text">Inventory Hub</span>
                   <div className="nav-trailing">
-                    {!isSidebarCollapsed && totalStockAlerts > 0 && (
+                    {isSidebarVisuallyExpanded && totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
                         title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
@@ -5258,7 +5271,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
-                {!isSidebarCollapsed && <span className="nav-badge-new">NEW</span>}
+                {isSidebarVisuallyExpanded && <span className="nav-badge-new">NEW</span>}
               </button>
             )}
 
@@ -5300,7 +5313,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                {!isSidebarCollapsed && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
               </button>
             )}
 
@@ -5321,7 +5334,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                {!isSidebarCollapsed && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
               </button>
             )}
 
@@ -5383,7 +5396,7 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
-                        {!isSidebarCollapsed && <span className="nav-count-badge">{purchases.length}</span>}
+                        {isSidebarVisuallyExpanded && <span className="nav-count-badge">{purchases.length}</span>}
                       </button>
                     )}
 
@@ -10134,7 +10147,22 @@ export function App() {
             {/* Section 1: Business Profile Editor */}
             <div className="card settings-section">
               <div className="card-title">
-                <span>⚙️ Active Store Configuration & Profile</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'var(--primary-light, #ede9fe)',
+                    color: 'var(--primary, #6366f1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(99, 102, 241, 0.15)'
+                  }}>
+                    <SettingsIcon size={18} />
+                  </span>
+                  <span>Active Store Configuration & Profile</span>
+                </span>
                 <span className={`biz-badge biz-${shop?.businessType}`}>
                   Current: {getBusinessLabel(shop?.businessType)}
                 </span>
@@ -10165,12 +10193,12 @@ export function App() {
                       value={settingsType}
                       onChange={(e) => setSettingsType(e.target.value)}
                     >
-                      <option value="retail">🛒 Retail / Kirana / Supermarket</option>
-                      <option value="pharmacy">💊 Pharmacy & Healthcare</option>
-                      <option value="restaurant">🍽️ Restaurant / Cafe / Bakery</option>
-                      <option value="wholesale">📦 Wholesale & Distribution</option>
-                      <option value="service">💼 Professional & Technical Services</option>
-                      <option value="general">🏢 General Business</option>
+                      <option value="retail">Retail / Kirana / Supermarket</option>
+                      <option value="pharmacy">Pharmacy & Healthcare</option>
+                      <option value="restaurant">Restaurant / Cafe / Bakery</option>
+                      <option value="wholesale">Wholesale & Distribution</option>
+                      <option value="service">Professional & Technical Services</option>
+                      <option value="general">General Business</option>
                     </select>
                   </div>
                   <div className="form-group">
