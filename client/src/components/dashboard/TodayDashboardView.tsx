@@ -11,6 +11,22 @@ import {
 import { OpenShiftModal } from '../shifts/OpenShiftModal.tsx';
 import { CashMovementModal } from '../shifts/CashMovementModal.tsx';
 import { CloseShiftModal } from '../shifts/CloseShiftModal.tsx';
+import {
+  SparklesIcon,
+  DownloadIcon,
+  PlusIcon,
+  ReceiptIcon,
+  CalendarIcon,
+  Building2Icon,
+  TagIcon,
+  ShieldCheckIcon,
+  PackageIcon,
+  RotateCcwIcon,
+  AlertTriangleIcon,
+  ShoppingCartIcon,
+  RefreshCwIcon,
+  CheckCircleIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface TodayDashboardViewProps {
   user: User;
@@ -55,6 +71,79 @@ function formatCompactRupees(minor: number): string {
   }
   return `₹${Math.round(r)}`;
 }
+
+interface AnimatedCounterProps {
+  value: number;
+  isRupees?: boolean;
+  decimals?: number;
+  duration?: number;
+  animKey?: any;
+  className?: string;
+  as?: 'span' | 'tspan';
+}
+
+/** Fluid ease-out count-up animation component for KPI values */
+export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
+  value,
+  isRupees = false,
+  decimals = 0,
+  duration = 850,
+  animKey = 0,
+  className = '',
+  as = 'span',
+}) => {
+  const [displayValue, setDisplayValue] = useState<number>(0);
+  const animFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (value <= 0) {
+      setDisplayValue(0);
+      return;
+    }
+
+    const startVal = 0;
+    const targetVal = value;
+    const startTime = performance.now();
+    const animDuration = Math.max(350, Math.min(1000, duration));
+
+    // Quartic ease-out for energetic launch & buttery smooth finish
+    const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+
+    const step = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(1, elapsed / animDuration);
+      const eased = easeOutQuart(progress);
+      const current = startVal + (targetVal - startVal) * eased;
+
+      setDisplayValue(progress >= 1 ? targetVal : current);
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(step);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [value, animKey, duration]);
+
+  const formatted = useMemo(() => {
+    if (isRupees) {
+      return formatRupees(Math.round(displayValue), decimals > 0);
+    }
+    return Math.round(displayValue).toLocaleString('en-IN');
+  }, [displayValue, isRupees, decimals]);
+
+  if (as === 'tspan') {
+    return <tspan className={className}>{formatted}</tspan>;
+  }
+
+  return <span className={className}>{formatted}</span>;
+};
 
 /** Compute nice tick steps with ~15% headroom starting at 0 */
 function getNiceTicks(
@@ -188,6 +277,11 @@ function buildMonotoneCubicPath(points: { x: number; y: number }[], baselineY: n
   return path;
 }
 
+// Persistent module cache for instantaneous 0ms dashboard loading and tab returns
+let cachedTodayDashboard: TodayDashboardData | null = null;
+let cachedTodayDashboardBranch: string | null = null;
+const branchDataMap = new Map<string, TodayDashboardData>();
+
 export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   user,
   shop,
@@ -199,11 +293,64 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onOpenAddProductModal,
   showToast,
 }) => {
-  const [data, setData] = useState<TodayDashboardData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // SWR: Initialize state immediately from cache if available (0ms instant render!)
+  const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
+  const [loading, setLoading] = useState<boolean>(() => !cachedTodayDashboard);
   const [error, setError] = useState<string | null>(null);
   const [chartMetric, setChartMetric] = useState<ChartMetric>('sales');
+  const [chartAnimKey, setChartAnimKey] = useState<number>(0);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+
+  const handleMetricChange = useCallback((metric: ChartMetric) => {
+    if (metric === chartMetric) return;
+    setChartMetric(metric);
+    setChartAnimKey((k) => k + 1);
+  }, [chartMetric]);
+
+  // Re-trigger graph & donut animation when user returns to dashboard or switches back to tab
+  useEffect(() => {
+    const handleDashboardFocus = () => {
+      setChartAnimKey((k) => k + 1);
+    };
+    window.addEventListener('dashboard_view_focused', handleDashboardFocus);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setChartAnimKey((k) => k + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('dashboard_view_focused', handleDashboardFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Dynamic theme colors for smooth transitions between Bills, Sales, and Profit
+  const metricTheme = useMemo(() => {
+    switch (chartMetric) {
+      case 'profit':
+        return {
+          color: '#10b981',
+          stopColor: '#10b981',
+          label: 'Gross Profit',
+        };
+      case 'bills':
+        return {
+          color: '#0284c7',
+          stopColor: '#0ea5e9',
+          label: 'Bills',
+        };
+      case 'sales':
+      default:
+        return {
+          color: '#6366f1',
+          stopColor: '#6366f1',
+          label: 'Sales',
+        };
+    }
+  }, [chartMetric]);
 
   const [selectedBranchCode, setSelectedBranchCode] = useState<string>(
     user.assignedLocation || 'MAIN'
@@ -230,7 +377,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     return 'Good evening';
   }, [data?.nowKolkata?.hour]);
 
-  // Load dashboard data
+  // Load dashboard data with SWR (Stale-While-Revalidate): background revalidation never blocks the UI
   const loadDashboard = useCallback(
     async (branchOrInitial?: string | boolean, isInitialParam = false) => {
       let branchToLoad: string = selectedBranchCodeRef.current;
@@ -242,10 +389,23 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         branchToLoad = branchOrInitial.trim();
       }
 
-      if (isInitial) setLoading(true);
+      // Check if we already have valid cached data for this branch
+      const cachedBranchData = branchDataMap.get(branchToLoad.toUpperCase()) || cachedTodayDashboard;
+      const hasBranchData = Boolean(cachedBranchData);
+
+      // Only show full-screen skeleton if we have NO cached data at all for this branch
+      if (isInitial && !hasBranchData) {
+        setLoading(true);
+      }
       setError(null);
       try {
         const res = await fetchTodayDashboard(branchToLoad);
+        cachedTodayDashboard = res;
+        cachedTodayDashboardBranch = branchToLoad;
+        branchDataMap.set(branchToLoad.toUpperCase(), res);
+        if (res.selectedBranch?.code) {
+          branchDataMap.set(res.selectedBranch.code.toUpperCase(), res);
+        }
         setData(res);
         if (res.selectedBranch?.code) {
           setSelectedBranchCode(res.selectedBranch.code);
@@ -253,11 +413,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         }
       } catch (err: any) {
         console.error('Failed to load today dashboard:', err);
-        if (isInitial) {
+        if (!cachedTodayDashboard && !cachedBranchData) {
           setError(err.message || 'Failed to load dashboard data. Please try again.');
         }
       } finally {
-        if (isInitial) setLoading(false);
+        setLoading(false);
       }
     },
     [],
@@ -267,38 +427,44 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     if (newBranchCode === selectedBranchCode) return;
     setSelectedBranchCode(newBranchCode);
     selectedBranchCodeRef.current = newBranchCode;
-    // Prepare clean counter data for the selected branch to prevent cross-branch leakage
-    setData((prev) => {
-      if (!prev) return null;
-      const targetBranch = prev.branches?.find(
-        (b) => (b.code || '').toUpperCase() === newBranchCode.toUpperCase()
-      );
-      const targetCounters = targetBranch?.counters || [];
-      const initialCounters = targetCounters.map((c, i) => {
-        const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
-        const name = m ? `Counter ${m[1]}` : c.trim();
+    const branchCached = branchDataMap.get(newBranchCode.toUpperCase());
+    if (branchCached) {
+      setData(branchCached);
+    } else {
+      // Prepare clean counter data for the selected branch to prevent cross-branch leakage
+      setData((prev) => {
+        if (!prev) return null;
+        const targetBranch = prev.branches?.find(
+          (b) => (b.code || '').toUpperCase() === newBranchCode.toUpperCase()
+        );
+        const targetCounters = targetBranch?.counters || [];
+        const initialCounters = targetCounters.map((c, i) => {
+          const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
+          const name = m ? `Counter ${m[1]}` : c.trim();
+          return {
+            id: `counter-${i + 1}`,
+            code: c,
+            name,
+            amountMinor: 0,
+            formattedAmount: '₹0',
+          };
+        });
+
         return {
-          id: `counter-${i + 1}`,
-          code: c,
-          name,
-          amountMinor: 0,
-          formattedAmount: '₹0',
+          ...prev,
+          countersToday: {
+            title: 'Counters Today',
+            subtitle: 'Collected from open till now',
+            branchCode: newBranchCode,
+            counters: initialCounters,
+            totalMinor: 0,
+            formattedTotal: '₹0',
+          },
         };
       });
-
-      return {
-        ...prev,
-        countersToday: {
-          title: 'Counters Today',
-          subtitle: 'Collected from open till now',
-          branchCode: newBranchCode,
-          counters: initialCounters,
-          totalMinor: 0,
-          formattedTotal: '₹0',
-        },
-      };
-    });
-    loadDashboard(newBranchCode, true);
+    }
+    setChartAnimKey((k) => k + 1);
+    loadDashboard(newBranchCode, !branchCached);
   };
 
   // Initial load
@@ -631,11 +797,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     return (
       <div className="today-dash-root">
         <div className="today-error-card">
-          <div className="error-icon">⚠️</div>
+          <div className="error-icon"><AlertTriangleIcon size={32} /></div>
           <h3>Failed to load Today's Overview</h3>
           <p>{error}</p>
-          <button className="btn btn-primary" onClick={() => loadDashboard(true)}>
-            🔄 Retry
+          <button className="btn btn-primary" onClick={() => loadDashboard(true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <RefreshCwIcon size={15} />
+            <span>Retry</span>
           </button>
         </div>
       </div>
@@ -654,7 +821,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="header-main-row">
           <div className="header-greeting-area">
             <h1 className="header-greeting-title">
-              {greeting}, {firstName} 👋
+              <span>{greeting}, {firstName}</span>
+              <SparklesIcon size={18} style={{ color: '#6366f1', marginLeft: '6px', verticalAlign: 'middle' }} />
             </h1>
             <div className="header-shop-subtitle">
               <span>{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
@@ -671,7 +839,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               onClick={onNavigateToPurchases}
               title="Record supplier purchase invoice & inward goods"
             >
-              <span className="btn-icon">📥</span>
+              <DownloadIcon size={16} />
               <span>Purchase Inward</span>
             </button>
 
@@ -682,7 +850,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               onClick={onOpenAddProductModal}
               title="Add new item to catalog"
             >
-              <span className="btn-icon">➕</span>
+              <PlusIcon size={16} />
               <span>Add Product</span>
             </button>
 
@@ -693,7 +861,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               onClick={onNavigateToPos}
               title="Open POS billing terminal (Hot key: F1)"
             >
-              <span className="btn-icon">🧾</span>
+              <ReceiptIcon size={16} />
               <span>New Bill (F1)</span>
             </button>
           </div>
@@ -702,7 +870,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         {/* Subheader: Today pill & Branch Switcher */}
         <div className="header-meta-row">
           <div className="header-today-pill">
-            <span className="pill-calendar-icon">📅</span>
+            <CalendarIcon size={14} style={{ marginRight: "4px" }} />
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
@@ -720,7 +888,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                       onClick={() => handleBranchChange(b.code)}
                       title={`Switch to ${b.name || b.code}`}
                     >
-                      <span className="branch-icon">🏢</span>
+                      <Building2Icon size={13} className="branch-icon" style={{ marginRight: "4px" }} />
                       <span>{b.name || b.code}</span>
                     </button>
                   );
@@ -735,13 +903,14 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
       {isBilledEmpty && (
         <div className="today-empty-alert-banner">
           <div className="empty-alert-content">
-            <span className="empty-alert-icon">✨</span>
+            <SparklesIcon size={20} className="empty-alert-icon" style={{ color: "#6366f1" }} />
             <div>
               <strong>No bills yet today</strong> — start billing from POS Counter to see live sales, hourly rush curves, and collections!
             </div>
           </div>
           <button type="button" className="btn-empty-start" onClick={onNavigateToPos}>
-            <span>🛒 Go to POS Counter (F1)</span>
+            <ShoppingCartIcon size={16} style={{ marginRight: "6px" }} />
+            <span>Go to POS Counter (F1)</span>
           </button>
         </div>
       )}
@@ -754,15 +923,18 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             <span className="kpi-label">TODAY'S SALES</span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value mono">{formatRupees(cards.todaySales.netSalesMinor)}</span>
+            <span className="kpi-value mono">
+              <AnimatedCounter value={cards.todaySales.netSalesMinor} isRupees={true} animKey={chartAnimKey} />
+            </span>
           </div>
           <div className="kpi-footer-row">
             {cards.todaySales.changePct !== null ? (
               <span
                 className={`kpi-change-pill ${cards.todaySales.changePct >= 0 ? 'pos' : 'neg'}`}
               >
-                {cards.todaySales.changePct >= 0 ? '▲' : '▼'}{' '}
-                {Math.abs(cards.todaySales.changePct).toFixed(1)}% vs yesterday
+                <span className="kpi-pill-arrow">{cards.todaySales.changePct >= 0 ? '▲' : '▼'}</span>
+                <span className="kpi-pill-pct">{Math.abs(cards.todaySales.changePct).toFixed(1)}%</span>
+                <span className="kpi-pill-ref">vs yesterday</span>
               </span>
             ) : (
               <span className="kpi-change-pill neutral">No sales yesterday</span>
@@ -774,10 +946,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-label">BILLS</span>
-            <span className="kpi-icon-badge blue">🧾</span>
+            <span className="kpi-icon-badge blue"><ReceiptIcon size={16} style={{ color: "#2563eb" }} /></span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value mono">{cards.bills.billsCount}</span>
+            <span className="kpi-value mono">
+              <AnimatedCounter value={cards.bills.billsCount} isRupees={false} animKey={chartAnimKey} />
+            </span>
           </div>
           <div className="kpi-footer-row">
             {cards.bills.hasCompBills ? (
@@ -798,10 +972,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-label">AVG BILL VALUE</span>
-            <span className="kpi-icon-badge green">🏷️</span>
+            <span className="kpi-icon-badge green"><TagIcon size={16} style={{ color: "#059669" }} /></span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value mono">{formatRupees(cards.avgBillValue.avgBillMinor, true)}</span>
+            <span className="kpi-value mono">
+              <AnimatedCounter value={cards.avgBillValue.avgBillMinor} isRupees={true} decimals={2} animKey={chartAnimKey} />
+            </span>
           </div>
           <div className="kpi-footer-row">
             {cards.avgBillValue.changePct !== null ? (
@@ -819,10 +995,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           <div className="today-kpi-card">
             <div className="kpi-card-header">
               <span className="kpi-label">GROSS PROFIT</span>
-              <span className="kpi-icon-badge green">🛡️</span>
+              <span className="kpi-icon-badge green"><ShieldCheckIcon size={16} style={{ color: "#059669" }} /></span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-value mono text-success">{formatRupees(cards.grossProfit.profitMinor)}</span>
+              <span className="kpi-value mono text-success">
+                <AnimatedCounter value={cards.grossProfit.profitMinor} isRupees={true} animKey={chartAnimKey} />
+              </span>
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-meta-text">
@@ -837,10 +1015,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-label">ITEMS SOLD</span>
-            <span className="kpi-icon-badge brown">📦</span>
+            <span className="kpi-icon-badge brown"><PackageIcon size={16} style={{ color: "#d97706" }} /></span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value mono">{cards.itemsSold.totalUnits}</span>
+            <span className="kpi-value mono">
+              <AnimatedCounter value={cards.itemsSold.totalUnits} isRupees={false} animKey={chartAnimKey} />
+            </span>
           </div>
           <div className="kpi-footer-row">
             <span className="kpi-meta-text">units across {cards.itemsSold.distinctProductsCount} products</span>
@@ -851,10 +1031,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card">
           <div className="kpi-card-header">
             <span className="kpi-label">RETURNS</span>
-            <span className="kpi-icon-badge red">↩️</span>
+            <span className="kpi-icon-badge red"><RotateCcwIcon size={16} style={{ color: "#ef4444" }} /></span>
           </div>
           <div className="kpi-value-row">
-            <span className="kpi-value mono text-danger">{formatRupees(cards.returns.returnsMinor)}</span>
+            <span className="kpi-value mono text-danger">
+              <AnimatedCounter value={cards.returns.returnsMinor} isRupees={true} animKey={chartAnimKey} />
+            </span>
           </div>
           <div className="kpi-footer-row">
             <span className="kpi-meta-text text-danger">
@@ -883,12 +1065,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                   aria-selected={chartMetric === 'bills'}
                   tabIndex={0}
                   type="button"
-                  className={`toggle-seg-btn ${chartMetric === 'bills' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('bills')}
+                  className={`toggle-seg-btn ${chartMetric === 'bills' ? 'active active-bills' : ''}`}
+                  onClick={() => handleMetricChange('bills')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setChartMetric('bills');
+                      handleMetricChange('bills');
                     }
                   }}
                 >
@@ -900,12 +1082,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                   aria-selected={chartMetric === 'sales'}
                   tabIndex={0}
                   type="button"
-                  className={`toggle-seg-btn ${chartMetric === 'sales' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('sales')}
+                  className={`toggle-seg-btn ${chartMetric === 'sales' ? 'active active-sales' : ''}`}
+                  onClick={() => handleMetricChange('sales')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setChartMetric('sales');
+                      handleMetricChange('sales');
                     }
                   }}
                 >
@@ -918,12 +1100,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                     aria-selected={chartMetric === 'profit'}
                     tabIndex={0}
                     type="button"
-                    className={`toggle-seg-btn ${chartMetric === 'profit' ? 'active' : ''}`}
-                    onClick={() => setChartMetric('profit')}
+                    className={`toggle-seg-btn ${chartMetric === 'profit' ? 'active active-profit' : ''}`}
+                    onClick={() => handleMetricChange('profit')}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        setChartMetric('profit');
+                        handleMetricChange('profit');
                       }
                     }}
                   >
@@ -935,7 +1117,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               {/* Legend */}
               <div className="chart-legend">
                 <span className="legend-item">
-                  <span className="legend-line today"></span> Today
+                  <span className="legend-line today" style={{ background: metricTheme.color }}></span> Today ({metricTheme.label})
                 </span>
                 <span className="legend-item">
                   <span className="legend-line last-week"></span> Yesterday ({nowKolkata.compWeekdayShort || nowKolkata.compWeekday || 'Prev'})
@@ -954,11 +1136,16 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               onMouseLeave={() => setHoveredPointIndex(null)}
             >
               <defs>
-                {/* Purple gradient for today's area under curve */}
+                {/* Dynamic gradient for today's area under curve */}
                 <linearGradient id="todayAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
+                  <stop offset="0%" stopColor={metricTheme.stopColor} stopOpacity="0.32" />
+                  <stop offset="100%" stopColor={metricTheme.stopColor} stopOpacity="0.01" />
                 </linearGradient>
+
+                {/* Soft glow drop shadow for the active metric line */}
+                <filter id="todayLineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor={metricTheme.stopColor} floodOpacity="0.35" />
+                </filter>
 
                 {/* Shading for rest of day */}
                 <pattern id="diagonalHatch" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
@@ -1007,6 +1194,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               {/* 3. Comparison Day Monotone Curve (Dashed Grey Full Day) */}
               {compLinePath && (
                 <path
+                  key={`comp-${chartAnimKey}-${chartMetric}`}
+                  className="comp-chart-animated-line"
                   d={compLinePath}
                   fill="none"
                   stroke="#cbd5e1"
@@ -1037,32 +1226,45 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
 
               {/* 5. Today's Area Fill */}
               {todayAreaPath && (
-                <path d={todayAreaPath} fill="url(#todayAreaGradient)" />
+                <path
+                  key={`area-${chartAnimKey}-${chartMetric}`}
+                  className="today-chart-animated-area"
+                  d={todayAreaPath}
+                  fill="url(#todayAreaGradient)"
+                />
               )}
 
-              {/* 6. Today's Monotone Solid Purple Line */}
+              {/* 6. Today's Monotone Solid Line */}
               {todayLinePath && (
                 <path
+                  key={`line-${chartAnimKey}-${chartMetric}`}
+                  className="today-chart-animated-line"
                   d={todayLinePath}
                   fill="none"
-                  stroke="#6366f1"
-                  strokeWidth="3.2"
+                  stroke={metricTheme.color}
+                  strokeWidth="3.4"
                   strokeLinecap="round"
+                  filter="url(#todayLineGlow)"
                 />
               )}
 
               {/* 7. Filled Dots for past & current hours */}
               {seriesWithCoords
                 .filter((p) => p.isPastOrCurrent && p.todayVal !== null)
-                .map((p) => (
+                .map((p, dotIdx) => (
                   <circle
-                    key={p.hour}
+                    key={`dot-${chartAnimKey}-${p.hour}`}
+                    className="today-chart-dot-pop"
                     cx={p.x}
                     cy={p.todayY}
-                    r={hoveredPointIndex === p.idx ? 5.5 : 4}
-                    fill={hoveredPointIndex === p.idx ? '#ffffff' : '#6366f1'}
-                    stroke="#6366f1"
+                    r={hoveredPointIndex === p.idx ? 6 : 4.5}
+                    fill={hoveredPointIndex === p.idx ? '#ffffff' : metricTheme.color}
+                    stroke={metricTheme.color}
                     strokeWidth="2.5"
+                    style={{
+                      animationDelay: `${Math.min(550, dotIdx * 45)}ms`,
+                      transformOrigin: `${p.x}px ${p.todayY}px`,
+                    }}
                   />
                 ))}
 
@@ -1148,11 +1350,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
               {/* Subtle accent marker on busiest hour peak when not hovered */}
               {hoveredPointIndex === null && busiestIndex >= 0 && seriesWithCoords[busiestIndex] && (
                 <circle
+                  key={`busiest-${chartAnimKey}-${busiestIndex}`}
                   cx={seriesWithCoords[busiestIndex].x}
                   cy={seriesWithCoords[busiestIndex].todayY}
-                  r="5"
+                  r="5.5"
                   fill="#ffffff"
-                  stroke="#6366f1"
+                  stroke={metricTheme.color}
                   strokeWidth="2.5"
                   pointerEvents="none"
                 />
@@ -1273,14 +1476,15 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                     );
                   }
 
-                  return payments.modes.map((mode) => {
+                  return payments.modes.map((mode, modeIdx) => {
                     const strokeDasharray = `${(mode.percentage / 100) * circumference} ${circumference}`;
                     const strokeDashoffset = -accumulatedOffset;
                     accumulatedOffset += (mode.percentage / 100) * circumference;
 
                     return (
                       <circle
-                        key={mode.key}
+                        key={`donut-slice-${chartAnimKey}-${mode.key}`}
+                        className="donut-animated-slice"
                         cx="90"
                         cy="90"
                         r={radius}
@@ -1291,18 +1495,23 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                         strokeDashoffset={strokeDashoffset}
                         transform="rotate(-90 90 90)"
                         strokeLinecap="butt"
+                        style={{
+                          animationDelay: `${modeIdx * 100}ms`,
+                        }}
                       />
                     );
                   });
                 })()}
 
-                {/* Center text in Donut */}
-                <text x="90" y="85" textAnchor="middle" className="donut-center-total mono">
-                  {formatCompactRupees(payments.collectedTotalMinor)}
-                </text>
-                <text x="90" y="103" textAnchor="middle" className="donut-center-label">
-                  collected
-                </text>
+                {/* Center text in Donut with animated entrance */}
+                <g key={`donut-center-${chartAnimKey}`} className="donut-center-group">
+                  <text x="90" y="85" textAnchor="middle" className="donut-center-total mono">
+                    {formatCompactRupees(payments.collectedTotalMinor)}
+                  </text>
+                  <text x="90" y="103" textAnchor="middle" className="donut-center-label">
+                    collected
+                  </text>
+                </g>
               </svg>
             </div>
 
@@ -1347,66 +1556,94 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
       {/* 4. BOTTOM SECTION (THREE CARDS: Top Sellers, Stock Alerts, Cash Drawer) */}
       <section className="today-bottom-grid">
         {/* CARD 1: TOP SELLERS TODAY */}
-        <div className="today-section-card">
+        <div className="today-section-card bento-card-3d bento-card-top-sellers">
           <div className="section-card-header">
-            <div>
-              <h3 className="section-title">Top Sellers Today</h3>
-              <span className="section-subtitle">By sales value</span>
+            <div className="section-title-group">
+              <div className="section-title-icon-box sellers-icon-box">
+                <SparklesIcon size={16} />
+              </div>
+              <div>
+                <h3 className="section-title">Top Sellers Today</h3>
+                <span className="section-subtitle">Ranked by revenue & volume</span>
+              </div>
             </div>
             <button
               type="button"
-              className="section-link-btn"
+              className="section-link-pill-btn"
               onClick={onNavigateToSalesAnalysis}
             >
-              Sales Analysis →
+              <span>Sales Analysis</span>
+              <span className="pill-arrow">→</span>
             </button>
           </div>
 
-          <div className="sellers-list">
+          <div className="sellers-list" key={`sellers-${chartAnimKey}`}>
             {topSellers.length > 0 ? (
-              topSellers.map((item) => (
-                <div key={item.itemId} className="seller-row">
+              topSellers.map((item, idx) => (
+                <div key={item.itemId} className="seller-row bento-item-tile">
+                  <div className={`seller-rank-badge rank-${idx + 1}`}>
+                    #{idx + 1}
+                  </div>
                   <div className="seller-info">
-                    <span className="seller-name">{item.name}</span>
-                    <span className="seller-qty">
-                      {item.quantity} {item.unit}
-                    </span>
+                    <div className="seller-name-row">
+                      <span className="seller-name" title={item.name}>{item.name}</span>
+                      <span className="seller-qty-chip">
+                        {item.quantity} {item.unit}
+                      </span>
+                    </div>
+                    <div className="seller-bar-track">
+                      <div
+                        className="seller-bar-fill animated-modern-bar"
+                        style={{
+                          width: `${item.barPct}%`,
+                          animationDelay: `${idx * 0.08}s`,
+                        }}
+                      >
+                        <span className="bar-shimmer-highlight"></span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="seller-bar-wrap">
-                    <div className="seller-bar" style={{ width: `${item.barPct}%` }}></div>
-                  </div>
-
-                  <div className="seller-amount mono">
-                    {formatRupees(item.salesMinor)}
+                  <div className="seller-amount-col mono">
+                    <span className="seller-amount-val">{formatRupees(item.salesMinor)}</span>
+                    <span className="seller-share-label">{item.barPct}%</span>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="empty-sub-card">No product sales yet today</div>
+              <div className="empty-sub-card">
+                <ShoppingCartIcon size={20} className="empty-sub-icon" />
+                <span>No product sales yet today</span>
+              </div>
             )}
           </div>
         </div>
 
         {/* CARD 2: STOCK NEEDING ATTENTION */}
-        <div className="today-section-card">
+        <div className="today-section-card bento-card-3d bento-card-stock-attention">
           <div className="section-card-header">
-            <div>
-              <h3 className="section-title">Stock Needing Attention</h3>
-              <span className="section-subtitle">Fast sellers running low today</span>
+            <div className="section-title-group">
+              <div className="section-title-icon-box stock-icon-box">
+                <AlertTriangleIcon size={16} />
+              </div>
+              <div>
+                <h3 className="section-title">Stock Needing Attention</h3>
+                <span className="section-subtitle">Fast sellers running low today</span>
+              </div>
             </div>
             <button
               type="button"
-              className="section-link-btn"
+              className="section-link-pill-btn"
               onClick={onNavigateToInventory}
             >
-              Inventory Hub →
+              <span>Inventory Hub</span>
+              <span className="pill-arrow">→</span>
             </button>
           </div>
 
-          <div className="stock-alerts-list">
+          <div className="stock-alerts-list" key={`stock-${chartAnimKey}`}>
             {stockAttention.length > 0 ? (
-              stockAttention.map((item) => {
+              stockAttention.map((item, idx) => {
                 const stockQty = typeof item.stockQty === 'number' && !isNaN(item.stockQty) ? item.stockQty : 0;
                 const badgeText =
                   item.badgeText && !item.badgeText.includes('NaN')
@@ -1425,17 +1662,30 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                     ? 'warning'
                     : 'neutral');
 
+                const initials = (item.name || 'P').slice(0, 2).toUpperCase();
+
                 return (
-                  <div key={item.itemId} className="stock-alert-row">
+                  <div
+                    key={item.itemId}
+                    className={`stock-alert-row bento-item-tile stock-status-${badgeType}`}
+                    style={{ animationDelay: `${idx * 0.07}s` }}
+                  >
+                    <div className="stock-item-avatar">
+                      {initials}
+                    </div>
+
                     <div className="stock-info">
-                      <span className="stock-name">{item.name}</span>
+                      <span className="stock-name" title={item.name}>{item.name}</span>
                       <span className="stock-left-qty">
-                        {stockQty} {item.unit || 'pcs'} left
+                        <span className={`status-beacon-dot beacon-${badgeType}`}></span>
+                        {stockQty <= 0 ? '0' : stockQty} {item.unit || 'pcs'} left
+                        {item.soldTodayQty > 0 && ` · ${item.soldTodayQty} sold today`}
                       </span>
                     </div>
 
                     <div className="stock-badge-col">
-                      <span className={`stock-badge ${badgeType}`}>
+                      <span className={`stock-badge modern-pill-badge ${badgeType}`}>
+                        <span className="badge-pulse-indicator"></span>
                         {badgeText}
                       </span>
                     </div>
@@ -1443,44 +1693,86 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                 );
               })
             ) : (
-              <div className="empty-sub-card">All active inventory levels are healthy ✓</div>
+              <div className="empty-sub-card">
+                <CheckCircleIcon size={20} style={{ color: "#10b981", marginRight: "8px" }} />
+                <span>All active inventory levels are healthy</span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* CARD 3: COUNTERS TODAY (Matches Design in Image 2) */}
-        <div className="today-section-card counters-today-card">
+        {/* CARD 3: COUNTERS TODAY */}
+        <div className="today-section-card bento-card-3d bento-card-counters counters-today-card">
           <div className="section-card-header">
-            <div>
-              <h3 className="section-title">Counters Today</h3>
-              <span className="section-subtitle">Collected from open till now</span>
+            <div className="section-title-group">
+              <div className="section-title-icon-box counters-icon-box">
+                <Building2Icon size={16} />
+              </div>
+              <div>
+                <h3 className="section-title">Counters Today</h3>
+                <span className="section-subtitle">Collected from open till now</span>
+              </div>
             </div>
             <button
               type="button"
-              className="counters-today-header-link"
+              className="section-link-pill-btn"
               onClick={onNavigateToShifts}
             >
-              Cashier Shifts →
+              <span>Cashier Shifts</span>
+              <span className="pill-arrow">→</span>
             </button>
           </div>
 
-          <div className="counters-today-body">
-            {countersToday?.counters && countersToday.counters.length > 0 ? (
-              countersToday.counters.map((c) => (
-                <div key={c.id || c.name} className="counter-row-item">
-                  <span className="counter-row-name">{c.name}</span>
-                  <span className="counter-row-amount mono">{c.formattedAmount}</span>
-                </div>
-              ))
-            ) : (
-              <div className="empty-sub-card">No active counters configured for this branch.</div>
-            )}
+          <div className="counters-today-body" key={`counters-${chartAnimKey}`}>
+            <div className="counters-rows-wrap">
+              {countersToday?.counters && countersToday.counters.length > 0 ? (
+                countersToday.counters.map((c, idx) => {
+                  const total = countersToday.totalMinor || 0;
+                  const pct = total > 0 ? Math.round((c.amountMinor / total) * 100) : 0;
+                  return (
+                    <div
+                      key={c.id || c.name}
+                      className="counter-row-item bento-item-tile"
+                      style={{ animationDelay: `${idx * 0.06}s` }}
+                    >
+                      <div className="counter-item-left">
+                        <div className="counter-status-indicator active">
+                          <span className="counter-live-dot"></span>
+                        </div>
+                        <div className="counter-info-text">
+                          <span className="counter-row-name">{c.name}</span>
+                          <span className="counter-sub-status">Terminal Ready</span>
+                        </div>
+                      </div>
 
-            <div className="counter-total-row">
-              <span className="counter-total-label">Total</span>
-              <span className="counter-total-amount mono">
-                {countersToday?.formattedTotal || '₹0'}
-              </span>
+                      <div className="counter-amount-box mono">
+                        <span className="counter-row-amount">{c.formattedAmount}</span>
+                        {total > 0 && (
+                          <div className="counter-mini-track">
+                            <div className="counter-mini-fill" style={{ width: `${pct}%` }}></div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="empty-sub-card">No active counters configured for this branch.</div>
+              )}
+            </div>
+
+            <div className="counter-total-row-bento">
+              <div className="counter-total-left">
+                <span className="counter-total-label">Branch Total</span>
+                <span className="counter-total-meta">
+                  Across {countersToday?.counters?.length || 0} active {countersToday?.counters?.length === 1 ? 'counter' : 'counters'}
+                </span>
+              </div>
+              <div className="counter-total-right mono">
+                <span className="counter-total-amount">
+                  <AnimatedCounter value={countersToday?.totalMinor || 0} isRupees={true} animKey={chartAnimKey} />
+                </span>
+              </div>
             </div>
           </div>
         </div>

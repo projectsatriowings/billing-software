@@ -78,6 +78,8 @@ import {
   UploadCloudIcon,
   DownloadIcon,
   ArrowRightIcon,
+  BarChart3Icon,
+  Building2Icon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -92,7 +94,7 @@ import { type BarcodeTargetItem } from '../../shared/barcodeScannerUtils.ts';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
-import { TodayDashboardView } from './components/dashboard/TodayDashboardView.tsx';
+import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
 import { CashBankView } from './components/finance/CashBankView.tsx';
@@ -413,6 +415,19 @@ export function App() {
     | 'gst-filing-history'
   >('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
+  const [displayTab, setDisplayTab] = useState<string>('dashboard');
+  const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeTab !== displayTab) {
+      setIsViewExiting(true);
+      const timer = setTimeout(() => {
+        setDisplayTab(activeTab);
+        setIsViewExiting(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, displayTab]);
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
@@ -843,6 +858,40 @@ export function App() {
   const [editingCatParentId, setEditingCatParentId] = useState('');
   const [catSearchTerm, setCatSearchTerm] = useState('');
   const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
+  const [catTabSlideDirection, setCatTabSlideDirection] = useState<'right' | 'left'>('right');
+  const [catTabAnimKey, setCatTabAnimKey] = useState<number>(0);
+  const [catTabGliderStyle, setCatTabGliderStyle] = useState<{ left: number; width: number }>({ left: 3, width: 68 });
+  const catSegmentedTabsRef = useRef<HTMLDivElement | null>(null);
+  const catSegmentedBtnRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+
+  const handleCatTypeFilterChange = (newFilter: 'all' | 'main' | 'sub') => {
+    if (newFilter === catTypeFilter) return;
+    const filterOrder: Record<'all' | 'main' | 'sub', number> = { all: 0, main: 1, sub: 2 };
+    setCatTabSlideDirection(filterOrder[newFilter] > filterOrder[catTypeFilter] ? 'right' : 'left');
+    setCatTypeFilter(newFilter);
+    setCatTabAnimKey((k) => k + 1);
+  };
+
+  useEffect(() => {
+    const updateGlider = () => {
+      const btn = catSegmentedBtnRefs.current[catTypeFilter];
+      const container = catSegmentedTabsRef.current;
+      if (btn && container) {
+        setCatTabGliderStyle({
+          left: btn.offsetLeft,
+          width: btn.offsetWidth,
+        });
+      }
+    };
+
+    updateGlider();
+    const rafId = requestAnimationFrame(updateGlider);
+    window.addEventListener('resize', updateGlider);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateGlider);
+    };
+  }, [catTypeFilter, categoriesList.length, displayTab]);
   const [modalCatSearch, setModalCatSearch] = useState('');
   const [modalCatStatusFilter, setModalCatStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -5306,59 +5355,61 @@ export function App() {
           </div>
         </div>
 
+        {/* View Transition Stage (SPA Bento Transition) */}
+        <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
-                {activeTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
-                {activeTab === 'items' && 'Product & Stock Catalog'}
-                {activeTab === 'inventory' && 'Inventory Hub & Stock Operations'}
-                {activeTab === 'product-movement' && 'Product Analysis'}
-                {activeTab === 'purchases' && 'Purchases & Stock Inward'}
-                {activeTab === 'invoices' && 'Sales Invoices & Bills'}
-                {activeTab === 'customers' && 'Customer Directory & Loyalty Points'}
-                {activeTab === 'suppliers' && 'Supplier Directory'}
-                {activeTab === 'reports' && 'Business Analytics & Reports'}
-                {activeTab === 'settings' && 'Business Configuration & Settings'}
-                {activeTab === 'payments' && 'Supplier Payments & Disbursements'}
-                {activeTab === 'expenses' && 'Business Operational Expenses'}
-                {activeTab === 'cashbank' && 'Cash & Bank Reconciliation'}
-                {activeTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
-                {activeTab === 'payables' && 'Accounts Payable & Vendor Balances'}
-                {activeTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
-                {activeTab === 'gst-sales-register' && 'GST Sales Register (Outward)'}
-                {activeTab === 'gst-purchase-register' && 'GST Purchase & Inward Register'}
-                {activeTab === 'gst-itc-reconciliation' && 'Input Tax Credit (ITC) Register & Reconciliation'}
-                {activeTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
-                {activeTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
-                {activeTab === 'gst-import-export' && 'GST Import & Export Hub'}
-                {activeTab === 'gst-filing-history' && 'GST Return Filing History'}
+                {displayTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
+                {displayTab === 'items' && 'Product & Stock Catalog'}
+                {displayTab === 'inventory' && 'Inventory Hub & Stock Operations'}
+                {displayTab === 'product-movement' && 'Product Analysis'}
+                {displayTab === 'purchases' && 'Purchases & Stock Inward'}
+                {displayTab === 'invoices' && 'Sales Invoices & Bills'}
+                {displayTab === 'customers' && 'Customer Directory & Loyalty Points'}
+                {displayTab === 'suppliers' && 'Supplier Directory'}
+                {displayTab === 'reports' && 'Business Analytics & Reports'}
+                {displayTab === 'settings' && 'Business Configuration & Settings'}
+                {displayTab === 'payments' && 'Supplier Payments & Disbursements'}
+                {displayTab === 'expenses' && 'Business Operational Expenses'}
+                {displayTab === 'cashbank' && 'Cash & Bank Reconciliation'}
+                {displayTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
+                {displayTab === 'payables' && 'Accounts Payable & Vendor Balances'}
+                {displayTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
+                {displayTab === 'gst-sales-register' && 'GST Sales Register (Outward)'}
+                {displayTab === 'gst-purchase-register' && 'GST Purchase & Inward Register'}
+                {displayTab === 'gst-itc-reconciliation' && 'Input Tax Credit (ITC) Register & Reconciliation'}
+                {displayTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
+                {displayTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
+                {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
+                {displayTab === 'gst-filing-history' && 'GST Return Filing History'}
               </h1>
               <span className="content-page-subtitle">
-                {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
-                {activeTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
-                {activeTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
-                {activeTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
-                {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
-                {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
-                {activeTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
-                {activeTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
-                {activeTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
-                {activeTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
-                {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
-                {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
-                {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
-                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
-                {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
-                {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
-                {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
-                {activeTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
-                {activeTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
-                {activeTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
-                {activeTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
-                {activeTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
-                {activeTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
+                {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
+                {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
+                {displayTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
+                {displayTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
+                {displayTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
+                {displayTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
+                {displayTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
+                {displayTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
+                {displayTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
+                {displayTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
+                {displayTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
+                {displayTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
+                {displayTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
+                {displayTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
+                {displayTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
+                {displayTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
+                {displayTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
+                {displayTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
+                {displayTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
+                {displayTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
+                {displayTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
+                {displayTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                {displayTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
               </span>
             </div>
 
@@ -5374,13 +5425,16 @@ export function App() {
         )}
 
         {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-        {activeTab === 'dashboard' && user && (
+        {displayTab === 'dashboard' && user && (
           <div className="dashboard-tab-wrapper">
             <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
               <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <button
                   type="button"
                   style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                     padding: '6px 14px',
                     borderRadius: '7px',
                     border: 'none',
@@ -5392,13 +5446,20 @@ export function App() {
                     boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
-                  onClick={() => setDashboardViewMode('today')}
+                  onClick={() => {
+                    setDashboardViewMode('today');
+                    setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                  }}
                 >
-                  📊 Today's Live Overview
+                  <BarChart3Icon size={15} />
+                  <span>Today's Live Overview</span>
                 </button>
                 <button
                   type="button"
                   style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                     padding: '6px 14px',
                     borderRadius: '7px',
                     border: 'none',
@@ -5412,7 +5473,8 @@ export function App() {
                   }}
                   onClick={() => setDashboardViewMode('management')}
                 >
-                  🏢 {user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}
+                  <Building2Icon size={15} />
+                  <span>{user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}</span>
                 </button>
               </div>
             </div>
@@ -5476,7 +5538,7 @@ export function App() {
         )}
 
         {/* TAB 1: BENTO POS BILLING TERMINAL */}
-        {activeTab === 'pos' && (
+        {displayTab === 'pos' && (
           <div className="bento-pos-root">
             {/* 1. TOP BENTO BAR: Store & Shift Status, Shortcuts, Alerts */}
             <div className="bento-top-bar">
@@ -7719,7 +7781,7 @@ export function App() {
         )}
 
         {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
-        {activeTab === 'shifts' && user && (
+        {displayTab === 'shifts' && user && (
           user.role === 'manager' ? (
             <StoreManagerDashboard
               user={user}
@@ -7736,7 +7798,7 @@ export function App() {
         )}
 
         {/* TAB 2: PRODUCTS */}
-        {activeTab === 'items' && (() => {
+        {displayTab === 'items' && (() => {
           const filteredMasterItems = items.filter((item) => {
             const q = itemSearchMaster.trim().toLowerCase();
             const matchesQ = !q ||
@@ -7925,6 +7987,7 @@ export function App() {
                   <table className="data-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '64px', minWidth: '64px', textAlign: 'center' }}>Image</th>
                         <th className="col-product-name">Product Name</th>
                         <th className="col-nowrap">Category</th>
                         <th className="col-nowrap">SKU / Code</th>
@@ -7941,6 +8004,33 @@ export function App() {
                     <tbody>
                       {filteredMasterItems.map((i) => (
                         <tr key={i.id} style={{ opacity: i.active === false ? 0.75 : 1 }}>
+                          <td style={{ width: '64px', minWidth: '64px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem' }}>
+                            <div className="product-table-image-cell">
+                              {i.imageUrl || (i as any).image ? (
+                                <img
+                                  src={i.imageUrl || (i as any).image}
+                                  alt={i.name}
+                                  className="product-thumb-img"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                    const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
+                                    if (placeholder) placeholder.style.display = 'inline-flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="product-thumb-placeholder"
+                                style={{ display: i.imageUrl || (i as any).image ? 'none' : 'inline-flex' }}
+                                title="Product Image Placeholder"
+                              >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                  <circle cx="8.5" cy="8.5" r="1.5" />
+                                  <polyline points="21 15 16 10 5 21" />
+                                </svg>
+                              </div>
+                            </div>
+                          </td>
                           <td className="col-product-name" style={{ fontWeight: 600 }}>
                             <div style={{ color: '#0f172a', fontWeight: 600 }}>{i.name}</div>
                             {i.custom?.batch && (
@@ -8180,7 +8270,7 @@ export function App() {
                       ))}
                       {filteredMasterItems.length === 0 && (
                         <tr>
-                          <td colSpan={can(user?.role as any, 'purchases') ? 12 : 11} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                          <td colSpan={can(user?.role as any, 'purchases') ? 13 : 12} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
                             No products match your search or filter criteria.
                           </td>
                         </tr>
@@ -8218,7 +8308,7 @@ export function App() {
         })()}
 
         {/* TAB 2b: CATEGORY MANAGEMENT MODULE - BENTO REDESIGN */}
-        {activeTab === 'categories' && (() => {
+        {displayTab === 'categories' && (() => {
           const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
           const subCategories = categoriesList.filter((c) => c.parentId && c.active);
           const activeCategoriesCount = categoriesList.filter((c) => c.active).length;
@@ -8239,7 +8329,7 @@ export function App() {
           return (
             <div className="cat-bento-module-wrapper">
               {/* 1. Bento Header Card */}
-              <div className="cat-bento-header-card">
+              <div className="cat-bento-header-card bento-card-3d">
                 <div className="cat-bento-header-content">
                   <div className="cat-bento-title-group">
                     <div className="cat-bento-icon-box">
@@ -8454,8 +8544,8 @@ export function App() {
               <div className="cat-bento-kpi-grid">
                 {/* Tile 1: Total Categories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'all' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('all')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-total ${catTypeFilter === 'all' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('all')}
                   title="Click to view all categories"
                 >
                   <div className="cat-kpi-header">
@@ -8468,7 +8558,7 @@ export function App() {
                     <span className="kpi-sub-badge purple">All Taxa</span>
                   </div>
                   <div className="cat-kpi-num mono">
-                    {categoriesList.length}
+                    <AnimatedCounter value={categoriesList.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Store classifications</span>
@@ -8478,8 +8568,8 @@ export function App() {
 
                 {/* Tile 2: Main Categories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'main' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('main')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-main ${catTypeFilter === 'main' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('main')}
                   title="Click to filter top-level main categories"
                 >
                   <div className="cat-kpi-header">
@@ -8492,7 +8582,7 @@ export function App() {
                     <span className="kpi-sub-badge green">Top-Level</span>
                   </div>
                   <div className="cat-kpi-num mono text-green">
-                    {mainCategories.length}
+                    <AnimatedCounter value={mainCategories.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Root department shelves</span>
@@ -8502,8 +8592,8 @@ export function App() {
 
                 {/* Tile 3: Subcategories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'sub' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('sub')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-sub ${catTypeFilter === 'sub' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('sub')}
                   title="Click to filter nested subcategories"
                 >
                   <div className="cat-kpi-header">
@@ -8516,7 +8606,7 @@ export function App() {
                     <span className="kpi-sub-badge purple">Nested</span>
                   </div>
                   <div className="cat-kpi-num mono text-blue">
-                    {subCategories.length}
+                    <AnimatedCounter value={subCategories.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Child classifications</span>
@@ -8526,7 +8616,7 @@ export function App() {
 
                 {/* Tile 4: Active Ratio */}
                 <div
-                  className="cat-bento-kpi-card"
+                  className="cat-bento-kpi-card bento-card-3d bento-cat-kpi-active"
                   title="Active vs Inactive category status"
                 >
                   <div className="cat-kpi-header">
@@ -8537,14 +8627,14 @@ export function App() {
                       <span className="cat-kpi-title">Active Status</span>
                     </div>
                     <span className="kpi-sub-badge green">
-                      {Math.round((activeCategoriesCount / (categoriesList.length || 1)) * 100)}% Live
+                      <AnimatedCounter value={Math.round((activeCategoriesCount / (categoriesList.length || 1)) * 100)} />% Live
                     </span>
                   </div>
                   <div className="cat-kpi-num mono">
-                    {activeCategoriesCount} <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {categoriesList.length}</span>
+                    <AnimatedCounter value={activeCategoriesCount} /> <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {categoriesList.length}</span>
                   </div>
                   <div className="cat-kpi-footer">
-                    <span>{inactiveCategoriesCount} inactive / disabled</span>
+                    <span><AnimatedCounter value={inactiveCategoriesCount} /> inactive / disabled</span>
                     <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
                   </div>
                 </div>
@@ -8553,7 +8643,7 @@ export function App() {
               {/* 3. Bento Middle Row (Asymmetrical Grid: Form 7fr + Guide 5fr) */}
               <div className="cat-bento-middle-grid">
                 {/* Left Bento: Category Creator Box */}
-                <div className="cat-bento-card cat-creator-card">
+                <div className="cat-bento-card bento-card-3d cat-creator-card">
                   <div className="cat-card-header">
                     <div className="cat-card-header-left">
                       <div className="cat-icon-badge purple">
@@ -8628,7 +8718,7 @@ export function App() {
                 </div>
 
                 {/* Right Bento: Best Practices / Quick Navigator */}
-                <div className="cat-bento-card cat-guide-card">
+                <div className="cat-bento-card bento-card-3d cat-guide-card">
                   <div className="cat-card-header">
                     <div className="cat-card-header-left">
                       <div className="cat-icon-badge amber">
@@ -8676,36 +8766,46 @@ export function App() {
               </div>
 
               {/* 4. Bento Bottom Card: Store Category Hierarchy Table */}
-              <div className="cat-bento-card cat-table-card">
+              <div className="cat-bento-card bento-card-3d cat-table-card">
                 <div className="cat-table-toolbar">
                   <div className="cat-toolbar-left">
                     <span className="cat-table-title">Store Category Hierarchy</span>
                     <span className="cat-count-badge">
-                      {filteredCategories.length} listed
+                      <AnimatedCounter value={filteredCategories.length} /> listed
                     </span>
                   </div>
 
                   <div className="cat-toolbar-right">
                     {/* Segmented Filter Pills */}
-                    <div className="cat-segmented-tabs">
+                    <div className="cat-segmented-tabs" ref={catSegmentedTabsRef}>
+                      <span
+                        className="cat-segmented-slider"
+                        style={catTabGliderStyle.width > 0 ? {
+                          left: `${catTabGliderStyle.left}px`,
+                          width: `${catTabGliderStyle.width}px`,
+                        } : undefined}
+                      />
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['all'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'all' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('all')}
+                        onClick={() => handleCatTypeFilterChange('all')}
                       >
                         All ({categoriesList.length})
                       </button>
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['main'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'main' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('main')}
+                        onClick={() => handleCatTypeFilterChange('main')}
                       >
                         <FolderIcon size={13} /> Main ({mainCategories.length})
                       </button>
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['sub'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'sub' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('sub')}
+                        onClick={() => handleCatTypeFilterChange('sub')}
                       >
                         <FolderTreeIcon size={13} /> Sub ({subCategories.length})
                       </button>
@@ -8745,7 +8845,8 @@ export function App() {
                         <th>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody key={`cat-tbody-${catTypeFilter}-${catTabAnimKey}`} className={`cat-table-body-slide slide-${catTabSlideDirection}`}>
+
                       {filteredCategories.map((cat) => (
                         <tr key={cat.id} className={!cat.active ? 'row-inactive' : ''}>
                           <td>
@@ -8916,7 +9017,7 @@ export function App() {
                                   style={{ fontSize: '0.82rem', marginTop: '0.45rem' }}
                                   onClick={() => {
                                     setCatSearchTerm('');
-                                    setCatTypeFilter('all');
+                                    handleCatTypeFilterChange('all');
                                   }}
                                 >
                                   Reset Filters
@@ -8935,7 +9036,7 @@ export function App() {
         })()}
 
         {/* TAB: INVENTORY MANAGEMENT */}
-        {activeTab === 'inventory' && (
+        {displayTab === 'inventory' && (
           <InventoryDashboard
             items={items}
             categories={categories}
@@ -8963,7 +9064,7 @@ export function App() {
         )}
 
         {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
-        {activeTab === 'product-movement' && (
+        {displayTab === 'product-movement' && (
           <ProductMovementAnalysisView
             categories={categories}
             userRole={user?.role as any}
@@ -8979,7 +9080,7 @@ export function App() {
         )}
 
         {/* TAB 3: BILLS & INVOICES */}
-        {activeTab === 'invoices' && (() => {
+        {displayTab === 'invoices' && (() => {
           const displayedInvoices = invoices.filter((inv) => {
             if (!invoiceFilterDate) return true;
             return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
@@ -9242,7 +9343,7 @@ export function App() {
         })()}
 
         {/* TAB: SALES ANALYSIS */}
-        {activeTab === 'sales-analysis' && (
+        {displayTab === 'sales-analysis' && (
           <SalesAnalysisView
             userRole={user?.role}
             shopName={shop?.name}
@@ -9255,7 +9356,7 @@ export function App() {
         )}
 
         {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
-        {activeTab === 'customers' && (
+        {displayTab === 'customers' && (
           <CustomerDirectory
             parties={parties}
             invoices={invoices}
@@ -9272,7 +9373,7 @@ export function App() {
         )}
 
         {/* TAB: SUPPLIERS - MODERN UPGRADED SUPPLIER DIRECTORY */}
-        {activeTab === 'suppliers' && (
+        {displayTab === 'suppliers' && (
           <SupplierDirectory
             parties={parties}
             purchases={purchases}
@@ -9293,7 +9394,7 @@ export function App() {
         )}
 
         {/* TAB: PURCHASES & STOCK INWARD */}
-        {activeTab === 'purchases' && (() => {
+        {displayTab === 'purchases' && (() => {
           const filteredPurchases = purchases.filter((p) => {
             if (purchaseStatusFilter === 'voided') {
               if (p.status !== 'voided') return false;
@@ -9605,7 +9706,7 @@ export function App() {
         })()}
 
         {/* TAB 5: REPORTS & ANALYTICS */}
-        {activeTab === 'reports' && report && (
+        {displayTab === 'reports' && report && (
           <div>
             {/* KPI Cards */}
             <div className="kpi-grid">
@@ -9783,7 +9884,7 @@ export function App() {
         )}
 
         {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
-        {activeTab === 'settings' && (
+        {displayTab === 'settings' && (
           <div>
             {/* Section 1: Business Profile Editor */}
             <div className="card settings-section">
@@ -10305,7 +10406,7 @@ export function App() {
         )}
 
         {/* ACCOUNTS & FINANCE TAB VIEWS */}
-        {activeTab === 'payments' && (
+        {displayTab === 'payments' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <PaymentsView
               onOpenCustomerLedger={(cid) => {
@@ -10330,7 +10431,7 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'expenses' && (
+        {displayTab === 'expenses' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ExpensesView
               userRole={user.role}
@@ -10340,13 +10441,13 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'cashbank' && (
+        {displayTab === 'cashbank' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <CashBankView />
           </div>
         )}
 
-        {activeTab === 'receivables' && (
+        {displayTab === 'receivables' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ReceivablesView
               onCollectPayment={(cid) => {
@@ -10362,7 +10463,7 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'payables' && (
+        {displayTab === 'payables' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <PayablesView
               onPaySupplier={(sid) => {
@@ -10379,53 +10480,54 @@ export function App() {
         )}
 
         {/* GST FILING TAB VIEWS */}
-        {activeTab === 'gst-overview' && (
+        {displayTab === 'gst-overview' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-sales-register' && (
+        {displayTab === 'gst-sales-register' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-purchase-register' && (
+        {displayTab === 'gst-purchase-register' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-itc-reconciliation' && (
+        {displayTab === 'gst-itc-reconciliation' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-gstr3b' && (
+        {displayTab === 'gst-gstr3b' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-gstr1' && (
+        {displayTab === 'gst-gstr1' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-import-export' && (
+        {displayTab === 'gst-import-export' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-filing-history' && (
+        {displayTab === 'gst-filing-history' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
+        </div>
       </main>
 
       {/* PRINT RECEIPT MODAL */}

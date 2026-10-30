@@ -95,6 +95,25 @@ const PAYMENT_MODE_COLORS: Record<string, string> = {
   cheque: '#64748b',
 };
 
+// In-memory cache for ultra-fast dashboard queries (TTL: 3.5s)
+interface CachedTodayDashboard {
+  data: any;
+  expiresAt: number;
+}
+const todayDashboardCache = new Map<string, CachedTodayDashboard>();
+
+export function invalidateTodayDashboardCache(tenantId?: string) {
+  if (!tenantId) {
+    todayDashboardCache.clear();
+    return;
+  }
+  for (const key of todayDashboardCache.keys()) {
+    if (key.startsWith(`${tenantId}:`)) {
+      todayDashboardCache.delete(key);
+    }
+  }
+}
+
 export function registerDashboard(r: Router) {
   r.get('/api/dashboard/today', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
@@ -104,11 +123,21 @@ export function registerDashboard(r: Router) {
     const isManager = userRole === 'manager';
     const isCashier = userRole === 'cashier';
 
-    // Fetch tenant timezone
-    const tenantRow = await ctx.db.one<any>('SELECT timezone FROM tenants WHERE id = ?', [tenantId]);
-    const tz = tenantRow?.timezone || 'Asia/Kolkata';
+    const rawBranchParam = (
+      (ctx.query.branch as string) ||
+      (ctx.query.branchId as string) ||
+      (ctx.query.branchCode as string) ||
+      ''
+    ).trim();
 
-    // 1. Fetch authorized branches for the tenant
+    // 0. Ultra-fast in-memory cache check (3.5s TTL)
+    const cacheKey = `${tenantId}:${rawBranchParam || ctx.user!.assignedLocation || 'MAIN'}:${userRole}:${ctx.user!.id}`;
+    const cached = todayDashboardCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+
+    // 1. Fetch authorized branches and timezone concurrently
     let branchWhereClause = 'WHERE b.tenant_id = ?';
     const branchQueryParams: unknown[] = [tenantId];
 
@@ -122,23 +151,21 @@ export function registerDashboard(r: Router) {
       branchQueryParams.push(assigned);
     }
 
-    const branchRows = await ctx.db.query<any>(
-      `SELECT b.*, u.name AS manager_name
-       FROM branches b
-       LEFT JOIN users u ON u.id = b.manager_id
-       ${branchWhereClause}
-       ORDER BY b.code = 'MAIN' DESC, b.code ASC`,
-      branchQueryParams,
-    );
+    const [tenantRow, branchRows] = await Promise.all([
+      ctx.db.one<any>('SELECT timezone FROM tenants WHERE id = ?', [tenantId]),
+      ctx.db.query<any>(
+        `SELECT b.*, u.name AS manager_name
+         FROM branches b
+         LEFT JOIN users u ON u.id = b.manager_id
+         ${branchWhereClause}
+         ORDER BY b.code = 'MAIN' DESC, b.code ASC`,
+        branchQueryParams,
+      ),
+    ]);
+
+    const tz = tenantRow?.timezone || 'Asia/Kolkata';
 
     // 2. Identify active branch requested by client
-    const rawBranchParam = (
-      (ctx.query.branch as string) ||
-      (ctx.query.branchId as string) ||
-      (ctx.query.branchCode as string) ||
-      ''
-    ).trim();
-
     const requestedBranchParam =
       rawBranchParam && !['true', 'false', 'undefined', 'null'].includes(rawBranchParam.toLowerCase())
         ? rawBranchParam
@@ -221,30 +248,481 @@ export function registerDashboard(r: Router) {
     const openingHour = 8;
     const closingHour = 21;
 
-    // 1. TODAY'S SALES AND METRICS
-    // Query posted sales and credit notes for today in shop timezone
-    const todaySalesRes = await ctx.db.one<any>(
-      `SELECT
-        COUNT(DISTINCT CASE WHEN i.kind = 'sale' THEN i.id END)::int AS bills_count,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.total_minor ELSE 0 END), 0)::bigint AS gross_sales,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.taxable_minor ELSE 0 END), 0)::bigint AS gross_taxable,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.cgst_minor ELSE 0 END), 0)::bigint AS gross_cgst,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.sgst_minor ELSE 0 END), 0)::bigint AS gross_sgst,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.igst_minor ELSE 0 END), 0)::bigint AS gross_igst,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.balance_minor ELSE 0 END), 0)::bigint AS credit_unpaid,
-        COUNT(DISTINCT CASE WHEN i.kind = 'credit_note' THEN i.id END)::int AS returns_count,
-        COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.total_minor ELSE 0 END), 0)::bigint AS returns_total,
-        COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.cgst_minor ELSE 0 END), 0)::bigint AS returns_cgst,
-        COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.sgst_minor ELSE 0 END), 0)::bigint AS returns_sgst,
-        COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.igst_minor ELSE 0 END), 0)::bigint AS returns_igst
-       FROM invoices i
-       WHERE i.tenant_id = ?
-         AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-         AND i.status = 'posted'
-         AND i.kind IN ('sale', 'credit_note')`,
-      [tenantId, todayYMD, tz, todayYMD],
-    );
+    // Shift query parameters
+    const counterParam = ((ctx.query.counter as string) || (ctx.query.location as string) || '').trim();
 
+    let shiftSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
+       FROM shifts s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`;
+    const shiftParams: any[] = [tenantId, ctx.user!.id];
+
+    if (branchLocations.length > 0) {
+      shiftSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
+      shiftParams.push(...branchLocations);
+    } else if (counterParam) {
+      shiftSql += ' AND (s.location = ? OR s.location = ?)';
+      shiftParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+    }
+    shiftSql += ' ORDER BY s.opened_at DESC LIMIT 1';
+
+    const assignedCounters = parseCounters(activeBranch.counters);
+    const branchLocPlaceholders = branchLocations.map(() => '?').join(', ');
+
+    // 4. PARALLELIZE ALL 14 DATABASE QUERIES CONCURRENTLY VIA Promise.all
+    const [
+      todaySalesRes,
+      compSalesRes,
+      cogsRes,
+      itemsSoldRes,
+      todayHourlyRows,
+      compHourlyRows,
+      paymentRows,
+      refundRows,
+      topSellersRows,
+      stockAttentionRows,
+      shiftRow,
+      counterPaymentsRows,
+      counterRefundsRows,
+      counterCreditNoteRefundsRows,
+    ] = await Promise.all([
+      // 1. Today sales
+      ctx.db.one<any>(
+        `SELECT
+          COUNT(DISTINCT CASE WHEN i.kind = 'sale' THEN i.id END)::int AS bills_count,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.total_minor ELSE 0 END), 0)::bigint AS gross_sales,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.taxable_minor ELSE 0 END), 0)::bigint AS gross_taxable,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.cgst_minor ELSE 0 END), 0)::bigint AS gross_cgst,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.sgst_minor ELSE 0 END), 0)::bigint AS gross_sgst,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.igst_minor ELSE 0 END), 0)::bigint AS gross_igst,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.balance_minor ELSE 0 END), 0)::bigint AS credit_unpaid,
+          COUNT(DISTINCT CASE WHEN i.kind = 'credit_note' THEN i.id END)::int AS returns_count,
+          COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.total_minor ELSE 0 END), 0)::bigint AS returns_total,
+          COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.cgst_minor ELSE 0 END), 0)::bigint AS returns_cgst,
+          COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.sgst_minor ELSE 0 END), 0)::bigint AS returns_sgst,
+          COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.igst_minor ELSE 0 END), 0)::bigint AS returns_igst
+         FROM invoices i
+         WHERE i.tenant_id = ?
+           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+           AND i.status = 'posted'
+           AND i.kind IN ('sale', 'credit_note')`,
+        [tenantId, todayYMD, tz, todayYMD],
+      ),
+
+      // 2. Comparison sales (yesterday)
+      ctx.db.one<any>(
+        `SELECT
+          COUNT(DISTINCT CASE WHEN i.kind = 'sale' THEN i.id END)::int AS bills_count,
+          COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.total_minor ELSE 0 END), 0)::bigint AS gross_sales,
+          COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.total_minor ELSE 0 END), 0)::bigint AS returns_total
+         FROM invoices i
+         WHERE i.tenant_id = ?
+           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+           AND i.status = 'posted'
+           AND i.kind IN ('sale', 'credit_note')
+           AND i.created_at <= ?`,
+        [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString()],
+      ),
+
+      // 3. COGS (if owner or manager)
+      isOwnerOrManager
+        ? ctx.db.one<any>(
+            `SELECT
+              COALESCE(SUM(
+                CASE
+                  WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
+                  WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
+                  ELSE 0
+                END
+              ), 0)::bigint AS cogs,
+              COUNT(CASE WHEN it.cost_minor IS NULL OR it.cost_minor = 0 THEN 1 END)::int AS missing_cost_lines
+             FROM invoice_lines il
+             JOIN invoices i ON i.id = il.invoice_id
+             LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+             WHERE i.tenant_id = ?
+               AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+               AND i.status = 'posted'
+               AND i.kind IN ('sale', 'credit_note')`,
+            [tenantId, todayYMD, tz, todayYMD],
+          )
+        : Promise.resolve(null),
+
+      // 4. Items sold today
+      ctx.db.one<any>(
+        `SELECT
+          COALESCE(SUM(
+            CASE
+              WHEN i.kind = 'sale' THEN il.qty_milli / 1000
+              WHEN i.kind = 'credit_note' THEN -(il.qty_milli / 1000)
+              ELSE 0
+            END
+          ), 0)::bigint AS total_units,
+          COUNT(DISTINCT il.item_id)::int AS distinct_products
+         FROM invoice_lines il
+         JOIN invoices i ON i.id = il.invoice_id
+         WHERE i.tenant_id = ?
+           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+           AND i.status = 'posted'
+           AND i.kind = 'sale'`,
+        [tenantId, todayYMD, tz, todayYMD],
+      ),
+
+      // 5. Today hourly breakdown
+      ctx.db.query<any>(
+        `WITH inv_summary AS (
+          SELECT
+            i.id,
+            EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
+            i.kind,
+            i.total_minor
+          FROM invoices i
+          WHERE i.tenant_id = ?
+            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+            AND i.status = 'posted'
+            AND i.kind IN ('sale', 'credit_note')
+        ),
+        hourly_invoices AS (
+          SELECT
+            hr,
+            COUNT(DISTINCT CASE WHEN kind = 'sale' THEN id END)::int AS bills,
+            COALESCE(SUM(CASE WHEN kind = 'sale' THEN total_minor WHEN kind = 'credit_note' THEN -total_minor ELSE 0 END), 0)::bigint AS net_sales
+          FROM inv_summary
+          GROUP BY hr
+        ),
+        hourly_cogs AS (
+          SELECT
+            EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
+            COALESCE(SUM(
+              CASE
+                WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
+                WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
+                ELSE 0
+              END
+            ), 0)::bigint AS cogs
+          FROM invoice_lines il
+          JOIN invoices i ON i.id = il.invoice_id
+          LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+          WHERE i.tenant_id = ?
+            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+            AND i.status = 'posted'
+            AND i.kind IN ('sale', 'credit_note')
+          GROUP BY hr
+        )
+        SELECT
+          hi.hr,
+          hi.bills,
+          hi.net_sales,
+          COALESCE(hc.cogs, 0)::bigint AS cogs
+        FROM hourly_invoices hi
+        LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
+        ORDER BY hi.hr ASC`,
+        [tz, tenantId, todayYMD, tz, todayYMD, tz, tenantId, todayYMD, tz, todayYMD],
+      ),
+
+      // 6. Comparison hourly breakdown (yesterday)
+      ctx.db.query<any>(
+        `WITH inv_summary AS (
+          SELECT
+            i.id,
+            EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
+            i.kind,
+            i.total_minor
+          FROM invoices i
+          WHERE i.tenant_id = ?
+            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+            AND i.status = 'posted'
+            AND i.kind IN ('sale', 'credit_note')
+        ),
+        hourly_invoices AS (
+          SELECT
+            hr,
+            COUNT(DISTINCT CASE WHEN kind = 'sale' THEN id END)::int AS bills,
+            COALESCE(SUM(CASE WHEN kind = 'sale' THEN total_minor WHEN kind = 'credit_note' THEN -total_minor ELSE 0 END), 0)::bigint AS net_sales
+          FROM inv_summary
+          GROUP BY hr
+        ),
+        hourly_cogs AS (
+          SELECT
+            EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
+            COALESCE(SUM(
+              CASE
+                WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
+                WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
+                ELSE 0
+              END
+            ), 0)::bigint AS cogs
+          FROM invoice_lines il
+          JOIN invoices i ON i.id = il.invoice_id
+          LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+          WHERE i.tenant_id = ?
+            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+            AND i.status = 'posted'
+            AND i.kind IN ('sale', 'credit_note')
+          GROUP BY hr
+        )
+        SELECT
+          hi.hr,
+          hi.bills,
+          hi.net_sales,
+          COALESCE(hc.cogs, 0)::bigint AS cogs
+        FROM hourly_invoices hi
+        LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
+        ORDER BY hi.hr ASC`,
+        [tz, tenantId, compDateYMD, tz, compDateYMD, tz, tenantId, compDateYMD, tz, compDateYMD],
+      ),
+
+      // 7. Payment modes breakdown
+      ctx.db.query<any>(
+        `SELECT
+          LOWER(COALESCE(p.mode, p.method, 'cash')) AS mode,
+          COALESCE(SUM(p.amount_minor), 0)::bigint AS total_minor
+         FROM payments p
+         LEFT JOIN invoices i ON i.id = p.invoice_id
+         WHERE p.tenant_id = ?
+           AND (p.status IS NULL OR p.status = 'posted')
+           AND COALESCE(p.kind, 'receipt') = 'receipt'
+           AND (
+             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date) AND i.status = 'posted' AND i.kind = 'sale')
+             OR
+             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+           )
+         GROUP BY LOWER(COALESCE(p.mode, p.method, 'cash'))`,
+        [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD],
+      ),
+
+      // 8. Refunds breakdown
+      ctx.db.query<any>(
+        `SELECT
+          LOWER(COALESCE(refund_mode, 'cash')) AS mode,
+          COALESCE(SUM(refund_amount_minor), 0)::bigint AS total_refund_minor
+         FROM invoices
+         WHERE tenant_id = ?
+           AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
+           AND kind = 'credit_note'
+           AND status = 'posted'
+           AND refund_amount_minor > 0
+         GROUP BY LOWER(COALESCE(refund_mode, 'cash'))`,
+        [tenantId, todayYMD, tz, todayYMD],
+      ),
+
+      // 9. Top 5 sellers
+      ctx.db.query<any>(
+        `SELECT
+          COALESCE(it.id, il.item_id) AS item_id,
+          COALESCE(it.name, il.name, 'Item') AS name,
+          COALESCE(it.unit, il.unit, 'pcs') AS unit,
+          COALESCE(SUM(
+            CASE
+              WHEN i.kind = 'sale' THEN il.qty_milli
+              WHEN i.kind = 'credit_note' THEN -il.qty_milli
+              ELSE 0
+            END
+          ), 0)::bigint AS qty_milli,
+          COALESCE(SUM(
+            CASE
+              WHEN i.kind = 'sale' THEN il.total_minor
+              WHEN i.kind = 'credit_note' THEN -il.total_minor
+              ELSE 0
+            END
+          ), 0)::bigint AS sales_minor
+         FROM invoice_lines il
+         JOIN invoices i ON i.id = il.invoice_id
+         LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+         WHERE i.tenant_id = ?
+           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+           AND i.status = 'posted'
+           AND i.kind IN ('sale', 'credit_note')
+         GROUP BY COALESCE(it.id, il.item_id), COALESCE(it.name, il.name, 'Item'), COALESCE(it.unit, il.unit, 'pcs')
+         HAVING SUM(CASE WHEN i.kind = 'sale' THEN il.total_minor WHEN i.kind = 'credit_note' THEN -il.total_minor ELSE 0 END) > 0
+         ORDER BY sales_minor DESC
+         LIMIT 5`,
+        [tenantId, todayYMD, tz, todayYMD],
+      ),
+
+      // 10. Stock attention (optimized CTE aggregation instead of correlated subquery per row)
+      ctx.db.query<any>(
+        `WITH sm_agg AS (
+          SELECT sm.item_id, SUM(sm.qty_milli)::bigint AS stock_milli
+          FROM stock_moves sm
+          WHERE sm.tenant_id = ?
+          GROUP BY sm.item_id
+        ),
+        today_sold AS (
+          SELECT
+            il.item_id,
+            COALESCE(SUM(il.qty_milli), 0)::bigint AS sold_today_milli
+          FROM invoice_lines il
+          JOIN invoices i ON i.id = il.invoice_id
+          WHERE i.tenant_id = ?
+            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+            AND i.status = 'posted'
+            AND i.kind = 'sale'
+          GROUP BY il.item_id
+        ),
+        item_stock AS (
+          SELECT
+            i.id,
+            i.name,
+            i.unit,
+            i.reorder_milli,
+            COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
+            COALESCE(sma.stock_milli, 0)::bigint AS stock_milli,
+            COALESCE(ts.sold_today_milli, 0)::bigint AS sold_today_milli
+          FROM items i
+          LEFT JOIN sm_agg sma ON sma.item_id = i.id
+          LEFT JOIN today_sold ts ON ts.item_id = i.id
+          WHERE i.tenant_id = ?
+            AND i.active = true
+            AND i.track_stock = true
+        )
+        SELECT
+          id,
+          name,
+          unit,
+          reorder_milli,
+          min_stock_milli,
+          stock_milli,
+          sold_today_milli
+        FROM item_stock
+        WHERE stock_milli <= 0
+           OR ((reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli))
+           OR sold_today_milli > 0
+        ORDER BY
+          (CASE
+            WHEN stock_milli <= 0 THEN 1
+            WHEN (reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli) THEN 2
+            ELSE 3
+          END) ASC,
+          sold_today_milli DESC,
+          stock_milli ASC
+        LIMIT 5`,
+        [tenantId, tenantId, todayYMD, tz, todayYMD, tenantId],
+      ),
+
+      // 11. Shift row
+      ctx.db.one<any>(shiftSql, shiftParams),
+
+      // 12. Counter payments
+      ctx.db.query<any>(
+        `SELECT 
+           p.id,
+           p.amount_minor,
+           p.location AS payment_location,
+           p.counter AS payment_counter,
+           s.location AS shift_location,
+           s.counter AS shift_counter,
+           i.location AS invoice_location,
+           i.counter AS invoice_counter
+         FROM payments p
+         LEFT JOIN shifts s ON s.id = p.shift_id
+         LEFT JOIN invoices i ON i.id = p.invoice_id
+         WHERE p.tenant_id = ?
+           AND (
+             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
+             OR
+             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+           )
+           AND (p.status IS NULL OR p.status = 'posted')
+           AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
+           AND COALESCE(p.kind, 'receipt') = 'receipt'
+           AND (
+             (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
+             OR
+             (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
+           )`,
+        [
+          tenantId,
+          todayYMD,
+          tz,
+          todayYMD,
+          todayYMD,
+          tz,
+          todayYMD,
+          ...branchLocations,
+          ...branchLocations,
+          ...branchLocations,
+        ],
+      ),
+
+      // 13. Counter refunds
+      ctx.db.query<any>(
+        `SELECT 
+           p.id,
+           p.amount_minor,
+           p.counter AS payment_counter,
+           s.location AS shift_location,
+           s.counter AS shift_counter,
+           i.location AS invoice_location,
+           i.counter AS invoice_counter
+         FROM payments p
+         LEFT JOIN shifts s ON s.id = p.shift_id
+         LEFT JOIN invoices i ON i.id = p.invoice_id
+         WHERE p.tenant_id = ?
+           AND (
+             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
+             OR
+             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+           )
+           AND (p.status IS NULL OR p.status = 'posted')
+           AND p.kind = 'refund'
+           AND (
+             (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
+             OR
+             (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
+           )`,
+        [
+          tenantId,
+          todayYMD,
+          tz,
+          todayYMD,
+          todayYMD,
+          tz,
+          todayYMD,
+          ...branchLocations,
+          ...branchLocations,
+          ...branchLocations,
+        ],
+      ),
+
+      // 14. Counter credit note refunds
+      ctx.db.query<any>(
+        `SELECT 
+           id,
+           refund_amount_minor,
+           location,
+           counter
+         FROM invoices
+         WHERE tenant_id = ?
+           AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
+           AND kind = 'credit_note'
+           AND status = 'posted'
+           AND refund_amount_minor > 0
+           AND location IN (${branchLocPlaceholders})`,
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
+      ),
+    ]);
+
+    // Active shift resolution
+    let activeShift = shiftRow;
+    if (!activeShift && isOwnerOrManager) {
+      let fallbackSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
+         FROM shifts s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.tenant_id = ? AND s.status = 'open'`;
+      const fallbackParams: any[] = [tenantId];
+      if (branchLocations.length > 0) {
+        fallbackSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
+        fallbackParams.push(...branchLocations);
+      } else if (counterParam) {
+        fallbackSql += ' AND (s.location = ? OR s.location = ?)';
+        fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+      }
+      fallbackSql += ' ORDER BY s.opened_at DESC LIMIT 1';
+
+      activeShift = await ctx.db.one<any>(fallbackSql, fallbackParams);
+    }
+
+    // 5. CALCULATIONS RUN SYNCHRONOUSLY IN MEMORY (< 1ms)
     // Note: ctx.db.one applies camelKeys, so we read both camelCase and snake_case
     const grossSalesMinor = Number(todaySalesRes?.grossSales ?? todaySalesRes?.gross_sales ?? 0);
     const returnsMinor = Number(todaySalesRes?.returnsTotal ?? todaySalesRes?.returns_total ?? 0);
@@ -271,21 +749,6 @@ export function registerDashboard(r: Router) {
     );
     const totalGstMinor = netCgstMinor + netSgstMinor + netIgstMinor;
 
-    // 2. COMPARISON METRICS (Previous calendar day, up to the same time of day)
-    const compSalesRes = await ctx.db.one<any>(
-      `SELECT
-        COUNT(DISTINCT CASE WHEN i.kind = 'sale' THEN i.id END)::int AS bills_count,
-        COALESCE(SUM(CASE WHEN i.kind = 'sale' THEN i.total_minor ELSE 0 END), 0)::bigint AS gross_sales,
-        COALESCE(SUM(CASE WHEN i.kind = 'credit_note' THEN i.total_minor ELSE 0 END), 0)::bigint AS returns_total
-       FROM invoices i
-       WHERE i.tenant_id = ?
-         AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-         AND i.status = 'posted'
-         AND i.kind IN ('sale', 'credit_note')
-         AND i.created_at <= ?`,
-      [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString()],
-    );
-
     const compGrossSalesMinor = Number(compSalesRes?.grossSales ?? compSalesRes?.gross_sales ?? 0);
     const compReturnsMinor = Number(compSalesRes?.returnsTotal ?? compSalesRes?.returns_total ?? 0);
     const compNetSalesMinor = Math.max(0, compGrossSalesMinor - compReturnsMinor);
@@ -305,32 +768,12 @@ export function registerDashboard(r: Router) {
       ? Number((((returnsMinor - compReturnsMinor) / compReturnsMinor) * 100).toFixed(1))
       : null;
 
-    // 3. COGS & GROSS PROFIT (Only computed for owner/manager)
     let cogsMinor = 0;
     let grossProfitMinor = 0;
     let marginPct = 0;
     let isCostEstimated = false;
 
-    if (isOwnerOrManager) {
-      const cogsRes = await ctx.db.one<any>(
-        `SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
-              WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
-              ELSE 0
-            END
-          ), 0)::bigint AS cogs,
-          COUNT(CASE WHEN it.cost_minor IS NULL OR it.cost_minor = 0 THEN 1 END)::int AS missing_cost_lines
-         FROM invoice_lines il
-         JOIN invoices i ON i.id = il.invoice_id
-         LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
-         WHERE i.tenant_id = ?
-           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-           AND i.status = 'posted'
-           AND i.kind IN ('sale', 'credit_note')`,
-        [tenantId, todayYMD, tz, todayYMD],
-      );
+    if (isOwnerOrManager && cogsRes) {
       cogsMinor = Number(cogsRes?.cogs ?? 0);
       grossProfitMinor = Math.max(0, netSalesMinor - cogsMinor);
       marginPct = netSalesMinor > 0 ? Number(((grossProfitMinor / netSalesMinor) * 100).toFixed(1)) : 0;
@@ -338,80 +781,8 @@ export function registerDashboard(r: Router) {
       isCostEstimated = missingLines > 0;
     }
 
-    // 4. ITEMS SOLD TODAY
-    const itemsSoldRes = await ctx.db.one<any>(
-      `SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN i.kind = 'sale' THEN il.qty_milli / 1000
-            WHEN i.kind = 'credit_note' THEN -(il.qty_milli / 1000)
-            ELSE 0
-          END
-        ), 0)::bigint AS total_units,
-        COUNT(DISTINCT il.item_id)::int AS distinct_products
-       FROM invoice_lines il
-       JOIN invoices i ON i.id = il.invoice_id
-       WHERE i.tenant_id = ?
-         AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-         AND i.status = 'posted'
-         AND i.kind = 'sale'`,
-      [tenantId, todayYMD, tz, todayYMD],
-    );
     const totalUnitsSold = Math.max(0, Number(itemsSoldRes?.totalUnits ?? itemsSoldRes?.total_units ?? 0));
     const distinctProductsSold = Number(itemsSoldRes?.distinctProducts ?? itemsSoldRes?.distinct_products ?? 0);
-
-    // 5. HOURLY BREAKDOWN FOR TODAY (up to current time) AND PREVIOUS DAY (all day)
-    // Uses CTEs to aggregate invoices and COGS separately, avoiding duplicate row multiplication
-    const todayHourlyRows = await ctx.db.query<any>(
-      `WITH inv_summary AS (
-        SELECT
-          i.id,
-          EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
-          i.kind,
-          i.total_minor
-        FROM invoices i
-        WHERE i.tenant_id = ?
-          AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-          AND i.status = 'posted'
-          AND i.kind IN ('sale', 'credit_note')
-      ),
-      hourly_invoices AS (
-        SELECT
-          hr,
-          COUNT(DISTINCT CASE WHEN kind = 'sale' THEN id END)::int AS bills,
-          COALESCE(SUM(CASE WHEN kind = 'sale' THEN total_minor WHEN kind = 'credit_note' THEN -total_minor ELSE 0 END), 0)::bigint AS net_sales
-        FROM inv_summary
-        GROUP BY hr
-      ),
-      hourly_cogs AS (
-        SELECT
-          EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
-          COALESCE(SUM(
-            CASE
-              WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
-              WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
-              ELSE 0
-            END
-          ), 0)::bigint AS cogs
-        FROM invoice_lines il
-        JOIN invoices i ON i.id = il.invoice_id
-        LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
-        WHERE i.tenant_id = ?
-          AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-          AND i.status = 'posted'
-          AND i.kind IN ('sale', 'credit_note')
-        GROUP BY hr
-      )
-      SELECT
-        hi.hr,
-        hi.bills,
-        hi.net_sales,
-        COALESCE(hc.cogs, 0)::bigint AS cogs
-      FROM hourly_invoices hi
-      LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
-      ORDER BY hi.hr ASC`,
-      [tz, tenantId, todayYMD, tz, todayYMD, tz, tenantId, todayYMD, tz, todayYMD],
-    );
 
     const todayHourMap = new Map<number, { bills: number; netSales: number; profit: number }>();
     for (const r of todayHourlyRows) {
@@ -423,58 +794,6 @@ export function registerDashboard(r: Router) {
       todayHourMap.set(hr, { bills, netSales, profit });
     }
 
-    // Previous calendar day hourly across the entire day
-    const compHourlyRows = await ctx.db.query<any>(
-      `WITH inv_summary AS (
-        SELECT
-          i.id,
-          EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
-          i.kind,
-          i.total_minor
-        FROM invoices i
-        WHERE i.tenant_id = ?
-          AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-          AND i.status = 'posted'
-          AND i.kind IN ('sale', 'credit_note')
-      ),
-      hourly_invoices AS (
-        SELECT
-          hr,
-          COUNT(DISTINCT CASE WHEN kind = 'sale' THEN id END)::int AS bills,
-          COALESCE(SUM(CASE WHEN kind = 'sale' THEN total_minor WHEN kind = 'credit_note' THEN -total_minor ELSE 0 END), 0)::bigint AS net_sales
-        FROM inv_summary
-        GROUP BY hr
-      ),
-      hourly_cogs AS (
-        SELECT
-          EXTRACT(HOUR FROM (i.created_at AT TIME ZONE ?))::int AS hr,
-          COALESCE(SUM(
-            CASE
-              WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
-              WHEN i.kind = 'credit_note' THEN -((il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000)
-              ELSE 0
-            END
-          ), 0)::bigint AS cogs
-        FROM invoice_lines il
-        JOIN invoices i ON i.id = il.invoice_id
-        LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
-        WHERE i.tenant_id = ?
-          AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-          AND i.status = 'posted'
-          AND i.kind IN ('sale', 'credit_note')
-        GROUP BY hr
-      )
-      SELECT
-        hi.hr,
-        hi.bills,
-        hi.net_sales,
-        COALESCE(hc.cogs, 0)::bigint AS cogs
-      FROM hourly_invoices hi
-      LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
-      ORDER BY hi.hr ASC`,
-      [tz, tenantId, compDateYMD, tz, compDateYMD, tz, tenantId, compDateYMD, tz, compDateYMD],
-    );
-
     const compHourMap = new Map<number, { bills: number; netSales: number; profit: number }>();
     for (const r of compHourlyRows) {
       const hr = Number(r.hr);
@@ -485,7 +804,6 @@ export function registerDashboard(r: Router) {
       compHourMap.set(hr, { bills, netSales, profit });
     }
 
-    // Build series from openingHour to closingHour
     const hourlySeries: Array<{
       hour: number;
       label: string;
@@ -590,26 +908,6 @@ export function registerDashboard(r: Router) {
         }`
       : `${Math.round(netSalesMinor / 100).toLocaleString('en-IN')} so far${isEveningRushAhead ? ' · evening rush still ahead' : ''}`;
 
-    // 6. PAYMENT MODES BREAKDOWN
-    // Actual payments received today: both POS bill checkouts and standalone customer dues collections
-    const paymentRows = await ctx.db.query<any>(
-      `SELECT
-        LOWER(COALESCE(p.mode, p.method, 'cash')) AS mode,
-        COALESCE(SUM(p.amount_minor), 0)::bigint AS total_minor
-       FROM payments p
-       LEFT JOIN invoices i ON i.id = p.invoice_id
-       WHERE p.tenant_id = ?
-         AND (p.status IS NULL OR p.status = 'posted')
-         AND COALESCE(p.kind, 'receipt') = 'receipt'
-         AND (
-           (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date) AND i.status = 'posted' AND i.kind = 'sale')
-           OR
-           (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
-         )
-       GROUP BY LOWER(COALESCE(p.mode, p.method, 'cash'))`,
-      [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD],
-    );
-
     const paymentModesMap = new Map<string, number>();
     for (const r of paymentRows) {
       const mode = String(r.mode || 'cash').toLowerCase();
@@ -618,21 +916,6 @@ export function registerDashboard(r: Router) {
         paymentModesMap.set(mode, (paymentModesMap.get(mode) || 0) + amt);
       }
     }
-
-    // Deduct actual refunds paid today on credit notes by refund mode
-    const refundRows = await ctx.db.query<any>(
-      `SELECT
-        LOWER(COALESCE(refund_mode, 'cash')) AS mode,
-        COALESCE(SUM(refund_amount_minor), 0)::bigint AS total_refund_minor
-       FROM invoices
-       WHERE tenant_id = ?
-         AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
-         AND kind = 'credit_note'
-         AND status = 'posted'
-         AND refund_amount_minor > 0
-       GROUP BY LOWER(COALESCE(refund_mode, 'cash'))`,
-      [tenantId, todayYMD, tz, todayYMD],
-    );
 
     for (const r of refundRows) {
       const mode = String(r.mode || 'cash').toLowerCase();
@@ -671,40 +954,6 @@ export function registerDashboard(r: Router) {
       };
     }).sort((a, b) => b.amountMinor - a.amountMinor);
 
-    // 7. TOP 5 SELLERS TODAY
-    const topSellersRows = await ctx.db.query<any>(
-      `SELECT
-        COALESCE(it.id, il.item_id) AS item_id,
-        COALESCE(it.name, il.name, 'Item') AS name,
-        COALESCE(it.unit, il.unit, 'pcs') AS unit,
-        COALESCE(SUM(
-          CASE
-            WHEN i.kind = 'sale' THEN il.qty_milli
-            WHEN i.kind = 'credit_note' THEN -il.qty_milli
-            ELSE 0
-          END
-        ), 0)::bigint AS qty_milli,
-        COALESCE(SUM(
-          CASE
-            WHEN i.kind = 'sale' THEN il.total_minor
-            WHEN i.kind = 'credit_note' THEN -il.total_minor
-            ELSE 0
-          END
-        ), 0)::bigint AS sales_minor
-       FROM invoice_lines il
-       JOIN invoices i ON i.id = il.invoice_id
-       LEFT JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
-       WHERE i.tenant_id = ?
-         AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-         AND i.status = 'posted'
-         AND i.kind IN ('sale', 'credit_note')
-       GROUP BY COALESCE(it.id, il.item_id), COALESCE(it.name, il.name, 'Item'), COALESCE(it.unit, il.unit, 'pcs')
-       HAVING SUM(CASE WHEN i.kind = 'sale' THEN il.total_minor WHEN i.kind = 'credit_note' THEN -il.total_minor ELSE 0 END) > 0
-       ORDER BY sales_minor DESC
-       LIMIT 5`,
-      [tenantId, todayYMD, tz, todayYMD],
-    );
-
     const firstSellerSales = topSellersRows.length > 0 ? Number(topSellersRows[0].salesMinor ?? topSellersRows[0].sales_minor ?? 0) : 1;
     const maxSellerSales = Math.max(1, firstSellerSales);
 
@@ -725,64 +974,7 @@ export function registerDashboard(r: Router) {
           barPct: maxSellerSales > 0 ? Math.min(100, Math.round((salesMinor / maxSellerSales) * 100)) : 0,
         };
       })
-      .filter((item) => item.salesMinor > 0 && item.quantity > 0);
-
-    // 8. STOCK NEEDING ATTENTION (Inventory Hub rules - strictly actual thresholds without arbitrary defaults)
-    const stockAttentionRows = await ctx.db.query<any>(
-      `WITH today_sold AS (
-        SELECT
-          il.item_id,
-          COALESCE(SUM(il.qty_milli), 0)::bigint AS sold_today_milli
-        FROM invoice_lines il
-        JOIN invoices i ON i.id = il.invoice_id
-        WHERE i.tenant_id = ?
-          AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
-          AND i.status = 'posted'
-          AND i.kind = 'sale'
-        GROUP BY il.item_id
-      ),
-      item_stock AS (
-        SELECT
-          i.id,
-          i.name,
-          i.unit,
-          i.reorder_milli,
-          COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
-          COALESCE((
-            SELECT SUM(sm.qty_milli)
-            FROM stock_moves sm
-            WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id
-          ), 0)::bigint AS stock_milli,
-          COALESCE(ts.sold_today_milli, 0)::bigint AS sold_today_milli
-        FROM items i
-        LEFT JOIN today_sold ts ON ts.item_id = i.id
-        WHERE i.tenant_id = ?
-          AND i.active = true
-          AND i.track_stock = true
-      )
-      SELECT
-        id,
-        name,
-        unit,
-        reorder_milli,
-        min_stock_milli,
-        stock_milli,
-        sold_today_milli
-      FROM item_stock
-      WHERE stock_milli <= 0
-         OR ((reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli))
-         OR sold_today_milli > 0
-      ORDER BY
-        (CASE
-          WHEN stock_milli <= 0 THEN 1
-          WHEN (reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli) THEN 2
-          ELSE 3
-        END) ASC,
-        sold_today_milli DESC,
-        stock_milli ASC
-      LIMIT 5`,
-      [tenantId, todayYMD, tz, todayYMD, tenantId],
-    );
+      .filter((item: any) => item.salesMinor > 0 && item.quantity > 0);
 
     const stockAttention = stockAttentionRows.map((r: any) => {
       const stockMilli = Number(r.stockMilli ?? r.stock_milli ?? 0);
@@ -832,44 +1024,6 @@ export function registerDashboard(r: Router) {
         badgeType,
       };
     });
-
-    // 9. CURRENT USER'S SHIFT / CASH DRAWER
-    const counterParam = (ctx.query.counter as string || ctx.query.location as string || '').trim();
-
-    let shiftSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
-       FROM shifts s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`;
-    const shiftParams: any[] = [tenantId, ctx.user!.id];
-
-    if (branchLocations.length > 0) {
-      shiftSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
-      shiftParams.push(...branchLocations);
-    } else if (counterParam) {
-      shiftSql += ' AND (s.location = ? OR s.location = ?)';
-      shiftParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
-    }
-    shiftSql += ' ORDER BY s.opened_at DESC LIMIT 1';
-
-    let activeShift = await ctx.db.one<any>(shiftSql, shiftParams);
-
-    if (!activeShift && isOwnerOrManager) {
-      let fallbackSql = `SELECT s.*, u.name AS user_name, u.role AS user_role
-         FROM shifts s
-         JOIN users u ON u.id = s.user_id
-         WHERE s.tenant_id = ? AND s.status = 'open'`;
-      const fallbackParams: any[] = [tenantId];
-      if (branchLocations.length > 0) {
-        fallbackSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
-        fallbackParams.push(...branchLocations);
-      } else if (counterParam) {
-        fallbackSql += ' AND (s.location = ? OR s.location = ?)';
-        fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
-      }
-      fallbackSql += ' ORDER BY s.opened_at DESC LIMIT 1';
-
-      activeShift = await ctx.db.one<any>(fallbackSql, fallbackParams);
-    }
 
     let shiftDrawer: {
       hasOpenShift: boolean;
@@ -963,106 +1117,6 @@ export function registerDashboard(r: Router) {
       };
     }
 
-    // 10. COUNTERS TODAY (Collections from open till now per counter for active branch)
-    const assignedCounters = parseCounters(activeBranch.counters);
-    const branchLocPlaceholders = branchLocations.map(() => '?').join(', ');
-
-    const counterPaymentsRows = await ctx.db.query<any>(
-      `SELECT 
-         p.id,
-         p.amount_minor,
-         p.location AS payment_location,
-         p.counter AS payment_counter,
-         s.location AS shift_location,
-         s.counter AS shift_counter,
-         i.location AS invoice_location,
-         i.counter AS invoice_counter
-       FROM payments p
-       LEFT JOIN shifts s ON s.id = p.shift_id
-       LEFT JOIN invoices i ON i.id = p.invoice_id
-       WHERE p.tenant_id = ?
-         AND (
-           (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
-           OR
-           (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
-         )
-         AND (p.status IS NULL OR p.status = 'posted')
-         AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
-         AND COALESCE(p.kind, 'receipt') = 'receipt'
-         AND (
-           (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
-           OR
-           (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
-         )`,
-      [
-        tenantId,
-        todayYMD,
-        tz,
-        todayYMD,
-        todayYMD,
-        tz,
-        todayYMD,
-        ...branchLocations,
-        ...branchLocations,
-        ...branchLocations,
-      ],
-    );
-
-    const counterRefundsRows = await ctx.db.query<any>(
-      `SELECT 
-         p.id,
-         p.amount_minor,
-         p.counter AS payment_counter,
-         s.location AS shift_location,
-         s.counter AS shift_counter,
-         i.location AS invoice_location,
-         i.counter AS invoice_counter
-       FROM payments p
-       LEFT JOIN shifts s ON s.id = p.shift_id
-       LEFT JOIN invoices i ON i.id = p.invoice_id
-       WHERE p.tenant_id = ?
-         AND (
-           (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
-           OR
-           (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
-         )
-         AND (p.status IS NULL OR p.status = 'posted')
-         AND p.kind = 'refund'
-         AND (
-           (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
-           OR
-           (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
-         )`,
-      [
-        tenantId,
-        todayYMD,
-        tz,
-        todayYMD,
-        todayYMD,
-        tz,
-        todayYMD,
-        ...branchLocations,
-        ...branchLocations,
-        ...branchLocations,
-      ],
-    );
-
-    const counterCreditNoteRefundsRows = await ctx.db.query<any>(
-      `SELECT 
-         id,
-         refund_amount_minor,
-         location,
-         counter
-       FROM invoices
-       WHERE tenant_id = ?
-         AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
-         AND kind = 'credit_note'
-         AND status = 'posted'
-         AND refund_amount_minor > 0
-         AND location IN (${branchLocPlaceholders})`,
-      [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
-    );
-
     function resolveRowCounter(row: any, counters: string[]): string {
       const candidates = [
         row.shiftCounter ?? row.shift_counter,
@@ -1137,7 +1191,7 @@ export function registerDashboard(r: Router) {
       formattedTotal: formatCounterRupees(countersTotalMinor),
     };
 
-    return {
+    const responsePayload = {
       serverTime: now.toISOString(),
       selectedBranch: {
         id: activeBranch.id,
@@ -1230,5 +1284,20 @@ export function registerDashboard(r: Router) {
       shiftDrawer,
       countersToday,
     };
+
+    // Cache response for 3.5s
+    todayDashboardCache.set(cacheKey, {
+      data: responsePayload,
+      expiresAt: Date.now() + 3500,
+    });
+
+    if (todayDashboardCache.size > 200) {
+      const nowMs = Date.now();
+      for (const [k, v] of todayDashboardCache.entries()) {
+        if (nowMs >= v.expiresAt) todayDashboardCache.delete(k);
+      }
+    }
+
+    return responsePayload;
   });
 }

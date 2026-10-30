@@ -411,76 +411,20 @@ export function registerItems(r: Router) {
     return { item: formatItem(updated) };
   });
 
-  // Deactivate or permanently delete item
+  // Permanent delete item & reclaim DB storage
   r.delete('/api/items/:id', requirePerm('items.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const isPermanent = ctx.query.permanent === 'true' || ctx.query.hard === 'true' || ctx.query.force === 'true';
-
     const item = await ctx.db.one('SELECT * FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
     if (!item) throw notFound('Item');
 
-    if (!isPermanent) {
-      // Deactivate item (soft delete)
-      await ctx.db.tx(async (q) => {
-        await q.exec('UPDATE items SET active = false, updated_at = now() WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
-        await audit(q, ctx, { action: 'item.deactivate', entity: 'item', entityId: item.id });
-      });
-      return { ok: true, active: false };
-    }
-
-    // ── Actual Database Deletion (Permanent) ─────────────────────────────────
-    // Check 1: Invoices / Sales lines
-    const invRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM invoice_lines WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const invCount = Number(invRes?.cnt || 0);
-    if (invCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by ${invCount} sales invoice record(s). Deactivate this product instead to preserve sales and tax records.`
-      );
-    }
-
-    // Check 2: Purchase lines
-    const purRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM purchase_lines WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const purCount = Number(purRes?.cnt || 0);
-    if (purCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by ${purCount} purchase bill record(s). Deactivate this product instead to preserve accounting and supplier records.`
-      );
-    }
-
-    // Check 3: Transactional stock moves (sales, purchases, returns, transfers, adjustments)
-    const stockRes = await ctx.db.one<{ cnt: string | number }>(
-      `SELECT COUNT(*) as cnt FROM stock_moves WHERE item_id = ? AND tenant_id = ? AND kind IN ('sale', 'purchase', 'return', 'transfer', 'adjust')`,
-      [item.id, tenantId]
-    );
-    const stockCount = Number(stockRes?.cnt || 0);
-    if (stockCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it has ${stockCount} transactional stock movement(s). Deactivate this product instead to retain inventory audit logs.`
-      );
-    }
-
-    // Check 4: Stock adjustments
-    const adjRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const adjCount = Number(adjRes?.cnt || 0);
-    if (adjCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by inventory stock adjustment records. Deactivate this product instead.`
-      );
-    }
-
-    // Safe to delete! Perform transactional cleanup of associated barcodes and opening stock moves
+    // Perform full permanent database cleanup:
+    // 1. Unlink historical invoices and purchases so past totals remain audit-intact
+    // 2. Cascade delete barcodes, branch inventory, stock ledger, and the item row
     await ctx.db.tx(async (q) => {
+      await q.exec('UPDATE invoice_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('UPDATE purchase_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM branch_inventory WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
-      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
       await audit(q, ctx, {
@@ -491,63 +435,20 @@ export function registerItems(r: Router) {
       });
     });
 
-    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" deleted successfully` };
+    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" permanently deleted from database` };
   });
 
   // Dedicated permanent delete route alias
   r.delete('/api/items/:id/permanent', requirePerm('items.write'), async (ctx) => {
-    ctx.query.permanent = 'true';
     const tenantId = ctx.user!.tenantId;
     const item = await ctx.db.one('SELECT * FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
     if (!item) throw notFound('Item');
 
-    const invRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM invoice_lines WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const invCount = Number(invRes?.cnt || 0);
-    if (invCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by ${invCount} sales invoice record(s). Deactivate this product instead to preserve sales and tax records.`
-      );
-    }
-
-    const purRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM purchase_lines WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const purCount = Number(purRes?.cnt || 0);
-    if (purCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by ${purCount} purchase bill record(s). Deactivate this product instead to preserve accounting and supplier records.`
-      );
-    }
-
-    const stockRes = await ctx.db.one<{ cnt: string | number }>(
-      `SELECT COUNT(*) as cnt FROM stock_moves WHERE item_id = ? AND tenant_id = ? AND kind IN ('sale', 'purchase', 'return', 'transfer', 'adjust')`,
-      [item.id, tenantId]
-    );
-    const stockCount = Number(stockRes?.cnt || 0);
-    if (stockCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it has ${stockCount} transactional stock movement(s). Deactivate this product instead to retain inventory audit logs.`
-      );
-    }
-
-    const adjRes = await ctx.db.one<{ cnt: string | number }>(
-      'SELECT COUNT(*) as cnt FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?',
-      [item.id, tenantId]
-    );
-    const adjCount = Number(adjRes?.cnt || 0);
-    if (adjCount > 0) {
-      throw conflict(
-        `Cannot delete "${item.name}": it is referenced by inventory stock adjustment records. Deactivate this product instead.`
-      );
-    }
-
     await ctx.db.tx(async (q) => {
+      await q.exec('UPDATE invoice_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('UPDATE purchase_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM branch_inventory WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
-      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
       await audit(q, ctx, {
@@ -558,6 +459,6 @@ export function registerItems(r: Router) {
       });
     });
 
-    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" deleted successfully` };
+    return { ok: true, deleted: true, itemId: item.id, message: `Product "${item.name}" permanently deleted from database` };
   });
 }

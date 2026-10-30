@@ -259,6 +259,7 @@ export function ScanManufacturerBarcodeModal({
   const [mobileConnectionType, setMobileConnectionType] = useState<'tunnel' | 'wifi'>('tunnel');
   const [isStartingTunnel, setIsStartingTunnel] = useState(false);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Barcode gun buffer & tracking
   const [lastGunScan, setLastGunScan] = useState<string | null>(null);
@@ -626,11 +627,15 @@ export function ScanManufacturerBarcodeModal({
   }, [isCameraActive, stopCamera]);
 
   // Start / restart Cloudflare public tunnel on demand
-  const handleStartPublicTunnel = useCallback(async () => {
+  const handleStartPublicTunnel = useCallback(async (force = false) => {
     setIsStartingTunnel(true);
     setTunnelError(null);
     try {
-      const res = await fetch('/api/scanner/restart-tunnel', { method: 'POST' });
+      const res = await fetch('/api/scanner/restart-tunnel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
       const data = await res.json();
       if (data.ok && data.tunnelUrl) {
         setScannerNetworkInfo((prev) =>
@@ -651,17 +656,30 @@ export function ScanManufacturerBarcodeModal({
 
   // Fetch network info for mobile QR scanner & auto-spawn tunnel for live video
   useEffect(() => {
-    fetch('/api/scanner/network-info')
-      .then((r) => r.json())
-      .then((data) => {
-        setScannerNetworkInfo(data);
-        if (data.tunnelUrl && data.isTunnelAlive) {
-          setMobileConnectionType('tunnel');
-        } else if (scanMode === 'mobile' && !data.tunnelUrl) {
-          handleStartPublicTunnel();
-        }
-      })
-      .catch(() => {});
+    if (scanMode !== 'mobile') return;
+
+    let isMounted = true;
+    const fetchInfo = () => {
+      fetch('/api/scanner/network-info')
+        .then((r) => r.json())
+        .then((data) => {
+          if (!isMounted) return;
+          setScannerNetworkInfo(data);
+          if (data.tunnelUrl && data.isTunnelAlive) {
+            setMobileConnectionType('tunnel');
+          } else if (!data.tunnelUrl || !data.isTunnelAlive) {
+            handleStartPublicTunnel(false);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchInfo();
+    const timer = setInterval(fetchInfo, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
   }, [scanMode, handleStartPublicTunnel]);
 
   // Real-time listener for mobile scanner scans during this modal session (persists across tab changes)
@@ -932,10 +950,10 @@ export function ScanManufacturerBarcodeModal({
         aria-modal="true"
         aria-labelledby="scan-mfr-dialog-title"
         style={{
-          width: '980px',
+          width: '1040px',
           maxWidth: '96vw',
-          height: '670px',
-          maxHeight: '94vh',
+          height: 'min(760px, 92vh)',
+          maxHeight: '92vh',
           background: '#ffffff',
           borderRadius: '20px',
           boxShadow: '0 25px 70px -10px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.9)',
@@ -1385,6 +1403,9 @@ export function ScanManufacturerBarcodeModal({
                         boxShadow: isSelected ? '0 4px 14px rgba(99, 102, 241, 0.12)' : '0 1px 2px rgba(0,0,0,0.02)',
                         position: 'relative',
                         overflow: 'hidden',
+                        flexShrink: 0,
+                        minHeight: '66px',
+                        boxSizing: 'border-box',
                       }}
                     >
                       {/* Left vertical accent indicator */}
@@ -1487,13 +1508,14 @@ export function ScanManufacturerBarcodeModal({
           {/* ── RIGHT PANEL: SELECTED PRODUCT & SCANNER ── */}
           <div
             style={{
-              padding: '1.4rem 1.8rem',
+              padding: '1.25rem 1.6rem',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
               background: '#ffffff',
               minHeight: 0,
               overflowY: 'auto',
+              maxHeight: '100%',
+              gap: '1rem',
             }}
           >
             {selectedTarget ? (
@@ -1634,100 +1656,94 @@ export function ScanManufacturerBarcodeModal({
                 <div
                   id="scan-barcode-preview-box"
                   style={{
-                    border: '1.5px solid #e2e8f0',
-                    borderRadius: '16px',
-                    padding: '1.3rem',
-                    background: 'linear-gradient(180deg, #ffffff 0%, #fafafa 100%)',
-                    minHeight: '145px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '14px',
+                    padding: '0.85rem 1.15rem',
+                    background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                    boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)',
+                    flexShrink: 0,
                   }}
                 >
                   {selectedTarget.barcode ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
-                      {/* Barcode SVG Rendering */}
-                      <div
-                        id="scan-rendered-barcode-svg"
-                        dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(selectedTarget.barcode) }}
-                        style={{
-                          height: '58px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.05))',
-                        }}
-                      />
-
-                      {/* Symbology Type & Code display */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                        <span
+                    <>
+                      {/* Left Side: Barcode SVG + Details */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', minWidth: 0 }}>
+                        <div
+                          id="scan-rendered-barcode-svg"
+                          dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(selectedTarget.barcode) }}
                           style={{
-                            fontSize: '0.74rem',
-                            fontWeight: 700,
-                            padding: '3px 9px',
-                            borderRadius: '12px',
-                            background: '#e0e7ff',
-                            color: '#3730a3',
-                            border: '1px solid #c7d2fe',
-                            letterSpacing: '0.04em',
+                            height: '42px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            maxWidth: '180px',
+                            overflow: 'hidden',
                           }}
-                        >
-                          {detectBarcodeType(selectedTarget.barcode)}
-                        </span>
-                        <span
-                          style={{
-                            fontFamily: 'monospace',
-                            fontWeight: 800,
-                            fontSize: '1.02rem',
-                            color: '#0f172a',
-                            letterSpacing: '0.08em',
-                          }}
-                        >
-                          {selectedTarget.barcode}
-                        </span>
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '6px',
+                                background: '#e0e7ff',
+                                color: '#3730a3',
+                                border: '1px solid #c7d2fe',
+                              }}
+                            >
+                              {detectBarcodeType(selectedTarget.barcode)}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: 'monospace',
+                                fontWeight: 800,
+                                fontSize: '0.96rem',
+                                color: '#0f172a',
+                                letterSpacing: '0.06em',
+                              }}
+                            >
+                              {selectedTarget.barcode}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>
+                            Current Assigned Barcode
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Action buttons with clean SVG icons */}
-                      <div style={{ display: 'flex', gap: '0.55rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+                      {/* Right Side: Actions */}
+                      <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                           id="scan-download-png-btn"
                           type="button"
                           onClick={() => downloadBarcodePngHighRes(selectedTarget.barcode!, selectedTarget.name)}
                           style={{
-                            padding: '0.4rem 0.85rem',
-                            borderRadius: '8px',
+                            padding: '0.35rem 0.7rem',
+                            borderRadius: '7px',
                             border: '1px solid #cbd5e1',
                             background: '#ffffff',
                             color: '#334155',
-                            fontSize: '0.8rem',
+                            fontSize: '0.76rem',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.4rem',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f8fafc';
-                            e.currentTarget.style.borderColor = '#94a3b8';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#ffffff';
-                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            gap: '4px',
                           }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="7 10 12 15 17 10" />
                             <line x1="12" y1="15" x2="12" y2="3" />
                           </svg>
-                          <span>Download PNG</span>
+                          <span>Download</span>
                         </button>
 
                         <button
@@ -1735,34 +1751,25 @@ export function ScanManufacturerBarcodeModal({
                           type="button"
                           onClick={() => printProductBarcodeLabel(selectedTarget, shopName)}
                           style={{
-                            padding: '0.4rem 0.85rem',
-                            borderRadius: '8px',
+                            padding: '0.35rem 0.7rem',
+                            borderRadius: '7px',
                             border: '1px solid #cbd5e1',
                             background: '#ffffff',
                             color: '#334155',
-                            fontSize: '0.8rem',
+                            fontSize: '0.76rem',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.4rem',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f8fafc';
-                            e.currentTarget.style.borderColor = '#94a3b8';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#ffffff';
-                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            gap: '4px',
                           }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="6 9 6 2 18 2 18 9" />
                             <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                             <rect x="6" y="14" width="12" height="8" />
                           </svg>
-                          <span>Print Label</span>
+                          <span>Print</span>
                         </button>
 
                         <button
@@ -1770,66 +1777,41 @@ export function ScanManufacturerBarcodeModal({
                           type="button"
                           onClick={handleRemoveBarcode}
                           style={{
-                            padding: '0.4rem 0.85rem',
-                            borderRadius: '8px',
+                            padding: '0.35rem 0.7rem',
+                            borderRadius: '7px',
                             border: '1px solid #fecaca',
                             background: '#fff1f2',
                             color: '#e11d48',
-                            fontSize: '0.8rem',
+                            fontSize: '0.76rem',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.4rem',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#ffe4e6';
-                            e.currentTarget.style.borderColor = '#fda4af';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#fff1f2';
-                            e.currentTarget.style.borderColor = '#fecaca';
+                            gap: '4px',
                           }}
                         >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="3 6 5 6 21 6" />
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                           </svg>
                           <span>Remove</span>
                         </button>
                       </div>
-                    </div>
+                    </>
                   ) : (
                     /* Placeholder: No barcode yet */
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.55rem', color: '#94a3b8', padding: '1rem 0' }}>
-                      <div
-                        style={{
-                          width: '54px',
-                          height: '54px',
-                          borderRadius: '14px',
-                          background: '#f1f5f9',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#94a3b8',
-                        }}
-                      >
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 5v14" />
-                          <path d="M6 5v14" />
-                          <path d="M10 5v14" />
-                          <path d="M13 5v14" />
-                          <path d="M17 5v14" />
-                          <path d="M21 5v14" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#64748b', padding: '0.35rem 0', width: '100%' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" />
                         </svg>
                       </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <span style={{ fontSize: '0.94rem', fontWeight: 700, color: '#475569', display: 'block' }}>
-                          No manufacturer barcode assigned
+                      <div>
+                        <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#334155', display: 'block' }}>
+                          No manufacturer barcode assigned yet
                         </span>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                          Click the button below to scan the barcode from the product pack
+                        <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                          Scan pack with webcam, barcode gun, or phone below to assign
                         </span>
                       </div>
                     </div>
@@ -1951,7 +1933,7 @@ export function ScanManufacturerBarcodeModal({
                       position: relative;
                       width: 100%;
                       max-width: 460px;
-                      height: 220px;
+                      height: 190px;
                       border-radius: 12px;
                       overflow: hidden;
                       background: #090d16;
@@ -2120,7 +2102,7 @@ export function ScanManufacturerBarcodeModal({
                           position: 'relative',
                           width: '100%',
                           maxWidth: '460px',
-                          height: '220px',
+                          height: '190px',
                           borderRadius: '14px',
                           overflow: 'hidden',
                           background: '#090d16',
@@ -2128,6 +2110,7 @@ export function ScanManufacturerBarcodeModal({
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          flexShrink: 0,
                         }}
                       >
                         {/* Target node for Html5Qrcode video mounting */}
@@ -2144,7 +2127,7 @@ export function ScanManufacturerBarcodeModal({
                               flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: '0.65rem',
+                              gap: '0.5rem',
                               color: '#ffffff',
                               zIndex: 15,
                             }}
@@ -2168,16 +2151,17 @@ export function ScanManufacturerBarcodeModal({
                               flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '1.5rem',
+                              padding: '1rem',
                               textAlign: 'center',
                               color: '#f8fafc',
                               zIndex: 12,
+                              gap: '0.45rem',
                             }}
                           >
                             <div
                               style={{
-                                width: '48px',
-                                height: '48px',
+                                width: '40px',
+                                height: '40px',
                                 borderRadius: '12px',
                                 background: 'rgba(99, 102, 241, 0.2)',
                                 border: '1px solid rgba(99, 102, 241, 0.4)',
@@ -2185,32 +2169,28 @@ export function ScanManufacturerBarcodeModal({
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#a5b4fc',
-                                marginBottom: '0.65rem',
                               }}
                             >
-                              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                                 <circle cx="12" cy="13" r="4" />
                               </svg>
                             </div>
-                            <div style={{ fontSize: '0.94rem', fontWeight: 700, color: '#ffffff' }}>
+                            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>
                               Camera Scanner Ready
                             </div>
-                            <p style={{ fontSize: '0.78rem', color: '#cbd5e1', margin: '0.35rem 0 0.85rem', maxWidth: '320px', lineHeight: 1.35 }}>
-                              Hold product packaging (e.g. Marie Gold biscuits) up to your webcam to automatically read and assign its manufacturer barcode.
-                            </p>
                             <button
                               id="scan-start-camera-feed-btn"
                               type="button"
                               onClick={() => startCamera()}
                               style={{
-                                padding: '0.55rem 1.4rem',
-                                borderRadius: '10px',
+                                padding: '0.45rem 1.25rem',
+                                borderRadius: '9px',
                                 border: 'none',
                                 background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
                                 color: '#ffffff',
                                 fontWeight: 700,
-                                fontSize: '0.86rem',
+                                fontSize: '0.84rem',
                                 cursor: 'pointer',
                                 display: 'inline-flex',
                                 alignItems: 'center',
@@ -2219,11 +2199,14 @@ export function ScanManufacturerBarcodeModal({
                                 transition: 'all 0.15s ease',
                               }}
                             >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                 <polygon points="5 3 19 12 5 21 5 3" />
                               </svg>
                               <span>Start Camera Scanner</span>
                             </button>
+                            <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                              Hold product packaging barcode up to your webcam
+                            </span>
                           </div>
                         )}
 
@@ -2709,13 +2692,71 @@ export function ScanManufacturerBarcodeModal({
                                 Point your phone camera at this QR code to open the <strong>live viewfinder with red laser bar</strong>. It streams your phone camera continuously and detects barcodes instantly (no photo taking needed).
                               </p>
                               {scannerNetworkInfo?.tunnelUrl && scannerNetworkInfo?.isTunnelAlive ? (
-                                <div style={{ fontSize: '0.76rem', color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '6px 10px', borderRadius: '8px', border: '1px solid #bbf7d0', wordBreak: 'break-all' }}>
-                                  Active Live URL: {scannerNetworkInfo.tunnelUrl}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <div style={{ fontSize: '0.76rem', color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '6px 10px', borderRadius: '8px', border: '1px solid #bbf7d0', wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', flexShrink: 0, boxShadow: '0 0 6px #22c55e' }}></span>
+                                    <span>Active Live URL: {scannerNetworkInfo.tunnelUrl}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartPublicTunnel(true)}
+                                      disabled={isStartingTunnel}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #cbd5e1',
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        fontSize: '0.74rem',
+                                        fontWeight: 700,
+                                        cursor: isStartingTunnel ? 'wait' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={isStartingTunnel ? { animation: 'spin 1s linear infinite' } : {}}>
+                                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                                      </svg>
+                                      <span>{isStartingTunnel ? 'Generating...' : 'Refresh QR / Reconnect'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (activeMobileUrl) {
+                                          navigator.clipboard?.writeText(activeMobileUrl);
+                                          setCopySuccess(true);
+                                          setTimeout(() => setCopySuccess(false), 2000);
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '4px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #cbd5e1',
+                                        background: copySuccess ? '#f0fdf4' : '#f8fafc',
+                                        color: copySuccess ? '#15803d' : '#334155',
+                                        fontSize: '0.74rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                      </svg>
+                                      <span>{copySuccess ? 'Copied!' : 'Copy Link'}</span>
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={handleStartPublicTunnel}
+                                  onClick={() => handleStartPublicTunnel(true)}
                                   disabled={isStartingTunnel}
                                   style={{
                                     padding: '0.5rem 1rem',
