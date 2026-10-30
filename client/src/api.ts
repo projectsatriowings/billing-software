@@ -660,6 +660,8 @@ export interface SupplierPaymentRecord {
   recordedBy?: string | null;
   voidReason?: string | null;
   createdAt: string;
+  supplierId?: string;
+  supplierName?: string;
 }
 
 export interface SupplierLedger {
@@ -1471,3 +1473,109 @@ export const suggestHsnForProduct = (name: string, category?: string) => {
 };
 
 
+
+
+// --------------------------------------------------------------------------
+// Shop Payment & QR Settings APIs
+// --------------------------------------------------------------------------
+export interface PublicPaymentSettings {
+  upiEnabled: boolean;
+  qrType: 'static' | 'dynamic';
+  provider: 'manual' | 'razorpay' | 'paytm' | 'phonepe';
+  staticUpiId: string | null;
+  staticMerchantName: string | null;
+  rzpEnabled: boolean;
+  rzpMode: 'test' | 'live';
+  rzpKeyId: string | null;
+  hasKeySecret: boolean;
+  hasWebhookSecret: boolean;
+  maskedKeySecret?: string;
+  rzpQrExpiryMinutes: number;
+  paytmEnabled?: boolean;
+  paytmMode?: 'test' | 'live';
+  paytmMid?: string | null;
+  hasPaytmKey?: boolean;
+  paytmWebsite?: string;
+  phonepeEnabled?: boolean;
+  phonepeMode?: 'test' | 'live';
+  phonepeMid?: string | null;
+  hasPhonePeSaltKey?: boolean;
+  phonepeSaltIndex?: string;
+  bankEnabled?: boolean;
+  bankAccountName?: string | null;
+  bankAccountNo?: string | null;
+  bankIfsc?: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  status: 'not_configured' | 'connected' | 'error';
+  statusMessage: string | null;
+  enabledMethods: string[];
+}
+
+export interface PaymentAttempt {
+  id?: string;
+  attemptId: string;
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
+  amountMinor: number;
+  qrPayload: string;
+  qrSvg?: string;
+  qrImageUrl?: string | null;
+  expiresAt?: string | null;
+  provider: 'manual' | 'razorpay' | 'paytm' | 'phonepe';
+  qrType: 'static' | 'dynamic';
+  providerPaymentId?: string;
+  errorReason?: string;
+}
+
+export const getPaymentSettings = () =>
+  api<PublicPaymentSettings>('/api/shop/payment-settings');
+
+export const updatePaymentSettings = (settings: Partial<PublicPaymentSettings> & { rzpKeySecret?: string; rzpWebhookSecret?: string; paytmMerchantKey?: string; phonepeSaltKey?: string }) =>
+  api<PublicPaymentSettings>('/api/shop/payment-settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  });
+
+export const createPaymentAttempt = (params: {
+  amountMinor: number;
+  qrType?: 'static' | 'dynamic';
+  invoiceId?: string;
+  idempotencyKey?: string;
+  customerName?: string;
+}) =>
+  api<PaymentAttempt>('/api/payment-attempts', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+
+export const getPaymentAttemptStatus = (attemptId: string) =>
+  api<{
+    attemptId: string;
+    status: 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
+    amountMinor: number;
+    invoiceId?: string;
+    providerPaymentId?: string;
+    verifiedAt?: string;
+    errorReason?: string;
+  }>(`/api/payment-attempts/${encodeURIComponent(attemptId)}/status`);
+
+export const verifyPaymentAttempt = (attemptId: string) =>
+  api<{ status: string; verified: boolean; providerPaymentId?: string; message?: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/verify`,
+    { method: 'POST' }
+  );
+
+export const manualVerifyPaymentAttempt = (attemptId: string, referenceNo?: string, note?: string) =>
+  api<{ status: string; referenceNo: string; verifiedByName?: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/manual-verify`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ referenceNo, note }),
+    }
+  );
+
+export const cancelPaymentAttempt = (attemptId: string) =>
+  api<{ ok: boolean; status: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/cancel`,
+    { method: 'POST' }
+  );

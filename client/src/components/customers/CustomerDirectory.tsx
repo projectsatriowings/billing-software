@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Party, Shop, Invoice } from '../../api.ts';
 import { normalizePhone } from '../../../../shared/whatsapp.ts';
+import { LoyaltySchemeModal } from '../loyalty/LoyaltySchemeModal.tsx';
 import './CustomerDirectory.css';
 
 export interface CustomerDirectoryProps {
@@ -71,20 +72,8 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
   const activeLoyaltyEnabled = shop?.loyaltyEnabled ?? true;
   const activeMinRedeem = shop?.loyaltyMinPointsRedeem ?? 10;
 
-  // Modal & Edit State for Custom Loyalty Points Scheme
+  // Modal State for Custom Loyalty Points Scheme
   const [isLoyaltyModalOpen, setIsLoyaltyModalOpen] = useState(false);
-  const [editLoyaltyEnabled, setEditLoyaltyEnabled] = useState(activeLoyaltyEnabled);
-  const [editPointsPer100, setEditPointsPer100] = useState(activePointsPer100);
-  const [editPointValueRupees, setEditPointValueRupees] = useState(activePointValRupees);
-  const [editMinRedeem, setEditMinRedeem] = useState(activeMinRedeem);
-  const [isSavingLoyalty, setIsSavingLoyalty] = useState(false);
-
-  useEffect(() => {
-    setEditLoyaltyEnabled(shop?.loyaltyEnabled ?? true);
-    setEditPointsPer100(shop?.loyaltyPointsPer100 ?? 10);
-    setEditPointValueRupees((shop?.loyaltyPointValueMinor ?? 10) / 100);
-    setEditMinRedeem(shop?.loyaltyMinPointsRedeem ?? 10);
-  }, [shop]);
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,25 +135,6 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       inactiveCount,
     };
   }, [customersList, invoices, activePointValRupees]);
-
-  const handleSaveLoyaltyRules = async () => {
-    if (!onUpdateLoyaltySettings) return;
-    setIsSavingLoyalty(true);
-    try {
-      await onUpdateLoyaltySettings({
-        loyaltyEnabled: editLoyaltyEnabled,
-        loyaltyPointsPer100: Math.max(0, Number(editPointsPer100) || 0),
-        loyaltyPointValueMinor: Math.round((Number(editPointValueRupees) || 0.1) * 100),
-        loyaltyMinPointsRedeem: Math.max(0, Number(editMinRedeem) || 0),
-      });
-      setIsLoyaltyModalOpen(false);
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to save loyalty settings');
-    } finally {
-      setIsSavingLoyalty(false);
-    }
-  };
 
   // Filter and Sort Customers
   const filteredCustomers = useMemo(() => {
@@ -349,7 +319,16 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
                 <span>Loyalty Scheme</span>
-                <span className="loyalty-rule-badge">₹100 = {activePointsPer100} pts</span>
+                <span
+                  className="loyalty-rule-badge"
+                  style={{
+                    background: activeLoyaltyEnabled ? undefined : '#f1f5f9',
+                    color: activeLoyaltyEnabled ? undefined : '#64748b',
+                    borderColor: activeLoyaltyEnabled ? undefined : '#cbd5e1',
+                  }}
+                >
+                  {activeLoyaltyEnabled ? `₹100 = ${activePointsPer100} pts` : 'Disabled'}
+                </span>
               </button>
             )}
 
@@ -785,206 +764,13 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       )}
 
       {/* 4. CUSTOM LOYALTY PROGRAM RULES CONFIGURATION MODAL */}
-      {isLoyaltyModalOpen && (
-        <div className="loyalty-modal-overlay" onClick={() => setIsLoyaltyModalOpen(false)}>
-          <div className="loyalty-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="loyalty-modal-header">
-              <div className="loyalty-header-left">
-                <div className="loyalty-header-icon">🎁</div>
-                <div>
-                  <h3 className="loyalty-header-title">Custom Loyalty Program Scheme</h3>
-                  <p className="loyalty-header-sub">Configure how points are earned and redeemed for your store</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="loyalty-modal-close"
-                onClick={() => setIsLoyaltyModalOpen(false)}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="loyalty-modal-body rectangular-view">
-              {/* Program Toggle Banner */}
-              <div className="loyalty-toggle-banner">
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <span style={{ fontSize: '1.25rem' }}>⭐</span>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a' }}>
-                        Enable Customer Loyalty Rewards Program
-                      </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '1px' }}>
-                        Turn loyalty points calculation and 1-click counter redemption ON or OFF for all shops
-                      </div>
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={editLoyaltyEnabled}
-                    onChange={(e) => setEditLoyaltyEnabled(e.target.checked)}
-                    style={{ width: '22px', height: '22px', accentColor: '#7c3aed', cursor: 'pointer' }}
-                  />
-                </label>
-              </div>
-
-              {/* 2-Column Balanced Rectangular Grid */}
-              <div className="loyalty-grid-2col">
-                {/* LEFT COLUMN: Earning Scheme */}
-                <div className="loyalty-config-pane purple-pane">
-                  <div className="pane-header">
-                    <span className="pane-icon">🎁</span>
-                    <div>
-                      <h4 className="pane-title">1. Points Earning Scheme</h4>
-                      <p className="pane-sub">How customers earn points on purchase</p>
-                    </div>
-                  </div>
-
-                  <div className="pane-body">
-                    <label className="pane-field-label">Points Earned per ₹100 Purchase</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        step="1"
-                        className="form-input mono bold"
-                        style={{ width: '100px', fontSize: '1.15rem', textAlign: 'center', color: '#7c3aed', background: '#ffffff' }}
-                        value={editPointsPer100}
-                        onChange={(e) => setEditPointsPer100(Number(e.target.value))}
-                      />
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
-                        pts for every ₹100 spent
-                      </span>
-                    </div>
-
-                    {/* Presets */}
-                    <div className="preset-chips-row compact">
-                      {[2, 5, 10, 15, 20].map((rate) => (
-                        <button
-                          key={rate}
-                          type="button"
-                          className={`preset-chip-btn ${editPointsPer100 === rate ? 'active' : ''}`}
-                          onClick={() => setEditPointsPer100(rate)}
-                        >
-                          {rate} pts / ₹100
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Live Purchase Preview */}
-                    <div className="loyalty-live-preview-box purple" style={{ marginTop: '0.85rem' }}>
-                      <span style={{ fontSize: '1.15rem' }}>⚡</span>
-                      <div style={{ fontSize: '0.78rem', color: '#4c1d95', lineHeight: 1.35 }}>
-                        <strong>Live Example:</strong> A bill of <strong>₹500</strong> earns{' '}
-                        <span className="preview-pill-stat purple">{Math.floor((500 * (Number(editPointsPer100) || 0)) / 100)} points</span>!
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: Redemption Scheme */}
-                <div className="loyalty-config-pane emerald-pane">
-                  <div className="pane-header">
-                    <span className="pane-icon">🪙</span>
-                    <div>
-                      <h4 className="pane-title">2. Points Redemption Scheme</h4>
-                      <p className="pane-sub">How much discount each point is worth at POS</p>
-                    </div>
-                  </div>
-
-                  <div className="pane-body">
-                    <label className="pane-field-label">Discount Value per 1 Point</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                      <span style={{ fontSize: '1rem', fontWeight: 800, color: '#059669' }}>₹</span>
-                      <input
-                        type="number"
-                        min="0.01"
-                        max="50"
-                        step="0.05"
-                        className="form-input mono bold"
-                        style={{ width: '100px', fontSize: '1.15rem', textAlign: 'center', color: '#059669', background: '#ffffff' }}
-                        value={editPointValueRupees}
-                        onChange={(e) => setEditPointValueRupees(Number(e.target.value))}
-                      />
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
-                        off bill per 1 pt
-                      </span>
-                    </div>
-
-                    {/* Presets */}
-                    <div className="preset-chips-row compact">
-                      {[
-                        { label: '₹0.10 (10 pts = ₹1)', val: 0.1 },
-                        { label: '₹0.20 (5 pts = ₹1)', val: 0.2 },
-                        { label: '₹0.50 (2 pts = ₹1)', val: 0.5 },
-                        { label: '₹1.00 (1 pt = ₹1)', val: 1.0 },
-                      ].map((p) => (
-                        <button
-                          key={p.val}
-                          type="button"
-                          className={`preset-chip-btn ${Math.abs(editPointValueRupees - p.val) < 0.001 ? 'active' : ''}`}
-                          onClick={() => setEditPointValueRupees(p.val)}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Minimum Points to Redeem */}
-                    <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>
-                        Min Balance to Redeem:
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        step="5"
-                        className="form-input mono bold"
-                        style={{ width: '70px', padding: '0.2rem 0.4rem', textAlign: 'center', fontSize: '0.85rem' }}
-                        value={editMinRedeem}
-                        onChange={(e) => setEditMinRedeem(Number(e.target.value))}
-                      />
-                      <span style={{ fontSize: '0.74rem', color: '#64748b' }}>pts required at POS</span>
-                    </div>
-
-                    {/* Live Redemption Preview */}
-                    <div className="loyalty-live-preview-box" style={{ marginTop: '0.65rem' }}>
-                      <span style={{ fontSize: '1.15rem' }}>🎁</span>
-                      <div style={{ fontSize: '0.78rem', color: '#065f46', lineHeight: 1.35 }}>
-                        <strong>Redemption Example:</strong> <strong>100 points</strong> ={' '}
-                        <span className="preview-pill-stat">₹{(100 * (Number(editPointValueRupees) || 0.1)).toFixed(2)} discount</span> at counter!
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="loyalty-modal-footer">
-              <button
-                type="button"
-                className="btn-modal-cancel"
-                onClick={() => setIsLoyaltyModalOpen(false)}
-                disabled={isSavingLoyalty}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-modal-save"
-                onClick={handleSaveLoyaltyRules}
-                disabled={isSavingLoyalty}
-              >
-                {isSavingLoyalty ? 'Saving...' : 'Save Loyalty Scheme'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LoyaltySchemeModal
+        isOpen={isLoyaltyModalOpen}
+        onClose={() => setIsLoyaltyModalOpen(false)}
+        shop={shop}
+        onSave={onUpdateLoyaltySettings || (async () => {})}
+        onRefresh={onRefresh}
+      />
     </div>
   );
 };

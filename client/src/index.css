@@ -114,6 +114,292 @@ body {
   color: #ffffff;
   overflow-y: auto;
   overflow-x: visible;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.22s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1), padding 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Icon-Only Collapsed Sidebar (Rail Mode) */
+.app-sidebar.icon-only {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  padding: 1rem 0.45rem;
+}
+
+.app-sidebar.icon-only .sidebar-header-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.25rem 0 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0.85rem;
+  width: 100%;
+}
+
+.app-sidebar.icon-only .sidebar-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+}
+
+.app-sidebar.icon-only .sidebar-brand-text {
+  display: none !important;
+}
+
+/* The collapse/expand toggle button is ALWAYS VISIBLE, centered and clickable in icon-only mode */
+.app-sidebar.icon-only .sidebar-collapse-toggle {
+  display: flex !important;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  cursor: pointer;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-sidebar.icon-only .sidebar-collapse-toggle:hover {
+  background: #6d4aff;
+  border-color: #a78bfa;
+  color: #ffffff;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.4);
+}
+
+.app-sidebar.icon-only .sidebar-store-wrapper {
+  margin-bottom: 0.75rem;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.app-sidebar.icon-only .sidebar-store-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.app-sidebar.icon-only .sidebar-store-info,
+.app-sidebar.icon-only .sidebar-store-badge,
+.app-sidebar.icon-only .sidebar-store-btn svg:last-child {
+  display: none !important;
+}
+
+.app-sidebar.icon-only .sidebar-section-label {
+  display: none !important;
+}
+
+.app-sidebar.icon-only .sidebar-nav {
+  align-items: center;
+  width: 100%;
+}
+
+.app-sidebar.icon-only .sidebar-nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 auto 0.35rem auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: 12px;
+  text-align: center;
+  position: relative;
+}
+
+.app-sidebar.icon-only .sidebar-nav-item:hover,
+.app-sidebar.icon-only .sidebar-nav-item.active {
+  transform: none !important;
+}
+
+/* Floating tooltip in rail mode */
+.app-sidebar.icon-only .sidebar-nav-item[title]:hover::after {
+  content: attr(title);
+  position: fixed;
+  left: 78px;
+  background: #1e1b4b;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 0.01em;
+  animation: railTooltipIn 0.15s ease-out;
+}
+
+@keyframes railTooltipIn {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.app-sidebar.icon-only .sidebar-nav-item .nav-text,
+.app-sidebar.icon-only .sidebar-nav-item .nav-trailing,
+.app-sidebar.icon-only .sidebar-nav-item .nav-count-badge,
+.app-sidebar.icon-only .sidebar-nav-item .nav-tag-shortcut,
+.app-sidebar.icon-only .sidebar-nav-item .nav-shift-badge,
+.app-sidebar.icon-only .sidebar-nav-item .nav-badge-new,
+.app-sidebar.icon-only .sidebar-chevron {
+  display: none !important;
+}
+
+.app-sidebar.icon-only .sidebar-nav-item .nav-icon {
+  margin: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-sidebar.icon-only .sidebar-nav-item .nav-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.app-sidebar.icon-only .sidebar-sub-items {
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+  border-left: none !important;
+  gap: 0.35rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app-sidebar.icon-only .sidebar-sub-items .sidebar-nav-item {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0 auto 0.25rem auto;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.app-sidebar.icon-only .sidebar-footer {
+  padding: 0.75rem 0 0.25rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-sidebar.icon-only .sidebar-user-card {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+}
+
+.app-sidebar.icon-only .sidebar-user-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 0.88rem;
+}
+
+.app-sidebar.icon-only .sidebar-user-meta {
+  display: none !important;
+}
+
+.app-sidebar.icon-only .sidebar-footer-buttons-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.app-sidebar.icon-only .sidebar-action-row-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  gap: 0;
+}
+
+.app-sidebar.icon-only .sidebar-action-row-btn .action-row-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-sidebar.icon-only .sidebar-action-row-btn span:last-child {
+  display: none !important;
+}
+
+/* Header Row & Toggle in normal expanded mode */
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 1.25rem;
+  width: 100%;
+}
+
+.sidebar-header-row .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  border-bottom: none;
+  margin-bottom: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .sidebar-top {
@@ -234,27 +520,49 @@ body {
 }
 
 .dropdown-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-  background: transparent;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9990 !important;
+  background: rgba(15, 23, 42, 0.25) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
 }
 
+/* Store Profile Dropdown Flyout - Floating Menu in both Full and Rail modes */
 .sidebar-dropdown-flyout {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  z-index: 120;
-  overflow: hidden;
-  animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  color: var(--text-main);
+  position: fixed !important;
+  top: 130px !important;
+  left: 16px !important;
+  width: 320px !important;
+  min-width: 300px !important;
+  max-width: min(340px, calc(100vw - 32px)) !important;
+  box-sizing: border-box !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  z-index: 9999 !important;
+  overflow: hidden !important;
+  animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  color: var(--text-main) !important;
+}
+
+/* In Icon-Only / Collapsed Sidebar: Pop out cleanly to the right of the 72px rail */
+.app-sidebar.icon-only .sidebar-dropdown-flyout,
+.app-sidebar.collapsed .sidebar-dropdown-flyout,
+.app-sidebar.is-collapsed .sidebar-dropdown-flyout {
+  position: fixed !important;
+  top: 72px !important;
+  left: 80px !important;
+  width: 330px !important;
+  min-width: 310px !important;
+  max-width: min(340px, calc(100vw - 92px)) !important;
+  animation: flyoutSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes flyoutSlideIn {
+  from { opacity: 0; transform: translateX(-8px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 /* Sidebar Navigation Items */
@@ -1298,11 +1606,88 @@ body {
 .top-global-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 1.5rem;
-  padding-bottom: 1.1rem;
-  margin-bottom: 1.25rem;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.95rem;
+  margin-bottom: 1.15rem;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/* Top Global Bar Left Controls */
+.top-global-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-sidebar-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 38px;
+  padding: 0 0.75rem;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-main);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.topbar-sidebar-toggle-btn:hover {
+  background: #f8fafc;
+  border-color: #6d4aff;
+  color: #6d4aff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.15);
+}
+
+.topbar-sidebar-toggle-btn:active {
+  transform: translateY(0);
+}
+
+.topbar-toggle-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-store-name {
+  font-weight: 800;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.topbar-breadcrumb-sep {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.topbar-current-page {
+  font-weight: 600;
+  color: #6d4aff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .top-global-search {
@@ -2522,6 +2907,12 @@ body {
 .sidebar-action-row-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
+}
+
+.sidebar-action-row-btn.active {
+  background: rgba(99, 102, 241, 0.28);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.4);
 }
 
 .sidebar-action-row-btn.signout {
@@ -6508,8 +6899,10 @@ body {
   font-size: 0.92rem;
   font-weight: 800;
   color: var(--text-main);
-  line-height: 1.25;
-  word-break: break-word;
+  line-height: 1.35;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
 }
 
 .store-profile-meta-grid {
@@ -11963,7 +12356,7 @@ body {
 /* ================= 2. MAIN BENTO GRID ================= */
 .bento-pos-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(360px, 0.95fr);
+  grid-template-columns: minmax(0, 1.48fr) minmax(360px, 400px);
   gap: 0.85rem;
   align-items: start;
   width: 100%;
@@ -11977,6 +12370,26 @@ body {
   }
 }
 
+.bento-main-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bento-side-col {
+  position: sticky;
+  top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Fallback backward-compatibility classes */
 .bento-left-col {
   display: flex;
   flex-direction: column;
@@ -11994,6 +12407,181 @@ body {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Find Product / No Barcode Action Button in Scanner Card */
+.bento-find-product-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.72rem 1rem;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border: 1.5px solid #c4b5fd;
+  border-radius: 10px;
+  color: #6d28d9;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(109, 40, 217, 0.08);
+  margin-top: 0.55rem;
+}
+
+.bento-find-product-btn:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border-color: #8b5cf6;
+  color: #5b21b6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.16);
+}
+
+/* Product Catalog Slide-In Flyout Drawer */
+.bento-catalog-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 1050;
+  display: flex;
+  justify-content: flex-end;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.bento-catalog-drawer {
+  width: 600px;
+  max-width: 95vw;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: -8px 0 32px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.bento-drawer-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1.5px solid #e2e8f0;
+  background: #fafbfc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.bento-drawer-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bento-drawer-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #ef4444;
+}
+
+.bento-drawer-search-bar {
+  padding: 0.85rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.bento-drawer-search-input {
+  flex: 1;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.bento-drawer-search-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.bento-drawer-cats {
+  padding: 0.6rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bento-drawer-cats::-webkit-scrollbar {
+  height: 4px;
+}
+
+.bento-drawer-cat-pill {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.bento-drawer-cat-pill:hover,
+.bento-drawer-cat-pill.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+}
+
+.bento-drawer-footer {
+  padding: 0.85rem 1.25rem;
+  background: #ffffff;
+  border-top: 1.5px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.05);
+}
+
+.bento-drawer-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.85rem;
+  align-content: start;
 }
 
 /* Common Bento Card Style */
@@ -13204,6 +13792,7 @@ body {
   border-color: #cbd5e1;
   width: 100%;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .bento-terminal-header {
@@ -13482,8 +14071,9 @@ body {
 .bento-cart-rows-scroll {
   display: flex;
   flex-direction: column;
-  max-height: 240px;
+  max-height: 220px;
   overflow-y: auto;
+  scroll-behavior: smooth;
   min-width: 0;
   box-sizing: border-box;
 }
@@ -13492,14 +14082,35 @@ body {
   display: grid;
   grid-template-columns: minmax(110px, 1.5fr) 70px 62px 82px 84px 24px;
   gap: 0.45rem;
-  padding: 0.55rem 0.75rem;
+  padding: 0.52rem 0.75rem;
   border-bottom: 1px solid #f1f5f9;
   border-left: 3.5px solid transparent;
   align-items: center;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-left-color 0.2s ease, border-color 0.15s ease;
   min-width: 0;
   box-sizing: border-box;
   cursor: pointer;
+}
+
+.bento-cart-row.just-added-highlight {
+  animation: justAddedPulse 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes justAddedPulse {
+  0% {
+    background-color: #dcfce7;
+    border-left: 4px solid #16a34a;
+    transform: translateY(-2px);
+  }
+  50% {
+    background-color: #f0fdf4;
+    border-left: 4px solid #22c55e;
+  }
+  100% {
+    background-color: transparent;
+    border-left: 4px solid transparent;
+    transform: translateY(0);
+  }
 }
 
 .bento-cart-row:hover {
@@ -13818,6 +14429,114 @@ body {
   color: #065f46;
 }
 
+
+/* Compact Customer & Member Status Chip in Billing Terminal */
+.bento-billing-customer-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.52rem 0.85rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 0.55rem;
+  flex-wrap: wrap;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.bento-billing-customer-chip:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.cust-chip-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+}
+
+.cust-chip-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.bento-billing-customer-chip:hover .cust-chip-icon {
+  transform: scale(1.15);
+}
+
+.cust-chip-label {
+  font-weight: 750;
+  color: #334155;
+  letter-spacing: -0.01em;
+}
+
+.chip-walkin-text {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.chip-phone {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.chip-pts-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-shadow: 0 1px 3px rgba(134, 25, 143, 0.08);
+}
+
+.chip-discount-tag {
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.cust-chip-focus-btn {
+  background: #ffffff;
+  border: 1.5px solid #c7d2fe;
+  color: #4338ca;
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.76rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cust-chip-focus-btn:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
+}
+
+.cust-chip-focus-btn:active {
+  transform: scale(0.97);
+}
+
 /* Payment Tender Modes */
 .bento-payment-modes {
   display: grid;
@@ -13870,14 +14589,23 @@ body {
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
 }
 
-/* Checkout Row */
+/* Checkout Row - sticky pinned at bottom so Grand Total & Bill Button are ALWAYS visible */
 .bento-checkout-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding-top: 0.25rem;
+  padding: 0.65rem 0.85rem;
   box-sizing: border-box;
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  z-index: 20;
+  margin: 0.2rem -1rem -0.75rem -1rem;
+  border-top: 1.5px solid #e2e8f0;
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .bento-grand-total {
@@ -20786,11 +21514,11 @@ select.expense-input-control {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 0.6rem 0.85rem;
-  margin-bottom: 0.75rem;
+  padding: 0.42rem 0.65rem;
+  margin-bottom: 0.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.25rem;
 }
 
 .counter-mobile-head {
@@ -24691,6 +25419,212 @@ select.expense-input-control {
 }
 
 /* ==========================================================================
+   GLOBAL APP SHELL RESPONSIVE & ADAPTIVE LAYOUT SYSTEM
+   ========================================================================== */
+
+/* Mobile Sidebar Backdrop */
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 998;
+  animation: fadeInBackdrop 0.2s ease-out;
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Tablet & Mobile Screens (<= 900px) */
+@media (max-width: 900px) {
+  .app-container {
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.26s ease !important;
+    box-shadow: none !important;
+  }
+
+  .app-sidebar.mobile-open {
+    transform: translateX(0) !important;
+    box-shadow: 12px 0 36px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  /* When on mobile drawer, display full readable navigation even if collapsed class exists */
+  .app-sidebar.mobile-open.icon-only {
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-brand-text,
+  .app-sidebar.mobile-open.icon-only .sidebar-store-info,
+  .app-sidebar.mobile-open.icon-only .sidebar-store-badge,
+  .app-sidebar.mobile-open.icon-only .sidebar-section-label,
+  .app-sidebar.mobile-open.icon-only .nav-text,
+  .app-sidebar.mobile-open.icon-only .nav-trailing,
+  .app-sidebar.mobile-open.icon-only .nav-count-badge,
+  .app-sidebar.mobile-open.icon-only .nav-tag-shortcut,
+  .app-sidebar.mobile-open.icon-only .nav-shift-badge,
+  .app-sidebar.mobile-open.icon-only .sidebar-chevron,
+  .app-sidebar.mobile-open.icon-only .sidebar-user-meta,
+  .app-sidebar.mobile-open.icon-only .sidebar-action-row-btn span:last-child {
+    display: inline-block !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-header-row {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-nav-item {
+    width: 100% !important;
+    height: auto !important;
+    padding: 0.65rem 0.85rem !important;
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  .app-sidebar.mobile-open.icon-only .sidebar-store-btn {
+    width: 100% !important;
+    height: auto !important;
+    padding: 0.6rem 0.75rem !important;
+    justify-content: flex-start !important;
+  }
+
+  .main-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.85rem 0.85rem 2rem !important;
+  }
+
+  .bento-pos-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bento-side-col {
+    position: static !important;
+  }
+}
+
+/* Small Tablets and Mobile Screens (<= 640px) */
+@media (max-width: 640px) {
+  .top-global-bar {
+    gap: 0.65rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .topbar-breadcrumb {
+    font-size: 0.78rem;
+  }
+
+  .topbar-store-name {
+    max-width: 110px;
+  }
+
+  .topbar-current-page {
+    max-width: 120px;
+  }
+
+  .top-user-details {
+    display: none !important;
+  }
+
+  .top-user-chip {
+    padding: 0.25rem 0.35rem !important;
+  }
+
+  .bento-top-bar {
+    padding: 0.5rem 0.65rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .bento-badge-sub {
+    display: none;
+  }
+
+  .bento-pos-badge {
+    gap: 0.45rem;
+  }
+
+  .bento-badge-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+
+  .bento-badge-title {
+    font-size: 0.88rem;
+  }
+
+  .card {
+    padding: 0.85rem !important;
+    overflow-x: auto;
+  }
+
+  .data-table {
+    min-width: 550px;
+  }
+
+  .modal-content {
+    max-width: 96vw !important;
+    margin: 0.5rem !important;
+    max-height: 94vh !important;
+  }
+}
+
+/* Small Mobile Screens (<= 520px) */
+@media (max-width: 520px) {
+  .bento-cart-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bento-cart-table-header,
+  .bento-cart-row {
+    min-width: 420px;
+  }
+}
+
+/* Extra Small Phones (<= 420px) */
+@media (max-width: 420px) {
+  .main-content {
+    padding: 0.5rem 0.5rem 1.5rem !important;
+  }
+
+  .topbar-toggle-text {
+    display: none;
+  }
+
+  .topbar-breadcrumb-sep,
+  .topbar-store-name {
+    display: none;
+  }
+
+  .topbar-current-page {
+    max-width: 140px;
+    font-size: 0.8rem;
+  }
+}
+
+/* ==========================================================================
    CASHIER POS KEYBOARD SHORTCUTS STYLING
    ========================================================================== */
 .pos-quick-shortcuts-strip {
@@ -25766,4 +26700,893 @@ select.expense-input-control {
     grid-template-columns: 1fr;
   }
 
+}
+
+
+/* ==========================================================================
+   ENHANCED POS TYPOGRAPHY CLARITY, VIBRANT ANIMATIONS & RESPONSIVE PERFECTION
+   ========================================================================== */
+
+/* Enhanced Font Smoothing & High-Contrast Typography */
+.bento-pos-root {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.bento-pos-root .mono,
+.grand-total-val,
+.summary-val,
+.pricing-store-val,
+.dock-metric-val,
+.tile-stepper-qty {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
+
+.bento-card-title {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.015em !important;
+}
+
+.bento-card-subtitle {
+  color: #64748b !important;
+  font-weight: 600 !important;
+}
+
+.grand-total-val {
+  font-size: 1.65rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.025em !important;
+}
+
+/* Animations: Gentle Floating Cart in Empty State */
+@keyframes bentoFloatCart {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(-1.5deg);
+  }
+}
+
+.bento-empty-icon-wrap svg {
+  animation: bentoFloatCart 3.5s ease-in-out infinite;
+  display: inline-block;
+  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2));
+}
+
+/* Animations: Expanding Radar Ring for Live Pulse Dots */
+@keyframes liveRadarGlow {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.dock-status-dot.online,
+.bento-pulse-dot.green {
+  animation: liveRadarGlow 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+/* Animations: Button Shimmer & Glowing Checkout Button */
+@keyframes bentoShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.bento-checkout-btn:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #6366f1, #3b82f6, #4f46e5) !important;
+  background-size: 260% 260% !important;
+  animation: bentoShimmer 6s ease infinite;
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.bento-checkout-btn:not(:disabled):hover {
+  transform: translateY(-2px) scale(1.015) !important;
+  box-shadow: 0 8px 25px rgba(79, 70, 229, 0.45) !important;
+}
+
+.bento-checkout-btn:active {
+  transform: scale(0.98) !important;
+}
+
+/* Animations: Payment Tender Mode Buttons with Tactile Elevation */
+.bento-pay-mode-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+}
+
+.bento-pay-mode-btn:hover {
+  border-color: #6366f1 !important;
+  color: #4f46e5 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.16) !important;
+}
+
+.bento-pay-mode-btn.active {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+  border-color: #4338ca !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+.bento-pay-mode-btn:active {
+  transform: scale(0.97) !important;
+}
+
+/* Animations: Bottom Dock Buttons Micro-interactions */
+.dock-action-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-weight: 700 !important;
+}
+
+.dock-action-btn:hover {
+  transform: translateY(-1.5px) !important;
+  border-color: #6366f1 !important;
+  color: #4f46e5 !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.14) !important;
+}
+
+.dock-action-btn:active {
+  transform: scale(0.97) !important;
+}
+
+/* Animations: Card Lift and Depth */
+.bento-card {
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease !important;
+}
+
+.bento-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 6px 20px -3px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* ================= RESPONSIVE BEHAVIOR FOR ALL SCREENS ================= */
+
+/* 1. Large Displays (>= 1440px) */
+@media (min-width: 1440px) {
+  .bento-pos-grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(370px, 420px) !important;
+    gap: 1.15rem !important;
+  }
+}
+
+/* 2. Standard Laptops (1100px to 1439px) */
+@media (min-width: 1100px) and (max-width: 1439px) {
+  .bento-pos-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(340px, 380px) !important;
+    gap: 0.9rem !important;
+  }
+}
+
+/* 3. Tablets Landscape & Medium Screens (769px to 1099px) */
+@media (max-width: 1099px) {
+  .bento-pos-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .bento-side-col {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  .bento-payment-modes {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+
+  .pos-dock-actions {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+}
+
+/* 4. Mobile & Portrait Tablets (<= 768px) */
+@media (max-width: 768px) {
+  .bento-pos-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bento-side-col {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .bento-top-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+
+  .bento-top-right {
+    justify-content: space-between !important;
+    width: 100% !important;
+  }
+
+  .bento-payment-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.4rem !important;
+  }
+
+  .bento-checkout-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .bento-checkout-actions {
+    width: 100% !important;
+  }
+
+  .bento-checkout-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.8rem !important;
+  }
+
+  .bento-pos-dock {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.85rem !important;
+  }
+
+  .pos-dock-status {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .pos-dock-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+  }
+
+  .dock-action-btn {
+    justify-content: center !important;
+  }
+}
+
+/* ==========================================================================
+   MASTER POS REDESIGN: LARGE HIGH-CONTRAST FONTS, ZERO-OVERLAP MEMBER CARDS,
+   FLUID ALL-SCREEN RESPONSIVENESS & TACTILE LUXURY ANIMATIONS
+   ========================================================================== */
+
+/* 1. Selected Member Card (Replaces the raw pill inside input with zero overlap) */
+.bento-selected-member-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #86efac;
+  border-radius: 12px;
+  animation: memberGlow 3.5s ease-in-out infinite;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@keyframes memberGlow {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12), 0 0 0 1px #86efac;
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25), 0 0 0 2px #22c55e;
+  }
+}
+
+.selected-member-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.selected-member-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.35);
+}
+
+.selected-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.selected-member-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.selected-member-name {
+  font-size: 1.05rem;
+  font-weight: 850;
+  color: #064e3b;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-member-badge {
+  background: #059669;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.selected-member-phone {
+  font-size: 0.88rem;
+  font-weight: 750;
+  color: #047857;
+}
+
+.selected-member-change-btn {
+  background: #ffffff;
+  border: 1.5px solid #a7f3d0;
+  color: #047857;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.12);
+  flex-shrink: 0;
+}
+
+.selected-member-change-btn:hover {
+  background: #059669;
+  border-color: #059669;
+  color: #ffffff;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.selected-member-change-btn:active {
+  transform: scale(0.96);
+}
+
+/* 2. Customer Card Header Polish (Scheme & Add Customer Buttons) */
+.bento-loyalty-scheme-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  padding: 0.42rem 0.75rem !important;
+  border-radius: 8px !important;
+}
+
+.bento-loyalty-scheme-btn:hover {
+  background: #f3e8ff !important;
+  border-color: #c084fc !important;
+  color: #581c87 !important;
+  transform: translateY(-1.5px);
+  box-shadow: 0 3px 10px rgba(192, 132, 252, 0.25);
+}
+
+.bento-add-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  padding: 0.42rem 0.75rem !important;
+  border-radius: 8px !important;
+}
+
+.bento-add-btn:hover {
+  transform: translateY(-1.5px);
+}
+
+/* 3. Member Details & Loyalty Points in Side Panel - BIG, CRISP & VIBRANT */
+.loyalty-card-head {
+  padding: 0.25rem 0;
+}
+
+.loyalty-phone-box {
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+}
+
+.loyalty-pts-pill {
+  padding: 0.35rem 0.75rem !important;
+  font-size: 0.95rem !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+  border: 1.5px solid #fcd34d !important;
+  color: #92400e !important;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.15) !important;
+}
+
+.loyalty-pts-pill .pts-count {
+  font-size: 1.05rem !important;
+  font-weight: 900 !important;
+  color: #b45309 !important;
+}
+
+.loyalty-pts-pill .pts-label {
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+}
+
+.loyalty-pts-pill .pts-val-bracket {
+  font-size: 0.86rem !important;
+  font-weight: 850 !important;
+  color: #047857 !important;
+}
+
+.pos-redeem-points-btn {
+  padding: 0.75rem 1rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 850 !important;
+  border-radius: 10px !important;
+  border-width: 2px !important;
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.2) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.pos-redeem-points-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35) !important;
+}
+
+.redeem-save-badge {
+  font-size: 0.86rem !important;
+  font-weight: 850 !important;
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 6px !important;
+}
+
+.loyalty-earn-notice {
+  font-size: 0.9rem !important;
+  font-weight: 750 !important;
+  padding: 0.65rem 0.95rem !important;
+  border-radius: 10px !important;
+  line-height: 1.45 !important;
+}
+
+/* 4. Cart Table: High-Contrast, Large Typography, Touch Steppers */
+.bento-cart-table-header {
+  font-size: 0.84rem !important;
+  font-weight: 850 !important;
+  color: #1e293b !important;
+  letter-spacing: 0.04em !important;
+  padding: 0.7rem 0.85rem !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+.bento-cart-row {
+  padding: 0.7rem 0.85rem !important;
+  align-items: center !important;
+  transition: background 0.18s ease, transform 0.18s ease !important;
+}
+
+.bento-cart-row:hover {
+  background: #f8fafc !important;
+}
+
+.bento-cart-item-name {
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  line-height: 1.35 !important;
+}
+
+.bento-cart-cat-badge {
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+  padding: 0.15rem 0.45rem !important;
+  border-radius: 5px !important;
+}
+
+.bento-cart-savings-tag {
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+  padding: 0.15rem 0.45rem !important;
+  border-radius: 5px !important;
+}
+
+.bento-qty-stepper {
+  border-radius: 8px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+.bento-qty-btn {
+  width: 30px !important;
+  height: 30px !important;
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+  transition: all 0.12s ease !important;
+}
+
+.bento-qty-btn:hover {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+}
+
+.bento-qty-btn:active {
+  transform: scale(0.88) !important;
+}
+
+.bento-qty-value {
+  min-width: 30px !important;
+  font-size: 1.05rem !important;
+  font-weight: 850 !important;
+  color: #0f172a !important;
+}
+
+.bento-mrp-val {
+  font-size: 0.94rem !important;
+  font-weight: 650 !important;
+  color: #64748b !important;
+}
+
+.bento-store-val {
+  font-size: 1.02rem !important;
+  font-weight: 850 !important;
+  color: #4338ca !important;
+}
+
+.bento-total-val {
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+}
+
+.bento-row-remove-btn {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.bento-row-remove-btn:hover {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  transform: scale(1.15) !important;
+}
+
+/* 5. Summary Box & Discounts - PROMINENT & CLEAR */
+.discount-label {
+  font-size: 0.88rem !important;
+  font-weight: 800 !important;
+  color: #1e293b !important;
+}
+
+.bento-disc-pill {
+  padding: 0.32rem 0.75rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 850 !important;
+  border-radius: 7px !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.bento-disc-pill:hover {
+  transform: translateY(-1.5px) !important;
+  border-color: #6366f1 !important;
+}
+
+.bento-summary-row {
+  font-size: 0.94rem !important;
+  font-weight: 650 !important;
+  color: #334155 !important;
+  padding: 0.22rem 0 !important;
+}
+
+.summary-val {
+  font-size: 1.08rem !important;
+  font-weight: 850 !important;
+  color: #0f172a !important;
+}
+
+.bento-summary-row.discount-row {
+  font-size: 0.96rem !important;
+  font-weight: 800 !important;
+  color: #059669 !important;
+}
+
+.bento-summary-row.tax-row {
+  padding: 0.6rem 0.85rem !important;
+  border-radius: 9px !important;
+}
+
+.tax-label-group {
+  font-size: 0.92rem !important;
+  font-weight: 800 !important;
+}
+
+.tax-sub-breakdown {
+  font-size: 0.82rem !important;
+  font-weight: 650 !important;
+  color: #475569 !important;
+}
+
+.tax-val {
+  font-size: 1.1rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+}
+
+.bento-savings-alert {
+  padding: 0.6rem 0.95rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
+  border-radius: 9px !important;
+}
+
+/* 6. Customer Status Chip Banner Above Payments */
+.bento-billing-customer-chip {
+  padding: 0.7rem 1.15rem !important;
+  border-radius: 12px !important;
+}
+
+.cust-chip-label {
+  font-size: 0.95rem !important;
+  font-weight: 850 !important;
+}
+
+.chip-walkin-text {
+  font-size: 1.02rem !important;
+  font-weight: 850 !important;
+  color: #0f172a !important;
+}
+
+.chip-phone {
+  font-size: 0.9rem !important;
+  font-weight: 750 !important;
+  color: #475569 !important;
+}
+
+.chip-pts-badge {
+  font-size: 0.88rem !important;
+  font-weight: 850 !important;
+  padding: 0.25rem 0.75rem !important;
+}
+
+.cust-chip-focus-btn {
+  font-size: 0.88rem !important;
+  font-weight: 800 !important;
+  padding: 0.45rem 0.95rem !important;
+}
+
+/* 7. Payment Tender Buttons - LARGE, TOUCH-FRIENDLY & EYE-CATCHING */
+.bento-payment-modes {
+  gap: 0.5rem !important;
+}
+
+.bento-pay-mode-btn {
+  padding: 0.75rem 0.65rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 850 !important;
+  border-radius: 10px !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+.bento-pay-mode-btn .pay-mode-svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* 8. Cash Tender Assistant - PROMINENT NUMERALS */
+.bento-cash-tender-card {
+  padding: 0.85rem 1.15rem !important;
+  border-radius: 12px !important;
+}
+
+.bento-cash-tender-card label {
+  font-size: 0.85rem !important;
+  font-weight: 850 !important;
+  color: #334155 !important;
+}
+
+.bento-cash-input {
+  font-size: 1.6rem !important;
+  font-weight: 900 !important;
+  height: 52px !important;
+  padding: 0.5rem 0.9rem !important;
+  border-radius: 10px !important;
+  color: #0f172a !important;
+}
+
+.tender-quick-btn {
+  font-size: 0.95rem !important;
+  font-weight: 850 !important;
+  padding: 0.4rem 0.95rem !important;
+  border-radius: 8px !important;
+}
+
+.change-due-val {
+  font-size: 1.5rem !important;
+  font-weight: 950 !important;
+  color: #059669 !important;
+}
+
+/* 9. Grand Total & Checkout Bar - MASSIVE CLARITY */
+.bento-checkout-row {
+  padding: 0.9rem 1.25rem !important;
+}
+
+.grand-total-label {
+  font-size: 0.85rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.05em !important;
+}
+
+.grand-total-val {
+  font-size: 2.1rem !important;
+  font-weight: 950 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.03em !important;
+}
+
+.bento-checkout-btn {
+  font-size: 1.1rem !important;
+  font-weight: 850 !important;
+  padding: 0.95rem 1.85rem !important;
+  border-radius: 12px !important;
+}
+
+/* 10. Barcode Scanner Card Font Upgrades */
+.bento-scanner-card .bento-card-title {
+  font-size: 1.05rem !important;
+  font-weight: 850 !important;
+}
+
+.bento-scanner-card .bento-badge-ready {
+  font-size: 0.84rem !important;
+  font-weight: 800 !important;
+}
+
+.bento-scanner-input {
+  font-size: 1rem !important;
+  font-weight: 750 !important;
+  padding: 0.75rem 1rem !important;
+  height: 48px !important;
+  border-radius: 10px !important;
+}
+
+.bento-scanner-btn {
+  font-size: 0.92rem !important;
+  font-weight: 850 !important;
+  padding: 0.72rem 1rem !important;
+  border-radius: 10px !important;
+}
+
+.bento-find-product-btn {
+  font-size: 0.98rem !important;
+  font-weight: 850 !important;
+  padding: 0.85rem 1.15rem !important;
+  border-radius: 11px !important;
+}
+
+/* 11. Bottom POS Dock Font Upgrades */
+.dock-status-title {
+  font-size: 0.94rem !important;
+  font-weight: 850 !important;
+}
+
+.dock-status-sub {
+  font-size: 0.82rem !important;
+  font-weight: 650 !important;
+}
+
+.dock-metric-label {
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+}
+
+.dock-metric-val {
+  font-size: 1.25rem !important;
+  font-weight: 950 !important;
+}
+
+.dock-action-btn {
+  font-size: 0.92rem !important;
+  font-weight: 850 !important;
+  padding: 0.65rem 1.15rem !important;
+  border-radius: 10px !important;
+}
+
+/* 12. Fluid Responsive Layout Grid & Smooth Viewport Adaptability */
+.bento-pos-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.52fr) minmax(360px, 420px) !important;
+  gap: 1.15rem !important;
+  align-items: start !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.bento-cart-rows-scroll {
+  max-height: clamp(180px, 32vh, 420px) !important;
+  overflow-y: auto !important;
+}
+
+@media (max-width: 1320px) {
+  .bento-pos-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(340px, 390px) !important;
+    gap: 0.85rem !important;
+  }
+  .bento-payment-modes {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .bento-pos-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  .bento-side-col {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+    gap: 1rem !important;
+  }
+  .bento-payment-modes {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .bento-cart-table-wrapper {
+    overflow-x: auto !important;
+  }
+  .bento-cart-table-header,
+  .bento-cart-row {
+    min-width: 520px !important;
+  }
+  .bento-payment-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }

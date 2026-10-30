@@ -22,9 +22,13 @@ export interface AuditEntry {
 export async function audit(q: Queryable, ctx: Pick<Ctx, 'user' | 'requestId'>, e: AuditEntry): Promise<void> {
   const tenantId = e.tenantId ?? ctx.user?.tenantId;
   if (!tenantId) return;
-  await q.exec(
-    `INSERT INTO audit_log (id, tenant_id, user_id, user_name, action, entity, entity_id, detail, reason, correlation_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)`,
-    [newId('a'), tenantId, e.userId ?? ctx.user?.id ?? null, e.userName ?? ctx.user?.name ?? null, e.action, e.entity ?? null, e.entityId ?? null, j(e.detail ?? {}), e.reason ?? null, ctx.requestId],
-  );
+  try {
+    await q.exec(
+      `INSERT INTO audit_log (id, tenant_id, user_id, user_name, action, entity, entity_id, detail, reason, correlation_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)`,
+      [newId('a'), tenantId, e.userId ?? ctx.user?.id ?? null, e.userName ?? ctx.user?.name ?? null, e.action, e.entity ?? null, e.entityId ?? null, j(e.detail ?? {}), e.reason ?? null, ctx.requestId],
+    );
+  } catch (err) {
+    console.warn('[audit] non-fatal audit log write failed:', err);
+  }
 }

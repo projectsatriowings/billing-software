@@ -75,8 +75,10 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
     const g = V.optStr(body.gstin, 'GSTIN', 20);
     if (g) {
       const gs = g.toUpperCase().replace(/\s/g, '');
-      const r = validateGstin(gs);
-      if (!r.ok) throw bad(`GSTIN is not valid: ${r.reason ?? 'please check it'}`, 'VALIDATION', { field: 'GSTIN' });
+      if (gs !== cur.gstin) {
+        const r = validateGstin(gs);
+        if (!r.ok) throw bad(`GSTIN is not valid: ${r.reason ?? 'please check it'}`, 'VALIDATION', { field: 'GSTIN' });
+      }
       out.gstin = gs;
     } else out.gstin = null;
   }

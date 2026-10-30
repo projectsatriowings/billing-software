@@ -30,7 +30,7 @@ export const PERMS = {
   assistant: ['owner', 'manager'],
   audit: ['owner', 'manager', 'accountant'],
   users: ['owner'],
-  settings: ['owner'],
+  settings: ['owner', 'manager'],
   backup: ['owner'],
   plan: ['owner'],
   support: ALL,
