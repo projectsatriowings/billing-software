@@ -447,4 +447,20 @@ export function registerBranches(r: Router) {
       })),
     };
   });
+
+  // Permanently delete branch & reclaim DB storage
+  r.delete('/api/branches/:id', requirePerm('settings'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const branch = await ctx.db.one('SELECT * FROM branches WHERE (id = ? OR code = ?) AND tenant_id = ?', [ctx.params.id, ctx.params.id, tenantId]);
+    if (!branch) throw notFound('Branch');
+    if (branch.code === 'MAIN') throw bad('Cannot delete Central Main Branch (MAIN)', 'MAIN_PROTECTED');
+
+    await ctx.db.tx(async (q) => {
+      await q.exec('DELETE FROM branch_inventory WHERE branch_id = ? AND tenant_id = ?', [branch.id, tenantId]);
+      await q.exec('DELETE FROM branches WHERE id = ? AND tenant_id = ?', [branch.id, tenantId]);
+      await audit(q, ctx, { action: 'branch.delete', entity: 'branch', entityId: branch.id, detail: { name: branch.name, code: branch.code } });
+    });
+
+    return { ok: true, deleted: branch.id };
+  });
 }

@@ -30,7 +30,7 @@ export const PERMS = {
   assistant: ['owner', 'manager'],
   audit: ['owner', 'manager', 'accountant'],
   users: ['owner'],
-  settings: ['owner'],
+  settings: ['owner', 'manager'],
   backup: ['owner'],
   plan: ['owner'],
   support: ALL,
@@ -991,6 +991,29 @@ export interface CashierSummaryStrip {
   billsOnCreditMinor: number;
 }
 
+export interface ProductPerformanceItem {
+  id?: string;
+  name: string;
+  unitsSold: number;
+  revenueMinor: number;
+  profitMinor?: number;
+  category?: string;
+  trendPct?: number;
+}
+
+export interface ProductPerformanceGroup {
+  groupTitle: string;
+  totalMetric: string;
+  trendPct: number;
+  items: ProductPerformanceItem[];
+}
+
+export interface SalesAnalysisProductBreakdown {
+  byRevenue: ProductPerformanceGroup;
+  byVolume: ProductPerformanceGroup;
+  byProfit: ProductPerformanceGroup;
+}
+
 export interface SalesAnalysisData {
   filters: {
     from: string;
@@ -1032,4 +1055,83 @@ export interface SalesAnalysisData {
     rows: CashierPerformanceRow[];
     summaryStrip: CashierSummaryStrip;
   } | null;
+  topProducts?: SalesAnalysisProductBreakdown;
+}
+
+
+// ---------------------------------------------------------------------------
+// Card Terminals & Universal Payment Engine Types
+// ---------------------------------------------------------------------------
+
+export const TERMINAL_PROVIDERS = ['paytm', 'pinelabs', 'hdfc', 'icici', 'verifone', 'standalone', 'mock'] as const;
+export type TerminalProvider = (typeof TERMINAL_PROVIDERS)[number];
+
+export const TERMINAL_CONNECTION_MODES = ['integrated', 'standalone'] as const;
+export type TerminalConnectionMode = (typeof TERMINAL_CONNECTION_MODES)[number];
+
+export const TERMINAL_STATUSES = ['online', 'offline', 'busy', 'error'] as const;
+export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
+
+export const TERMINAL_TX_STATUSES = ['pending', 'processing', 'success', 'failed', 'cancelled', 'timeout', 'refunded'] as const;
+export type TerminalTxStatus = (typeof TERMINAL_TX_STATUSES)[number];
+
+export const CARD_NETWORKS = ['VISA', 'MASTERCARD', 'RUPAY', 'AMEX', 'OTHER'] as const;
+export type CardNetwork = (typeof CARD_NETWORKS)[number];
+
+export interface CardTerminal {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  branchName?: string;
+  counter?: string | null;
+  name: string;
+  provider: TerminalProvider;
+  model?: string | null;
+  serialNumber?: string | null;
+  terminalId?: string | null;
+  merchantId?: string | null;
+  connectionMode: TerminalConnectionMode;
+  ipAddress?: string | null;
+  port?: number | null;
+  apiEndpoint?: string | null;
+  hasAuthToken?: boolean;
+  hasSecretKey?: boolean;
+  active: boolean;
+  status: TerminalStatus;
+  lastSeenAt?: string | null;
+  config?: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TerminalTransaction {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  branchName?: string;
+  terminalId: string;
+  terminalName?: string;
+  invoiceId?: string | null;
+  counter?: string | null;
+  amountMinor: number;
+  currency: string;
+  provider: TerminalProvider;
+  connectionMode: TerminalConnectionMode;
+  providerTxId?: string | null;
+  providerRefNo?: string | null;
+  cardNetwork?: CardNetwork | null;
+  cardLast4?: string | null;
+  authCode?: string | null;
+  status: TerminalTxStatus;
+  errorReason?: string | null;
+  idempotencyKey?: string | null;
+  cashierId: string;
+  cashierName?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: 'api' | 'cashier_manual' | 'webhook' | null;
+  reconciled: boolean;
+  reconciledAt?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
 }

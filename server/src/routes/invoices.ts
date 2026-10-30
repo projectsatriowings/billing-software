@@ -379,23 +379,33 @@ export function registerInvoices(r: Router) {
       }
       const balanceMinor = Math.max(0, calculated.totalMinor - totalPaidMinor);
 
+      // Check for active cashier shift
+      const activeShift = await q.one<{ id: string }>(
+        "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
+        [tenantId, ctx.user!.id],
+      );
+
       // 3. Insert invoice
       if (tenderData) {
         tenderData.changeReturnedMinor = Math.max(0, tenderData.cashReceivedMinor - calculated.totalMinor);
       }
 
+      const paymentStatus = balanceMinor === 0 ? 'paid' : (totalPaidMinor > 0 ? 'partial' : 'unpaid');
+
       await q.exec(
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
-          customer_name, customer_phone, place_state, intra,
-          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
-          paid_minor, balance_minor, rule_version, calc, share_token, created_by, location, counter, custom,
+          customer_name, customer_phone, party_name, party_phone, place_state, intra,
+          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
+          round_off_minor, rounding_minor, total_minor,
+          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom,
           applied_promotions, promotion_discount_minor
         ) VALUES (
           ?, ?, ?, ?, 'sale', 'posted', ?, ?,
-          ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb,
           ?::jsonb, ?
         )`,
         [
@@ -407,6 +417,8 @@ export function registerInvoices(r: Router) {
           partyId || null,
           customerName || null,
           customerPhone || null,
+          customerName || null,
+          customerPhone || null,
           b.placeState || '33',
           isIntra,
           calculated.subtotalMinor,
@@ -416,14 +428,17 @@ export function registerInvoices(r: Router) {
           calculated.sgstMinor,
           calculated.igstMinor,
           calculated.roundOffMinor,
+          calculated.roundOffMinor,
           calculated.totalMinor,
           totalPaidMinor,
           balanceMinor,
+          paymentStatus,
           j(calculated),
           shareToken,
           ctx.user!.id,
           location,
           counter,
+          activeShift?.id || null,
           j(tenderData ? { tender: tenderData } : {}),
           j(appliedPromotionsInput),
           promotionDiscountMinor,
@@ -503,22 +518,20 @@ export function registerInvoices(r: Router) {
           ],
         );
 
-        // Deduct inventory at the sale's branch location
+        // Deduct inventory at the sale's branch location (verifying item exists to prevent foreign key errors)
         if (item.itemId) {
-          await q.exec(
-            `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
-             VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
-            [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
-          );
+          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? LIMIT 1', [item.itemId, tenantId]);
+          if (itemExists) {
+            await q.exec(
+              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
+               VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
+              [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
+            );
+          }
         }
       }
 
       // 5. Insert payments
-      const activeShift = await q.one<{ id: string }>(
-        "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
-        [tenantId, ctx.user!.id],
-      );
-
       for (const p of paymentsInput) {
         const amt = V.int(p.amountMinor, 'Payment amount', { min: 1 });
         const rawMethod = (p.method ?? p.mode ?? 'cash').toLowerCase();
@@ -544,6 +557,18 @@ export function registerInvoices(r: Router) {
            VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, counter],
         );
+
+        if (method === 'card' && p.reference) {
+          const rrnMatch = p.reference.match(/RRN:([^\s|]+)/i);
+          if (rrnMatch && rrnMatch[1]) {
+            await q.exec(
+              `UPDATE terminal_transactions
+               SET invoice_id = ?
+               WHERE tenant_id = ? AND (provider_ref_no = ? OR provider_tx_id = ?) AND invoice_id IS NULL`,
+              [invoiceId, tenantId, rrnMatch[1], rrnMatch[1]],
+            );
+          }
+        }
       }
 
       // 6. Customer loyalty points calculation & update based on shop's custom rule
@@ -627,7 +652,14 @@ export function registerInvoices(r: Router) {
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [inv.tenantId ?? inv.tenant_id]);
     if (!shop) throw notFound('Shop');
 
-    const lines = await ctx.db.query('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY pos ASC', [inv.id]);
+    const lines = await ctx.db.query(
+      `SELECT il.*, it.custom AS item_custom
+       FROM invoice_lines il
+       LEFT JOIN items it ON it.id = il.item_id
+       WHERE il.invoice_id = ?
+       ORDER BY il.pos ASC`,
+      [inv.id],
+    );
     const payments = await ctx.db.query('SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC', [inv.id]);
 
     const paper = (ctx.query.paper === 'a4' || ctx.query.paper === 'thermal58') ? ctx.query.paper : 'thermal80';
@@ -666,22 +698,48 @@ export function registerInvoices(r: Router) {
         phone: shop.phone,
         gstin: shop.gstin,
         upiId: shop.upiId ?? shop.upi_id,
+        logoUrl: shop.logoUrl ?? shop.logo_url ?? null,
       },
       customer: custName ? { name: custName, phone: custPhone } : null,
-      lines: lines.map((l: any) => ({
-        name: l.name,
-        hsn: l.hsn,
-        unit: l.unit,
-        qtyMilli: Number(l.qtyMilli ?? l.qty_milli),
-        priceMinor: Number(l.priceMinor ?? l.price_minor),
-        discountMinor: Number(l.discountMinor ?? l.discount_minor),
-        taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
-        taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
-        cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
-        sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
-        igstMinor: Number(l.igstMinor ?? l.igst_minor),
-        totalMinor: Number(l.totalMinor ?? l.total_minor),
-      })),
+      lines: lines.map((l: any) => {
+        let mrpMinor = 0;
+        try {
+          const itemCustom = typeof l.itemCustom === 'string' ? JSON.parse(l.itemCustom) : (l.itemCustom || {});
+          if (typeof itemCustom.mrpMinor === 'number' && itemCustom.mrpMinor > 0) {
+            mrpMinor = itemCustom.mrpMinor;
+          } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
+            mrpMinor = itemCustom.mrp_minor;
+          }
+        } catch {}
+
+        const priceMinor = Number(l.priceMinor ?? l.price_minor);
+        const discountMinor = Number(l.discountMinor ?? l.discount_minor);
+        const qtyMilli = Number(l.qtyMilli ?? l.qty_milli);
+        const discountPerUnit = qtyMilli > 0 ? Math.round((discountMinor * 1000) / qtyMilli) : 0;
+        if (!mrpMinor || mrpMinor <= priceMinor) {
+          if (discountPerUnit > 0) {
+            mrpMinor = priceMinor + discountPerUnit;
+          } else {
+            mrpMinor = Math.max(priceMinor, Math.ceil((priceMinor * 1.15) / 100) * 100);
+          }
+        }
+
+        return {
+          name: l.name,
+          hsn: l.hsn,
+          unit: l.unit,
+          qtyMilli,
+          priceMinor,
+          mrpMinor,
+          discountMinor,
+          taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
+          taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
+          cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
+          sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
+          igstMinor: Number(l.igstMinor ?? l.igst_minor),
+          totalMinor: Number(l.totalMinor ?? l.total_minor),
+        };
+      }),
       totals: {
         subtotalMinor: Number(inv.subtotalMinor ?? inv.subtotal_minor),
         discountMinor: Number(inv.discountMinor ?? inv.discount_minor),
@@ -782,7 +840,14 @@ export function registerInvoices(r: Router) {
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [inv.tenantId ?? inv.tenant_id]);
     if (!shop) throw notFound('Shop');
 
-    const lines = await ctx.db.query('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY pos ASC', [inv.id]);
+    const lines = await ctx.db.query(
+      `SELECT il.*, it.custom AS item_custom
+       FROM invoice_lines il
+       LEFT JOIN items it ON it.id = il.item_id
+       WHERE il.invoice_id = ?
+       ORDER BY il.pos ASC`,
+      [inv.id],
+    );
     const payments = await ctx.db.query('SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC', [inv.id]);
 
     const custName = inv.customerName ?? inv.customer_name;
@@ -801,22 +866,48 @@ export function registerInvoices(r: Router) {
         phone: shop.phone,
         gstin: shop.gstin,
         upiId: shop.upiId ?? shop.upi_id,
+        logoUrl: shop.logoUrl ?? shop.logo_url ?? null,
       },
       customer: custName ? { name: custName, phone: custPhone } : null,
-      lines: lines.map((l: any) => ({
-        name: l.name,
-        hsn: l.hsn,
-        unit: l.unit,
-        qtyMilli: Number(l.qtyMilli ?? l.qty_milli),
-        priceMinor: Number(l.priceMinor ?? l.price_minor),
-        discountMinor: Number(l.discountMinor ?? l.discount_minor),
-        taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
-        taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
-        cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
-        sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
-        igstMinor: Number(l.igstMinor ?? l.igst_minor),
-        totalMinor: Number(l.totalMinor ?? l.total_minor),
-      })),
+      lines: lines.map((l: any) => {
+        let mrpMinor = 0;
+        try {
+          const itemCustom = typeof l.itemCustom === 'string' ? JSON.parse(l.itemCustom) : (l.itemCustom || {});
+          if (typeof itemCustom.mrpMinor === 'number' && itemCustom.mrpMinor > 0) {
+            mrpMinor = itemCustom.mrpMinor;
+          } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
+            mrpMinor = itemCustom.mrp_minor;
+          }
+        } catch {}
+
+        const priceMinor = Number(l.priceMinor ?? l.price_minor);
+        const discountMinor = Number(l.discountMinor ?? l.discount_minor);
+        const qtyMilli = Number(l.qtyMilli ?? l.qty_milli);
+        const discountPerUnit = qtyMilli > 0 ? Math.round((discountMinor * 1000) / qtyMilli) : 0;
+        if (!mrpMinor || mrpMinor <= priceMinor) {
+          if (discountPerUnit > 0) {
+            mrpMinor = priceMinor + discountPerUnit;
+          } else {
+            mrpMinor = Math.max(priceMinor, Math.ceil((priceMinor * 1.15) / 100) * 100);
+          }
+        }
+
+        return {
+          name: l.name,
+          hsn: l.hsn,
+          unit: l.unit,
+          qtyMilli,
+          priceMinor,
+          mrpMinor,
+          discountMinor,
+          taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
+          taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
+          cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
+          sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
+          igstMinor: Number(l.igstMinor ?? l.igst_minor),
+          totalMinor: Number(l.totalMinor ?? l.total_minor),
+        };
+      }),
       totals: {
         subtotalMinor: Number(inv.subtotalMinor ?? inv.subtotal_minor),
         discountMinor: Number(inv.discountMinor ?? inv.discount_minor),

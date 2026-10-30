@@ -38,16 +38,17 @@ export function registerCategories(r: Router) {
 
     let rows = await ctx.db.query(sql, params);
 
-    // Auto-discovery from products: If products have categories not yet in the categories table, register them automatically
+    // Auto-discovery from products: Only register categories that do NOT exist yet
     const distinctItemCats = await ctx.db.query<{ category: string }>(
       'SELECT DISTINCT category FROM items WHERE tenant_id = ? AND category IS NOT NULL AND category <> \'\'',
       [tenantId],
     );
     if (distinctItemCats.length > 0) {
+      const existingNames = new Set(rows.map((r: any) => (r.name || '').trim().toLowerCase()));
       let insertedNew = false;
       for (const itemCat of distinctItemCats) {
         const catName = itemCat.category.trim();
-        if (!catName) continue;
+        if (!catName || existingNames.has(catName.toLowerCase())) continue;
 
         let parentName: string | null = null;
         let leafName = catName;
@@ -64,42 +65,52 @@ export function registerCategories(r: Router) {
 
         try {
           if (parentName) {
-            // Ensure parent category exists
             let parent = await ctx.db.one<{ id: string }>(
               'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
               [tenantId, parentName],
             );
-            if (!parent) {
+            if (!parent && !existingNames.has(parentName.toLowerCase())) {
               const pId = newId('cat');
               await ctx.db.exec(
-                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
+                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
                 [pId, tenantId, parentName],
               );
+              existingNames.add(parentName.toLowerCase());
               parent = await ctx.db.one<{ id: string }>(
                 'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
                 [tenantId, parentName],
               );
               insertedNew = true;
             }
-            const catId = newId('cat');
-            const res = await ctx.db.exec(
-              'INSERT INTO categories (id, tenant_id, name, parent_id, active) VALUES (?, ?, ?, ?, true) ON CONFLICT DO NOTHING',
-              [catId, tenantId, leafName, parent?.id ?? null],
-            );
-            if (res) insertedNew = true;
+            if (!existingNames.has(leafName.toLowerCase())) {
+              const catId = newId('cat');
+              const res = await ctx.db.exec(
+                'INSERT INTO categories (id, tenant_id, name, parent_id, active) VALUES (?, ?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
+                [catId, tenantId, leafName, parent?.id ?? null],
+              );
+              if (res) {
+                existingNames.add(leafName.toLowerCase());
+                insertedNew = true;
+              }
+            }
           } else {
-            const catId = newId('cat');
-            const res = await ctx.db.exec(
-              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
-              [catId, tenantId, catName],
-            );
-            if (res) insertedNew = true;
+            if (!existingNames.has(catName.toLowerCase())) {
+              const catId = newId('cat');
+              const res = await ctx.db.exec(
+                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
+                [catId, tenantId, catName],
+              );
+              if (res) {
+                existingNames.add(catName.toLowerCase());
+                insertedNew = true;
+              }
+            }
           }
         } catch {
           // ignore duplicate
         }
       }
-      if (insertedNew || rows.length === 0) {
+      if (insertedNew) {
         rows = await ctx.db.query(sql, params);
       }
     }

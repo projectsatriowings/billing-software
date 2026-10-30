@@ -938,7 +938,27 @@ version: 29,
     ],
   },
   {
+    version: 33,
+    statements: [
+      `ALTER TABLE card_terminals ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      `CREATE INDEX IF NOT EXISTS card_terminals_deleted_at ON card_terminals (tenant_id, deleted_at)`,
+      `ALTER TABLE terminal_transactions ALTER COLUMN terminal_id DROP NOT NULL`,
+      `ALTER TABLE terminal_transactions DROP CONSTRAINT IF EXISTS terminal_transactions_terminal_id_fkey`,
+      `ALTER TABLE terminal_transactions ADD CONSTRAINT terminal_transactions_terminal_id_fkey FOREIGN KEY (terminal_id) REFERENCES card_terminals(id) ON DELETE SET NULL`,
+    ],
+  },
+  {
     version: 34,
+    statements: [
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_cash_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS expected_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counted_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS variance_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS note TEXT`,
+    ],
+  },
+  {
+    version: 35,
     statements: [
       `CREATE TABLE IF NOT EXISTS promotions (
         id TEXT PRIMARY KEY,

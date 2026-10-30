@@ -26,6 +26,14 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<any[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [networkInfo, setNetworkInfo] = useState<{ tunnelUrl?: string; isTunnelAlive?: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/scanner/network-info')
+      .then((r) => r.json())
+      .then((d) => setNetworkInfo(d))
+      .catch(() => {});
+  }, []);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef<{ [code: string]: number }>({});
@@ -156,29 +164,19 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
       try {
         setCameraError(null);
         if (!isSecure) {
-          setCameraError('Live video stream requires HTTPS. You can use Camera Snap mode below, or connect via the secure tunnel.');
-          setActiveMode('snap');
-          return;
-        }
-        const cameras = await Html5Qrcode.getCameras();
-        if (!isMounted) return;
-
-        if (!cameras || cameras.length === 0) {
-          setCameraError('No camera found on this device. Switch to Snapshot or Manual mode.');
-          setActiveMode('snap');
+          setCameraError('Live video viewfinder requires HTTPS. Tap "Activate Live Scanner" above or use Snapshot mode below.');
           return;
         }
 
-        setAvailableCameras(cameras);
-        // Prefer back / environment facing camera
-        const backCam = cameras.find((c) =>
-          c.label.toLowerCase().includes('back') ||
-          c.label.toLowerCase().includes('environment') ||
-          c.label.toLowerCase().includes('rear')
-        );
-        const targetId = selectedCameraId || (backCam ? backCam.id : cameras[0].id);
+        const container = document.getElementById('qr-reader-interactive');
+        if (!container || !isMounted) return;
 
-        if (!scannerRef.current) {
+        // If scanner is currently active, stop it before re-initializing
+        if (scannerRef.current) {
+          if (scannerRef.current.isScanning) {
+            try { await scannerRef.current.stop(); } catch {}
+          }
+        } else {
           scannerRef.current = new Html5Qrcode('qr-reader-interactive', {
             formatsToSupport: [
               Html5QrcodeSupportedFormats.EAN_13,
@@ -193,55 +191,92 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
           });
         }
 
-        await scannerRef.current.start(
-          targetId,
-          {
-            fps: 20,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const width = Math.min(300, Math.floor(viewfinderWidth * 0.85));
-              const height = Math.min(180, Math.floor(viewfinderHeight * 0.55));
-              return { width, height };
-            },
-            aspectRatio: 1.333,
-          },
-          (decodedText) => {
-            dispatchBarcode(decodedText);
-          },
-          () => {
-            // Frame parsed with no barcode: ignore
-          }
-        );
+        // Use selected camera ID if user manually chose one, otherwise request rear camera directly
+        const cameraTarget: any = selectedCameraId
+          ? selectedCameraId
+          : { facingMode: 'environment' };
 
-        if (isMounted) {
-          setIsScanning(true);
+        try {
+          await scannerRef.current.start(
+            cameraTarget,
+            {
+              fps: 20,
+              qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const width = Math.min(320, Math.floor(viewfinderWidth * 0.88));
+                const height = Math.min(220, Math.floor(viewfinderHeight * 0.62));
+                return { width, height };
+              },
+              aspectRatio: 1.333,
+            },
+            (decodedText) => {
+              dispatchBarcode(decodedText);
+            },
+            () => {}
+          );
+          if (isMounted) {
+            setIsScanning(true);
+            setCameraError(null);
+          }
+        } catch (startErr: any) {
+          // If specific rear camera constraint failed, try user facing or default
+          if (!selectedCameraId) {
+            await scannerRef.current.start(
+              { facingMode: 'user' },
+              {
+                fps: 20,
+                qrbox: (w, h) => ({
+                  width: Math.min(320, Math.floor(w * 0.88)),
+                  height: Math.min(220, Math.floor(h * 0.62)),
+                }),
+                aspectRatio: 1.333,
+              },
+              (decodedText) => dispatchBarcode(decodedText),
+              () => {}
+            );
+            if (isMounted) {
+              setIsScanning(true);
+              setCameraError(null);
+            }
+          } else {
+            throw startErr;
+          }
         }
+
+        // Camera stream is running! Now enumerate cameras so the user can use the Flip button
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (isMounted && devices && devices.length > 0) {
+            setAvailableCameras(devices);
+          }
+        } catch {}
       } catch (err: any) {
         if (!isMounted) return;
         const msg = String(err?.message || err);
         console.warn('Camera stream error:', msg);
+        setIsScanning(false);
         if (msg.includes('NotSupportedError') || msg.includes('secure context') || !window.isSecureContext) {
-          setCameraError('Live video stream requires HTTPS. Use the Snapshot (Camera Shutter) mode below.');
-          setActiveMode('snap');
+          setCameraError('Live video requires HTTPS. Use Snapshot (Photo Shutter) mode below.');
+        } else if (msg.includes('NotAllowedError') || msg.includes('Permission') || msg.includes('denied')) {
+          setCameraError('Camera access was blocked. Tap "Retry Camera Access" below and tap "Allow" when prompted.');
         } else {
-          setCameraError('Camera access denied or busy. You can use Snapshot or Manual entry.');
-          setActiveMode('snap');
+          setCameraError('Could not start live camera. Tap "Retry Camera Access" or switch to Snapshot mode.');
         }
       }
     }
 
     const t = setTimeout(() => {
       initCamera();
-    }, 250);
+    }, 200);
 
     return () => {
       isMounted = false;
       clearTimeout(t);
-      if (scannerRef.current && isScanning) {
+      if (scannerRef.current && scannerRef.current.isScanning) {
         scannerRef.current.stop().catch(() => {});
         setIsScanning(false);
       }
     };
-  }, [activeMode, selectedCameraId]);
+  }, [activeMode, selectedCameraId, isSecure]);
 
   // Handle Snapshot image decode
   const handleSnapFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,6 +356,99 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
         </div>
       </header>
 
+      {/* HTTPS Upgrade Banner for Continuous Live Laser Barcode Scanner */}
+      {typeof window !== 'undefined' && window.location.protocol !== 'https:' && (
+        <div
+          style={{
+            margin: '10px 14px 4px',
+            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+            borderRadius: '14px',
+            padding: '12px 14px',
+            color: '#ffffff',
+            boxShadow: '0 4px 16px rgba(79, 70, 229, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', color: '#fef08a' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.88rem' }}>Activate Live Laser Scanner</div>
+              <div style={{ fontSize: '0.72rem', opacity: 0.9, marginTop: '2px', lineHeight: 1.3 }}>
+                Switch to HTTPS to scan live continuously without taking photos.
+              </div>
+            </div>
+          </div>
+          {networkInfo?.tunnelUrl ? (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = `${networkInfo.tunnelUrl}/scanner?session=${encodeURIComponent(sessionId)}`;
+              }}
+              style={{
+                padding: '8px 14px',
+                background: '#ffffff',
+                color: '#4338ca',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>Switch Now</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/scanner/restart-tunnel', { method: 'POST' });
+                  const data = await res.json();
+                  if (data.ok && data.tunnelUrl) {
+                    window.location.href = `${data.tunnelUrl}/scanner?session=${encodeURIComponent(sessionId)}`;
+                  }
+                } catch {}
+              }}
+              style={{
+                padding: '8px 14px',
+                background: '#ffffff',
+                color: '#4338ca',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>Launch Live</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Mode Selector Tabs */}
       <nav className="mobile-mode-tabs">
         <button
@@ -374,11 +502,123 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
               <div id="qr-reader-interactive" className="mobile-interactive-viewport"></div>
 
               {/* Viewfinder Overlays: Laser Bar & Reticle Corners */}
-              <div className="scanner-laser-bar"></div>
-              <div className="reticle-corner top-left"></div>
-              <div className="reticle-corner top-right"></div>
-              <div className="reticle-corner bottom-left"></div>
-              <div className="reticle-corner bottom-right"></div>
+              {isScanning && !cameraError && (
+                <>
+                  <div className="scanner-laser-bar"></div>
+                  <div className="reticle-corner top-left"></div>
+                  <div className="reticle-corner top-right"></div>
+                  <div className="reticle-corner bottom-left"></div>
+                  <div className="reticle-corner bottom-right"></div>
+                </>
+              )}
+
+              {/* Viewfinder Starting Loader */}
+              {!isScanning && !cameraError && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(15, 23, 42, 0.94)',
+                    color: '#f8fafc',
+                    zIndex: 20,
+                    gap: '12px',
+                    padding: '20px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" />
+                  </svg>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>Opening Live Camera...</div>
+                  <div style={{ fontSize: '0.76rem', color: '#94a3b8', maxWidth: '240px' }}>
+                    Tap &quot;Allow&quot; if your phone browser asks for camera permission.
+                  </div>
+                </div>
+              )}
+
+              {/* Camera Error / Permission Blocked Overlay */}
+              {cameraError && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(15, 23, 42, 0.96)',
+                    color: '#f8fafc',
+                    zIndex: 25,
+                    gap: '10px',
+                    padding: '24px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#fca5a5' }}>Camera Not Opening</div>
+                  <div style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.45, maxWidth: '280px' }}>
+                    {cameraError}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '240px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCameraError(null);
+                        setSelectedCameraId(null);
+                        setActiveMode('snap');
+                        setTimeout(() => setActiveMode('live'), 100);
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '0.84rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 12px rgba(79, 70, 229, 0.4)',
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                      <span>Retry Camera Access</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMode('snap')}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '10px',
+                        border: '1px solid #334155',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        color: '#cbd5e1',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Use Photo Shutter (Snap) Instead
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Instant Scan Success Feedback Toast on Viewfinder */}
               {flashSuccess && (
@@ -399,7 +639,12 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
                   pointerEvents: 'none',
                   whiteSpace: 'nowrap',
                 }}>
-                  <div>✓ BARCODE SCANNED</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>BARCODE SCANNED</span>
+                  </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.95, marginTop: '2px' }}>
                     Added to Counter Bill
                   </div>
@@ -541,7 +786,12 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
           <div className="mobile-last-scanned-card">
             <span className="last-scan-label">Last Dispatched:</span>
             <span className="last-scan-val mono">{lastScanned}</span>
-            <span className="last-scan-badge">✓ Cart Updated</span>
+            <span className="last-scan-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>Dispatched</span>
+            </span>
           </div>
         )}
 
@@ -574,7 +824,12 @@ export const MobileScanner: React.FC<MobileScannerProps> = ({ sessionId }) => {
                   </div>
                   <div className="history-item-right">
                     {item.status === 'sent' ? (
-                      <span className="history-badge sent">Sent ✓</span>
+                      <span className="history-badge sent" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        <span>Sent</span>
+                      </span>
                     ) : (
                       <span className="history-badge err">Retry</span>
                     )}

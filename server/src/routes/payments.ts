@@ -292,6 +292,141 @@ export function registerPayments(r: Router) {
     };
   });
 
+  // 1b. List Customer Receipts / Payments
+  r.get('/api/payments', requireUser, async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const limit = Math.min(Math.max(V.int(ctx.query.limit ?? 50, 'Limit', { min: 1, max: 200 }), 1), 200);
+    const offset = Math.max(V.int(ctx.query.offset ?? 0, 'Offset', { min: 0 }), 0);
+    const mode = ctx.query.mode ? String(ctx.query.mode) : null;
+    const q = ctx.query.q ? String(ctx.query.q).trim().toLowerCase() : null;
+
+    let sql = `
+      SELECT p.*,
+             u.name AS received_by_name,
+             c.name AS customer_name,
+             c.phone AS customer_phone,
+             c.gstin AS customer_gstin,
+             i.number AS invoice_number
+      FROM payments p
+      LEFT JOIN users u ON u.id = COALESCE(p.received_by, p.created_by)
+      LEFT JOIN parties c ON c.id = COALESCE(p.customer_id, p.party_id)
+      LEFT JOIN invoices i ON i.id = p.invoice_id
+      WHERE p.tenant_id = ?
+        AND (p.kind IS NULL OR p.kind IN ('receipt', 'sale') OR p.customer_id IS NOT NULL OR p.invoice_id IS NOT NULL)
+        AND (p.kind IS NULL OR p.kind != 'supplier_payment')
+    `;
+    const params: unknown[] = [tenantId];
+
+    if (mode && mode !== 'ALL') {
+      sql += ` AND (p.mode = ? OR p.method = ?)`;
+      params.push(mode, mode);
+    }
+    if (q) {
+      sql += ` AND (
+        lower(COALESCE(p.receipt_number, '')) LIKE ? OR
+        lower(COALESCE(c.name, '')) LIKE ? OR
+        lower(COALESCE(p.reference_no, p.reference, '')) LIKE ? OR
+        lower(COALESCE(i.number, '')) LIKE ?
+      )`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    sql += ` ORDER BY COALESCE(p.payment_date, p.created_at) DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const rows = await ctx.db.query(sql, params);
+
+    const paymentIds = rows.map((r: any) => r.id);
+    const allocMap = new Map<string, any[]>();
+    if (paymentIds.length > 0) {
+      const placeholders = paymentIds.map(() => '?').join(',');
+      const allocations = await ctx.db.query(
+        `SELECT pa.*, i.number AS invoice_number, i.bdate AS invoice_date
+         FROM payment_allocations pa
+         JOIN invoices i ON i.id = pa.invoice_id
+         WHERE pa.tenant_id = ? AND pa.payment_id IN (${placeholders})
+         ORDER BY i.bdate ASC, i.created_at ASC`,
+        [tenantId, ...paymentIds],
+      );
+      for (const a of allocations) {
+        const pid = a.paymentId ?? a.payment_id;
+        if (!allocMap.has(pid)) allocMap.set(pid, []);
+        allocMap.get(pid)!.push(a);
+      }
+    }
+
+    return {
+      payments: rows.map((r: any) => formatPaymentWithAllocations(r, allocMap.get(r.id) || [])),
+    };
+  });
+
+  // 1c. List Supplier Payments / Disbursements History
+  const handleSupplierPayments = async (ctx: any) => {
+    const tenantId = ctx.user!.tenantId;
+    const limit = Math.min(Math.max(V.int(ctx.query.limit ?? 50, 'Limit', { min: 1, max: 200 }), 1), 200);
+    const offset = Math.max(V.int(ctx.query.offset ?? 0, 'Offset', { min: 0 }), 0);
+    const method = ctx.query.mode || ctx.query.method ? String(ctx.query.mode || ctx.query.method) : null;
+    const q = ctx.query.q ? String(ctx.query.q).trim().toLowerCase() : null;
+
+    let sql = `
+      SELECT p.id,
+             COALESCE(p.payment_number, p.reference, p.id) AS payment_number,
+             COALESCE(p.method, p.mode, 'cash') AS method,
+             p.amount_minor,
+             COALESCE(p.reference, p.reference_no) AS reference,
+             COALESCE(p.bdate, p.payment_date::text, p.created_at::text) AS date,
+             COALESCE(p.status, 'posted') AS status,
+             p.party_id AS supplier_id,
+             s.name AS supplier_name,
+             p.reversal_reason AS void_reason,
+             p.created_at,
+             u.name AS recorded_by
+      FROM payments p
+      LEFT JOIN parties s ON s.id = p.party_id
+      LEFT JOIN users u ON u.id = COALESCE(p.created_by, p.received_by)
+      WHERE p.tenant_id = ? AND p.kind = 'supplier_payment'
+    `;
+    const params: unknown[] = [tenantId];
+
+    if (method && method !== 'ALL') {
+      sql += ` AND (p.method = ? OR p.mode = ?)`;
+      params.push(method, method);
+    }
+    if (q) {
+      sql += ` AND (
+        lower(COALESCE(p.payment_number, '')) LIKE ? OR
+        lower(COALESCE(s.name, '')) LIKE ? OR
+        lower(COALESCE(p.reference, p.reference_no, '')) LIKE ?
+      )`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+
+    sql += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const rows = await ctx.db.query(sql, params);
+
+    return {
+      payments: rows.map((r: any) => ({
+        id: r.id,
+        paymentNumber: r.paymentNumber ?? r.payment_number ?? `PAY-${(r.id || '').slice(-6).toUpperCase()}`,
+        method: r.method,
+        amountMinor: Number(r.amountMinor ?? r.amount_minor),
+        reference: r.reference || null,
+        date: r.date ? (typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10)) : '',
+        status: r.status,
+        supplierId: r.supplierId ?? r.supplier_id,
+        supplierName: r.supplierName ?? r.supplier_name,
+        recordedBy: r.recordedBy ?? r.recorded_by ?? 'Store Manager',
+        voidReason: r.voidReason ?? r.void_reason ?? null,
+        createdAt: r.createdAt ?? r.created_at,
+      })),
+    };
+  };
+
+  r.get('/api/suppliers/payments/history', requireUser, handleSupplierPayments);
+  r.get('/api/suppliers/payments', requireUser, handleSupplierPayments);
+
   // 2. Customer Dues Overview (dues, advance, unpaid invoices list)
   const getCustomerDues = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
@@ -315,7 +450,7 @@ export function registerPayments(r: Router) {
     const totalDuesMinor = Math.max(0, totalUnpaidMinor - advanceMinor);
 
     // Lifetime billing and collection metrics
-    const stats = await (ctx.db as any).one(
+    const stats: any = await (ctx.db as any).one(
       `SELECT
         (SELECT COALESCE(SUM(total_minor), 0)::bigint FROM invoices WHERE tenant_id = ? AND party_id = ? AND status = 'posted') AS total_billed,
         (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM payments WHERE tenant_id = ? AND customer_id = ? AND (status IS NULL OR status = 'posted')) AS total_collected`,
@@ -338,8 +473,8 @@ export function registerPayments(r: Router) {
       totalUnpaidMinor,
       oldestInvoiceDate,
       unpaidCount: unpaidInvoices.length,
-      totalBilledMinor: Number(stats?.totalBilled ?? 0),
-      totalCollectedMinor: Number(stats?.totalCollected ?? 0),
+      totalBilledMinor: Number(stats?.totalBilled ?? stats?.total_billed ?? 0),
+      totalCollectedMinor: Number(stats?.totalCollected ?? stats?.total_collected ?? 0),
       unpaidInvoices: unpaidInvoices.map((inv: any) => ({
         id: inv.id,
         number: inv.number,
@@ -1291,18 +1426,23 @@ export function registerPayments(r: Router) {
 }
 
 function formatPaymentWithAllocations(p: any, allocations: any[] = [], balanceAfterMinor?: number) {
+  const pDate = p.payment_date ?? p.paymentDate;
+  const formattedDate = pDate
+    ? (typeof pDate === 'string' ? pDate.slice(0, 10) : new Date(pDate).toISOString().slice(0, 10))
+    : (p.bdate ?? (p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : ''));
+
   return {
     id: p.id,
-    receiptNumber: p.receipt_number ?? p.receiptNumber,
-    customerId: p.customer_id ?? p.customerId,
-    customerName: p.customer_name ?? p.customerName,
+    receiptNumber: p.receipt_number ?? p.receiptNumber ?? (p.invoice_number ? `INV-${p.invoice_number}` : `RCT-${(p.id || '').slice(-6).toUpperCase()}`),
+    customerId: p.customer_id ?? p.customerId ?? p.party_id ?? null,
+    customerName: p.customer_name ?? p.customerName ?? 'Counter Customer',
     customerPhone: p.customer_phone ?? p.customerPhone,
     amountMinor: Number(p.amount_minor ?? p.amountMinor),
     mode: p.mode ?? p.method ?? 'cash',
-    referenceNo: p.reference_no ?? p.referenceNo ?? null,
-    paymentDate: p.payment_date ?? p.paymentDate ?? p.created_at ?? p.createdAt,
+    referenceNo: p.reference_no ?? p.referenceNo ?? p.reference ?? null,
+    paymentDate: formattedDate,
     note: p.note ?? null,
-    receivedBy: p.received_by ?? p.receivedBy,
+    receivedBy: p.received_by ?? p.receivedBy ?? p.created_by,
     receivedByName: p.received_by_name ?? p.receivedByName ?? null,
     advanceMinor: Number(p.advance_minor ?? p.advanceMinor ?? 0),
     status: p.status ?? 'posted',

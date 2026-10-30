@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import type { Item, Role } from '../../api.ts';
 import { adjustStock, can } from '../../api.ts';
+import {
+  SlidersIcon,
+  LockIcon,
+  AlertTriangleIcon,
+  XIcon,
+  PlusIcon,
+  MinusIcon,
+  ClipboardCheckIcon,
+} from './InventoryIcons.tsx';
 
 interface StockAdjustmentModalProps {
   isOpen: boolean;
@@ -153,20 +162,20 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       >
         <div className="modal-header">
           <div className="modal-title-wrap">
-            <span className="modal-icon-badge purple">⚖️</span>
+            <span className="modal-icon-badge purple"><SlidersIcon size={20} /></span>
             <div>
               <h2 className="modal-title">Manual Stock Adjustment</h2>
               <p className="modal-subtitle">Record damaged, expired, missing or counted variance</p>
             </div>
           </div>
           <button type="button" className="btn-close-modal" onClick={onClose} aria-label="Close modal">
-            ✕
+            <XIcon size={18} />
           </button>
         </div>
 
         {!isAuthorized ? (
           <div className="permission-warning-banner" style={{ margin: '1.5rem', padding: '1.25rem' }}>
-            <span className="warning-icon">🔒</span>
+            <span className="warning-icon"><LockIcon size={20} /></span>
             <div>
               <h4 style={{ margin: '0 0 0.25rem 0', color: '#991b1b' }}>Access Restricted</h4>
               <p style={{ margin: 0, fontSize: '0.88rem', color: '#7f1d1d' }}>
@@ -179,7 +188,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
           <form onSubmit={handleValidateAndPromptConfirm} className="modal-form-body">
             {error && (
               <div className="form-error-alert" style={{ marginBottom: '1rem' }}>
-                <span className="error-icon">⚠️</span>
+                <span className="error-icon"><AlertTriangleIcon size={16} /></span>
                 <span>{error}</span>
               </div>
             )}
@@ -276,7 +285,11 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                       className={`segment-btn ${adjustmentType === 'quantity' ? 'active' : ''}`}
                       onClick={() => setAdjustmentType('quantity')}
                     >
-                      <span>➕ / ➖ Delta Adjustment</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <PlusIcon size={13} />
+                        <MinusIcon size={13} />
+                        Delta Adjustment
+                      </span>
                       <small>Add or deduct quantity</small>
                     </button>
                     <button
@@ -284,7 +297,10 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                       className={`segment-btn ${adjustmentType === 'physical_count' ? 'active' : ''}`}
                       onClick={() => setAdjustmentType('physical_count')}
                     >
-                      <span>📋 Physical Counted Quantity</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <ClipboardCheckIcon size={14} />
+                        Physical Counted Quantity
+                      </span>
                       <small>Set final stock count</small>
                     </button>
                   </div>
@@ -324,12 +340,12 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                       onChange={(e) => setReason(e.target.value)}
                       required
                     >
-                      <option value="correction">✏️ Stock Count Correction</option>
-                      <option value="damaged">🚨 Damaged / Breakage</option>
-                      <option value="expired">⏰ Expired / Past Date</option>
-                      <option value="missing">🔍 Missing / Shrinkage / Theft</option>
-                      <option value="found">📦 Found / Unrecorded Stock</option>
-                      <option value="other">📝 Other Adjustment</option>
+                      <option value="correction">Stock Count Correction</option>
+                      <option value="damaged">Damaged / Breakage</option>
+                      <option value="expired">Expired / Past Date</option>
+                      <option value="missing">Missing / Shrinkage / Theft</option>
+                      <option value="found">Found / Unrecorded Stock</option>
+                      <option value="other">Other Adjustment</option>
                     </select>
                   </div>
                 </div>
@@ -353,8 +369,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                       </div>
                     </div>
                     {willBeNegative && (
-                      <div className="negative-warning-text">
-                        ⚠️ Store rules do not permit negative stock balances.
+                      <div className="negative-warning-text" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AlertTriangleIcon size={14} /> Store rules do not permit negative stock balances.
                       </div>
                     )}
                   </div>
@@ -394,7 +410,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
         {showConfirm && selectedItem && (
           <div className="sub-modal-backdrop">
             <div className="confirm-modal-box">
-              <div className="confirm-icon-wrap amber">⚠️</div>
+              <div className="confirm-icon-wrap amber"><AlertTriangleIcon size={24} /></div>
               <h3 className="confirm-title">Confirm Stock Adjustment</h3>
               <p className="confirm-desc">
                 You are about to record a permanent stock movement for <strong>{selectedItem.name}</strong>.

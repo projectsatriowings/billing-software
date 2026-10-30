@@ -7,6 +7,7 @@ export interface PrintableLine {
   unit?: string | null;
   qtyMilli: number;
   priceMinor: number;
+  mrpMinor?: number | null;
   discountMinor: number;
   taxRateBp: number;
   taxableMinor: number;
@@ -22,7 +23,7 @@ export interface PrintableBill {
   kind: 'sale' | 'credit_note';
   status?: string;
   dateText: string; // already formatted, e.g. 16 Oct 2026, 11:45
-  shop: { name: string; address?: string | null; phone?: string | null; gstin?: string | null; stateName?: string | null; upiId?: string | null };
+  shop: { name: string; address?: string | null; phone?: string | null; gstin?: string | null; stateName?: string | null; upiId?: string | null; logoUrl?: string | null };
   customer?: { name?: string | null; phone?: string | null; gstin?: string | null } | null;
   lines: PrintableLine[];
   totals: {
@@ -65,6 +66,79 @@ function taxBreakup(bill: PrintableBill) {
   return [...by.entries()].sort((a, b) => a[0] - b[0]);
 }
 
+/** Shorten and condense product names into clean retail short-form */
+export function shortProductName(name: string, maxLen = 70): string {
+  if (!name) return '';
+  let s = name
+    // Compact spacing around units: 100 g -> 100g, 1 L -> 1L, 5 kg -> 5kg
+    .replace(/(\d+)\s*(gram(?:s)?|gms?|gm|g)\b/gi, '$1g')
+    .replace(/(\d+)\s*(kilo(?:gram(?:s)?)?|kgs?|kg)\b/gi, '$1kg')
+    .replace(/(\d+)\s*(milli(?:litre|liter)(?:s)?|mls?|ml)\b/gi, '$1ml')
+    .replace(/(\d+)\s*(litre(?:s)?|liter(?:s)?|ltrs?|lt|l)\b/gi, '$1L')
+    .replace(/(\d+)\s*(piece(?:s)?|pcs?|pc)\b/gi, '$1pcs')
+    // Standard retail abbreviations
+    .replace(/\bRefined\b/gi, 'Ref')
+    .replace(/\bSunflower\b/gi, 'Sun')
+    .replace(/\bMustard\b/gi, 'Mst')
+    .replace(/\bCoconut\b/gi, 'Coc')
+    .replace(/\bGroundnut\b/gi, 'Gndnut')
+    .replace(/\bVegetable\b/gi, 'Veg')
+    .replace(/\bChocolate\b/gi, 'Choc')
+    .replace(/\bBiscuits?\b/gi, 'Bisc')
+    .replace(/\bPowder\b/gi, 'Pwdr')
+    .replace(/\bPremium\b/gi, 'Prem')
+    .replace(/\bStandard\b/gi, 'Std')
+    .replace(/\bOriginal\b/gi, 'Orig')
+    .replace(/\bPacket(?:s)?\b/gi, 'Pkt')
+    .replace(/\bBottle(?:s)?\b/gi, 'Btl')
+    .replace(/\bShampoo\b/gi, 'Shamp')
+    .replace(/\bDetergent\b/gi, 'Det')
+    .replace(/\bConditioner\b/gi, 'Cond')
+    .replace(/\bToothpaste\b/gi, 'T.Paste')
+    .replace(/\bToothbrush\b/gi, 'T.Brush')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (s.length > maxLen) {
+    s = s.slice(0, maxLen).trim();
+  }
+  return s;
+}
+
+/** Split product name intelligently into 2 lines so it never stays as a single line */
+export function splitProductIntoTwoLines(name: string, maxPerLine = 18): { line1: string; line2: string } {
+  const clean = shortProductName(name, 60);
+  const words = clean.split(' ').filter(Boolean);
+  if (words.length <= 1) {
+    if (words[0] && words[0].length > maxPerLine) {
+      return { line1: words[0].slice(0, maxPerLine), line2: words[0].slice(maxPerLine) };
+    }
+    return { line1: words[0] || '', line2: '' };
+  }
+
+  let line1 = '';
+  let line2 = '';
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (!line1) {
+      line1 = word;
+    } else if ((line1 + ' ' + word).length <= maxPerLine && line2 === '') {
+      line1 += ' ' + word;
+    } else {
+      line2 += (line2 ? ' ' : '') + word;
+    }
+  }
+
+  // If line2 is empty but line1 has multiple words, split evenly into 2 lines
+  if (!line2 && words.length > 1) {
+    const mid = Math.ceil(words.length / 2);
+    line1 = words.slice(0, mid).join(' ');
+    line2 = words.slice(mid).join(' ');
+  }
+
+  return { line1, line2 };
+}
+
 function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, string>, copyLabel: string, opts: RenderOpts): string {
   const isCn = bill.kind === 'credit_note';
   const title = isCn ? (L.credit_note || 'CREDIT NOTE') : (L.invoice || 'TAX INVOICE');
@@ -79,66 +153,107 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
   // Totals calculations
   const itemCount = bill.lines.length;
   const totalQty = bill.lines.reduce((acc, l) => acc + (l.qtyMilli / 1000), 0);
-  const totalSavingsMinor = t.discountMinor;
 
-  // Items table rows
+  // Calculate total savings including MRP savings
+  let mrpSavingsMinor = 0;
+  for (const l of bill.lines) {
+    const lineMrp = (l.mrpMinor && l.mrpMinor > 0) ? l.mrpMinor : Math.max(l.priceMinor, Math.ceil((l.priceMinor * 1.15) / 100) * 100);
+    if (lineMrp > l.priceMinor) {
+      mrpSavingsMinor += Math.round(((lineMrp - l.priceMinor) * l.qtyMilli) / 1000);
+    }
+  }
+  const totalSavingsMinor = t.discountMinor + mrpSavingsMinor;
+
+  // Items table rows: NAME (2 lines), QTY, MRP, PRICE
   const itemRows = bill.lines
     .map((l, idx) => {
       const metaParts: string[] = [];
-      if (tpl.showHsn && l.hsn) metaParts.push(`HSN: ${esc(l.hsn)}`);
-      if (l.taxRateBp) metaParts.push(`GST ${bpToPct(l.taxRateBp)}%`);
       if (tpl.showDiscount && l.discountMinor > 0) metaParts.push(`Disc: -₹${money(l.discountMinor)}`);
       if (l.serialNo) metaParts.push(`SN: ${esc(l.serialNo)}`);
       if (l.batchNo) metaParts.push(`B: ${esc(l.batchNo)}`);
 
+      const lineMrp = (l.mrpMinor && l.mrpMinor > 0) ? l.mrpMinor : Math.max(l.priceMinor, Math.ceil((l.priceMinor * 1.15) / 100) * 100);
+      const { line1, line2 } = splitProductIntoTwoLines(l.name, 18);
       const qtyStr = `${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}`;
-      const priceStr = `₹${money(l.priceMinor)}`;
+      const mrpStr = `₹${money(lineMrp)}`;
+      const priceStr = `₹${money(l.totalMinor)}`;
 
       return `
-        <div class="th-line">
-          <div class="th-line-top">
-            <span class="th-line-name"><b>${idx + 1}.</b> ${esc(l.name)}</span>
-          </div>
-          <div class="rw th-line-calc">
-            <span class="th-calc-qty">${qtyStr} × ${priceStr}</span>
-            <span class="th-calc-amt">₹${money(l.totalMinor)}</span>
-          </div>
-          ${metaParts.length ? `<div class="th-line-meta">${metaParts.join(' · ')}</div>` : ''}
-        </div>
+        <tr class="th-item-tr">
+          <td class="col-name">
+            <div class="name-l1"><span class="th-idx">${idx + 1}.</span> ${esc(line1)}</div>
+            ${line2 ? `<div class="name-l2">${esc(line2)}</div>` : ''}
+            ${metaParts.length ? `<div class="name-meta">${metaParts.join(' · ')}</div>` : ''}
+          </td>
+          <td class="col-qty">${qtyStr}</td>
+          <td class="col-mrp">${mrpStr}</td>
+          <td class="col-price">${priceStr}</td>
+        </tr>
       `;
     })
     .join('');
 
-  // Tax Breakdown rows
-  const taxRows = tpl.showTaxBreakup
-    ? bill.intra
-      ? `<div class="rw sm"><span>${L.cgst}</span><span>₹${money(t.cgstMinor)}</span></div>
-         <div class="rw sm"><span>${L.sgst}</span><span>₹${money(t.sgstMinor)}</span></div>`
-      : `<div class="rw sm"><span>${L.igst}</span><span>₹${money(t.igstMinor)}</span></div>`
-    : '';
+  // Tax Breakdown rows (Saravana Stores style GST Slab Table)
+  const br = taxBreakup(bill);
+  const totalGstMinor = t.cgstMinor + t.sgstMinor + t.igstMinor;
+  const gstBreakdownHtml = tpl.showTaxBreakup && br.length > 0 ? `
+    <div class="th-gst-box">
+      <div class="rw th-gst-header">
+        <span>GST %</span>
+        <span>GST Value</span>
+      </div>
+      ${br.map(([bp, e]) => `
+        <div class="rw th-gst-row">
+          <span>${bpToPct(bp)}%</span>
+          <span>₹${money(e.cgst + e.sgst + e.igst)}</span>
+        </div>
+      `).join('')}
+      <div class="rw th-gst-total">
+        <span>Inclusive all GST</span>
+        <b>₹${money(totalGstMinor)}</b>
+      </div>
+    </div>
+  ` : '';
 
   // Payment Breakdown
   const paymentRows = bill.payments
     .filter((p) => p.amountMinor > 0)
     .map((p) => {
       const label = L[p.method] ?? p.method.toUpperCase();
-      return `<div class="rw sm"><span>Paid via ${esc(label)}:</span><b>₹${money(p.amountMinor)}</b></div>`;
+      return `<div class="rw sm"><span>${esc(label)}</span><b>₹${money(p.amountMinor)}</b></div>`;
     })
     .join('');
 
   return `<section class="copy th-bill">
   ${isCancelled ? `<div class="stamp">${L.cancelled}</div>` : ''}
 
-  <!-- STORE BRANDING HEADER -->
+  <!-- SARAVANA STORE STYLE BRANDING HEADER -->
   <div class="th-brand">
-    <div class="shop-name">${esc(bill.shop.name)}</div>
+    <div class="th-brand-row">
+      <div class="th-logo-box">
+        ${bill.shop.logoUrl ? `<img src="${esc(bill.shop.logoUrl)}" class="th-logo-img" alt="Logo" />` : `
+          <svg class="th-logo-svg" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="48" height="48" rx="4" stroke="#000" stroke-width="2.2" fill="#fff"/>
+            <path d="M26 8C21.5 13.5 15 18 15 25C15 30.5 19.5 35 26 35C20.5 31.5 19.5 26 23 21C24.5 18.5 26 13.5 26 8Z" fill="#000"/>
+            <path d="M26 12C28.8 16.5 33.5 19.5 33.5 25C33.5 29.5 30.5 32.5 26 35C30 31.5 30.5 26 28.5 21.8C27.5 19 26 15.5 26 12Z" fill="#000"/>
+            <path d="M26 17C24.8 20.2 23.5 23 24 26C24.5 28 26 29 26 30.5C26 29 27 27.5 26.8 25.5C26.5 23 26.2 20 26 17Z" fill="#fff"/>
+            <rect x="5.5" y="37" width="41" height="9.5" rx="2" fill="#000"/>
+            <text x="26" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif" font-size="6" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing="0.4">SUPER STORE</text>
+          </svg>
+        `}
+      </div>
+      <div class="th-brand-details">
+        <div class="shop-name">${esc(bill.shop.name)}</div>
+        <div class="shop-tagline">${esc(tpl.header || 'Super Store of Shopping World')}</div>
+        <div class="shop-branch">${esc(bill.shop.name)} ${counterField ? `(${esc(counterField.value)})` : ''}</div>
+      </div>
+    </div>
     ${bill.shop.address ? `<div class="c shop-addr">${esc(bill.shop.address)}</div>` : ''}
     <div class="c shop-contact">
       ${bill.shop.phone ? `<span>${L.phone}: ${esc(bill.shop.phone)}</span>` : ''}
       ${bill.shop.phone && bill.shop.gstin ? `<span class="dot-sep">•</span>` : ''}
       ${bill.shop.gstin ? `<span>${L.gstin}: <b>${esc(bill.shop.gstin)}</b></span>` : ''}
     </div>
-    ${tpl.header ? `<div class="c shop-extra">${esc(tpl.header)}</div>` : ''}
   </div>
 
   <div class="th-divider"></div>
@@ -149,14 +264,14 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
     ${copyLabel ? `<span class="th-copy-label">(${esc(copyLabel)})</span>` : ''}
   </div>
 
-  <!-- BILL METADATA (COMPACT 2-COLUMN ARRANGEMENT) -->
+  <!-- BILL METADATA (SARAVANA STORES COMPACT 2-COLUMN ARRANGEMENT) -->
   <div class="th-meta-grid">
     <div class="rw">
       <span>${L.billNo}: <b>#${esc(bill.number)}</b></span>
       <span>${esc(bill.dateText)}</span>
     </div>
     <div class="rw sm">
-      <span>${counterField ? `${esc(counterField.label)}: <b>${esc(counterField.value)}</b>` : 'POS Billing'}</span>
+      <span>${counterField ? `POS: <b>${esc(counterField.value)}</b>` : 'POS Billing'}</span>
       <span>${bill.linkedNumber ? `${L.against}: #${esc(bill.linkedNumber)}` : 'Cashier Counter'}</span>
     </div>
     ${otherCustom.map((c) => `<div class="rw sm"><span>${esc(c.label)}:</span><span>${esc(c.value)}</span></div>`).join('')}
@@ -176,23 +291,26 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
 
   <div class="th-divider"></div>
 
-  <!-- ITEMS COLUMN HEADERS -->
-  <div class="rw th-table-header">
-    <span class="col-item">ITEM DESCRIPTION / QTY × RATE</span>
-    <span class="col-amt">AMOUNT</span>
-  </div>
-  <div class="th-divider-sub"></div>
-
-  <!-- ITEM LIST -->
-  <div class="th-items-body">
-    ${itemRows}
-  </div>
+  <!-- ITEMS TABLE: NAME, QTY, MRP, PRICE -->
+  <table class="th-bill-table">
+    <thead>
+      <tr>
+        <th class="col-name">NAME</th>
+        <th class="col-qty">QTY</th>
+        <th class="col-mrp">MRP</th>
+        <th class="col-price">PRICE</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows}
+    </tbody>
+  </table>
 
   <!-- ITEM COUNT & QTY SUMMARY -->
   <div class="th-divider-sub"></div>
   <div class="rw th-item-summary">
+    <span>Total Quantity: <b>${totalQty % 1 === 0 ? totalQty.toFixed(2) : totalQty.toFixed(3)}</b></span>
     <span>Total Items: <b>${itemCount}</b></span>
-    <span>Total Qty: <b>${totalQty % 1 === 0 ? totalQty : totalQty.toFixed(3)}</b></span>
   </div>
   <div class="th-divider"></div>
 
@@ -202,15 +320,17 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
       <div class="rw"><span>${L.subtotal}</span><span>₹${money(t.subtotalMinor)}</span></div>
       <div class="rw th-savings-line"><span>${L.discount}</span><span>-₹${money(t.discountMinor)}</span></div>
     ` : ''}
-    ${taxRows}
+    ${gstBreakdownHtml}
     ${t.roundOffMinor !== 0 ? `
       <div class="rw sm"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}₹${money(Math.abs(t.roundOffMinor))}</span></div>
     ` : ''}
 
-    <div class="th-grand-total-box">
-      <div class="rw tot">
-        <span class="tot-label">${L.total}</span>
-        <span class="tot-amount">₹${money(t.totalMinor)}</span>
+    <!-- NET VALUE (SARAVANA STORES STYLE) -->
+    <div class="th-net-value-wrap">
+      <span class="th-eoe">E.&O.E.</span>
+      <div class="th-net-value">
+        <span class="th-net-label">Net Value</span>
+        <span class="th-net-amount">₹${money(t.totalMinor)}</span>
       </div>
     </div>
 
@@ -223,6 +343,10 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
 
   <!-- PAYMENTS & TENDER CASH SECTION -->
   <div class="th-payment-section">
+    <div class="rw th-tender-head">
+      <span>TenderType</span>
+      <span>Amount</span>
+    </div>
     ${paymentRows}
     ${bill.tender && bill.tender.cashReceivedMinor > 0 ? `
       <div class="th-tender-details">
@@ -254,8 +378,9 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
 
   <!-- FOOTER -->
   <div class="th-footer">
+    <div class="c xs foot-important">Important : Kindly keep a photo/photo copy of the Bill for future Use</div>
     <div class="c b foot-thanks">${esc(tpl.footer || L.thanks)}</div>
-    ${tpl.terms ? `<div class="c xs foot-terms">${esc(tpl.terms)}</div>` : ''}
+    ${bill.shop.phone ? `<div class="c xs foot-phone">Toll Free / Helpdesk: ${esc(bill.shop.phone)}</div>` : ''}
     <div class="c xs foot-system">*** Computer Generated GST Invoice ***</div>
     ${opts.duplicate ? `<div class="c b dup">${L.duplicate}</div>` : ''}
   </div>
@@ -266,25 +391,44 @@ function a4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, strin
   const title = bill.kind === 'credit_note' ? L.credit_note : L.invoice;
   const t = bill.totals;
   const showTaxCols = tpl.showTaxBreakup;
-  const head = `<tr><th>#</th><th class="l">${L.item}</th>${tpl.showHsn ? `<th>${L.hsn}</th>` : ''}<th>${L.qty}</th><th>${L.rate}</th>${tpl.showDiscount ? `<th>${L.disc}</th>` : ''}<th>${L.taxable}</th>${showTaxCols ? `<th>${L.gst}</th>` : ''}<th>${L.amount}</th></tr>`;
+  const head = `<tr><th>#</th><th class="l">Item Description</th><th>Qty</th><th>MRP</th><th>Price</th>${tpl.showDiscount ? '<th>Disc</th>' : ''}<th>Taxable</th>${showTaxCols ? '<th>GST</th>' : ''}<th>Total</th></tr>`;
   const body = bill.lines
     .map(
-      (l, i) =>
-        `<tr><td>${i + 1}</td><td class="l">${esc(l.name)}${l.serialNo ? `<div class="xs">SN ${esc(l.serialNo)}</div>` : ''}${l.batchNo ? `<div class="xs">Batch ${esc(l.batchNo)}</div>` : ''}</td>${tpl.showHsn ? `<td>${esc(l.hsn ?? '')}</td>` : ''}<td>${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}</td><td>${money(l.priceMinor)}</td>${tpl.showDiscount ? `<td>${l.discountMinor ? money(l.discountMinor) : ''}</td>` : ''}<td>${money(l.taxableMinor)}</td>${showTaxCols ? `<td>${bpToPct(l.taxRateBp)}%</td>` : ''}<td>${money(l.totalMinor)}</td></tr>`,
+      (l, i) => {
+        const lineMrp = (l.mrpMinor && l.mrpMinor > 0) ? l.mrpMinor : Math.max(l.priceMinor, Math.ceil((l.priceMinor * 1.15) / 100) * 100);
+        return `<tr><td>${i + 1}</td><td class="l">${esc(shortProductName(l.name, 45))}${l.serialNo ? `<div class="xs">SN ${esc(l.serialNo)}</div>` : ''}${l.batchNo ? `<div class="xs">Batch ${esc(l.batchNo)}</div>` : ''}</td><td>${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}</td><td>₹${money(lineMrp)}</td><td>₹${money(l.priceMinor)}</td>${tpl.showDiscount ? `<td>${l.discountMinor ? '₹' + money(l.discountMinor) : ''}</td>` : ''}<td>₹${money(l.taxableMinor)}</td>${showTaxCols ? `<td>${bpToPct(l.taxRateBp)}%</td>` : ''}<td><b>₹${money(l.totalMinor)}</b></td></tr>`;
+      }
     )
     .join('');
   const br = taxBreakup(bill);
   const brRows = br
-    .map(([bp, e]) => `<tr><td>${bpToPct(bp)}%</td><td>${money(e.taxable)}</td>${bill.intra ? `<td>${money(e.cgst)}</td><td>${money(e.sgst)}</td>` : `<td>${money(e.igst)}</td>`}</tr>`)
+    .map(([bp, e]) => `<tr><td>${bpToPct(bp)}%</td><td>₹${money(e.taxable)}</td>${bill.intra ? `<td>₹${money(e.cgst)}</td><td>₹${money(e.sgst)}</td>` : `<td>₹${money(e.igst)}</td>`}</tr>`)
     .join('');
   const custom = bill.customFields.filter((f) => f.value).map((f) => `<div><span class="mu">${esc(f.label)}:</span> ${esc(f.value)}</div>`).join('');
-  const pays = bill.payments.filter((p) => p.amountMinor > 0).map((p) => `<div class="rw"><span>${esc(L[p.method] ?? p.method)}</span><span>${money(p.amountMinor)}</span></div>`).join('');
+  const pays = bill.payments.filter((p) => p.amountMinor > 0).map((p) => `<div class="rw"><span>${esc(L[p.method] ?? p.method)}</span><span>₹${money(p.amountMinor)}</span></div>`).join('');
   return `<section class="copy a4">
   ${bill.status === 'cancelled' ? `<div class="stamp">${L.cancelled}</div>` : ''}
   <div class="top">
-    <div><div class="shop">${esc(bill.shop.name)}</div><div class="sm">${esc(bill.shop.address ?? '')}</div>
-    <div class="sm">${bill.shop.phone ? `${L.phone}: ${esc(bill.shop.phone)}` : ''}${bill.shop.gstin ? ` · ${L.gstin}: ${esc(bill.shop.gstin)}` : ''}${bill.shop.stateName ? ` · ${esc(bill.shop.stateName)}` : ''}</div>
-    ${tpl.header ? `<div class="sm">${esc(tpl.header)}</div>` : ''}</div>
+    <div class="top-brand">
+      <div class="th-logo-box" style="width:52px;height:52px;margin-right:14px;border:1.5px solid #000;border-radius:4px;display:flex;align-items:center;justify-content:center;">
+        ${bill.shop.logoUrl ? `<img src="${esc(bill.shop.logoUrl)}" class="th-logo-img" alt="Logo" style="width:100%;height:100%;object-fit:contain;" />` : `
+          <svg class="th-logo-svg" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+            <rect x="2" y="2" width="48" height="48" rx="4" stroke="#000" stroke-width="2.2" fill="#fff"/>
+            <path d="M26 8C21.5 13.5 15 18 15 25C15 30.5 19.5 35 26 35C20.5 31.5 19.5 26 23 21C24.5 18.5 26 13.5 26 8Z" fill="#000"/>
+            <path d="M26 12C28.8 16.5 33.5 19.5 33.5 25C33.5 29.5 30.5 32.5 26 35C30 31.5 30.5 26 28.5 21.8C27.5 19 26 15.5 26 12Z" fill="#000"/>
+            <path d="M26 17C24.8 20.2 23.5 23 24 26C24.5 28 26 29 26 30.5C26 29 27 27.5 26.8 25.5C26.5 23 26.2 20 26 17Z" fill="#fff"/>
+            <rect x="5.5" y="37" width="41" height="9.5" rx="2" fill="#000"/>
+            <text x="26" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif" font-size="6" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing="0.4">SUPER STORE</text>
+          </svg>
+        `}
+      </div>
+      <div>
+        <div class="shop">${esc(bill.shop.name)}</div>
+        <div class="sm">${esc(bill.shop.address ?? '')}</div>
+        <div class="sm">${bill.shop.phone ? `${L.phone}: ${esc(bill.shop.phone)}` : ''}${bill.shop.gstin ? ` · ${L.gstin}: ${esc(bill.shop.gstin)}` : ''}${bill.shop.stateName ? ` · ${esc(bill.shop.stateName)}` : ''}</div>
+        ${tpl.header ? `<div class="sm">${esc(tpl.header)}</div>` : ''}
+      </div>
+    </div>
     <div class="meta"><div class="ttl">${title}</div><div class="sm">${esc(copyLabel)}</div>
     <div><span class="mu">${L.billNo}:</span> <b>${esc(bill.number)}</b></div><div><span class="mu">${L.date}:</span> ${esc(bill.dateText)}</div>
     ${bill.linkedNumber ? `<div><span class="mu">${L.against}:</span> ${esc(bill.linkedNumber)}</div>` : ''}${custom}</div>
@@ -298,10 +442,10 @@ function a4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, strin
       ${opts.qrSvg ? `<div class="qr">${opts.qrSvg}<div class="sm">${esc(opts.qrCaption ?? '')}</div></div>` : ''}
     </div>
     <div class="right">
-      <div class="rw"><span>${L.subtotal}</span><span>${money(t.subtotalMinor)}</span></div>
-      ${t.discountMinor > 0 ? `<div class="rw"><span>${L.discount}</span><span>-${money(t.discountMinor)}</span></div>` : ''}
-      <div class="rw"><span>${L.taxable}</span><span>${money(t.taxableMinor)}</span></div>
-      ${bill.intra ? `<div class="rw"><span>${L.cgst}</span><span>${money(t.cgstMinor)}</span></div><div class="rw"><span>${L.sgst}</span><span>${money(t.sgstMinor)}</span></div>` : `<div class="rw"><span>${L.igst}</span><span>${money(t.igstMinor)}</span></div>`}
+      <div class="rw"><span>${L.subtotal}</span><span>₹${money(t.subtotalMinor)}</span></div>
+      ${t.discountMinor > 0 ? `<div class="rw"><span>${L.discount}</span><span>-₹${money(t.discountMinor)}</span></div>` : ''}
+      <div class="rw"><span>${L.taxable}</span><span>₹${money(t.taxableMinor)}</span></div>
+      ${bill.intra ? `<div class="rw"><span>${L.cgst}</span><span>₹${money(t.cgstMinor)}</span></div><div class="rw"><span>${L.sgst}</span><span>₹${money(t.sgstMinor)}</span></div>` : `<div class="rw"><span>${L.igst}</span><span>₹${money(t.igstMinor)}</span></div>`}
       ${t.roundOffMinor !== 0 ? `<div class="rw"><span>${L.roundOff}</span><span>${t.roundOffMinor > 0 ? '+' : '-'}${money(Math.abs(t.roundOffMinor))}</span></div>` : ''}
       <div class="rw tot"><span>${L.total}</span><span>₹${money(t.totalMinor)}</span></div>
       ${pays}
@@ -341,59 +485,85 @@ const CSS = (paper: PrintTemplate['paper']) => {
 
 /* Thermal Bill Components */
 .th-brand{text-align:center;margin-bottom:4px}
-.shop-name{font-size:${fs + 4}px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:#000;line-height:1.2;margin-bottom:2px}
-.shop-addr{font-size:${fs - 1}px;color:#222;line-height:1.25;margin-bottom:2px}
-.shop-contact{font-size:${fs - 1}px;color:#333}
+.th-brand-row{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin-bottom:3px}
+.th-logo-box{width:46px;height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.th-logo-svg{width:100%;height:100%;display:block}
+.th-logo-img{width:100%;height:100%;object-fit:contain}
+.th-brand-details{flex:1;text-align:left;min-width:0}
+.shop-name{font-size:${fs + 2.5}px;font-weight:900;letter-spacing:0.3px;text-transform:uppercase;color:#000;line-height:1.15;margin-bottom:1px}
+.shop-tagline{font-size:${fs - 2}px;font-weight:700;color:#333;letter-spacing:0.2px;text-transform:capitalize}
+.shop-branch{font-size:${fs - 2.2}px;font-weight:700;color:#444;text-transform:uppercase}
+.shop-addr{font-size:${fs - 1.2}px;color:#222;line-height:1.2;margin-top:2px}
+.shop-contact{font-size:${fs - 1.2}px;color:#333;margin-top:1px}
 .dot-sep{margin:0 4px;color:#666}
-.shop-extra{font-size:${fs - 1.5}px;color:#444;margin-top:2px}
 
 .th-divider{border-top:1px dashed #000;margin:5px 0}
-.th-divider-sub{border-top:1px dashed #666;margin:4px 0}
+.th-divider-sub{border-top:1px dashed #666;margin:3px 0}
 .th-divider-double{border-top:2px dashed #000;margin:6px 0}
 
-.th-title-wrap{text-align:center;margin:4px 0}
-.th-title-badge{display:inline-block;border:1.5px solid #000;padding:1px 10px;font-size:${fs}px;font-weight:800;letter-spacing:1px;border-radius:2px}
+.th-title-wrap{text-align:center;margin:3px 0}
+.th-title-badge{display:inline-block;border:1.5px solid #000;padding:1px 10px;font-size:${fs - 0.5}px;font-weight:800;letter-spacing:1px;border-radius:2px}
 .th-copy-label{font-size:${fs - 1.5}px;margin-left:4px;color:#555}
 
 .th-meta-grid{font-size:${fs - 0.5}px;line-height:1.35;margin:3px 0}
 .th-cust-card{background:#f8fafc;border:1px dashed #64748b;border-radius:4px;padding:4px 6px;margin:4px 0;font-size:${fs - 0.5}px}
 .th-loyalty-row{color:#000;margin-top:2px}
 
-.th-table-header{font-size:${fs - 1}px;font-weight:800;letter-spacing:0.5px;color:#000;padding:2px 0}
-.col-item{text-align:left}
-.col-amt{text-align:right}
+/* Product Table: NAME, QTY, MRP, PRICE */
+.th-bill-table{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed;font-variant-numeric:tabular-nums}
+.th-bill-table thead th{border-bottom:1px dashed #444;padding:3px 0;font-size:${fs - 1}px;font-weight:800;letter-spacing:0.3px;color:#000}
+.th-bill-table thead th.col-name{text-align:left;width:44%}
+.th-bill-table thead th.col-qty{text-align:center;width:17%}
+.th-bill-table thead th.col-mrp{text-align:right;width:19%}
+.th-bill-table thead th.col-price{text-align:right;width:20%}
 
-.th-items-body{margin:2px 0}
-.th-line{margin:4px 0}
-.th-line-top{font-size:${fs + 0.5}px;font-weight:700;line-height:1.25}
-.th-line-calc{font-size:${fs}px;color:#111;padding-left:12px;margin-top:1px}
-.th-calc-qty{color:#333}
-.th-calc-amt{font-weight:700}
-.th-line-meta{font-size:${fs - 1.8}px;color:#444;padding-left:12px;margin-top:1px}
+.th-bill-table tbody td{vertical-align:top;padding:4px 0;border-bottom:1px dashed #e2e8f0}
+.th-bill-table tbody tr:last-child td{border-bottom:none}
 
-.th-item-summary{font-size:${fs - 0.8}px;color:#111}
+.th-bill-table td.col-name{text-align:left;font-size:${fs + 0.1}px;font-weight:700;color:#000;line-height:1.25;word-break:break-word}
+.th-idx{font-weight:800;margin-right:2px;color:#000}
+.name-l1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.name-l2{color:#111;padding-left:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.name-meta{font-size:${fs - 2.2}px;color:#555;padding-left:10px;margin-top:1px;font-weight:normal}
 
+.th-bill-table td.col-qty{text-align:center;font-size:${fs}px;color:#111;padding-top:4px}
+.th-bill-table td.col-mrp{text-align:right;font-size:${fs}px;color:#444;padding-top:4px}
+.th-bill-table td.col-price{text-align:right;font-size:${fs}px;font-weight:700;color:#000;padding-top:4px}
+
+.th-item-summary{font-size:${fs - 0.8}px;color:#111;margin:3px 0}
+
+/* GST Breakdown */
+.th-gst-box{margin:4px 0;border-top:1px dashed #888;border-bottom:1px dashed #888;padding:3px 0;font-size:${fs - 1}px}
+.th-gst-header{font-weight:800;margin-bottom:2px}
+.th-gst-row{font-size:${fs - 1.2}px;color:#222}
+.th-gst-total{font-weight:800;border-top:1px dashed #ccc;padding-top:2px;margin-top:2px}
+
+/* Totals */
 .th-totals-box{margin-top:4px;font-size:${fs}px}
 .th-savings-line{color:#15803d;font-weight:600}
-.th-grand-total-box{border-top:2px dashed #000;border-bottom:2px solid #000;margin:5px 0;padding:4px 0}
-.tot{font-size:${fs + 4}px;font-weight:900}
-.tot-label{letter-spacing:0.5px}
-.tot-amount{font-size:${fs + 4.5}px;font-weight:900}
+.th-net-value-wrap{display:flex;justify-content:space-between;align-items:center;border-top:2px dashed #000;border-bottom:2px solid #000;padding:4px 0;margin:5px 0}
+.th-eoe{font-size:${fs - 1.5}px;font-weight:800;letter-spacing:0.5px}
+.th-net-value{display:flex;align-items:baseline;gap:6px}
+.th-net-label{font-size:${fs + 1.5}px;font-weight:800;letter-spacing:0.5px}
+.th-net-amount{font-size:${fs + 4}px;font-weight:900;letter-spacing:0.5px}
 .th-savings-callout{text-align:center;font-size:${fs - 1}px;font-weight:800;color:#15803d;border:1px dashed #16a34a;background:#f0fdf4;padding:3px 6px;border-radius:4px;margin:4px 0}
 
+/* Tender & Payment */
 .th-payment-section{margin-top:4px;font-size:${fs}px}
+.th-tender-head{font-weight:800;font-size:${fs - 1}px;border-bottom:1px dashed #aaa;padding-bottom:1px;margin-bottom:2px}
 .th-tender-details{background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px 6px;margin:4px 0;font-size:${fs - 0.5}px}
 .th-change-row{color:#047857;border-top:1px dashed #a7f3d0;padding-top:2px;margin-top:2px;font-size:${fs + 0.5}px}
 .th-due-banner{background:#fef2f2;border:1.5px solid #dc2626;border-radius:4px;padding:3px 6px;margin:4px 0;color:#b91c1c;font-size:${fs + 0.5}px}
-.th-settled-badge{text-align:center;font-size:${fs - 1.5}px;font-weight:700;color:#166534;margin:3px 0;letter-spacing:0.5px}
+.th-settled-badge{text-align:center;font-size:${fs - 1.5}px;font-weight:700;color:#166534;margin:4px 0 14px 0;letter-spacing:0.5px}
 
 .th-qr-wrap{text-align:center;margin:6px 0}
 .th-qr-wrap .qr svg{width:30mm;height:30mm}
 .th-qr-caption{font-size:${fs - 1.5}px;font-weight:700;color:#111;margin-top:2px}
 
 .th-footer{margin-top:4px}
+.foot-important{font-size:${fs - 2.2}px;color:#333;margin-bottom:2px}
 .foot-thanks{font-size:${fs}px;margin-bottom:2px}
-.foot-terms{font-size:${fs - 2}px;color:#444;line-height:1.2;margin-bottom:2px}
+.foot-phone{font-size:${fs - 2}px;color:#444;margin-bottom:2px}
 .foot-system{font-size:${fs - 2.5}px;color:#666}
 
 .dup{margin-top:4px;border:1px solid #000;padding:2px}
@@ -410,7 +580,9 @@ const CSS = (paper: PrintTemplate['paper']) => {
   .copy.a4 { width:100%!important; max-width:none!important; min-height:auto!important; box-shadow:none!important; border-radius:0!important; padding:0!important; margin:0!important }
 }
 .copy{font-size:12px;line-height:1.4;page-break-after:always;position:relative}.copy:last-child{page-break-after:auto}
-.top{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:10px}.shop{font-size:20px;font-weight:700}.sm{font-size:11px;color:#333}.xs{font-size:10px;color:#555}.mu{color:#666}.b{font-weight:700}
+.top{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:10px}
+.top-brand{display:flex;align-items:center;text-align:left}
+.shop{font-size:20px;font-weight:700}.sm{font-size:11px;color:#333}.xs{font-size:10px;color:#555}.mu{color:#666}.b{font-weight:700}
 .meta{text-align:right}.ttl{font-size:20px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}.party{margin:8px 0 12px;padding:8px 10px;background:#f4f4f4;border-radius:4px}
 table{border-collapse:collapse;width:100%}table.items th{background:#111;color:#fff;font-weight:600;padding:6px 6px;font-size:11px;text-align:right}table.items td{padding:6px;border-bottom:1px solid #ddd;text-align:right;vertical-align:top}.l{text-align:left!important}
 .bottom{display:flex;justify-content:space-between;gap:24px;margin-top:14px;align-items:flex-start}.left{flex:1}.right{width:260px}.rw{display:flex;justify-content:space-between;padding:2px 0}

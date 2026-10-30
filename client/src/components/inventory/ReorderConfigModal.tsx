@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Item, Party } from '../../api.ts';
 import { updateItemReorder } from '../../api.ts';
+import { BellRingIcon, AlertTriangleIcon, XIcon } from './InventoryIcons.tsx';
 
 interface ReorderConfigModalProps {
   isOpen: boolean;
@@ -73,21 +74,21 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
       >
         <div className="modal-header">
           <div className="modal-title-wrap">
-            <span className="modal-icon-badge blue">🔔</span>
+            <span className="modal-icon-badge blue"><BellRingIcon size={20} /></span>
             <div>
               <h2 className="modal-title">Reorder & Low Stock Settings</h2>
               <p className="modal-subtitle">Configure thresholds for {item.name}</p>
             </div>
           </div>
           <button type="button" className="btn-close-modal" onClick={onClose} aria-label="Close modal">
-            ✕
+            <XIcon size={18} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form-body">
           {error && (
             <div className="form-error-alert" style={{ marginBottom: '1rem' }}>
-              <span className="error-icon">⚠️</span>
+              <span className="error-icon"><AlertTriangleIcon size={16} /></span>
               <span>{error}</span>
             </div>
           )}
