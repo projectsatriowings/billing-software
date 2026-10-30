@@ -27590,3 +27590,368 @@ select.expense-input-control {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+/* ==========================================================================
+   ENHANCED POS CUSTOMER & LOYALTY CARD DESIGN (CLEAN, FLUID & PROFESSIONAL)
+   ========================================================================== */
+
+.bento-customer-header {
+  padding: 0.75rem 0.95rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  box-sizing: border-box !important;
+}
+
+.bento-customer-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  flex-shrink: 0 !important;
+}
+
+.bento-loyalty-scheme-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 0.28rem 0.65rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  color: #6d28d9 !important;
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  border: 1.2px solid #d8b4fe !important;
+  border-radius: 9999px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 3px rgba(109, 40, 217, 0.08) !important;
+}
+
+.bento-loyalty-scheme-pill:hover {
+  transform: translateY(-1px) !important;
+  background: #ede9fe !important;
+  border-color: #c084fc !important;
+  box-shadow: 0 3px 8px rgba(109, 40, 217, 0.2) !important;
+}
+
+.loyalty-pill-gift {
+  font-size: 0.85rem !important;
+  line-height: 1 !important;
+}
+
+.loyalty-pill-text {
+  font-size: 0.72rem !important;
+  letter-spacing: -0.01em !important;
+}
+
+.bento-add-cust-btn {
+  background: #f0fdf4 !important;
+  border: 1.5px solid #86efac !important;
+  color: #15803d !important;
+  padding: 0.28rem 0.65rem !important;
+  border-radius: 8px !important;
+  font-size: 0.75rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+  white-space: nowrap !important;
+}
+
+.bento-add-cust-btn:hover {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25) !important;
+}
+
+/* Modern Customer Search Bar */
+.bento-search-box-wrap {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.bento-search-box-icon {
+  position: absolute !important;
+  left: 12px !important;
+  color: #94a3b8 !important;
+  pointer-events: none !important;
+  transition: color 0.18s ease !important;
+}
+
+.bento-customer-search-input {
+  width: 100% !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 0.55rem 2.2rem 0.55rem 2.35rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 550 !important;
+  color: #0f172a !important;
+  transition: all 0.2s ease !important;
+  height: 42px !important;
+  box-sizing: border-box !important;
+}
+
+.bento-customer-search-input:focus {
+  background: #ffffff !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+  outline: none !important;
+}
+
+.bento-customer-search-input:focus ~ .bento-search-box-icon {
+  color: #4f46e5 !important;
+}
+
+.bento-search-box-clear {
+  position: absolute !important;
+  right: 12px !important;
+  background: #e2e8f0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.65rem !important;
+  color: #475569 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.bento-search-box-clear:hover {
+  background: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.bento-search-box-hint {
+  position: absolute !important;
+  right: 12px !important;
+  background: #e2e8f0 !important;
+  color: #64748b !important;
+  font-size: 0.65rem !important;
+  font-weight: 750 !important;
+  padding: 0.12rem 0.38rem !important;
+  border-radius: 4px !important;
+  pointer-events: none !important;
+}
+
+/* Unified Walk-in Customer Panel */
+.bento-walkin-unified-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  background: #ffffff !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.bento-walkin-unified-panel:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+}
+
+.walkin-unified-top {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  padding: 0.75rem 0.95rem !important;
+  background: #f8fafc !important;
+}
+
+.walkin-unified-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.65rem !important;
+  min-width: 0 !important;
+}
+
+.walkin-unified-avatar {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border: 1.5px solid #a7f3d0 !important;
+  color: #059669 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15) !important;
+}
+
+.walkin-unified-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+.walkin-unified-name-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+}
+
+.walkin-unified-name {
+  font-size: 0.94rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.01em !important;
+}
+
+.walkin-unified-badge {
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+  font-size: 0.62rem !important;
+  font-weight: 800 !important;
+  padding: 0.12rem 0.4rem !important;
+  border-radius: 4px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.walkin-unified-sub {
+  font-size: 0.73rem !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.walkin-unified-dir-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  background: #ffffff !important;
+  border: 1.2px solid #cbd5e1 !important;
+  color: #334155 !important;
+  padding: 0.35rem 0.65rem !important;
+  border-radius: 7px !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.walkin-unified-dir-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Loyalty Bottom Bar */
+.walkin-loyalty-bottom-bar {
+  padding: 0.6rem 0.85rem !important;
+  border-top: 1px dashed #e2e8f0 !important;
+  background: #ffffff !important;
+}
+
+.walkin-loyalty-earning-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  background: #f0fdf4 !important;
+  border: 1.2px solid #bbf7d0 !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 8px !important;
+}
+
+.loyalty-earning-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  min-width: 0 !important;
+}
+
+.loyalty-sparkle-pill {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+  padding: 0.15rem 0.5rem !important;
+  border-radius: 9999px !important;
+  white-space: nowrap !important;
+}
+
+.loyalty-earning-text {
+  font-size: 0.76rem !important;
+  color: #166534 !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+}
+
+.walkin-link-member-btn {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.35rem 0.7rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 1px 4px rgba(22, 163, 74, 0.25) !important;
+}
+
+.walkin-link-member-btn:hover {
+  background: #15803d !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.35) !important;
+}
+
+.walkin-loyalty-scheme-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  line-height: 1.35 !important;
+}
+
+.loyalty-gift-tag {
+  background: #faf5ff !important;
+  border: 1px solid #d8b4fe !important;
+  color: #7c3aed !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+  padding: 0.12rem 0.45rem !important;
+  border-radius: 5px !important;
+  white-space: nowrap !important;
+}
+
+.loyalty-scheme-text {
+  flex: 1 !important;
+  font-size: 0.74rem !important;
+  color: #475569 !important;
+}
+
+@media (max-width: 900px) {
+  .bento-customer-header {
+    flex-wrap: wrap !important;
+  }
+  .bento-loyalty-scheme-pill {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.7rem !important;
+  }
+  .walkin-unified-top {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+}
