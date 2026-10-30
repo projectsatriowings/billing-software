@@ -925,4 +925,16 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS invoices_client_id ON invoices (tenant_id, client_id)`,
     ],
   },
+  {
+    version: 32,
+    statements: [
+      `DELETE FROM categories 
+       WHERE id NOT IN (
+         SELECT DISTINCT ON (tenant_id, lower(name)) id 
+         FROM categories 
+         ORDER BY tenant_id, lower(name), created_at ASC, id ASC
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS categories_name_uq ON categories (tenant_id, lower(name))`,
+    ],
+  },
 ];

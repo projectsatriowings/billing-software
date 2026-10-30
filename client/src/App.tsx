@@ -1316,8 +1316,18 @@ export function App() {
   const loadCategories = async () => {
     try {
       const res = await api<{ categories: Category[] }>('/api/categories?includeInactive=1');
-      setCategoriesList(res.categories || []);
-      const activeCats = (res.categories || []).filter((c) => c.active).map((c) => c.name);
+      // Deduplicate by name and preserve canonical items
+      const uniqueCats: Category[] = [];
+      const seen = new Set<string>();
+      for (const c of res.categories || []) {
+        const key = c.name.trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueCats.push(c);
+        }
+      }
+      setCategoriesList(uniqueCats);
+      const activeCats = uniqueCats.filter((c) => c.active).map((c) => c.name);
       setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);

@@ -444,7 +444,7 @@ export function registerItemsBulk(r: Router) {
           const newCatId = newId('cat');
           try {
             await ctx.db.exec(
-              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
+              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
               [newCatId, tenantId, catName],
             );
             const createdCat = { id: newCatId, name: catName, active: true };
@@ -504,7 +504,7 @@ export function registerItemsBulk(r: Router) {
           const catId = newId('cat');
           await q.exec(
             `INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true)
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (tenant_id, lower(name)) DO NOTHING`,
             [catId, tenantId, row.category],
           );
           catByName.set(row.category.toLowerCase(), { id: catId, name: row.category, active: true });
