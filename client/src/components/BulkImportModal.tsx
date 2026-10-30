@@ -45,7 +45,67 @@ import {
 import { ScanManufacturerBarcodeModal } from './ScanManufacturerBarcodeModal.tsx';
 import { type BarcodeTargetItem } from '../../../shared/barcodeScannerUtils.ts';
 
-const RefreshCwIcon = ({ size = 12, color = '#4f46e5' }: { size?: number; color?: string }) => (
+const PackageBoxIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);
+
+const FileSpreadsheetIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <path d="M8 13h8" />
+    <path d="M8 17h8" />
+    <path d="M14 9v12" />
+  </svg>
+);
+
+const UploadCloudIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+    <path d="M12 12v9" />
+    <path d="m16 16-4-4-4 4" />
+  </svg>
+);
+
+const ClipboardPasteIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M8 12h8" />
+    <path d="M8 16h6" />
+  </svg>
+);
+
+const Edit3Icon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+  </svg>
+);
+
+const DownloadIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const SparklesIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    <path d="M5 3v4" />
+    <path d="M19 17v4" />
+    <path d="M3 5h4" />
+    <path d="M17 19h4" />
+  </svg>
+);
+
+const RefreshCwIcon = ({ size = 12, color = '#4f46e5', spinning = false }: { size?: number; color?: string; spinning?: boolean }) => (
   <svg
     width={size}
     height={size}
@@ -55,12 +115,157 @@ const RefreshCwIcon = ({ size = 12, color = '#4f46e5' }: { size?: number; color?
     strokeWidth="2.5"
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    className={spinning ? 'bulk-spin' : undefined}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
   >
     <path d="M21 2v6h-6" />
     <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
     <path d="M3 22v-6h6" />
     <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
+const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const AlertCircleIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+
+const CheckCircleIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const CheckIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const CopyIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+const BarcodeIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M3 5v14" />
+    <path d="M8 5v14" />
+    <path d="M12 5v14" />
+    <path d="M17 5v14" />
+    <path d="M21 5v14" />
+  </svg>
+);
+
+const CameraIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+    <circle cx="12" cy="13" r="3" />
+  </svg>
+);
+
+const TagIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+
+const StoreIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+    <path d="M2 7h20" />
+  </svg>
+);
+
+const Trash2Icon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const PlusIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const ArrowRightIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
+const ArrowLeftIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+
+const ChevronRightIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const CloseXIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const LinkIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+const RotateCcwIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </svg>
+);
+
+const FileTextIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+
+const LayersIcon = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <polyline points="2 17 12 22 22 17" />
+    <polyline points="2 12 12 17 22 12" />
   </svg>
 );
 
@@ -1215,7 +1420,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         const cost = r.costPrice.trim() ? Math.round(parseFloat(r.costPrice) * 100) : 0;
         const stock = r.openingStock.trim() ? Math.round(parseFloat(r.openingStock) * 1000) : 0;
         const taxRateBp = parseGstToBp(r.gstRate) ?? 500;
-        const finalBarcode = r.barcode ? r.barcode.trim() : (r.matchedItem?.barcode ? r.matchedItem.barcode : null);
+        const finalBarcode = r.barcode && r.barcode.trim() ? r.barcode.trim() : null;
         const finalBarcodeType = r.barcodeType || (r.isBarcodeAutoGenerated ? 'INTERNAL' : (finalBarcode ? 'MANUFACTURER' : null));
 
         let finalCatId = r.categoryId ? r.categoryId.trim() : null;
@@ -1326,9 +1531,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
           className="modal-content"
           style={{
             width: '98vw',
-            maxWidth: step === 'choose' ? '760px' : '98vw',
+            maxWidth: step === 'choose' ? '1060px' : '98vw',
             height: step === 'choose' ? 'auto' : '96vh',
-            maxHeight: '96vh',
+            maxHeight: '92vh',
             display: isScanModalOpen ? 'none' : 'flex',
             flexDirection: 'column',
             boxShadow: '0 25px 60px -12px rgba(49, 46, 129, 0.35)',
@@ -1339,41 +1544,159 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         }}
       >
         {/* ── HEADER ── */}
-        <div className="modal-header" style={{ flexShrink: 0, padding: '0.85rem 1.25rem', background: '#ffffff', borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <h3 className="card-title" style={{ margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              🎂 Bulk Product Import — {shopName || 'Supermarket & Retail'}
-            </h3>
-            {/* Step Progression Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.4rem', fontSize: '0.85rem' }}>
-              <span style={{ fontWeight: step === 'choose' ? 700 : 500, color: step === 'choose' ? 'var(--primary)' : 'var(--text-muted)' }}>
-                1. Choose Data
-              </span>
-              <span style={{ color: 'var(--border)' }}>›</span>
-              <span style={{ fontWeight: step === 'review' ? 700 : 500, color: step === 'review' ? 'var(--primary)' : 'var(--text-muted)' }}>
-                2. Review &amp; Fix
-              </span>
-              <span style={{ color: 'var(--border)' }}>›</span>
-              <span style={{ fontWeight: step === 'confirm' ? 700 : 500, color: step === 'confirm' ? 'var(--primary)' : 'var(--text-muted)' }}>
-                3. Confirm
-              </span>
-              <span style={{ color: 'var(--border)' }}>›</span>
-              <span style={{ fontWeight: step === 'results' ? 700 : 500, color: step === 'results' ? 'var(--primary)' : 'var(--text-muted)' }}>
-                4. Results
-              </span>
+        <div
+          className="modal-header"
+          style={{
+            flexShrink: 0,
+            padding: '1rem 1.5rem',
+            background: '#ffffff',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #6d4aff 0%, #4f46e5 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(109, 74, 255, 0.25)',
+                color: '#ffffff',
+                flexShrink: 0,
+              }}
+            >
+              <PackageBoxIcon size={22} color="#ffffff" />
+            </div>
+            <div>
+              <h3
+                className="card-title"
+                style={{
+                  margin: 0,
+                  fontSize: '1.2rem',
+                  fontWeight: 800,
+                  color: 'var(--text-main)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Bulk Product Import
+                <span
+                  style={{
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    background: 'var(--bg-main)',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {shopName || 'Supermarket & Retail'}
+                </span>
+              </h3>
+              {/* Modern Step Progression Pills */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  marginTop: '0.35rem',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {[
+                  { key: 'choose', num: 1, label: 'Choose Data' },
+                  { key: 'review', num: 2, label: 'Review & Fix' },
+                  { key: 'confirm', num: 3, label: 'Confirm' },
+                  { key: 'results', num: 4, label: 'Results' },
+                ].map((s, idx, arr) => {
+                  const stepOrder = ['choose', 'review', 'confirm', 'results'];
+                  const currIdx = stepOrder.indexOf(step);
+                  const isCurrent = step === s.key;
+                  const isPast = currIdx > idx;
+
+                  return (
+                    <React.Fragment key={s.key}>
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: isCurrent ? '0.2rem 0.65rem' : '0.15rem 0.5rem',
+                          borderRadius: '12px',
+                          background: isCurrent ? 'var(--primary-light)' : (isPast ? '#f0fdf4' : 'transparent'),
+                          color: isCurrent ? 'var(--primary)' : (isPast ? '#15803d' : 'var(--text-muted)'),
+                          fontWeight: isCurrent ? 700 : (isPast ? 600 : 500),
+                          border: isCurrent ? '1px solid var(--primary-light)' : (isPast ? '1px solid #dcfce7' : '1px solid transparent'),
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 17,
+                            height: 17,
+                            borderRadius: '50%',
+                            background: isCurrent ? 'var(--primary)' : (isPast ? '#16a34a' : '#cbd5e1'),
+                            color: '#ffffff',
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isPast ? <CheckIcon size={10} color="#ffffff" /> : s.num}
+                        </span>
+                        <span>{s.label}</span>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <ChevronRightIcon size={12} color="#cbd5e1" />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <button
             id="bulk-import-close-btn"
             style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              fontSize: '1.4rem', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
+              background: '#f8fafc',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
             }}
             onClick={onClose}
             disabled={isSubmitting}
             title="Close"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#fee2e2';
+              e.currentTarget.style.color = '#ef4444';
+              e.currentTarget.style.borderColor = '#fca5a5';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#f8fafc';
+              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.borderColor = 'var(--border)';
+            }}
           >
-            ✕
+            <CloseXIcon size={16} />
           </button>
         </div>
 
@@ -1389,81 +1712,106 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
             background: '#ffffff',
           }}
         >
+          {/* Inject micro styles for animations and focus */}
+          <style>{`
+            @keyframes bulkSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            .bulk-spin { animation: bulkSpin 0.9s linear infinite; }
+            .bulk-table-input:focus {
+              border-color: #6366f1 !important;
+              box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18) !important;
+              outline: none !important;
+            }
+          `}</style>
 
           {/* ══════════════════════════════════════════════════════════════════════
               STEP 1: CHOOSE DATA (8-COLUMN SUPPLIER FORMAT)
              ══════════════════════════════════════════════════════════════════════ */}
           {step === 'choose' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Method Tabs */}
-              <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+            <div className="bulk-bento-container">
+              {/* Method Navigation Segmented Pills */}
+              <div className="bulk-method-nav">
                 <button
                   id="bulk-tab-upload"
                   onClick={() => { setActiveTab('upload'); setParseError(''); }}
-                  style={{
-                    padding: '0.55rem 1.15rem', borderRadius: '8px', border: 'none',
-                    background: activeTab === 'upload' ? 'var(--primary)' : 'transparent',
-                    color: activeTab === 'upload' ? '#ffffff' : 'var(--text-muted)',
-                    fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem',
-                    transition: 'all 0.15s ease',
-                  }}
+                  className={`bulk-method-pill ${activeTab === 'upload' ? 'active' : ''}`}
                 >
-                  📁 Upload Supplier File (Excel / CSV)
+                  <UploadCloudIcon size={16} color={activeTab === 'upload' ? 'var(--primary)' : 'var(--text-muted)'} />
+                  <span>Upload File (Excel / CSV)</span>
+                  {activeTab === 'upload' && <span className="bulk-method-dot"></span>}
                 </button>
                 <button
                   id="bulk-tab-paste"
                   onClick={() => { setActiveTab('paste'); setParseError(''); }}
-                  style={{
-                    padding: '0.55rem 1.15rem', borderRadius: '8px', border: 'none',
-                    background: activeTab === 'paste' ? 'var(--primary)' : 'transparent',
-                    color: activeTab === 'paste' ? '#ffffff' : 'var(--text-muted)',
-                    fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem',
-                    transition: 'all 0.15s ease',
-                  }}
+                  className={`bulk-method-pill ${activeTab === 'paste' ? 'active' : ''}`}
                 >
-                  📋 Paste Spreadsheet Data
+                  <ClipboardPasteIcon size={16} color={activeTab === 'paste' ? 'var(--primary)' : 'var(--text-muted)'} />
+                  <span>Paste Spreadsheet Data</span>
+                  {activeTab === 'paste' && <span className="bulk-method-dot"></span>}
                 </button>
                 <button
                   id="bulk-tab-manual"
                   onClick={() => { setActiveTab('manual'); setParseError(''); }}
-                  style={{
-                    padding: '0.55rem 1.15rem', borderRadius: '8px', border: 'none',
-                    background: activeTab === 'manual' ? 'var(--primary)' : 'transparent',
-                    color: activeTab === 'manual' ? '#ffffff' : 'var(--text-muted)',
-                    fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem',
-                    transition: 'all 0.15s ease',
-                  }}
+                  className={`bulk-method-pill ${activeTab === 'manual' ? 'active' : ''}`}
                 >
-                  ✍️ Enter Data Manually
+                  <Edit3Icon size={16} color={activeTab === 'manual' ? 'var(--primary)' : 'var(--text-muted)'} />
+                  <span>Enter Data Manually</span>
+                  {activeTab === 'manual' && <span className="bulk-method-dot"></span>}
                 </button>
               </div>
 
-              {/* TAB A: UPLOAD FILE */}
+              {/* TAB A: UPLOAD FILE BENTO GRID */}
               {activeTab === 'upload' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="bulk-bento-grid">
+                  {/* LEFT BENTO TILE: Interactive Hero Dropzone */}
                   <div
                     id="bulk-drop-zone"
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      border: `2px dashed ${isDragging ? 'var(--primary)' : '#cbd5e1'}`,
-                      borderRadius: '12px',
-                      padding: '2.5rem 1.5rem',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      background: isDragging ? 'var(--primary-light)' : 'var(--bg-main)',
-                      transition: 'all 0.2s',
-                    }}
+                    className={`bulk-bento-hero-dropzone ${isDragging ? 'dragging' : ''}`}
                   >
-                    <div style={{ fontSize: '2.8rem', marginBottom: '0.75rem' }}>📦</div>
-                    <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '0.35rem', color: 'var(--text-main)' }}>
-                      {fileName ? `✓ Selected: ${fileName}` : 'Drop supplier CSV or Excel file here, or click to browse'}
+                    <div className="bulk-drop-icon-squircle">
+                      <UploadCloudIcon size={26} color="#4f46e5" />
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Supports standard supplier formats (.xlsx, .xls, .csv, .tsv, .txt)
+
+                    <div className="bulk-bento-hero-title">
+                      {fileName ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', color: '#16a34a' }}>
+                          <CheckCircleIcon size={18} color="#16a34a" />
+                          <span>File Ready: {fileName}</span>
+                        </span>
+                      ) : (
+                        <span>Drop supplier CSV or Excel file here</span>
+                      )}
                     </div>
+
+                    <div className="bulk-bento-hero-subtitle">
+                      {fileName
+                        ? 'Click browse to select a different file or continue to review.'
+                        : 'Drag & drop your catalog spreadsheet or click browse to upload from your device'}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="bulk-bento-browse-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      <UploadCloudIcon size={14} color="#ffffff" />
+                      <span>{fileName ? 'Choose Another File' : 'Browse Computer'}</span>
+                    </button>
+
+                    <div className="bulk-format-tags">
+                      <span className="bulk-format-tag">.XLSX</span>
+                      <span className="bulk-format-tag">.XLS</span>
+                      <span className="bulk-format-tag">.CSV</span>
+                      <span className="bulk-format-tag">.TSV</span>
+                      <span className="bulk-format-tag">.TXT</span>
+                    </div>
+
                     <input
                       ref={fileInputRef}
                       id="bulk-file-input"
@@ -1474,122 +1822,286 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     />
                   </div>
 
-                  {/* Template Downloads */}
-                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <button
-                      id="bulk-download-csv-template"
-                      onClick={() => downloadCsv('supplier_product_template.csv', TEMPLATE_COLUMNS, SAMPLE_SUPPLIER_ROWS)}
-                      style={{
-                        flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                        padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid var(--border)',
-                        background: 'var(--primary-light)', color: 'var(--primary)', cursor: 'pointer',
-                        fontWeight: 600, fontSize: '0.85rem',
-                      }}
-                    >
-                      ⬇️ Download Sample CSV Template
-                    </button>
-                    <button
-                      id="bulk-download-excel-template"
-                      onClick={downloadExcelTemplate}
-                      style={{
-                        flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                        padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid var(--border)',
-                        background: 'var(--primary-light)', color: 'var(--primary)', cursor: 'pointer',
-                        fontWeight: 600, fontSize: '0.85rem',
-                      }}
-                    >
-                      📊 Download Sample Excel (.xlsx) Template
-                    </button>
-                  </div>
-
-                  {/* 8 Columns Supplier Format Notice */}
-                  <div style={{ background: 'var(--bg-main)', borderRadius: '12px', padding: '1rem 1.25rem', border: '1px solid var(--border)' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.35rem', color: 'var(--text-main)' }}>
-                      Simplified Supplier Format (8 Columns)
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                      SKU, Barcode, and Category are <strong>not required</strong> in your file. SKUs and internal barcodes are generated automatically, existing restocks are detected, and categories are smartly suggested.
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.4rem 1rem' }}>
-                      {TEMPLATE_COLUMNS.map((c, i) => (
-                        <div
-                          key={c}
-                          style={{
-                            fontSize: '0.82rem',
-                            color: i === 0 || i === 2 ? 'var(--primary)' : 'var(--text-muted)',
-                            fontWeight: i === 0 || i === 2 ? 700 : 500,
-                            display: 'flex', alignItems: 'center', gap: '0.4rem',
-                          }}
-                        >
-                          <span style={{ fontSize: '0.75rem' }}>{i === 0 || i === 2 ? '★' : '○'}</span> {c}
+                  {/* RIGHT BENTO COLUMN: Templates + Format Specs */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {/* BENTO CARD 1: Official Templates */}
+                    <div className="bulk-bento-card">
+                      <div className="bulk-bento-header-row">
+                        <div className="bulk-bento-header-left">
+                          <div className="bulk-bento-badge-icon indigo">
+                            <FileSpreadsheetIcon size={15} />
+                          </div>
+                          <span className="bulk-bento-card-title">Official Import Templates</span>
                         </div>
-                      ))}
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: '4px', background: '#dcfce7', color: '#15803d' }}>
+                          Recommended
+                        </span>
+                      </div>
+                      <div className="bulk-bento-card-desc">
+                        Pre-formatted files with sample supermarket items for instant catalog upload.
+                      </div>
+
+                      <div className="bulk-template-grid">
+                        <div
+                          className="bulk-template-tile"
+                          id="bulk-download-excel-template"
+                          onClick={downloadExcelTemplate}
+                          title="Download Excel (.xlsx) Template with sample items"
+                        >
+                          <div className="bulk-template-icon-squircle excel">
+                            <FileSpreadsheetIcon size={16} color="#16a34a" />
+                          </div>
+                          <div className="bulk-template-info">
+                            <span className="bulk-template-name">Excel Template</span>
+                            <span className="bulk-template-sub">.xlsx format</span>
+                          </div>
+                          <div className="bulk-template-download-btn">
+                            <DownloadIcon size={13} />
+                          </div>
+                        </div>
+
+                        <div
+                          className="bulk-template-tile"
+                          id="bulk-download-csv-template"
+                          onClick={() => downloadCsv('supplier_product_template.csv', TEMPLATE_COLUMNS, SAMPLE_SUPPLIER_ROWS)}
+                          title="Download CSV Template with sample items"
+                        >
+                          <div className="bulk-template-icon-squircle csv">
+                            <FileSpreadsheetIcon size={16} color="#2563eb" />
+                          </div>
+                          <div className="bulk-template-info">
+                            <span className="bulk-template-name">CSV Template</span>
+                            <span className="bulk-template-sub">.csv format</span>
+                          </div>
+                          <div className="bulk-template-download-btn">
+                            <DownloadIcon size={13} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BENTO CARD 2: Simplified 8-Column Format Specs */}
+                    <div className="bulk-bento-card">
+                      <div className="bulk-bento-header-row">
+                        <div className="bulk-bento-header-left">
+                          <div className="bulk-bento-badge-icon purple">
+                            <SparklesIcon size={15} color="var(--primary)" />
+                          </div>
+                          <span className="bulk-bento-card-title">Simplified 8-Column Format</span>
+                        </div>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: '4px', background: '#f5f3ff', color: 'var(--primary)', border: '1px solid #ede9fe' }}>
+                          Smart Auto-Fill
+                        </span>
+                      </div>
+                      <div className="bulk-bento-card-desc">
+                        SKU, Barcode & Category are auto-generated. Only 8 columns needed:
+                      </div>
+
+                      <div className="bulk-columns-spec-grid">
+                        {TEMPLATE_COLUMNS.map((c, i) => (
+                          <div
+                            key={c}
+                            className={`bulk-column-pill ${i === 0 || i === 2 ? 'required' : ''}`}
+                            title={i === 0 || i === 2 ? `${c} is mandatory` : `${c} optional/auto-filled`}
+                          >
+                            <span>{c}</span>
+                            {i === 0 || i === 2 && <span className="bulk-col-req-badge">Req</span>}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="bulk-bento-ai-footer">
+                        <SparklesIcon size={14} color="#6d4aff" />
+                        <span>Detects existing items and restocks shelf quantity without duplicate products.</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB B: PASTE SPREADSHEET DATA */}
+              {/* TAB B: PASTE SPREADSHEET DATA BENTO GRID */}
               {activeTab === 'paste' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    Copy rows directly from Excel or Google Sheets (8 columns) and paste below:
+                <div className="bulk-bento-grid">
+                  <div className="bulk-bento-card" style={{ gap: '0.75rem' }}>
+                    <div className="bulk-bento-header-row">
+                      <div className="bulk-bento-header-left">
+                        <div className="bulk-bento-badge-icon purple">
+                          <ClipboardPasteIcon size={15} color="var(--primary)" />
+                        </div>
+                        <span className="bulk-bento-card-title">Paste Tabular Data</span>
+                      </div>
+                      <button
+                        onClick={() => setPasteText(SAMPLE_SUPPLIER_ROWS.map((r) => r.join('\t')).join('\n'))}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.76rem', padding: '0.25rem 0.65rem' }}
+                      >
+                        Insert Sample Data
+                      </button>
+                    </div>
+
+                    <textarea
+                      id="bulk-paste-area"
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      placeholder={'Product Name\tUOM\tSelling Price\tCost Price\tHSN\tGST Rate\tPrice Inclusive of GST\tOpening Stock\nToor Dal 1kg\tkg\t145.50\t120\t0713\t5%\tYes\t50\nBasmati Rice 1kg\tkg\t89\t65\t1006\t5%\tYes\t100'}
+                      style={{
+                        width: '100%', minHeight: '190px', padding: '0.75rem',
+                        borderRadius: '8px', border: '1px solid var(--border)',
+                        background: '#f8fafc', color: 'var(--text-main)',
+                        fontSize: '0.82rem', fontFamily: 'monospace',
+                        resize: 'none', boxSizing: 'border-box',
+                      }}
+                    />
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <button
+                        id="bulk-parse-paste-btn"
+                        onClick={handleParsePaste}
+                        className="btn btn-primary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                      >
+                        <span>Parse &amp; Review Data</span>
+                        <ArrowRightIcon size={14} />
+                      </button>
+                      {pasteText && (
+                        <button
+                          type="button"
+                          onClick={() => setPasteText('')}
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem' }}
+                        >
+                          Clear Text
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <textarea
-                    id="bulk-paste-area"
-                    value={pasteText}
-                    onChange={(e) => setPasteText(e.target.value)}
-                    placeholder={'Product Name\tUOM\tSelling Price\tCost Price\tHSN\tGST Rate\tPrice Inclusive of GST\tOpening Stock\nToor Dal 1kg\tkg\t145.50\t120\t0713\t5%\tYes\t50\nBasmati Rice 1kg\tkg\t89\t65\t1006\t5%\tYes\t100'}
-                    style={{
-                      width: '100%', minHeight: '220px', padding: '0.85rem',
-                      borderRadius: '8px', border: '1px solid var(--border)',
-                      background: '#ffffff', color: 'var(--text-main)',
-                      fontSize: '0.85rem', fontFamily: 'monospace',
-                      resize: 'vertical', boxSizing: 'border-box',
-                    }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button
-                      id="bulk-parse-paste-btn"
-                      onClick={handleParsePaste}
-                      className="btn btn-primary"
-                    >
-                      Parse &amp; Review Data →
-                    </button>
-                    <button
-                      onClick={() => setPasteText(SAMPLE_SUPPLIER_ROWS.map((r) => r.join('\t')).join('\n'))}
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.8rem' }}
-                    >
-                      Insert Sample Supplier Data
-                    </button>
+
+                  <div className="bulk-bento-card" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="bulk-bento-header-row">
+                        <div className="bulk-bento-header-left">
+                          <div className="bulk-bento-badge-icon indigo">
+                            <SparklesIcon size={15} />
+                          </div>
+                          <span className="bulk-bento-card-title">Expected Column Order</span>
+                        </div>
+                      </div>
+                      <div className="bulk-bento-card-desc">
+                        Copy all 8 columns from Excel or Google Sheets and paste them on the left:
+                      </div>
+
+                      <div className="bulk-columns-spec-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                        {TEMPLATE_COLUMNS.map((c, i) => (
+                          <div
+                            key={c}
+                            className={`bulk-column-pill ${i === 0 || i === 2 ? 'required' : ''}`}
+                          >
+                            <span>{i + 1}. {c}</span>
+                            {i === 0 || i === 2 && <span className="bulk-col-req-badge">Req</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bulk-bento-ai-footer">
+                      <SparklesIcon size={14} color="#6d4aff" />
+                      <span>Tab-separated rows from clipboard are automatically parsed into individual product fields.</span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB C: MANUAL ENTRY */}
+              {/* TAB C: MANUAL ENTRY BENTO GRID */}
               {activeTab === 'manual' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', background: 'var(--bg-main)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>
-                    Enter Products in the Smart Import Grid
+                <div className="bulk-bento-grid">
+                  <div className="bulk-bento-card" style={{ gap: '0.85rem' }}>
+                    <div className="bulk-bento-header-row">
+                      <div className="bulk-bento-header-left">
+                        <div className="bulk-bento-badge-icon purple">
+                          <Edit3Icon size={15} color="var(--primary)" />
+                        </div>
+                        <span className="bulk-bento-card-title">Interactive Smart Grid</span>
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: '4px', background: '#dcfce7', color: '#15803d' }}>
+                        Live AI Validation
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.86rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                      Type products directly with automatic barcode and category suggestions
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      The Smart Grid allows you to enter products like a spreadsheet with real-time SKU generation, conflict resolution, EAN-13 barcode generation, and duplicate checking.
+                    </div>
+
+                    <button
+                      id="bulk-start-manual-btn"
+                      onClick={handleStartManual}
+                      className="btn btn-primary"
+                      style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 1.25rem', marginTop: 'auto' }}
+                    >
+                      <span>Open Interactive Smart Grid</span>
+                      <ArrowRightIcon size={14} />
+                    </button>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Start with interactive sample products. SKUs are generated on the fly, restocks are detected, and categories are suggested as you type.
+
+                  <div className="bulk-bento-card" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="bulk-bento-header-row">
+                        <div className="bulk-bento-header-left">
+                          <div className="bulk-bento-badge-icon indigo">
+                            <SparklesIcon size={15} />
+                          </div>
+                          <span className="bulk-bento-card-title">Automated Features</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', fontSize: '0.78rem' }}>
+                          <CheckCircleIcon size={15} color="#16a34a" />
+                          <span style={{ color: 'var(--text-main)' }}><strong>Unique Short SKUs:</strong> Auto-generated based on item name.</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', fontSize: '0.78rem' }}>
+                          <CheckCircleIcon size={15} color="#16a34a" />
+                          <span style={{ color: 'var(--text-main)' }}><strong>Internal Barcodes:</strong> Standard EAN-13 check-digit barcodes.</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', fontSize: '0.78rem' }}>
+                          <CheckCircleIcon size={15} color="#16a34a" />
+                          <span style={{ color: 'var(--text-main)' }}><strong>Category Suggestions:</strong> Matches against existing shop departments.</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', fontSize: '0.78rem' }}>
+                          <CheckCircleIcon size={15} color="#16a34a" />
+                          <span style={{ color: 'var(--text-main)' }}><strong>Restock Match:</strong> Detects existing items and updates quantity safely.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bulk-bento-ai-footer">
+                      <SparklesIcon size={14} color="#6d4aff" />
+                      <span>Ready to add up to 500 items in a single transaction.</span>
+                    </div>
                   </div>
-                  <button
-                    id="bulk-start-manual-btn"
-                    onClick={handleStartManual}
-                    className="btn btn-primary"
-                    style={{ alignSelf: 'flex-start' }}
-                  >
-                    Open Smart Grid →
-                  </button>
                 </div>
               )}
 
               {parseError && (
-                <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 500 }}>
-                  ⚠️ {parseError}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#b91c1c',
+                    fontSize: '0.82rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  <AlertTriangleIcon size={16} color="#dc2626" />
+                  <span>{parseError}</span>
                 </div>
               )}
             </div>
@@ -1610,60 +2122,107 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
               }}
             >
               {/* TOP SUMMARY FILTER BAR */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', flexShrink: 0 }}>
-                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', flexShrink: 0, padding: '0.2rem 0' }}>
+                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
                     id="bulk-filter-all"
                     onClick={() => setFilter('all')}
                     style={{
-                      padding: '0.4rem 0.8rem', borderRadius: '20px',
+                      padding: '0.35rem 0.75rem', borderRadius: '20px',
                       border: filter === 'all' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
                       background: filter === 'all' ? 'var(--primary-light)' : '#ffffff',
                       color: filter === 'all' ? 'var(--primary)' : 'var(--text-main)',
-                      fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                      transition: 'all 0.15s ease',
+                      boxShadow: filter === 'all' ? '0 1px 4px rgba(109,74,255,0.15)' : 'none',
                     }}
                   >
-                    All Rows {validatedRows.length}
+                    <LayersIcon size={13} color={filter === 'all' ? 'var(--primary)' : '#64748b'} />
+                    <span>All Rows</span>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: '10px',
+                      background: filter === 'all' ? 'var(--primary)' : '#f1f5f9',
+                      color: filter === 'all' ? '#ffffff' : '#475569',
+                      fontSize: '0.72rem', fontWeight: 700,
+                    }}>
+                      {validatedRows.length}
+                    </span>
                   </button>
                   <button
                     id="bulk-filter-new"
                     onClick={() => setFilter('new')}
                     style={{
-                      padding: '0.4rem 0.8rem', borderRadius: '20px',
+                      padding: '0.35rem 0.75rem', borderRadius: '20px',
                       border: filter === 'new' ? '1.5px solid #6366f1' : '1px solid #e0e7ff',
                       background: filter === 'new' ? '#eef2ff' : '#f8faff',
                       color: '#4338ca',
-                      fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                      transition: 'all 0.15s ease',
+                      boxShadow: filter === 'new' ? '0 1px 4px rgba(99,102,241,0.2)' : 'none',
                     }}
                   >
-                    ✨ New Products {newRows.length}
+                    <SparklesIcon size={13} color="#4338ca" />
+                    <span>New Products</span>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: '10px',
+                      background: filter === 'new' ? '#4338ca' : '#e0e7ff',
+                      color: filter === 'new' ? '#ffffff' : '#4338ca',
+                      fontSize: '0.72rem', fontWeight: 700,
+                    }}>
+                      {newRows.length}
+                    </span>
                   </button>
                   <button
                     id="bulk-filter-restock"
                     onClick={() => setFilter('restock')}
                     style={{
-                      padding: '0.4rem 0.8rem', borderRadius: '20px',
+                      padding: '0.35rem 0.75rem', borderRadius: '20px',
                       border: filter === 'restock' ? '1.5px solid #16a34a' : '1px solid #bbf7d0',
                       background: filter === 'restock' ? '#dcfce7' : '#f0fdf4',
                       color: '#15803d',
-                      fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                      transition: 'all 0.15s ease',
+                      boxShadow: filter === 'restock' ? '0 1px 4px rgba(22,163,74,0.2)' : 'none',
                     }}
                   >
-                    🔄 Restocks {restockRows.length}
+                    <RefreshCwIcon size={12} color="#15803d" />
+                    <span>Restocks</span>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: '10px',
+                      background: filter === 'restock' ? '#15803d' : '#dcfce7',
+                      color: filter === 'restock' ? '#ffffff' : '#15803d',
+                      fontSize: '0.72rem', fontWeight: 700,
+                    }}>
+                      {restockRows.length}
+                    </span>
                   </button>
                   {ambiguousRows.length > 0 && (
                     <button
                       id="bulk-filter-ambiguous"
                       onClick={() => setFilter('ambiguous')}
                       style={{
-                        padding: '0.4rem 0.8rem', borderRadius: '20px',
+                        padding: '0.35rem 0.75rem', borderRadius: '20px',
                         border: filter === 'ambiguous' ? '1.5px solid #d97706' : '1px solid #fde68a',
                         background: filter === 'ambiguous' ? '#fef3c7' : '#fffbeb',
                         color: '#b45309',
-                        fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                        fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      ⚠️ Needs Review {ambiguousRows.length}
+                      <AlertTriangleIcon size={13} color="#b45309" />
+                      <span>Needs Review</span>
+                      <span style={{
+                        padding: '1px 6px', borderRadius: '10px',
+                        background: filter === 'ambiguous' ? '#b45309' : '#fde68a',
+                        color: filter === 'ambiguous' ? '#ffffff' : '#b45309',
+                        fontSize: '0.72rem', fontWeight: 700,
+                      }}>
+                        {ambiguousRows.length}
+                      </span>
                     </button>
                   )}
                   {duplicateRows.length > 0 && (
@@ -1671,14 +2230,25 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                       id="bulk-filter-duplicate"
                       onClick={() => setFilter('duplicate')}
                       style={{
-                        padding: '0.4rem 0.8rem', borderRadius: '20px',
+                        padding: '0.35rem 0.75rem', borderRadius: '20px',
                         border: filter === 'duplicate' ? '1.5px solid #ea580c' : '1px solid #fed7aa',
                         background: filter === 'duplicate' ? '#ffedd5' : '#fff7ed',
                         color: '#c2410c',
-                        fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                        fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      👥 Duplicate Rows {duplicateRows.length}
+                      <CopyIcon size={13} color="#c2410c" />
+                      <span>Duplicate Rows</span>
+                      <span style={{
+                        padding: '1px 6px', borderRadius: '10px',
+                        background: filter === 'duplicate' ? '#c2410c' : '#fed7aa',
+                        color: filter === 'duplicate' ? '#ffffff' : '#c2410c',
+                        fontSize: '0.72rem', fontWeight: 700,
+                      }}>
+                        {duplicateRows.length}
+                      </span>
                     </button>
                   )}
                   {errorRows.length > 0 && (
@@ -1686,19 +2256,30 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                       id="bulk-filter-error"
                       onClick={() => setFilter('error')}
                       style={{
-                        padding: '0.4rem 0.8rem', borderRadius: '20px',
+                        padding: '0.35rem 0.75rem', borderRadius: '20px',
                         border: filter === 'error' ? '1.5px solid #dc2626' : '1px solid #fecaca',
                         background: filter === 'error' ? '#fee2e2' : '#fef2f2',
                         color: '#b91c1c',
-                        fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
+                        fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      ❌ Errors {errorRows.length}
+                      <AlertCircleIcon size={13} color="#b91c1c" />
+                      <span>Errors</span>
+                      <span style={{
+                        padding: '1px 6px', borderRadius: '10px',
+                        background: filter === 'error' ? '#b91c1c' : '#fecaca',
+                        color: filter === 'error' ? '#ffffff' : '#b91c1c',
+                        fontSize: '0.72rem', fontWeight: 700,
+                      }}>
+                        {errorRows.length}
+                      </span>
                     </button>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   <button
                     id="bulk-refresh-cats-btn"
                     type="button"
@@ -1707,17 +2288,18 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     className="btn btn-secondary"
                     style={{
                       fontSize: '0.78rem',
-                      padding: '0.3rem 0.65rem',
-                      display: 'flex',
+                      padding: '0.35rem 0.75rem',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.35rem',
+                      gap: '0.4rem',
                       borderRadius: '8px',
                     }}
                     title="Reload latest categories from the database and re-apply suggestions"
                   >
-                    🔄 {isRefreshingCats ? 'Loading...' : 'Refresh Categories'}
+                    <RefreshCwIcon size={13} color="#475569" spinning={isRefreshingCats} />
+                    <span>{isRefreshingCats ? 'Loading...' : 'Refresh Categories'}</span>
                   </button>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-main)' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-main)' }}>
                     <input
                       type="checkbox"
                       checked={globalUpdatePrices}
@@ -1725,29 +2307,35 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                         setGlobalUpdatePrices(e.target.checked);
                         setRawRows((prev) => prev.map((r) => ({ ...r, updatePrices: e.target.checked })));
                       }}
-                      style={{ accentColor: 'var(--primary)' }}
+                      style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
                     />
                     Update prices on restock
                   </label>
-                  <span>Source: <strong>{importSource}</strong></span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <FileSpreadsheetIcon size={13} color="#64748b" />
+                    <span>Source: <strong>{importSource}</strong></span>
+                  </span>
                 </div>
               </div>
 
               {/* AMBIGUOUS MATCH NOTIFICATION BANNER */}
               {ambiguousRows.length > 0 && (
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.45rem 0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                  <div>
-                    <span style={{ fontWeight: 700, color: '#b45309', fontSize: '0.84rem' }}>
-                      ⚠️ {ambiguousRows.length} product{ambiguousRows.length !== 1 ? 's have' : ' has'} multiple possible catalog matches
-                    </span>
-                    <div style={{ fontSize: '0.76rem', color: '#92400e', marginTop: '1px' }}>
-                      Please select whether to link to an existing variant or create as a new product in the table below.
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.55rem 0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <AlertTriangleIcon size={18} color="#b45309" />
+                    <div>
+                      <span style={{ fontWeight: 700, color: '#b45309', fontSize: '0.84rem' }}>
+                        {ambiguousRows.length} product{ambiguousRows.length !== 1 ? 's have' : ' has'} multiple possible catalog matches
+                      </span>
+                      <div style={{ fontSize: '0.76rem', color: '#92400e', marginTop: '1px' }}>
+                        Please select whether to link to an existing variant or create as a new product in the table below.
+                      </div>
                     </div>
                   </div>
                   <button
                     onClick={() => setFilter('ambiguous')}
                     className="btn btn-secondary"
-                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem', borderColor: '#f59e0b', color: '#b45309' }}
+                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem', borderColor: '#f59e0b', color: '#b45309', flexShrink: 0 }}
                   >
                     View Ambiguous Rows ({ambiguousRows.length})
                   </button>
@@ -1757,10 +2345,10 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
               {/* ── BARCODE WORKFLOW SELECTOR & BULK CONTROLS ── */}
               <div
                 style={{
-                  background: '#f8f7ff',
-                  border: '1px solid #e0e7ff',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '10px',
-                  padding: '0.45rem 0.85rem',
+                  padding: '0.5rem 0.9rem',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -1776,21 +2364,23 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     type="button"
                     onClick={handleGenerateBarcodes}
                     style={{
-                      padding: '0.45rem 1rem',
+                      padding: '0.45rem 1.05rem',
                       borderRadius: '20px',
                       border: 'none',
-                      background: '#6366f1',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                       color: '#ffffff',
                       fontWeight: 700,
                       fontSize: '0.82rem',
                       cursor: 'pointer',
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.35rem',
-                      boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+                      gap: '0.45rem',
+                      boxShadow: '0 2px 8px rgba(99, 102, 241, 0.35)',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    ⚡ Generate Internal Barcodes
+                    <BarcodeIcon size={14} color="#ffffff" />
+                    <span>Generate Internal Barcodes</span>
                   </button>
 
                   <button
@@ -1802,7 +2392,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                       setIsScanModalOpen(true);
                     }}
                     style={{
-                      padding: '0.45rem 1rem',
+                      padding: '0.45rem 1.05rem',
                       borderRadius: '20px',
                       border: '1.5px solid #0d9488',
                       background: '#f0fdfa',
@@ -1810,14 +2400,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                       fontWeight: 700,
                       fontSize: '0.82rem',
                       cursor: 'pointer',
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.35rem',
-                      boxShadow: '0 1px 4px rgba(13, 148, 136, 0.15)',
+                      gap: '0.45rem',
+                      boxShadow: '0 1px 4px rgba(13, 148, 136, 0.12)',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    📷 Scan Manufacturer Barcodes
+                    <CameraIcon size={14} color="#0f766e" />
+                    <span>Scan Manufacturer Barcodes</span>
                   </button>
 
                   {generatedBarcodesCount > 0 && (
@@ -1830,17 +2421,21 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                         borderRadius: '20px',
                         border: '1.5px solid #c7d2fe',
                         background: '#ffffff',
-                        color: '#1e1b4b',
+                        color: '#4338ca',
                         fontWeight: 700,
-                        fontSize: '0.82rem',
+                        fontSize: '0.8rem',
                         cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
                       }}
                     >
-                      Undo {generatedBarcodesCount} generated
+                      <RotateCcwIcon size={13} color="#4338ca" />
+                      <span>Undo {generatedBarcodesCount} generated</span>
                     </button>
                   )}
 
-                  <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
                     {generatedBarcodesCount > 0
                       ? `${generatedBarcodesCount} internal barcode${generatedBarcodesCount !== 1 ? 's' : ''} generated.`
                       : 'Generate internal EAN-13 codes or scan manufacturer barcodes.'}
@@ -1927,28 +2522,33 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                               {/* STATUS BADGE */}
                               <td style={{ padding: '0.45rem 0.5rem' }}>
                                 {row.status === 'NEW_PRODUCT' && (
-                                  <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#eef2ff', color: '#4338ca', fontWeight: 700, fontSize: '0.74rem' }}>
-                                    ✨ New Product
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#eef2ff', border: '1px solid #c7d2fe', color: '#4338ca', fontWeight: 700, fontSize: '0.72rem' }}>
+                                    <SparklesIcon size={11} color="#4338ca" />
+                                    <span>New Product</span>
                                   </span>
                                 )}
                                 {row.status === 'RESTOCK' && (
-                                  <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: '0.74rem' }}>
-                                    🔄 Restock
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#dcfce7', border: '1px solid #bbf7d0', color: '#15803d', fontWeight: 700, fontSize: '0.72rem' }}>
+                                    <RefreshCwIcon size={11} color="#15803d" />
+                                    <span>Restock</span>
                                   </span>
                                 )}
                                 {row.status === 'AMBIGUOUS' && (
-                                  <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#fef3c7', color: '#b45309', fontWeight: 700, fontSize: '0.74rem' }}>
-                                    ⚠️ Needs Review
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#fef3c7', border: '1px solid #fde68a', color: '#b45309', fontWeight: 700, fontSize: '0.72rem' }}>
+                                    <AlertTriangleIcon size={11} color="#b45309" />
+                                    <span>Needs Review</span>
                                   </span>
                                 )}
                                 {row.status === 'DUPLICATE' && (
-                                  <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#ffedd5', color: '#c2410c', fontWeight: 700, fontSize: '0.74rem' }}>
-                                    👥 Duplicate
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#ffedd5', border: '1px solid #fed7aa', color: '#c2410c', fontWeight: 700, fontSize: '0.72rem' }}>
+                                    <CopyIcon size={11} color="#c2410c" />
+                                    <span>Duplicate</span>
                                   </span>
                                 )}
                                 {row.status === 'ERROR' && (
-                                  <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#fee2e2', color: '#b91c1c', fontWeight: 700, fontSize: '0.74rem' }}>
-                                    ❌ Error
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.2rem 0.55rem', borderRadius: '12px', background: '#fee2e2', border: '1px solid #fecaca', color: '#b91c1c', fontWeight: 700, fontSize: '0.72rem' }}>
+                                    <AlertCircleIcon size={11} color="#b91c1c" />
+                                    <span>Error</span>
                                   </span>
                                 )}
                               </td>
@@ -1966,14 +2566,14 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                     background: hasNameErr ? '#fff1f2' : '#ffffff',
                                   }}
                                 />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                                   <button
                                     type="button"
                                     onClick={() => toggleRowProductNature(row._id)}
                                     title={`Classification: ${row.productNature === 'BRANDED' ? 'Branded Product' : 'Shop Product'} (click to change)`}
                                     style={{
                                       cursor: 'pointer',
-                                      borderRadius: '10px',
+                                      borderRadius: '8px',
                                       padding: '1px 6px',
                                       fontSize: '0.67rem',
                                       fontWeight: 700,
@@ -1984,10 +2584,21 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         : (row.natureConfidence === 'LOW' ? '1px dashed #cbd5e1' : '1px solid #cbd5e1'),
                                       display: 'inline-flex',
                                       alignItems: 'center',
-                                      gap: '2px',
+                                      gap: '3px',
+                                      transition: 'all 0.15s ease',
                                     }}
                                   >
-                                    {row.productNature === 'BRANDED' ? '🏷️ Branded' : '🏪 Shop'}
+                                    {row.productNature === 'BRANDED' ? (
+                                      <>
+                                        <TagIcon size={11} color="#1d4ed8" />
+                                        <span>Branded</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <StoreIcon size={11} color="#475569" />
+                                        <span>Shop</span>
+                                      </>
+                                    )}
                                     {row.natureConfidence === 'LOW' && (
                                       <span style={{ fontSize: '0.62rem', opacity: 0.75 }}>?</span>
                                     )}
@@ -2019,8 +2630,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                               </td>
 
                               {/* BARCODE / EAN */}
-                              <td style={{ padding: '0.45rem 0.35rem', minWidth: 140, maxWidth: 170 }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <td style={{ padding: '0.45rem 0.35rem', minWidth: 145, maxWidth: 175 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                     {(() => {
                                       if (!hasBarcode) {
@@ -2028,17 +2639,20 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                           <span
                                             style={{
                                               fontSize: '0.65rem',
-                                              fontWeight: 800,
-                                              padding: '2px 6px',
+                                              fontWeight: 700,
+                                              padding: '1px 5px',
                                               borderRadius: '4px',
                                               background: '#fef3c7',
                                               color: '#92400e',
                                               border: '1px solid #fde68a',
-                                              display: 'inline-block',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
                                             }}
-                                            title="Pending: No barcode assigned"
+                                            title="Pending: Will be auto-generated or scanned"
                                           >
-                                            Pending
+                                            <BarcodeIcon size={10} color="#b45309" />
+                                            <span>Pending EAN</span>
                                           </span>
                                         );
                                       }
@@ -2048,16 +2662,19 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                             style={{
                                               fontSize: '0.65rem',
                                               fontWeight: 800,
-                                              padding: '2px 6px',
+                                              padding: '1px 5px',
                                               borderRadius: '4px',
                                               background: '#ccfbf1',
                                               color: '#0f766e',
                                               border: '1px solid #99f6e4',
-                                              display: 'inline-block',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '3px',
                                             }}
                                             title="Manufacturer Barcode (MBC)"
                                           >
-                                            MBC
+                                            <CameraIcon size={10} color="#0f766e" />
+                                            <span>MBC</span>
                                           </span>
                                         );
                                       }
@@ -2066,16 +2683,19 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                           style={{
                                             fontSize: '0.65rem',
                                             fontWeight: 800,
-                                            padding: '2px 6px',
+                                            padding: '1px 5px',
                                             borderRadius: '4px',
                                             background: '#f3e8ff',
                                             color: '#7e22ce',
                                             border: '1px solid #e9d5ff',
-                                            display: 'inline-block',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px',
                                           }}
                                           title="Internal Barcode (IBC)"
                                         >
-                                          IBC
+                                          <BarcodeIcon size={10} color="#7e22ce" />
+                                          <span>IBC</span>
                                         </span>
                                       );
                                     })()}
@@ -2086,7 +2706,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         style={{
                                           fontSize: '0.65rem',
                                           fontWeight: 800,
-                                          padding: '2px 5px',
+                                          padding: '1px 5px',
                                           borderRadius: '4px',
                                           background: '#dcfce7',
                                           color: '#15803d',
@@ -2097,7 +2717,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         }}
                                         title="Manufacturer barcode scanned in this session"
                                       >
-                                        ✓ Scanned
+                                        <CheckIcon size={10} color="#15803d" />
+                                        <span>Scanned</span>
                                       </span>
                                     )}
                                   </div>
@@ -2105,7 +2726,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                   <input
                                     type="text"
                                     value={row.barcode || ''}
-                                    placeholder="Pending"
+                                    placeholder="Enter or scan barcode"
                                     onChange={(e) => updateRowField(row._id, 'barcode', e.target.value)}
                                     style={{
                                       ...cellInputStyle,
@@ -2120,10 +2741,10 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                     title={
                                       hasBarcode
                                         ? (isIbc ? 'Internal Barcode (IBC)' : 'Manufacturer Barcode (MBC)')
-                                        : 'Pending: No barcode assigned'
+                                        : 'No barcode assigned yet'
                                     }
                                   />
-                                  {hasBarcode ? (
+                                  {hasBarcode && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
                                       <div
                                         dangerouslySetInnerHTML={{ __html: renderBarcodeSvg(row.barcode) }}
@@ -2152,18 +2773,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         </button>
                                       )}
                                     </div>
-                                  ) : (
-                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontStyle: 'italic', paddingLeft: '2px' }}>
-                                      Pending
-                                    </div>
                                   )}
                                   {row.barcodeError && (
-                                    <div style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 600 }}>
-                                      {row.barcodeError}{' '}
+                                    <div style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                      <AlertCircleIcon size={11} color="#dc2626" />
+                                      <span>{row.barcodeError}</span>
                                       <button
                                         type="button"
                                         onClick={() => handleRegenerateSingleBarcode(row._id)}
-                                        style={{ textDecoration: 'underline', border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', padding: 0 }}
+                                        style={{ textDecoration: 'underline', border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', padding: 0, fontWeight: 700 }}
                                       >
                                         Retry
                                       </button>
@@ -2300,10 +2918,23 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                               <td style={{ padding: '0.45rem 0.35rem', textAlign: 'center' }}>
                                 <button
                                   onClick={() => removeRow(row._id)}
-                                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.9rem' }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#94a3b8',
+                                    cursor: 'pointer',
+                                    padding: '4px',
+                                    borderRadius: '4px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'color 0.15s ease',
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
                                   title="Remove row"
                                 >
-                                  🗑
+                                  <Trash2Icon size={14} />
                                 </button>
                               </td>
                             </tr>
@@ -2311,12 +2942,13 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                             {/* INLINE NOTICE / ERROR / AMBIGUITY ROW */}
                             {(row.errors.length > 0 || row.matchedItem || (row.candidates && row.candidates.length > 1) || row.resolution) && (
                               <tr style={{ borderBottom: '1px solid var(--border)', background: '#ffffff' }}>
-                                <td colSpan={16} style={{ padding: '0 0.6rem 0.5rem 2.8rem', fontSize: '0.78rem' }}>
+                                <td colSpan={16} style={{ padding: '0.2rem 0.6rem 0.55rem 2.8rem', fontSize: '0.78rem' }}>
                                   {/* Restock details for single-match products */}
                                   {row.matchedItem && (!row.candidates || row.candidates.length <= 1) && (
-                                    <div style={{ color: '#047857', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                      <span>
-                                        🔄 <strong>Restocking existing item:</strong> &quot;{row.matchedItem.name}&quot; (ID: {row.matchedItem.id}, SKU: {row.matchedItem.sku})
+                                    <div style={{ color: '#047857', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <RefreshCwIcon size={13} color="#047857" />
+                                        <span><strong>Restocking existing item:</strong> &quot;{row.matchedItem.name}&quot; (ID: {row.matchedItem.id}, SKU: {row.matchedItem.sku})</span>
                                       </span>
                                       <span>• Existing Stock: {existingStock} + Incoming: {incomingStock} = <strong>Final: {finalStock}</strong></span>
                                       {row.matchedItem.priceMinor !== Math.round(parseFloat(row.sellingPrice) * 100) && (
@@ -2327,7 +2959,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                       <button
                                         type="button"
                                         onClick={() => createAsNewProduct(row._id)}
-                                        style={{ background: 'none', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '1px 6px', fontSize: '0.72rem', cursor: 'pointer' }}
+                                        style={{ background: 'none', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '1px 6px', fontSize: '0.72rem', cursor: 'pointer', color: '#475569' }}
                                       >
                                         Do not link (create new product)
                                       </button>
@@ -2348,7 +2980,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                     >
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                          <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                          <AlertTriangleIcon size={18} color="#b45309" />
                                           <div>
                                             <strong style={{ color: '#b45309', fontSize: '0.85rem' }}>
                                               Ambiguous Catalog Matches Found for &quot;{row.name}&quot;
@@ -2371,12 +3003,13 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                             fontWeight: 700,
                                             cursor: 'pointer',
                                             boxShadow: '0 1px 3px rgba(99, 102, 241, 0.15)',
-                                            display: 'flex',
+                                            display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '0.35rem',
                                           }}
                                         >
-                                          ✨ Create as New Product (New SKU &amp; Barcode)
+                                          <SparklesIcon size={13} color="#4338ca" />
+                                          <span>Create as New Product (New SKU &amp; Barcode)</span>
                                         </button>
                                       </div>
 
@@ -2438,10 +3071,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                                       cursor: 'pointer',
                                                       display: 'inline-flex',
                                                       alignItems: 'center',
-                                                      gap: '0.25rem',
+                                                      gap: '0.35rem',
                                                     }}
                                                   >
-                                                    🔗 Link to this Product
+                                                    <LinkIcon size={12} color="#ffffff" />
+                                                    <span>Link to this Product</span>
                                                   </button>
                                                 </td>
                                               </tr>
@@ -2467,15 +3101,21 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         fontSize: '0.78rem',
                                       }}
                                     >
-                                      <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         {row.resolution === 'LINK' && row.matchedItem ? (
-                                          <span style={{ color: '#166534', fontWeight: 600 }}>
-                                            ✅ <strong>Resolved:</strong> Linked to existing variant &quot;{row.matchedItem.name}&quot; (SKU: {row.matchedItem.sku}, ID: {row.matchedItem.id}). Stock will be added to this item.
-                                          </span>
+                                          <>
+                                            <CheckCircleIcon size={14} color="#166534" />
+                                            <span style={{ color: '#166534', fontWeight: 600 }}>
+                                              <strong>Resolved:</strong> Linked to existing variant &quot;{row.matchedItem.name}&quot; (SKU: {row.matchedItem.sku}, ID: {row.matchedItem.id}). Stock will be added to this item.
+                                            </span>
+                                          </>
                                         ) : (
-                                          <span style={{ color: '#4338ca', fontWeight: 600 }}>
-                                            ✨ <strong>Resolved:</strong> Creating as new distinct catalog product (SKU: {row.sku}).
-                                          </span>
+                                          <>
+                                            <SparklesIcon size={14} color="#4338ca" />
+                                            <span style={{ color: '#4338ca', fontWeight: 600 }}>
+                                              <strong>Resolved:</strong> Creating as new distinct catalog product (SKU: {row.sku}).
+                                            </span>
+                                          </>
                                         )}
                                       </div>
                                       <button
@@ -2496,15 +3136,39 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                     </div>
                                   )}
 
-                                  {/* Error messages */}
-                                  {row.errors.map((err, idx) => (
+                                  {/* Error messages callout */}
+                                  {row.errors.length > 0 && (
                                     <div
-                                      key={idx}
-                                      style={{ color: err.isDuplicate ? '#d97706' : '#dc2626', fontWeight: 500, marginTop: '1px' }}
+                                      style={{
+                                        marginTop: '4px',
+                                        padding: '0.35rem 0.65rem',
+                                        borderRadius: '6px',
+                                        background: '#fff1f2',
+                                        border: '1px solid #fecaca',
+                                        borderLeft: '3px solid #ef4444',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '2px',
+                                      }}
                                     >
-                                      • {err.message}
+                                      {row.errors.map((err, idx) => (
+                                        <div
+                                          key={idx}
+                                          style={{
+                                            color: err.isDuplicate ? '#b45309' : '#b91c1c',
+                                            fontWeight: 600,
+                                            fontSize: '0.75rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                          }}
+                                        >
+                                          <AlertCircleIcon size={12} color={err.isDuplicate ? '#d97706' : '#dc2626'} />
+                                          <span>{err.message}</span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
                                 </td>
                               </tr>
                             )}
@@ -2524,10 +3188,12 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                   style={{
                     padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border)',
                     background: '#ffffff', color: 'var(--text-main)', fontSize: '0.82rem',
-                    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  + Add Row
+                  <PlusIcon size={14} color="var(--text-main)" />
+                  <span>Add Row</span>
                 </button>
 
                 {errorRows.length > 0 && (
@@ -2537,10 +3203,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     style={{
                       padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid #fecaca',
                       background: '#fff1f2', color: '#dc2626', fontSize: '0.82rem',
-                      fontWeight: 600, cursor: 'pointer',
+                      fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
                     }}
                   >
-                    Remove {errorRows.length} error row(s)
+                    <Trash2Icon size={13} color="#dc2626" />
+                    <span>Remove {errorRows.length} error row(s)</span>
                   </button>
                 )}
 
@@ -2551,10 +3218,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     style={{
                       padding: '0.4rem 0.85rem', borderRadius: '8px', border: '1px solid #fde68a',
                       background: '#fffbeb', color: '#d97706', fontSize: '0.82rem',
-                      fontWeight: 600, cursor: 'pointer',
+                      fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
                     }}
                   >
-                    Remove {duplicateRows.length} duplicate row(s)
+                    <CopyIcon size={13} color="#d97706" />
+                    <span>Remove {duplicateRows.length} duplicate row(s)</span>
                   </button>
                 )}
               </div>
@@ -2566,24 +3234,57 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
              ══════════════════════════════════════════════════════════════════════ */}
           {step === 'confirm' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '820px', margin: '0 auto' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.15rem', color: 'var(--text-main)' }}>
-                Confirm Import &amp; Restock Execution
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <LayersIcon size={18} color="#6366f1" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1.15rem', color: 'var(--text-main)' }}>
+                    Confirm Import &amp; Restock Execution
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    Review summary numbers before applying changes to your inventory
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
-                <div style={statCardStyle}>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
+                    <LayersIcon size={16} color="#6366f1" />
+                  </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary)' }}>{rawRows.length}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Input Rows</div>
                 </div>
-                <div style={statCardStyle}>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
+                    <SparklesIcon size={16} color="#4338ca" />
+                  </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#4338ca' }}>{newRows.length}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>New Products to Create</div>
                 </div>
-                <div style={statCardStyle}>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
+                    <RefreshCwIcon size={16} color="#16a34a" />
+                  </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#16a34a' }}>{restockRows.length}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Existing Restocks</div>
                 </div>
-                <div style={statCardStyle}>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
+                    <PackageBoxIcon size={16} color="#0284c7" />
+                  </div>
                   <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0284c7' }}>{totalInwardStock}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Inward Units</div>
                 </div>
@@ -2591,8 +3292,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
 
               {/* Explanatory notes */}
               <div style={{ background: '#f8f7ff', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.6rem', color: 'var(--text-main)' }}>
-                  Execution Details &amp; Safeguards
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.65rem', color: 'var(--text-main)' }}>
+                  <CheckCircleIcon size={16} color="#4f46e5" />
+                  <span>Execution Details &amp; Safeguards</span>
                 </div>
                 <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.8 }}>
                   <li>
@@ -2612,20 +3314,50 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     </li>
                   )}
                   <li>
-                    Idempotency protected with batch key <code>{importBatchId.current}</code>.
+                    Idempotency protected with batch key <code style={{ background: '#ffffff', padding: '0.15rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.8rem' }}>{importBatchId.current}</code>.
                   </li>
                 </ul>
               </div>
 
               {rawRows.some((r) => !r.matchedItem && (!r.barcode || !r.barcode.trim())) && (
-                <div style={{ padding: '0.85rem 1rem', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ⚠️ {rawRows.filter((r) => !r.matchedItem && (!r.barcode || !r.barcode.trim())).length} new product(s) are pending barcodes. Please return to Review and click &quot;Generate Internal Barcodes&quot; or scan barcodes.
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.65rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '10px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#b91c1c',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <AlertTriangleIcon size={18} color="#dc2626" />
+                  <span>
+                    {rawRows.filter((r) => !r.matchedItem && (!r.barcode || !r.barcode.trim())).length} new product(s) are pending barcodes. Please return to Review and click &quot;Generate Internal Barcodes&quot; or scan barcodes.
+                  </span>
                 </div>
               )}
 
               {apiError && (
-                <div style={{ padding: '0.85rem 1rem', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ❌ {apiError}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.65rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '10px',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#b91c1c',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <AlertCircleIcon size={18} color="#dc2626" />
+                  <span>{apiError}</span>
                 </div>
               )}
             </div>
@@ -2637,36 +3369,78 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
           {step === 'results' && importResult && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-                <div style={statCardStyle}>
-                  <div style={{ fontSize: '1.8rem' }}>📦</div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <LayersIcon size={18} color="var(--primary)" />
+                  </div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>{importResult.totalRows}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Rows</div>
                 </div>
-                <div style={statCardStyle}>
-                  <div style={{ fontSize: '1.8rem' }}>✨</div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <SparklesIcon size={18} color="#4338ca" />
+                  </div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#4338ca' }}>{importResult.created}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>New Products Created</div>
                 </div>
-                <div style={statCardStyle}>
-                  <div style={{ fontSize: '1.8rem' }}>🔄</div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <RefreshCwIcon size={18} color="#16a34a" />
+                  </div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#16a34a' }}>{importResult.restocked}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Products Restocked</div>
                 </div>
-                <div style={statCardStyle}>
-                  <div style={{ fontSize: '1.8rem' }}>🏷️</div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <BarcodeIcon size={18} color="#0284c7" />
+                  </div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0284c7' }}>{importResult.barcodesSaved ?? 0}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Barcodes Saved</div>
                 </div>
-                <div style={statCardStyle}>
-                  <div style={{ fontSize: '1.8rem' }}>⚠️</div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: importResult.skipped > 0 ? '#fee2e2' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.45rem' }}>
+                    <AlertTriangleIcon size={18} color={importResult.skipped > 0 ? '#dc2626' : '#9ca3af'} />
+                  </div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 800, color: importResult.skipped > 0 ? '#dc2626' : 'var(--text-muted)' }}>{importResult.skipped}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Skipped / Unchanged</div>
                 </div>
               </div>
 
               {importResult.created + importResult.restocked > 0 && (
-                <div style={{ padding: '0.85rem 1.15rem', borderRadius: '10px', background: '#ecfdf5', border: '1px solid #a7f3d0', fontSize: '0.9rem', color: '#065f46', fontWeight: 600 }}>
-                  🎉 Successfully imported {importResult.created} new product{importResult.created !== 1 ? 's' : ''}, restocked {importResult.restocked} existing product{importResult.restocked !== 1 ? 's' : ''}, and saved {importResult.barcodesSaved ?? 0} barcode mapping{importResult.barcodesSaved !== 1 ? 's' : ''}!
+                <div
+                  style={{
+                    padding: '1rem 1.25rem',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+                    border: '1px solid #a7f3d0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.08)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: '#d1fae5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckCircleIcon size={22} color="#059669" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.94rem', color: '#065f46', fontWeight: 700 }}>
+                      Import Batch Completed Successfully
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: '#047857', marginTop: '0.2rem' }}>
+                      Successfully imported {importResult.created} new product{importResult.created !== 1 ? 's' : ''}, restocked {importResult.restocked} existing product{importResult.restocked !== 1 ? 's' : ''}, and saved {importResult.barcodesSaved ?? 0} barcode mapping{importResult.barcodesSaved !== 1 ? 's' : ''}!
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2688,18 +3462,21 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                         <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, color: 'var(--text-main)' }}>{r.name || '(unnamed)'}</td>
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           {r.status === 'created' && (
-                            <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#eef2ff', color: '#4338ca' }}>
-                              Created (New)
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#eef2ff', color: '#4338ca' }}>
+                              <SparklesIcon size={12} color="#4338ca" />
+                              <span>Created (New)</span>
                             </span>
                           )}
                           {r.status === 'restocked' && (
-                            <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>
-                              Restocked
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>
+                              <RefreshCwIcon size={12} color="#15803d" />
+                              <span>Restocked</span>
                             </span>
                           )}
                           {r.status === 'skipped' && (
-                            <span style={{ padding: '0.2rem 0.55rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#fee2e2', color: '#b91c1c' }}>
-                              Skipped
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: '#fee2e2', color: '#b91c1c' }}>
+                              <AlertCircleIcon size={12} color="#b91c1c" />
+                              <span>Skipped</span>
                             </span>
                           )}
                         </td>
@@ -2716,23 +3493,48 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                 {importResult.skipped > 0 && (
                   <button
+                    id="bulk-download-failed-btn"
                     onClick={handleDownloadFailedRows}
                     style={{
-                      padding: '0.55rem 1rem', borderRadius: '8px', border: '1px solid #fca5a5',
-                      background: '#fff1f2', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                      padding: '0.55rem 1.1rem',
+                      borderRadius: '8px',
+                      border: '1px solid #fca5a5',
+                      background: '#fff1f2',
+                      color: '#b91c1c',
+                      fontSize: '0.84rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    ⬇️ Download Failed Rows (CSV)
+                    <DownloadIcon size={14} color="#b91c1c" />
+                    <span>Download Failed Rows (CSV)</span>
                   </button>
                 )}
                 <button
+                  id="bulk-download-report-btn"
                   onClick={handleDownloadImportReport}
                   style={{
-                    padding: '0.55rem 1rem', borderRadius: '8px', border: '1px solid var(--border)',
-                    background: '#ffffff', color: 'var(--text-main)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                    padding: '0.55rem 1.1rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    background: '#ffffff',
+                    color: 'var(--text-main)',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  📄 Download Complete Summary Report (CSV)
+                  <FileSpreadsheetIcon size={14} color="#4f46e5" />
+                  <span>Download Complete Summary Report (CSV)</span>
                 </button>
               </div>
             </div>
@@ -2769,22 +3571,52 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                 id="bulk-start-over-btn"
                 onClick={() => { setStep('choose'); setRawRows([]); setBarcodeValidationActive(false); }}
                 className="btn btn-secondary"
-                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
               >
-                ‹ Start Over
+                <ArrowLeftIcon size={14} />
+                <span>Start Over</span>
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                   {errorRows.length + duplicateRows.length + ambiguousRows.length > 0 ? (
-                    <span>
-                      <strong style={{ color: '#dc2626' }}>
-                        {errorRows.length + duplicateRows.length + ambiguousRows.length} row(s)
-                      </strong>{' '}
-                      will be skipped unless resolved
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.35rem 0.8rem',
+                        borderRadius: '20px',
+                        background: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        color: '#b45309',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertTriangleIcon size={14} color="#d97706" />
+                      <span>
+                        <strong>{errorRows.length + duplicateRows.length + ambiguousRows.length} row(s)</strong> will be skipped unless resolved
+                      </span>
                     </span>
                   ) : (
-                    <span style={{ color: '#15803d', fontWeight: 600 }}>All {eligibleRows.length} rows ready to import</span>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.35rem 0.8rem',
+                        borderRadius: '20px',
+                        background: '#ecfdf5',
+                        border: '1px solid #a7f3d0',
+                        color: '#047857',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <CheckCircleIcon size={14} color="#10b981" />
+                      <span>All <strong>{eligibleRows.length}</strong> rows ready to import</span>
+                    </span>
                   )}
                 </span>
 
@@ -2802,19 +3634,23 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                   }}
                   disabled={eligibleRows.length === 0}
                   style={{
-                    background: eligibleRows.length > 0 ? '#6d4aff' : '#cbd5e1',
+                    background: eligibleRows.length > 0 ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : '#cbd5e1',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '10px',
-                    padding: '0.65rem 1.35rem',
+                    padding: '0.65rem 1.4rem',
                     fontWeight: 700,
-                    fontSize: '0.92rem',
+                    fontSize: '0.9rem',
                     cursor: eligibleRows.length > 0 ? 'pointer' : 'not-allowed',
-                    boxShadow: eligibleRows.length > 0 ? '0 4px 12px rgba(109,74,255,0.3)' : 'none',
-                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                    boxShadow: eligibleRows.length > 0 ? '0 4px 14px rgba(99, 102, 241, 0.35)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  Review &amp; Import ({eligibleRows.length}) ›
+                  <span>Review &amp; Import ({eligibleRows.length})</span>
+                  <ArrowRightIcon size={15} color="#ffffff" />
                 </button>
               </div>
             </>
@@ -2826,18 +3662,46 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                 onClick={() => setStep('review')}
                 className="btn btn-secondary"
                 disabled={isSubmitting}
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
               >
-                ‹ Back to Review
+                <ArrowLeftIcon size={14} />
+                <span>Back to Review</span>
               </button>
 
               <button
                 id="bulk-confirm-import-btn"
                 onClick={handleExecuteImport}
                 disabled={isSubmitting || eligibleRows.length === 0}
-                className="btn btn-primary"
-                style={{ minWidth: 190, padding: '0.65rem 1.4rem', fontSize: '0.92rem', fontWeight: 700 }}
+                style={{
+                  background: isSubmitting || eligibleRows.length === 0 ? '#cbd5e1' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  minWidth: 200,
+                  padding: '0.65rem 1.4rem',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  cursor: isSubmitting || eligibleRows.length === 0 ? 'not-allowed' : 'pointer',
+                  boxShadow: !isSubmitting && eligibleRows.length > 0 ? '0 4px 14px rgba(16, 185, 129, 0.35)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.15s ease',
+                }}
               >
-                {isSubmitting ? '⏳ Importing & Restocking...' : `Confirm & Import (${eligibleRows.length}) ›`}
+                {isSubmitting ? (
+                  <>
+                    <RefreshCwIcon size={15} color="#ffffff" spinning={true} />
+                    <span>Importing &amp; Restocking...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircleIcon size={16} color="#ffffff" />
+                    <span>Confirm &amp; Import ({eligibleRows.length})</span>
+                    <ArrowRightIcon size={14} color="#ffffff" />
+                  </>
+                )}
               </button>
             </>
           )}
@@ -2847,17 +3711,33 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
               <button
                 onClick={() => { setStep('choose'); setRawRows([]); setImportResult(null); setBarcodeValidationActive(false); }}
                 className="btn btn-secondary"
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', fontWeight: 600 }}
               >
-                Import More Products
+                <RotateCcwIcon size={14} />
+                <span>Import More Products</span>
               </button>
 
               <button
                 id="bulk-import-done-btn"
                 onClick={() => { onImportDone(); onClose(); }}
-                className="btn btn-primary"
-                style={{ fontWeight: 700 }}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.65rem 1.4rem',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  transition: 'all 0.15s ease',
+                }}
               >
-                ✓ Done — Go to Products
+                <CheckIcon size={15} color="#ffffff" />
+                <span>Done — Go to Products</span>
               </button>
             </>
           )}

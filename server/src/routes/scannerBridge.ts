@@ -85,17 +85,83 @@ function savePersistedTunnelUrl(url: string) {
   } catch {}
 }
 
-let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || loadPersistedTunnelUrl();
+import { spawn, type ChildProcess } from 'node:child_process';
 
-// Keep Cloudflare Tunnel alive & prevent Wi-Fi router NAT connection timeouts
-setInterval(() => {
-  if (activeTunnelUrl && activeTunnelUrl.startsWith('https://')) {
-    fetch(`${activeTunnelUrl}/api/health`, {
+let activeTunnelUrl = process.env.SCANNER_TUNNEL_URL || loadPersistedTunnelUrl();
+let activeTunnelProcess: ChildProcess | null = null;
+
+export async function isTunnelHealthy(url?: string): Promise<boolean> {
+  const target = url || activeTunnelUrl;
+  if (!target || !target.startsWith('https://')) return false;
+  try {
+    const res = await fetch(`${target}/api/health`, {
       headers: { 'User-Agent': 'Billing-Tunnel-KeepAlive/1.0' },
-      signal: AbortSignal.timeout(4000),
-    }).catch(() => {});
+      signal: AbortSignal.timeout(3500),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
-}, 20_000);
+}
+
+export function launchTunnel(port = 3001): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (activeTunnelProcess) {
+        try { activeTunnelProcess.kill(); } catch {}
+        activeTunnelProcess = null;
+      }
+      const child = spawn('npx', ['-y', 'cloudflared', 'tunnel', '--protocol', 'http2', '--url', `http://localhost:${port}`], {
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      activeTunnelProcess = child;
+
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Tunnel startup timed out after 15 seconds'));
+        }
+      }, 15000);
+
+      const onData = (chunk: Buffer) => {
+        const text = chunk.toString();
+        const match = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
+        if (match && !resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          const url = match[0];
+          setTunnelUrl(url);
+          resolve(url);
+        }
+      };
+
+      child.stdout?.on('data', onData);
+      child.stderr?.on('data', onData);
+      child.on('error', (err) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          reject(err);
+        }
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// Keep Cloudflare Tunnel alive & detect dead tunnels
+setInterval(async () => {
+  if (activeTunnelUrl && activeTunnelUrl.startsWith('https://')) {
+    const alive = await isTunnelHealthy(activeTunnelUrl);
+    if (!alive) {
+      activeTunnelUrl = '';
+      savePersistedTunnelUrl('');
+    }
+  }
+}, 25_000);
 
 export function setTunnelUrl(url: string) {
   activeTunnelUrl = url.trim();
@@ -108,17 +174,29 @@ export function getTunnelUrl(): string {
 
 export function registerScannerBridge(r: Router) {
   // 1. Get network IP & ports for mobile pairing QR code
-  r.get('/api/scanner/network-info', (ctx: Ctx) => {
+  r.get('/api/scanner/network-info', async (ctx: Ctx) => {
     const localIp = getLocalIpAddress();
     const availableIps = getAllLocalIps();
     const httpPort = Number(process.env.PORT ?? 3001);
     const httpsPort = httpPort + 443;
+
+    let validTunnelUrl = activeTunnelUrl;
+    if (activeTunnelUrl) {
+      const isAlive = await isTunnelHealthy(activeTunnelUrl);
+      if (!isAlive) {
+        activeTunnelUrl = '';
+        savePersistedTunnelUrl('');
+        validTunnelUrl = '';
+      }
+    }
+
     return {
       localIp,
       availableIps,
       httpPort,
       httpsPort,
-      tunnelUrl: activeTunnelUrl,
+      tunnelUrl: validTunnelUrl,
+      isTunnelAlive: Boolean(validTunnelUrl),
       serverTime: Date.now(),
     };
   });
@@ -137,6 +215,17 @@ export function registerScannerBridge(r: Router) {
       setTunnelUrl(String(ctx.body.url));
     }
     return { ok: true, tunnelUrl: activeTunnelUrl };
+  });
+
+  // 1c. Start or restart public tunnel on demand
+  r.post('/api/scanner/restart-tunnel', async () => {
+    const httpPort = Number(process.env.PORT ?? 3001);
+    try {
+      const url = await launchTunnel(httpPort);
+      return { ok: true, tunnelUrl: url };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Failed to start tunnel' };
+    }
   });
 
   // 2. Initialize or verify session

@@ -458,13 +458,16 @@ export function registerInvoices(r: Router) {
           ],
         );
 
-        // Deduct inventory at the sale's branch location
+        // Deduct inventory at the sale's branch location (verifying item exists to prevent foreign key errors)
         if (item.itemId) {
-          await q.exec(
-            `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
-             VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
-            [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
-          );
+          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? LIMIT 1', [item.itemId, tenantId]);
+          if (itemExists) {
+            await q.exec(
+              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
+               VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
+              [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
+            );
+          }
         }
       }
 
@@ -582,7 +585,14 @@ export function registerInvoices(r: Router) {
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [inv.tenantId ?? inv.tenant_id]);
     if (!shop) throw notFound('Shop');
 
-    const lines = await ctx.db.query('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY pos ASC', [inv.id]);
+    const lines = await ctx.db.query(
+      `SELECT il.*, it.custom AS item_custom
+       FROM invoice_lines il
+       LEFT JOIN items it ON it.id = il.item_id
+       WHERE il.invoice_id = ?
+       ORDER BY il.pos ASC`,
+      [inv.id],
+    );
     const payments = await ctx.db.query('SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC', [inv.id]);
 
     const paper = (ctx.query.paper === 'a4' || ctx.query.paper === 'thermal58') ? ctx.query.paper : 'thermal80';
@@ -621,22 +631,48 @@ export function registerInvoices(r: Router) {
         phone: shop.phone,
         gstin: shop.gstin,
         upiId: shop.upiId ?? shop.upi_id,
+        logoUrl: shop.logoUrl ?? shop.logo_url ?? null,
       },
       customer: custName ? { name: custName, phone: custPhone } : null,
-      lines: lines.map((l: any) => ({
-        name: l.name,
-        hsn: l.hsn,
-        unit: l.unit,
-        qtyMilli: Number(l.qtyMilli ?? l.qty_milli),
-        priceMinor: Number(l.priceMinor ?? l.price_minor),
-        discountMinor: Number(l.discountMinor ?? l.discount_minor),
-        taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
-        taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
-        cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
-        sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
-        igstMinor: Number(l.igstMinor ?? l.igst_minor),
-        totalMinor: Number(l.totalMinor ?? l.total_minor),
-      })),
+      lines: lines.map((l: any) => {
+        let mrpMinor = 0;
+        try {
+          const itemCustom = typeof l.itemCustom === 'string' ? JSON.parse(l.itemCustom) : (l.itemCustom || {});
+          if (typeof itemCustom.mrpMinor === 'number' && itemCustom.mrpMinor > 0) {
+            mrpMinor = itemCustom.mrpMinor;
+          } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
+            mrpMinor = itemCustom.mrp_minor;
+          }
+        } catch {}
+
+        const priceMinor = Number(l.priceMinor ?? l.price_minor);
+        const discountMinor = Number(l.discountMinor ?? l.discount_minor);
+        const qtyMilli = Number(l.qtyMilli ?? l.qty_milli);
+        const discountPerUnit = qtyMilli > 0 ? Math.round((discountMinor * 1000) / qtyMilli) : 0;
+        if (!mrpMinor || mrpMinor <= priceMinor) {
+          if (discountPerUnit > 0) {
+            mrpMinor = priceMinor + discountPerUnit;
+          } else {
+            mrpMinor = Math.max(priceMinor, Math.ceil((priceMinor * 1.15) / 100) * 100);
+          }
+        }
+
+        return {
+          name: l.name,
+          hsn: l.hsn,
+          unit: l.unit,
+          qtyMilli,
+          priceMinor,
+          mrpMinor,
+          discountMinor,
+          taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
+          taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
+          cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
+          sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
+          igstMinor: Number(l.igstMinor ?? l.igst_minor),
+          totalMinor: Number(l.totalMinor ?? l.total_minor),
+        };
+      }),
       totals: {
         subtotalMinor: Number(inv.subtotalMinor ?? inv.subtotal_minor),
         discountMinor: Number(inv.discountMinor ?? inv.discount_minor),
@@ -737,7 +773,14 @@ export function registerInvoices(r: Router) {
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [inv.tenantId ?? inv.tenant_id]);
     if (!shop) throw notFound('Shop');
 
-    const lines = await ctx.db.query('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY pos ASC', [inv.id]);
+    const lines = await ctx.db.query(
+      `SELECT il.*, it.custom AS item_custom
+       FROM invoice_lines il
+       LEFT JOIN items it ON it.id = il.item_id
+       WHERE il.invoice_id = ?
+       ORDER BY il.pos ASC`,
+      [inv.id],
+    );
     const payments = await ctx.db.query('SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC', [inv.id]);
 
     const custName = inv.customerName ?? inv.customer_name;
@@ -756,22 +799,48 @@ export function registerInvoices(r: Router) {
         phone: shop.phone,
         gstin: shop.gstin,
         upiId: shop.upiId ?? shop.upi_id,
+        logoUrl: shop.logoUrl ?? shop.logo_url ?? null,
       },
       customer: custName ? { name: custName, phone: custPhone } : null,
-      lines: lines.map((l: any) => ({
-        name: l.name,
-        hsn: l.hsn,
-        unit: l.unit,
-        qtyMilli: Number(l.qtyMilli ?? l.qty_milli),
-        priceMinor: Number(l.priceMinor ?? l.price_minor),
-        discountMinor: Number(l.discountMinor ?? l.discount_minor),
-        taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
-        taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
-        cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
-        sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
-        igstMinor: Number(l.igstMinor ?? l.igst_minor),
-        totalMinor: Number(l.totalMinor ?? l.total_minor),
-      })),
+      lines: lines.map((l: any) => {
+        let mrpMinor = 0;
+        try {
+          const itemCustom = typeof l.itemCustom === 'string' ? JSON.parse(l.itemCustom) : (l.itemCustom || {});
+          if (typeof itemCustom.mrpMinor === 'number' && itemCustom.mrpMinor > 0) {
+            mrpMinor = itemCustom.mrpMinor;
+          } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
+            mrpMinor = itemCustom.mrp_minor;
+          }
+        } catch {}
+
+        const priceMinor = Number(l.priceMinor ?? l.price_minor);
+        const discountMinor = Number(l.discountMinor ?? l.discount_minor);
+        const qtyMilli = Number(l.qtyMilli ?? l.qty_milli);
+        const discountPerUnit = qtyMilli > 0 ? Math.round((discountMinor * 1000) / qtyMilli) : 0;
+        if (!mrpMinor || mrpMinor <= priceMinor) {
+          if (discountPerUnit > 0) {
+            mrpMinor = priceMinor + discountPerUnit;
+          } else {
+            mrpMinor = Math.max(priceMinor, Math.ceil((priceMinor * 1.15) / 100) * 100);
+          }
+        }
+
+        return {
+          name: l.name,
+          hsn: l.hsn,
+          unit: l.unit,
+          qtyMilli,
+          priceMinor,
+          mrpMinor,
+          discountMinor,
+          taxRateBp: Number(l.taxRateBp ?? l.tax_rate_bp),
+          taxableMinor: Number(l.taxableMinor ?? l.taxable_minor),
+          cgstMinor: Number(l.cgstMinor ?? l.cgst_minor),
+          sgstMinor: Number(l.sgstMinor ?? l.sgst_minor),
+          igstMinor: Number(l.igstMinor ?? l.igst_minor),
+          totalMinor: Number(l.totalMinor ?? l.total_minor),
+        };
+      }),
       totals: {
         subtotalMinor: Number(inv.subtotalMinor ?? inv.subtotal_minor),
         discountMinor: Number(inv.discountMinor ?? inv.discount_minor),

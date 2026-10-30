@@ -229,6 +229,342 @@ function addDaysYMD(ymd: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/* ==========================================================================
+   MODERN VECTOR SVG ICONS FOR SALES ANALYSIS
+   ========================================================================== */
+
+const AnalyticsHeaderIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+    <line x1="2" y1="20" x2="22" y2="20" />
+  </svg>
+);
+
+const DownloadCloudIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const PrinterIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="8" />
+  </svg>
+);
+
+const WhatsAppCalendarIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+  </svg>
+);
+
+const StoreIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+    <path d="M2 7h20" />
+  </svg>
+);
+
+const TagFilterIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+
+const UserFilterIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const CalendarIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
+const GitCompareIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+    <path d="M11 18H8a2 2 0 0 1-2-2V9" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const NetSalesIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="1" x2="12" y2="23" />
+    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+  </svg>
+);
+
+const BillsReceiptIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z" />
+    <line x1="8" y1="8" x2="16" y2="8" />
+    <line x1="8" y1="12" x2="16" y2="12" />
+    <line x1="8" y1="16" x2="12" y2="16" />
+  </svg>
+);
+
+const AvgBillIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+    <path d="M3 6h18" />
+    <path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>
+);
+
+const GrossProfitIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <path d="m16 8-8 8" />
+    <circle cx="9" cy="9" r="1" />
+    <circle cx="15" cy="15" r="1" />
+  </svg>
+);
+
+const ReturnsRefundIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </svg>
+);
+
+const GstShieldIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+const TrendUpIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="17 7 17 17 7 17" transform="rotate(-45 12 12)" />
+  </svg>
+);
+
+const TrendDownIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="17 7 17 17 7 17" transform="rotate(45 12 12)" />
+  </svg>
+);
+
+const OverviewChartIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+);
+
+const EmptyChartIllustration = () => (
+  <svg width="56" height="56" viewBox="0 0 64 64" fill="none" style={{ opacity: 0.6 }}>
+    <rect x="8" y="12" width="48" height="40" rx="8" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 4" />
+    <path d="M16 42l10-14 8 8 14-16" stroke="#6d4aff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="16" cy="42" r="3" fill="#6d4aff" />
+    <circle cx="26" cy="28" r="3" fill="#6d4aff" />
+    <circle cx="34" cy="36" r="3" fill="#6d4aff" />
+    <circle cx="48" cy="20" r="3" fill="#6d4aff" />
+  </svg>
+);
+
+const PieChartCategoryIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+    <path d="M22 12A10 10 0 0 0 12 2v10z" />
+  </svg>
+);
+
+const ChevronRightMini = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const ClockHeatmapIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const FlamePeakIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  </svg>
+);
+
+const WalletPaymentIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+  </svg>
+);
+
+const PhoneUpiIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+    <line x1="12" y1="18" x2="12.01" y2="18" />
+  </svg>
+);
+
+const BanknoteCashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <circle cx="12" cy="12" r="2" />
+    <path d="M6 12h.01M18 12h.01" />
+  </svg>
+);
+
+const CreditCardIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+    <line x1="1" y1="10" x2="23" y2="10" />
+  </svg>
+);
+
+const BookKhataIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+);
+
+const CrownUserIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const SparklesInsightIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+  </svg>
+);
+
+const CalendarTableIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <line x1="3" y1="14" x2="21" y2="14" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+    <line x1="9" y1="10" x2="9" y2="22" />
+    <line x1="15" y1="10" x2="15" y2="22" />
+  </svg>
+);
+
+const FileSpreadsheetIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="8" y1="13" x2="16" y2="13" />
+    <line x1="8" y1="17" x2="16" y2="17" />
+    <line x1="10" y1="9" x2="8" y2="9" />
+  </svg>
+);
+
+const CloseModalIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const AlertTriangleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+/** Render modern vector SVG icon for insights */
+function renderInsightIcon(iconStr: string, theme?: string) {
+  if (iconStr === '📈' || iconStr.includes('up') || theme === 'emerald') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </svg>
+    );
+  }
+  if (iconStr === '📉' || iconStr.includes('down') || theme === 'rose') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+        <polyline points="17 18 23 18 23 12" />
+      </svg>
+    );
+  }
+  if (iconStr === '⏰' || iconStr.includes('rush') || iconStr.includes('hour') || theme === 'amber') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    );
+  }
+  if (iconStr === '💳' || iconStr.includes('credit') || iconStr.includes('khata') || theme === 'purple') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+        <line x1="1" y1="10" x2="23" y2="10" />
+      </svg>
+    );
+  }
+  if (iconStr === '🏆' || iconStr.includes('trophy')) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+      </svg>
+    );
+  }
+  if (iconStr === '⚠️' || iconStr.includes('alert')) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6d4aff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    </svg>
+  );
+}
+
 export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
   userRole = 'owner',
   shopName = 'Shree Krishna Supermarket & Retail',
@@ -787,12 +1123,21 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
       <div className="card sales-header-card">
         <div className="sales-header-top">
           <div className="sales-header-title-row">
-            <span className="sales-module-icon">💰</span>
-            <h1 className="sales-module-title">Sales Analysis</h1>
-            <span className="badge-live-pulse" title="Live transactions synced directly from cashier registers">
-              <span className="pulse-dot-green"></span>
-              Live from billing
-            </span>
+            <div className="sales-module-brand-icon">
+              <AnalyticsHeaderIcon />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <h1 className="sales-module-title">Sales Analysis</h1>
+                <span className="badge-live-pulse" title="Live transactions synced directly from cashier registers">
+                  <span className="pulse-dot-green"></span>
+                  <span>Live from billing</span>
+                </span>
+              </div>
+              <div className="sales-header-subtitle">
+                Sales, profit, payment modes, peak hours, customers and cashiers · completed bills only, returns and cancelled bills handled per your business rules
+              </div>
+            </div>
           </div>
 
           <div className="sales-header-actions">
@@ -803,11 +1148,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               disabled={loading || !data}
               title="Export complete sales analysis summary and table to CSV"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
+              <DownloadCloudIcon />
               <span>Export Report</span>
             </button>
 
@@ -818,11 +1159,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               disabled={loading || !data}
               title="Print clean Sales Analysis document"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                <rect x="6" y="14" width="12" height="8"></rect>
-              </svg>
+              <PrinterIcon />
               <span>Print</span>
             </button>
 
@@ -832,19 +1169,10 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               onClick={() => setShowScheduleModal(true)}
               title="Schedule automated daily sales digest to shop owner's WhatsApp"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-              </svg>
+              <WhatsAppCalendarIcon />
               <span>Schedule Daily Report</span>
             </button>
           </div>
-        </div>
-
-        <div className="sales-header-subtitle">
-          Sales, profit, payment modes, peak hours, customers and cashiers · completed bills only, returns and cancelled bills handled per your business rules
         </div>
       </div>
 
@@ -853,6 +1181,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
         <div className="sales-filter-left">
           {/* Counter Dropdown */}
           <div className="sales-select-wrap">
+            <span className="sales-select-icon">
+              <StoreIcon />
+            </span>
             <select
               className="form-select sales-filter-select"
               value={selectedCounter}
@@ -865,10 +1196,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 </option>
               )) || <option value="ALL">All counters</option>}
             </select>
+            <span className="sales-select-chevron">
+              <ChevronDownIcon />
+            </span>
           </div>
 
           {/* Category Dropdown */}
           <div className="sales-select-wrap">
+            <span className="sales-select-icon">
+              <TagFilterIcon />
+            </span>
             <select
               className="form-select sales-filter-select"
               value={selectedCategory}
@@ -884,10 +1221,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   </option>
                 ))}
             </select>
+            <span className="sales-select-chevron">
+              <ChevronDownIcon />
+            </span>
           </div>
 
           {/* Cashier Dropdown */}
           <div className="sales-select-wrap">
+            <span className="sales-select-icon">
+              <UserFilterIcon />
+            </span>
             <select
               className="form-select sales-filter-select"
               value={selectedCashier}
@@ -903,6 +1246,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   </option>
                 ))}
             </select>
+            <span className="sales-select-chevron">
+              <ChevronDownIcon />
+            </span>
           </div>
         </div>
 
@@ -949,13 +1295,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               className={`sales-pill-btn custom-pill ${datePreset === 'custom' ? 'active' : ''}`}
               onClick={openCustomDateModal}
             >
-              <span>📅</span>
+              <CalendarIcon />
               <span>{datePreset === 'custom' && customFrom && customTo ? `${formatDMMM(customFrom)} – ${formatDMMM(customTo)}` : 'Custom'}</span>
             </button>
           </div>
 
           {/* Compare Period Dropdown */}
           <div className="sales-compare-wrap">
+            <span className="sales-compare-icon">
+              <GitCompareIcon />
+            </span>
             <select
               className="form-select sales-compare-select"
               value={comparePreset}
@@ -966,6 +1315,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               <option value="same_period_last_month">Compare: Same period last month</option>
               <option value="none">Compare: None</option>
             </select>
+            <span className="sales-select-chevron">
+              <ChevronDownIcon />
+            </span>
           </div>
         </div>
       </div>
@@ -973,7 +1325,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
       {/* ERROR STATE */}
       {error && (
         <div className="card sales-error-card">
-          <div className="error-icon">⚠️</div>
+          <div className="error-icon-box">
+            <AlertTriangleIcon />
+          </div>
           <div className="error-details">
             <strong>Unable to load sales analysis</strong>
             <p>{error}</p>
@@ -1006,9 +1360,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
           {/* 3. 6 SUMMARY CARDS */}
           <div className="sales-kpi-grid-6">
             {/* Card 1: NET SALES */}
-            <div className="sales-kpi-card border-top-purple">
+            <div className="sales-kpi-card kpi-card-purple">
               <div className="kpi-header-row">
                 <span className="kpi-label">NET SALES</span>
+                <div className="kpi-icon-badge kpi-icon-purple">
+                  <NetSalesIcon />
+                </div>
               </div>
               <div className="kpi-value-main text-purple mono">
                 {formatRupees(data.summary.netSalesMinor)}
@@ -1016,7 +1373,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               <div className="kpi-diff-row">
                 {data.comparison?.diff ? (
                   <span className={`diff-tag ${data.comparison.diff.netSalesChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.netSalesChangePct >= 0 ? '▲' : '▼'} {Math.abs(data.comparison.diff.netSalesChangePct)}%
+                    {data.comparison.diff.netSalesChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                    <span>{Math.abs(data.comparison.diff.netSalesChangePct)}%</span>
                     <span className="diff-sub">vs {data.comparison.periodLabel}</span>
                   </span>
                 ) : (
@@ -1026,9 +1384,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
 
             {/* Card 2: BILLS */}
-            <div className="sales-kpi-card border-top-blue">
+            <div className="sales-kpi-card kpi-card-blue">
               <div className="kpi-header-row">
                 <span className="kpi-label">BILLS</span>
+                <div className="kpi-icon-badge kpi-icon-blue">
+                  <BillsReceiptIcon />
+                </div>
               </div>
               <div className="kpi-value-main mono">
                 {data.summary.billsCount.toLocaleString('en-IN')}
@@ -1036,7 +1397,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               <div className="kpi-diff-row">
                 {data.comparison?.diff ? (
                   <span className={`diff-tag ${data.comparison.diff.billsCountChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.billsCountChangePct >= 0 ? '▲' : '▼'} {Math.abs(data.comparison.diff.billsCountChangePct)}%
+                    {data.comparison.diff.billsCountChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                    <span>{Math.abs(data.comparison.diff.billsCountChangePct)}%</span>
                     <span className="diff-sub">• {data.summary.avgBillsPerDay} / day</span>
                   </span>
                 ) : (
@@ -1046,9 +1408,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
 
             {/* Card 3: AVG BILL VALUE */}
-            <div className="sales-kpi-card border-top-cyan">
+            <div className="sales-kpi-card kpi-card-cyan">
               <div className="kpi-header-row">
                 <span className="kpi-label">AVG BILL VALUE</span>
+                <div className="kpi-icon-badge kpi-icon-cyan">
+                  <AvgBillIcon />
+                </div>
               </div>
               <div className="kpi-value-main mono">
                 {formatRupees(data.summary.avgBillValueMinor, true)}
@@ -1056,7 +1421,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               <div className="kpi-diff-row">
                 {data.comparison?.diff ? (
                   <span className={`diff-tag ${data.comparison.diff.avgBillChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.avgBillChangePct >= 0 ? '▲' : '▼'} {Math.abs(data.comparison.diff.avgBillChangePct)}%
+                    {data.comparison.diff.avgBillChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                    <span>{Math.abs(data.comparison.diff.avgBillChangePct)}%</span>
                   </span>
                 ) : (
                   <span className="diff-sub">Net sales ÷ bills</span>
@@ -1065,19 +1431,22 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
 
             {/* Card 4: GROSS PROFIT */}
-            <div className="sales-kpi-card border-top-emerald">
+            <div className="sales-kpi-card kpi-card-emerald">
               <div className="kpi-header-row">
                 <span className="kpi-label">GROSS PROFIT</span>
+                <div className="kpi-icon-badge kpi-icon-emerald">
+                  <GrossProfitIcon />
+                </div>
               </div>
               <div className="kpi-value-main text-emerald mono">
                 {formatRupees(data.summary.grossProfitMinor)}
               </div>
               <div className="kpi-diff-row">
-                <span className="diff-sub">
+                <span className="diff-sub" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <strong>{data.summary.marginPct}% margin</strong>
                   {data.comparison?.diff && (
                     <span className={`diff-tag-inline ${data.comparison.diff.marginPointDiff >= 0 ? 'positive' : 'negative'}`}>
-                      • {data.comparison.diff.marginPointDiff >= 0 ? '▲' : '▼'} {Math.abs(data.comparison.diff.marginPointDiff)} pt
+                      • {data.comparison.diff.marginPointDiff >= 0 ? <TrendUpIcon /> : <TrendDownIcon />} {Math.abs(data.comparison.diff.marginPointDiff)} pt
                     </span>
                   )}
                 </span>
@@ -1085,9 +1454,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
 
             {/* Card 5: RETURNS */}
-            <div className="sales-kpi-card border-top-red">
+            <div className="sales-kpi-card kpi-card-red">
               <div className="kpi-header-row">
                 <span className="kpi-label">RETURNS</span>
+                <div className="kpi-icon-badge kpi-icon-red">
+                  <ReturnsRefundIcon />
+                </div>
               </div>
               <div className="kpi-value-main text-red mono">
                 {formatRupees(data.summary.returnsMinor)}
@@ -1100,9 +1472,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
 
             {/* Card 6: GST COLLECTED */}
-            <div className="sales-kpi-card border-top-amber">
+            <div className="sales-kpi-card kpi-card-amber">
               <div className="kpi-header-row">
                 <span className="kpi-label">GST COLLECTED</span>
+                <div className="kpi-icon-badge kpi-icon-amber">
+                  <GstShieldIcon />
+                </div>
               </div>
               <div className="kpi-value-main mono">
                 {formatRupees(data.summary.totalGstMinor)}
@@ -1120,7 +1495,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
           <div className="card sales-overview-card">
             <div className="sales-chart-header">
               <div className="sales-chart-title-area">
-                <h2 className="sales-chart-heading">Sales Overview</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div className="chart-header-icon-box">
+                    <OverviewChartIcon />
+                  </div>
+                  <h2 className="sales-chart-heading">Sales Overview</h2>
+                </div>
                 <div className="sales-chart-sub">
                   <span>{headerDetails.dateRange}</span>
                   <span className="sub-sep">·</span>
@@ -1343,9 +1723,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Centered Empty State when all values in range are 0 */}
               {isChartEmpty && (
                 <div className="sales-chart-empty-state">
-                  <span className="chart-empty-icon" aria-hidden="true">
-                    📊
-                  </span>
+                  <EmptyChartIllustration />
                   <p className="chart-empty-text">No completed bills in this period</p>
                 </div>
               )}
@@ -1372,9 +1750,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Panel: Sales by Category */}
               <div className="card sales-panel-card">
                 <div className="panel-card-header">
-                  <div>
-                    <h3 className="panel-title">Sales by Category</h3>
-                    <div className="panel-subtitle">Share of net sales</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div className="panel-header-icon-box">
+                      <PieChartCategoryIcon />
+                    </div>
+                    <div>
+                      <h3 className="panel-title">Sales by Category</h3>
+                      <div className="panel-subtitle">Share of net sales</div>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -1385,7 +1768,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                       }
                     }}
                   >
-                    Details →
+                    <span>Details</span>
+                    <ChevronRightMini />
                   </button>
                 </div>
 
@@ -1393,6 +1777,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   {data.categories.map((cat, idx) => (
                     <div key={idx} className="category-rank-row">
                       <div className="cat-name-col">
+                        <span className="cat-rank-number">#{idx + 1}</span>
                         <span className="cat-color-dot" style={{ backgroundColor: cat.color }}></span>
                         <span className="cat-name-text" title={cat.category}>{cat.category}</span>
                       </div>
@@ -1414,7 +1799,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                       </div>
 
                       <div className="cat-share-col mono">
-                        {cat.sharePct}%
+                        <span className="cat-share-badge">{cat.sharePct}%</span>
                       </div>
                     </div>
                   ))}
@@ -1428,9 +1813,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Panel: Busiest Days & Hours Heatmap */}
               <div className="card sales-panel-card">
                 <div className="panel-card-header">
-                  <div>
-                    <h3 className="panel-title">Busiest Days & Hours</h3>
-                    <div className="panel-subtitle">Average sales by weekday and hour</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div className="panel-header-icon-box">
+                      <ClockHeatmapIcon />
+                    </div>
+                    <div>
+                      <h3 className="panel-title">Busiest Days &amp; Hours</h3>
+                      <div className="panel-subtitle">Average sales by weekday and hour</div>
+                    </div>
                   </div>
                 </div>
 
@@ -1483,7 +1873,10 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                     <span className="legend-label">High</span>
                     <span className="legend-dot">•</span>
                     <span className="legend-peak-text">
-                      Peak: <strong>{data.heatmap.peakSlot}</strong>
+                      <span className="peak-flame-icon">
+                        <FlamePeakIcon />
+                      </span>
+                      <span>Peak: <strong>{data.heatmap.peakSlot}</strong></span>
                     </span>
                   </div>
                 </div>
@@ -1495,9 +1888,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Panel: Payment Modes */}
               <div className="card sales-panel-card">
                 <div className="panel-card-header">
-                  <div>
-                    <h3 className="panel-title">Payment Modes</h3>
-                    <div className="panel-subtitle">Share of net sales</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div className="panel-header-icon-box">
+                      <WalletPaymentIcon />
+                    </div>
+                    <div>
+                      <h3 className="panel-title">Payment Modes</h3>
+                      <div className="panel-subtitle">Share of net sales</div>
+                    </div>
                   </div>
                 </div>
 
@@ -1532,12 +1930,38 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
 
                   {/* Small ₹ amount tiles below */}
                   <div className="payment-amount-tiles">
-                    {data.payments.modes.map((m, idx) => (
-                      <div key={idx} className="payment-amount-tile">
-                        <div className="tile-label">{m.label}</div>
-                        <div className="tile-val mono">{formatRupees(m.totalMinor)}</div>
-                      </div>
-                    ))}
+                    {data.payments.modes.map((m, idx) => {
+                      const getModeIcon = (modeId: string) => {
+                        switch (modeId.toLowerCase()) {
+                          case 'upi':
+                            return <PhoneUpiIcon />;
+                          case 'cash':
+                            return <BanknoteCashIcon />;
+                          case 'card':
+                            return <CreditCardIcon />;
+                          case 'credit':
+                          case 'khata':
+                            return <BookKhataIcon />;
+                          default:
+                            return <WalletPaymentIcon />;
+                        }
+                      };
+
+                      return (
+                        <div key={idx} className="payment-amount-tile">
+                          <div className="tile-top-row">
+                            <span className="tile-icon-wrap" style={{ color: m.color }}>
+                              {getModeIcon(m.mode)}
+                            </span>
+                            <span className="tile-label">{m.label}</span>
+                            <span className="tile-pct-badge" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
+                              {m.sharePct}%
+                            </span>
+                          </div>
+                          <div className="tile-val mono">{formatRupees(m.totalMinor)}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1545,9 +1969,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Panel: Top Customers */}
               <div className="card sales-panel-card">
                 <div className="panel-card-header">
-                  <div>
-                    <h3 className="panel-title">Top Customers</h3>
-                    <div className="panel-subtitle">Named customers • by sales</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div className="panel-header-icon-box">
+                      <CrownUserIcon />
+                    </div>
+                    <div>
+                      <h3 className="panel-title">Top Customers</h3>
+                      <div className="panel-subtitle">Named customers • by sales</div>
+                    </div>
                   </div>
                 </div>
 
@@ -1555,17 +1984,24 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   {data.topCustomers.map((cust, idx) => (
                     <div key={idx} className="top-customer-row">
                       <div className="customer-info-area">
-                        <div className="customer-name-row">
-                          <span className="customer-name">{cust.name}</span>
+                        <div className="customer-avatar-badge">
+                          {cust.name.trim().charAt(0).toUpperCase() || 'C'}
                         </div>
-                        <div className="customer-meta-row">
-                          <span className="customer-bill-count">{cust.billsCount} bills</span>
-                          <span className="meta-sep">•</span>
-                          {cust.isB2B ? (
-                            <span className="badge-cust-b2b">B2B</span>
-                          ) : (
-                            <span className="badge-cust-retail">Retail</span>
-                          )}
+                        <div>
+                          <div className="customer-name-row">
+                            <span className="customer-name">{cust.name}</span>
+                          </div>
+                          <div className="customer-meta-row">
+                            <span className="customer-bill-count">{cust.billsCount} bills</span>
+                            <span className="meta-sep">•</span>
+                            {cust.isB2B ? (
+                              <span className="badge-cust-b2b">B2B</span>
+                            ) : cust.isKhata ? (
+                              <span className="badge-cust-khata">Khata</span>
+                            ) : (
+                              <span className="badge-cust-retail">Retail</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1584,16 +2020,23 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Panel: Data-Driven Insights */}
               <div className="card sales-panel-card">
                 <div className="panel-card-header">
-                  <div>
-                    <h3 className="panel-title">Insights</h3>
-                    <div className="panel-subtitle">Updated with the date range</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div className="panel-header-icon-box">
+                      <SparklesInsightIcon />
+                    </div>
+                    <div>
+                      <h3 className="panel-title">Insights</h3>
+                      <div className="panel-subtitle">Updated with the date range</div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="insights-stack">
                   {data.insights.map((ins) => (
                     <div key={ins.id} className={`insight-card theme-${ins.theme}`}>
-                      <div className="insight-icon-area">{ins.icon}</div>
+                      <div className={`insight-icon-area theme-${ins.theme}`}>
+                        {renderInsightIcon(ins.icon, ins.theme)}
+                      </div>
                       <div className="insight-body">
                         <div className="insight-title">{ins.title}</div>
                         <div className="insight-desc">{ins.description}</div>
@@ -1613,9 +2056,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
           <div className="card sales-daywise-card">
             <div className="daywise-table-header">
               <div className="daywise-title-area">
-                <h3 className="daywise-heading">Daywise Sales Summary</h3>
-                <div className="daywise-sub">
-                  Click a day to see its bills · change vs same weekday last week
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                  <div className="panel-header-icon-box">
+                    <CalendarTableIcon />
+                  </div>
+                  <div>
+                    <h3 className="daywise-heading">Daywise Sales Summary</h3>
+                    <div className="daywise-sub">
+                      Click a day to see its bills · change vs same weekday last week
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1627,10 +2077,13 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                     value={grouping}
                     onChange={(e) => setGrouping(e.target.value as GroupingPreset)}
                   >
-                    <option value="day">Group: Day ▾</option>
-                    <option value="week">Group: Week ▾</option>
-                    <option value="month">Group: Month ▾</option>
+                    <option value="day">Group: Day</option>
+                    <option value="week">Group: Week</option>
+                    <option value="month">Group: Month</option>
                   </select>
+                  <span className="daywise-group-chevron">
+                    <ChevronDownIcon />
+                  </span>
                 </div>
 
                 {/* Export CSV button */}
@@ -1640,11 +2093,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   onClick={handleExportDaywiseCSV}
                   title="Export Daywise Sales Summary table to CSV"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
+                  <FileSpreadsheetIcon />
                   <span>Export CSV</span>
                 </button>
 
@@ -1655,11 +2104,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   onClick={handlePrint}
                   title="Print Sales Summary"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
+                  <PrinterIcon />
                   <span>Print</span>
                 </button>
               </div>
@@ -1671,28 +2116,52 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 <thead>
                   <tr>
                     <th onClick={() => { setSortField('date'); setSortAsc(!sortAsc); }} className="sortable-th">
-                      DATE {sortField === 'date' && (sortAsc ? '▲' : '▼')}
+                      <span>DATE</span>
+                      {sortField === 'date' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('billsCount'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      BILLS {sortField === 'billsCount' && (sortAsc ? '▲' : '▼')}
+                      <span>BILLS</span>
+                      {sortField === 'billsCount' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('netSalesMinor'); setSortAsc(!sortAsc); }} className="sortable-th col-num active-sort">
-                      NET SALES {sortField === 'netSalesMinor' && (sortAsc ? '▲' : '▼')}
+                      <span>NET SALES</span>
+                      {sortField === 'netSalesMinor' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('returnsMinor'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      RETURNS {sortField === 'returnsMinor' && (sortAsc ? '▲' : '▼')}
+                      <span>RETURNS</span>
+                      {sortField === 'returnsMinor' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('discountMinor'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      DISCOUNT {sortField === 'discountMinor' && (sortAsc ? '▲' : '▼')}
+                      <span>DISCOUNT</span>
+                      {sortField === 'discountMinor' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('gstMinor'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      GST {sortField === 'gstMinor' && (sortAsc ? '▲' : '▼')}
+                      <span>GST</span>
+                      {sortField === 'gstMinor' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('grossProfitMinor'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      GROSS PROFIT {sortField === 'grossProfitMinor' && (sortAsc ? '▲' : '▼')}
+                      <span>GROSS PROFIT</span>
+                      {sortField === 'grossProfitMinor' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th onClick={() => { setSortField('marginPct'); setSortAsc(!sortAsc); }} className="sortable-th col-num">
-                      MARGIN % {sortField === 'marginPct' && (sortAsc ? '▲' : '▼')}
+                      <span>MARGIN %</span>
+                      {sortField === 'marginPct' && (
+                        <span className="th-sort-arrow">{sortAsc ? '↑' : '↓'}</span>
+                      )}
                     </th>
                     <th className="col-num">CHANGE</th>
                   </tr>
@@ -1729,8 +2198,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           <span
                             className={`daywise-change-badge ${row.prevWeekSameDayChangePct >= 0 ? 'pos' : 'neg'}`}
                           >
-                            {row.prevWeekSameDayChangePct >= 0 ? '▲' : '▼'}{' '}
-                            {Math.abs(row.prevWeekSameDayChangePct)}%
+                            {row.prevWeekSameDayChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
+                            <span>{Math.abs(row.prevWeekSameDayChangePct)}%</span>
                           </span>
                         ) : (
                           <span className="text-muted">—</span>
@@ -1812,7 +2281,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               {/* Cashier Summary Strip */}
               <div className="cashier-summary-strip">
                 <div className="strip-item">
-                  <span className="strip-icon">📄</span>
+                  <span className="strip-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <FileSpreadsheetIcon />
+                  </span>
                   <span>
                     Voided bills: <strong>{data.cashierPerformance.summaryStrip.voidedBillsCount}</strong> (
                     {formatRupees(data.cashierPerformance.summaryStrip.voidedTotalMinor)})
@@ -1844,7 +2315,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
           >
             <div className="sales-modal-header">
               <div className="sales-modal-title-wrap">
-                <div className="sales-modal-icon-badge">📅</div>
+                <div className="sales-modal-icon-badge">
+                  <CalendarIcon />
+                </div>
                 <div>
                   <h3 id="customDateModalTitle" className="sales-modal-title">Select Custom Date Range</h3>
                   <p className="sales-modal-subtitle">Filter analytics for any custom billing period</p>
@@ -1856,7 +2329,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 onClick={() => setShowCustomModal(false)}
                 aria-label="Close modal"
               >
-                ✕
+                <CloseModalIcon />
               </button>
             </div>
 
@@ -1973,7 +2446,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 {/* Selected Range Summary Box */}
                 {modalFrom && modalTo && modalFrom <= modalTo ? (
                   <div className="sales-range-summary-box">
-                    <span className="summary-box-icon">🗓️</span>
+                    <div className="summary-box-icon-wrap">
+                      <CalendarIcon />
+                    </div>
                     <div className="summary-box-content">
                       <span className="summary-days-count">{selectedRangeDays} days duration</span>
                       <span className="summary-date-sub">
@@ -1983,7 +2458,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                   </div>
                 ) : (
                   <div className="sales-range-error-box">
-                    <span>⚠️ Invalid range: "From Date" cannot be after "To Date".</span>
+                    <AlertTriangleIcon />
+                    <span>Invalid range: "From Date" cannot be after "To Date".</span>
                   </div>
                 )}
               </div>
@@ -2025,7 +2501,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             <div className="sales-modal-header">
               <div className="sales-modal-title-wrap">
                 <div className="sales-modal-icon-badge" style={{ background: '#ecfdf5', color: '#10b981' }}>
-                  📱
+                  <WhatsAppCalendarIcon />
                 </div>
                 <div>
                   <h3 id="scheduleModalTitle" className="sales-modal-title">Schedule Daily Sales Report</h3>
@@ -2038,7 +2514,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 onClick={() => setShowScheduleModal(false)}
                 aria-label="Close modal"
               >
-                ✕
+                <CloseModalIcon />
               </button>
             </div>
             <div className="sales-modal-body">
