@@ -71,6 +71,7 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import { StockTransferView } from './components/inventory/StockTransferView';
 import type { Branch } from '../../shared/types.ts';
 import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
 import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
@@ -421,6 +422,7 @@ export function App() {
     | 'items'
     | 'categories'
     | 'inventory'
+    | 'stock-transfer'
     | 'product-movement'
     | 'sales-analysis'
     | 'purchases'
@@ -532,7 +534,7 @@ export function App() {
   };
 
   const isInventorySubmenuVisible =
-    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement';
+    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement' || activeTab === 'stock-transfer';
 
   // Close inventory dropdown on outside click
   useEffect(() => {
@@ -555,7 +557,7 @@ export function App() {
 
   // Close submenu when navigating away to unrelated modules
   useEffect(() => {
-    if (activeTab !== 'inventory' && activeTab !== 'product-movement') {
+    if (activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer') {
       setShowInventoryDropdown(false);
       setIsInventoryHovered(false);
     }
@@ -1213,6 +1215,10 @@ export function App() {
       const hash = window.location.hash.replace('#', '');
       if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
         setView(hash as any);
+      } else if (hash === 'stock-transfer') {
+        setView('dashboard');
+        setActiveTab('stock-transfer');
+        setShowInventoryDropdown(true);
       } else if (hash === 'product-analysis' || hash === 'product-movement') {
         setView('dashboard');
         setActiveTab('product-movement');
@@ -1246,13 +1252,21 @@ export function App() {
         loadMyBusinesses();
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
+        const isStockTransferRoute =
+          currentHash === 'stock-transfer' ||
+          tabParam === 'stock-transfer' ||
+          window.location.pathname === '/stock-transfer';
         const isProductAnalysisRoute =
           ['product-analysis', 'product-movement'].includes(currentHash) ||
           ['product-analysis', 'product-movement'].includes(tabParam || '') ||
           window.location.pathname === '/product-analysis' ||
           window.location.pathname === '/product-movement';
 
-        if (isProductAnalysisRoute) {
+        if (isStockTransferRoute) {
+          setView('dashboard');
+          setActiveTab('stock-transfer');
+          setShowInventoryDropdown(true);
+        } else if (isProductAnalysisRoute) {
           setView('dashboard');
           setActiveTab('product-movement');
           setShowInventoryDropdown(true);
@@ -5197,8 +5211,8 @@ export function App() {
                 <button
                   type="button"
                   className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
-                    activeTab === 'product-movement' ? 'has-active-child' : ''
-                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
+                    activeTab === 'product-movement' || activeTab === 'stock-transfer' ? 'has-active-child' : ''
+                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer' ? 'open-highlight' : ''}`}
                   onClick={handleInventoryClick}
                   aria-haspopup="true"
                   aria-expanded={isInventorySubmenuVisible}
@@ -5234,12 +5248,57 @@ export function App() {
                     <button
                       type="button"
                       role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'stock-transfer' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('stock-transfer');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Transfer"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Transfer</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('inventory');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Adjustment"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="4" y1="21" x2="4" y2="14" />
+                          <line x1="4" y1="10" x2="4" y2="3" />
+                          <line x1="12" y1="21" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12" y2="3" />
+                          <line x1="20" y1="21" x2="20" y2="16" />
+                          <line x1="20" y1="12" x2="20" y2="3" />
+                          <line x1="1" y1="14" x2="7" y2="14" />
+                          <line x1="9" y1="8" x2="15" y2="8" />
+                          <line x1="17" y1="16" x2="23" y2="16" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Adjustment</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
                       onClick={() => {
                         setActiveTab('product-movement');
                         setShowInventoryDropdown(true);
                       }}
-                      title="Product Analysis"
+                      title="Stock Report"
                     >
                       <span className="submenu-icon" aria-hidden="true">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -5247,7 +5306,7 @@ export function App() {
                           <polyline points="17 6 23 6 23 12" />
                         </svg>
                       </span>
-                      <span className="submenu-text">Product Analysis</span>
+                      <span className="submenu-text">Stock Report</span>
                     </button>
                   </div>
                 )}
@@ -5730,7 +5789,7 @@ export function App() {
         {/* View Transition Stage (SPA Bento Transition) */}
         <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && !(user.role === 'manager' && displayTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -9318,6 +9377,20 @@ export function App() {
             }}
             showToast={showToast}
             onReloadItems={loadItems}
+          />
+        )}
+
+        {/* TAB: STOCK TRANSFER (BRANCH TO BRANCH) */}
+        {displayTab === 'stock-transfer' && user && (
+          <StockTransferView
+            user={user}
+            onNavigateToTab={(tab) => {
+              if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                setShowInventoryDropdown(true);
+              }
+              setActiveTab(tab as any);
+            }}
+            showToast={showToast}
           />
         )}
 

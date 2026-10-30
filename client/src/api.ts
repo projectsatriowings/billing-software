@@ -1,4 +1,5 @@
 // Typed client API wrapper for Adaptive Billing Platform
+import type { StockTransfer, StockTransferLine, CreateStockTransferInput, StockMove } from '../../shared/types.ts';
 
 export const getToken = (): string =>
   localStorage.getItem('billing_token') || localStorage.getItem('token') || '';
@@ -1581,4 +1582,95 @@ export const cancelPaymentAttempt = (attemptId: string) =>
   api<{ ok: boolean; status: string }>(
     `/api/payment-attempts/${encodeURIComponent(attemptId)}/cancel`,
     { method: 'POST' }
+  );
+
+
+// Stock Transfer APIs
+export const getStockTransfers = (params?: {
+  branch?: string;
+  fromBranch?: string;
+  toBranch?: string;
+  status?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const query = new URLSearchParams();
+  if (params?.branch) query.set('branch', params.branch);
+  if (params?.fromBranch) query.set('fromBranch', params.fromBranch);
+  if (params?.toBranch) query.set('toBranch', params.toBranch);
+  if (params?.status) query.set('status', params.status);
+  if (params?.search) query.set('search', params.search);
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return api<{
+    transfers: StockTransfer[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>(`/api/stock-transfers${qs ? `?${qs}` : ''}`);
+};
+
+export const getNextStockTransferNumber = () =>
+  api<{ nextTransferNumber: string }>('/api/stock-transfers/next-number');
+
+export const getBranchStock = (branch: string, q?: string, limit?: number) => {
+  const query = new URLSearchParams();
+  query.set('branch', branch);
+  if (q) query.set('q', q);
+  if (limit) query.set('limit', String(limit));
+  return api<{ branch: string; items: any[] }>(`/api/stock-transfers/branch-stock?${query.toString()}`);
+};
+
+export const getStockTransfer = (id: string) =>
+  api<{
+    transfer: StockTransfer;
+    lines: StockTransferLine[];
+    stockMoves: { source: StockMove[]; destination: StockMove[] };
+    activityLog: any[];
+  }>(`/api/stock-transfers/${encodeURIComponent(id)}`);
+
+export const createStockTransfer = (data: CreateStockTransferInput) =>
+  api<{ success: boolean; transferId: string; transferNumber: string; message: string }>(
+    '/api/stock-transfers',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+
+export const dispatchStockTransfer = (id: string) =>
+  api<{ success: boolean; status: string; message: string }>(
+    `/api/stock-transfers/${encodeURIComponent(id)}/dispatch`,
+    { method: 'POST' }
+  );
+
+export const receiveStockTransfer = (
+  id: string,
+  data?: {
+    lines?: { lineId: string; receivedQty?: number; receivedQtyMilli?: number; discrepancyReason?: string }[];
+    notes?: string;
+  }
+) =>
+  api<{ success: boolean; status: string; message: string }>(
+    `/api/stock-transfers/${encodeURIComponent(id)}/receive`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    }
+  );
+
+export const cancelStockTransfer = (id: string, reason?: string) =>
+  api<{ success: boolean; status: string; message: string }>(
+    `/api/stock-transfers/${encodeURIComponent(id)}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }
   );
