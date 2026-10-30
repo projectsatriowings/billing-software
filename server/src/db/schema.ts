@@ -947,4 +947,14 @@ version: 29,
       `ALTER TABLE terminal_transactions ADD CONSTRAINT terminal_transactions_terminal_id_fkey FOREIGN KEY (terminal_id) REFERENCES card_terminals(id) ON DELETE SET NULL`,
     ],
   },
+  {
+    version: 34,
+    statements: [
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_cash_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS expected_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counted_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS variance_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS note TEXT`,
+    ],
+  },
 ];
