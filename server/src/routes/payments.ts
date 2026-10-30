@@ -450,7 +450,7 @@ export function registerPayments(r: Router) {
     const totalDuesMinor = Math.max(0, totalUnpaidMinor - advanceMinor);
 
     // Lifetime billing and collection metrics
-    const stats: any = await ctx.db.one(
+    const stats: any = await (ctx.db as any).one(
       `SELECT
         (SELECT COALESCE(SUM(total_minor), 0)::bigint FROM invoices WHERE tenant_id = ? AND party_id = ? AND status = 'posted') AS total_billed,
         (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM payments WHERE tenant_id = ? AND customer_id = ? AND (status IS NULL OR status = 'posted')) AS total_collected`,

@@ -252,6 +252,8 @@ export function registerInvoices(r: Router) {
     let partyId = V.optStr(b.partyId, 'Customer party', 50);
     const redeemedPoints = Math.max(0, V.int(b.redeemedPoints ?? 0, 'Redeemed points', { min: 0 }));
     const billDiscountMinor = V.int(b.billDiscountMinor ?? 0, 'Bill discount', { min: 0 });
+    const appliedPromotionsInput = Array.isArray(b.appliedPromotions) ? b.appliedPromotions : [];
+    const promotionDiscountMinor = V.int(b.promotionDiscountMinor ?? 0, 'Promotion discount', { min: 0 });
 
     const cleanPhoneDigits = customerPhone ? customerPhone.replace(/\D/g, '').slice(-10) : '';
     if (!partyId && cleanPhoneDigits) {
@@ -396,13 +398,15 @@ export function registerInvoices(r: Router) {
           customer_name, customer_phone, party_name, party_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor,
-          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom
+          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom,
+          applied_promotions, promotion_discount_minor
         ) VALUES (
           ?, ?, ?, ?, 'sale', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb
+          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb,
+          ?::jsonb, ?
         )`,
         [
           invoiceId,
@@ -436,8 +440,49 @@ export function registerInvoices(r: Router) {
           counter,
           activeShift?.id || null,
           j(tenderData ? { tender: tenderData } : {}),
+          j(appliedPromotionsInput),
+          promotionDiscountMinor,
         ],
       );
+
+      // 3.5 Record promotion usage and atomic usage limit check
+      for (const promoItem of appliedPromotionsInput) {
+        if (promoItem.promotionId) {
+          const promo = await q.one<{ id: string; max_total_usage: number | null; current_usage_count: number }>(
+            'SELECT id, max_total_usage, current_usage_count FROM promotions WHERE id = ? AND tenant_id = ? FOR UPDATE',
+            [promoItem.promotionId, tenantId]
+          );
+          if (promo) {
+            if (promo.max_total_usage && promo.current_usage_count >= promo.max_total_usage) {
+              throw bad(`Promotion "${promoItem.promotionName || promo.id}" has reached its maximum usage limit.`);
+            }
+            await q.exec(
+              `UPDATE promotions
+               SET current_usage_count = current_usage_count + 1,
+                   status = CASE WHEN max_total_usage IS NOT NULL AND current_usage_count + 1 >= max_total_usage THEN 'expired' ELSE status END,
+                   updated_at = now()
+               WHERE id = ? AND tenant_id = ?`,
+              [promoItem.promotionId, tenantId]
+            );
+            await q.exec(
+              `INSERT INTO promotion_usage (
+                 id, tenant_id, promotion_id, invoice_id, party_id, customer_phone, discount_minor, branch, counter, applied_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+              [
+                newId('pu'),
+                tenantId,
+                promoItem.promotionId,
+                invoiceId,
+                partyId || null,
+                customerPhone || null,
+                Math.max(0, Number(promoItem.discountMinor || 0)),
+                location,
+                counter,
+              ]
+            );
+          }
+        }
+      }
 
       // 4. Insert lines and update inventory
       for (let i = 0; i < formattedLines.length; i++) {
