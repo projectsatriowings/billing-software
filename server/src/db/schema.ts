@@ -950,6 +950,16 @@ version: 29,
   {
     version: 34,
     statements: [
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_cash_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS expected_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counted_cash_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS variance_minor BIGINT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS note TEXT`,
+    ],
+  },
+  {
+    version: 35,
+    statements: [
       `CREATE TABLE IF NOT EXISTS stock_transfers (
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL REFERENCES tenants(id),

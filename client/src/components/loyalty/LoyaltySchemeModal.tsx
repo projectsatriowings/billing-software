@@ -62,7 +62,15 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
       <div className="loyalty-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="loyalty-modal-header">
           <div className="loyalty-header-left">
-            <div className="loyalty-header-icon">🎁</div>
+            <div className="loyalty-header-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                <rect x="2" y="7" width="20" height="5"></rect>
+                <line x1="12" y1="22" x2="12" y2="7"></line>
+                <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+              </svg>
+            </div>
             <div>
               <h3 className="loyalty-header-title">Custom Loyalty Program Scheme</h3>
               <p className="loyalty-header-sub">Configure how points are earned and redeemed for your store</p>
@@ -120,7 +128,15 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
               {/* LEFT COLUMN: Earning Scheme */}
               <div className="loyalty-config-pane purple-pane">
                 <div className="pane-header">
-                  <span className="pane-icon">🎁</span>
+                  <span className="pane-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                      <rect x="2" y="7" width="20" height="5"></rect>
+                      <line x1="12" y1="22" x2="12" y2="7"></line>
+                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                    </svg>
+                  </span>
                   <div>
                     <h4 className="pane-title">1. Points Earning Scheme</h4>
                     <p className="pane-sub">How customers earn points on purchase</p>
@@ -161,7 +177,9 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
 
                   {/* Live Purchase Preview */}
                   <div className="loyalty-live-preview-box purple" style={{ marginTop: '0.85rem' }}>
-                    <span style={{ fontSize: '1.15rem' }}>⚡</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
                     <div style={{ fontSize: '0.78rem', color: '#4c1d95', lineHeight: 1.35 }}>
                       <strong>Live Example:</strong> A bill of <strong>₹500</strong> earns{' '}
                       <span className="preview-pill-stat purple">{Math.floor((500 * (Number(editPointsPer100) || 0)) / 100)} points</span>!
@@ -173,7 +191,13 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
               {/* RIGHT COLUMN: Redemption Scheme */}
               <div className="loyalty-config-pane emerald-pane">
                 <div className="pane-header">
-                  <span className="pane-icon">🪙</span>
+                  <span className="pane-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"></path>
+                      <line x1="12" y1="6" x2="12" y2="18"></line>
+                    </svg>
+                  </span>
                   <div>
                     <h4 className="pane-title">2. Points Redemption Scheme</h4>
                     <p className="pane-sub">How much discount each point is worth at POS</p>
@@ -238,7 +262,13 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
 
                   {/* Live Redemption Preview */}
                   <div className="loyalty-live-preview-box" style={{ marginTop: '0.65rem' }}>
-                    <span style={{ fontSize: '1.15rem' }}>🎁</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                      <rect x="2" y="7" width="20" height="5"></rect>
+                      <line x1="12" y1="22" x2="12" y2="7"></line>
+                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                    </svg>
                     <div style={{ fontSize: '0.78rem', color: '#065f46', lineHeight: 1.35 }}>
                       <strong>Redemption Example:</strong> <strong>100 points</strong> ={' '}
                       <span className="preview-pill-stat">₹{(100 * (Number(editPointValueRupees) || 0.1)).toFixed(2)} discount</span> at counter!
@@ -277,7 +307,10 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
                   fontSize: '1.75rem',
                 }}
               >
-                ⏸️
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
               </div>
               <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#334155' }}>
                 Loyalty Rewards Program is Currently Disabled
@@ -301,7 +334,12 @@ export const LoyaltySchemeModal: React.FC<LoyaltySchemeModalProps> = ({
                   borderRadius: '8px',
                 }}
               >
-                ✨ Click to Enable &amp; Configure Scheme
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                  <span>Click to Enable &amp; Configure Scheme</span>
+                </span>
               </button>
             </div>
           )}
