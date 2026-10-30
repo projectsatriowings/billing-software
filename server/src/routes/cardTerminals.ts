@@ -10,31 +10,31 @@ import { TERMINAL_PROVIDERS, TERMINAL_CONNECTION_MODES, CARD_NETWORKS } from '..
 
 const MASTER_KEY = env.jwtSecret || 'adaptive-billing-payment-master-secret-32-chars';
 
-function formatTerminalResponse(t: CardTerminalRecord & { branch_name?: string }) {
+function formatTerminalResponse(t: any) {
   return {
     id: t.id,
-    tenantId: t.tenant_id,
-    branchId: t.branch_id,
-    branchName: t.branch_name,
+    tenantId: t.tenantId ?? t.tenant_id,
+    branchId: t.branchId ?? t.branch_id,
+    branchName: t.branchName ?? t.branch_name,
     counter: t.counter,
     name: t.name,
     provider: t.provider,
     model: t.model,
-    serialNumber: t.serial_number,
-    terminalId: t.terminal_id,
-    merchantId: t.merchant_id,
-    connectionMode: t.connection_mode,
-    ipAddress: t.ip_address,
+    serialNumber: t.serialNumber ?? t.serial_number,
+    terminalId: t.terminalId ?? t.terminal_id,
+    merchantId: t.merchantId ?? t.merchant_id,
+    connectionMode: t.connectionMode ?? t.connection_mode,
+    ipAddress: t.ipAddress ?? t.ip_address,
     port: t.port,
-    apiEndpoint: t.api_endpoint,
-    hasAuthToken: !!t.auth_token_encrypted,
-    hasSecretKey: !!t.secret_key_encrypted,
+    apiEndpoint: t.apiEndpoint ?? t.api_endpoint,
+    hasAuthToken: !!(t.authTokenEncrypted ?? t.auth_token_encrypted),
+    hasSecretKey: !!(t.secretKeyEncrypted ?? t.secret_key_encrypted),
     active: t.active,
     status: t.status,
-    lastSeenAt: t.last_seen_at,
+    lastSeenAt: t.lastSeenAt ?? t.last_seen_at,
     config: t.config || {},
-    createdAt: t.created_at,
-    updatedAt: t.updated_at,
+    createdAt: t.createdAt ?? t.created_at,
+    updatedAt: t.updatedAt ?? t.updated_at,
   };
 }
 

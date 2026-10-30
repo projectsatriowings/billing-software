@@ -251,7 +251,7 @@ export class PaytmPosAdapter implements TerminalAdapter {
             head: { token: decryptedSecrets.authToken || '', mid: (terminal.merchantId || (terminal as any).merchant_id) },
             body: { mid: (terminal.merchantId || (terminal as any).merchant_id), tid: (terminal.terminalId || (terminal as any).terminal_id), orderId: (transaction.providerTxId || (transaction as any).provider_tx_id) },
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return { cancelled: true, message: 'Paytm POS transaction cancel signal dispatched.' };
     } catch (err: any) {
