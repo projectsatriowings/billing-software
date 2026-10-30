@@ -6462,16 +6462,7 @@ export function App() {
                             </svg>
                           ),
                         },
-                        {
-                          id: 'bank',
-                          label: 'Bank Transfer',
-                          disabled: posPaymentConfig?.bankEnabled === false,
-                          icon: (
-                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M14 10v11M12 2L2 7h20L12 2z" />
-                            </svg>
-                          ),
-                        },
+                        
                         {
                           id: 'split',
                           label: 'Split',
@@ -9142,7 +9133,7 @@ export function App() {
                       </div>
                     </div>
 
-                    <div className="cat-form-row align-bottom">
+                    <div className="cat-form-row">
                       <div className="cat-form-field flex-1">
                         <label className="cat-form-label">
                           Description <span className="cat-opt-label">(Optional)</span>
@@ -9150,12 +9141,24 @@ export function App() {
                         <input
                           type="text"
                           className="cat-form-input"
-                          placeholder="Optional notes or shelf location..."
+                          placeholder="Optional notes, department shelf location, or display subtitle..."
                           value={newCatDesc}
                           onChange={(e) => setNewCatDesc(e.target.value)}
                         />
                       </div>
+                    </div>
 
+                    <div className="cat-form-action-strip">
+                      <div className="cat-form-hint">
+                        <span className="cat-form-hint-icon">{newCatParentId ? '↳' : '🏷️'}</span>
+                        <span>
+                          {newCatParentId ? (
+                            <span>Nesting under <strong>{mainCategories.find((c) => c.id === newCatParentId)?.name || 'Parent'}</strong></span>
+                          ) : (
+                            <span>Creating a <strong>Main Department</strong> (appears as primary POS department tab)</span>
+                          )}
+                        </span>
+                      </div>
                       <button type="submit" className="cat-submit-btn">
                         <PlusIcon size={15} />
                         <span>Add Category</span>

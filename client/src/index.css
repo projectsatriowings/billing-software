@@ -28885,3 +28885,100 @@ select.expense-input-control {
     align-items: flex-start !important;
   }
 }
+
+
+/* Fix Category Creator Card: eliminate empty middle void and balance form layout */
+.cat-bento-card.cat-creator-card {
+  justify-content: flex-start !important;
+  gap: 1.15rem !important;
+}
+
+.cat-creator-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.85rem !important;
+  flex: 1 !important;
+}
+
+.cat-form-action-strip {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.85rem !important;
+  padding-top: 0.75rem !important;
+  border-top: 1px dashed #e2e8f0 !important;
+  margin-top: auto !important;
+  flex-wrap: wrap !important;
+}
+
+.cat-form-hint {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  font-size: 0.76rem !important;
+  color: #64748b !important;
+}
+
+.cat-form-hint-icon {
+  font-size: 0.95rem !important;
+}
+
+/* Fix POS Customer & Loyalty Panel layout */
+.bento-customer-card {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.bento-customer-card .bento-customer-body {
+  padding: 0.75rem 0.95rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
+  justify-content: flex-start !important;
+}
+
+.bento-customer-header {
+  padding: 0.8rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  flex-wrap: nowrap !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.bento-customer-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  flex-shrink: 0 !important;
+}
+
+.bento-loyalty-scheme-pill {
+  padding: 0.22rem 0.55rem !important;
+  font-size: 0.72rem !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.bento-add-cust-btn {
+  padding: 0.28rem 0.65rem !important;
+  font-size: 0.74rem !important;
+  white-space: nowrap !important;
+}
+
+/* Payment Tender Modes: clean 4-column desktop layout without Bank Transfer */
+.bento-payment-modes {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.5rem !important;
+}
+
+@media (max-width: 640px) {
+  .bento-payment-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
