@@ -827,4 +827,11 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS seq BIGSERIAL`,
     ],
   },
+  {
+    version: 30,
+    statements: [
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS image_url TEXT`,
+      `CREATE INDEX IF NOT EXISTS items_image ON items (tenant_id) WHERE image_url IS NOT NULL`,
+    ],
+  },
 ];

@@ -47,6 +47,8 @@ function formatItem(r: any) {
     minStockMilli: Number(r.minStockMilli ?? r.min_stock_milli ?? 0),
     preferredSupplierId: r.preferredSupplierId ?? r.preferred_supplier_id ?? null,
     favorite: Boolean(r.favorite),
+    imageUrl: r.imageUrl ?? r.image_url ?? (typeof r.custom === 'object' && r.custom?.image ? r.custom.image : null),
+    image: r.imageUrl ?? r.image_url ?? (typeof r.custom === 'object' && r.custom?.image ? r.custom.image : null),
     custom: typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom ?? {}),
     currentStockMilli: Number(r.currentStockMilli ?? r.current_stock_milli ?? 0),
     active: Boolean(r.active),
@@ -265,6 +267,7 @@ export function registerItems(r: Router) {
     const favorite = V.bool(b.favorite, false);
     const custom = validateCustom(b.custom);
     const openingQtyMilli = V.int(b.openingQtyMilli ?? b.openingStockMilli ?? 0, 'Opening quantity', { min: 0 });
+    const imageUrl = (b.imageUrl ?? b.image) ? String(b.imageUrl ?? b.image).trim() : null;
 
     if (barcode) {
       const existing = await ctx.db.one<{ id: string; name: string }>(
@@ -294,9 +297,9 @@ export function registerItems(r: Router) {
         `INSERT INTO items (
           id, tenant_id, name, sku, barcode, hsn, unit, category,
           price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-          reorder_milli, min_stock_milli, preferred_supplier_id, favorite, custom, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
-        [id, tenantId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom)],
+          reorder_milli, min_stock_milli, preferred_supplier_id, favorite, custom, active, image_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
+        [id, tenantId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
       );
 
       if (barcode) {
@@ -358,6 +361,8 @@ export function registerItems(r: Router) {
     const favorite = b.favorite !== undefined ? V.bool(b.favorite) : Boolean(item.favorite);
     const custom = b.custom !== undefined ? validateCustom(b.custom) : (typeof item.custom === 'string' ? JSON.parse(item.custom) : (item.custom ?? {}));
     const active = b.active !== undefined ? V.bool(b.active) : Boolean(item.active);
+    const hasImage = b.imageUrl !== undefined || b.image !== undefined;
+    const imageUrl = hasImage ? ((b.imageUrl ?? b.image) ? String(b.imageUrl ?? b.image).trim() : null) : (item.imageUrl ?? item.image_url ?? null);
 
     if (barcode && barcode !== item.barcode) {
       const dup = await ctx.db.one<{ id: string; name: string }>(
@@ -374,9 +379,9 @@ export function registerItems(r: Router) {
         `UPDATE items SET
           name = ?, price_minor = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?,
           hsn = ?, unit = ?, category = ?, tax_inclusive = ?, track_stock = ?, reorder_milli = ?,
-          min_stock_milli = ?, preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, updated_at = now()
+          min_stock_milli = ?, preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, image_url = ?, updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, item.id, tenantId],
+        [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
       );
 
       // Keep product_barcodes table synchronized

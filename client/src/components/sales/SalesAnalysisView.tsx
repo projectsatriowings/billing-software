@@ -3,6 +3,7 @@ import type {
   SalesAnalysisData,
   SalesOverviewPoint,
   DaywiseSalesRow,
+  CategorySalesItem,
 } from '../../api.ts';
 import { fetchSalesAnalysis } from '../../api.ts';
 

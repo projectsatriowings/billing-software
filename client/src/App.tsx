@@ -95,6 +95,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
+import { fileToOptimizedDataUrl } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -892,6 +893,21 @@ export function App() {
   const [itemFormReorder, setItemFormReorder] = useState('0');
   const [itemFormMinStock, setItemFormMinStock] = useState('0');
   const [itemFormSupplierId, setItemFormSupplierId] = useState('');
+  const [itemFormImageUrl, setItemFormImageUrl] = useState('');
+  const [isUploadingItemImage, setIsUploadingItemImage] = useState(false);
+
+  const handleItemImageFileSelect = async (file: File) => {
+    if (!file) return;
+    try {
+      setIsUploadingItemImage(true);
+      const dataUrl = await fileToOptimizedDataUrl(file);
+      setItemFormImageUrl(dataUrl);
+    } catch (err: any) {
+      alert(err.message || 'Failed to process image');
+    } finally {
+      setIsUploadingItemImage(false);
+    }
+  };
   // HSN & SAC Smart Directory states
   const [hsnSuggestions, setHsnSuggestions] = useState<HsnItem[]>([]);
   const [hsnSearchResults, setHsnSearchResults] = useState<HsnItem[]>([]);
@@ -3424,6 +3440,7 @@ export function App() {
     setItemFormReorder('10');
     setItemFormMinStock('5');
     setItemFormSupplierId('');
+    setItemFormImageUrl('');
     setHsnSuggestions([]);
     setHsnSearchResults([]);
     setSelectedHsnDesc('');
@@ -3447,6 +3464,7 @@ export function App() {
     setItemFormReorder(String(((item.reorderMilli ?? item.reorderLevelMilli) || 0) / 1000));
     setItemFormMinStock(String((item.minStockMilli || 0) / 1000));
     setItemFormSupplierId(item.preferredSupplierId || '');
+    setItemFormImageUrl(item.imageUrl || (item as any).image || item.custom?.image || '');
     setHsnSuggestions([]);
     setHsnSearchResults([]);
     setSelectedHsnDesc('');
@@ -3514,6 +3532,7 @@ export function App() {
             reorderLevelMilli: Math.max(Math.round((parseFloat(itemFormReorder) || 0) * 1000), 0),
             minStockMilli: Math.max(Math.round((parseFloat(itemFormMinStock) || 0) * 1000), 0),
             preferredSupplierId: itemFormSupplierId || null,
+            imageUrl: itemFormImageUrl.trim() || null,
           }),
         });
         showToast(`Item "${itemFormName}" updated successfully!`);
@@ -3535,6 +3554,7 @@ export function App() {
             reorderLevelMilli: Math.max(Math.round((parseFloat(itemFormReorder) || 0) * 1000), 0),
             minStockMilli: Math.max(Math.round((parseFloat(itemFormMinStock) || 0) * 1000), 0),
             preferredSupplierId: itemFormSupplierId || null,
+            imageUrl: itemFormImageUrl.trim() || null,
           }),
         });
         showToast(`Item "${itemFormName}" added to inventory!`);
@@ -8343,7 +8363,7 @@ export function App() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th style={{ width: '64px', minWidth: '64px', textAlign: 'center' }}>Image</th>
+                        <th style={{ width: '74px', minWidth: '70px', textAlign: 'center' }}>Image</th>
                         <th className="col-product-name">Product Name</th>
                         <th className="col-nowrap">Category</th>
                         <th className="col-nowrap">SKU / Code</th>
@@ -8360,31 +8380,88 @@ export function App() {
                     <tbody>
                       {filteredMasterItems.map((i) => (
                         <tr key={i.id} style={{ opacity: i.active === false ? 0.75 : 1 }}>
-                          <td style={{ width: '64px', minWidth: '64px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem' }}>
-                            <div className="product-table-image-cell">
+                          <td style={{ width: '74px', minWidth: '70px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem 0.5rem' }}>
+                            <div
+                              className="product-table-image-cell"
+                              style={{
+                                width: '50px',
+                                height: '50px',
+                                minWidth: '50px',
+                                minHeight: '50px',
+                                maxWidth: '50px',
+                                maxHeight: '50px',
+                                margin: '0 auto',
+                                borderRadius: '10px',
+                                overflow: 'hidden',
+                                border: '1.5px solid #e2e8f0',
+                                background: '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                position: 'relative',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                              }}
+                            >
                               {i.imageUrl || (i as any).image ? (
-                                <img
-                                  src={i.imageUrl || (i as any).image}
-                                  alt={i.name}
-                                  className="product-thumb-img"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLElement).style.display = 'none';
-                                    const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                    if (placeholder) placeholder.style.display = 'inline-flex';
+                                <>
+                                  <img
+                                    src={i.imageUrl || (i as any).image}
+                                    alt={i.name}
+                                    className="product-thumb-img"
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                      display: 'block',
+                                    }}
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
+                                      if (placeholder) placeholder.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div
+                                    className="product-thumb-placeholder"
+                                    style={{
+                                      display: 'none',
+                                      width: '100%',
+                                      height: '100%',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#94a3b8',
+                                      background: '#f8fafc',
+                                    }}
+                                    title="Product Image Placeholder"
+                                  >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                      <circle cx="8.5" cy="8.5" r="1.5" />
+                                      <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                  </div>
+                                </>
+                              ) : (
+                                <div
+                                  className="product-thumb-placeholder"
+                                  style={{
+                                    display: 'flex',
+                                    width: '100%',
+                                    height: '100%',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#94a3b8',
+                                    background: '#f8fafc',
                                   }}
-                                />
-                              ) : null}
-                              <div
-                                className="product-thumb-placeholder"
-                                style={{ display: i.imageUrl || (i as any).image ? 'none' : 'inline-flex' }}
-                                title="Product Image Placeholder"
-                              >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                  <circle cx="8.5" cy="8.5" r="1.5" />
-                                  <polyline points="21 15 16 10 5 21" />
-                                </svg>
-                              </div>
+                                  title="Product Image Placeholder"
+                                >
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="col-product-name" style={{ fontWeight: 600 }}>
@@ -12568,17 +12645,44 @@ export function App() {
         </div>
       )}
 
-      {/* MASTER DATA: ADD / EDIT ITEM MODAL */}
+      {/* Master Data: Item Form Modal (Add & Edit) */}
       {showItemModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+        <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
+          <div
+            className="modal-content product-edit-rectangle-modal"
+            style={{
+              maxWidth: '960px',
+              width: '94vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.4)',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. MODAL HEADER */}
+            <div
+              className="modal-header"
+              style={{
+                padding: '0.9rem 1.5rem',
+                borderBottom: '1px solid #e2e8f0',
+                background: '#ffffff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '8px',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
                     background: 'rgba(99, 102, 241, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
@@ -12587,12 +12691,12 @@ export function App() {
                   }}
                 >
                   {editingItem ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                       <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
                       <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -12600,16 +12704,29 @@ export function App() {
                   )}
                 </div>
                 <div>
-                  <h3 className="card-title" style={{ margin: 0 }}>
+                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
                     {editingItem ? `Edit Product: ${editingItem.name}` : `Add New Item to ${shop?.name}`}
                   </h3>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
                     {editingItem ? 'Update product details, pricing, tax rates and units' : 'Register a new item with unit, tax rate, and opening stock'}
                   </div>
                 </div>
               </div>
               <button
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', borderRadius: '6px' }}
+                type="button"
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  transition: 'all 0.15s ease',
+                }}
                 onClick={() => setShowItemModal(false)}
                 title="Close"
                 aria-label="Close"
@@ -12620,469 +12737,663 @@ export function App() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleSaveItem} className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Product / Item Name *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={itemFormName}
-                  onChange={(e) => setItemFormName(e.target.value)}
-                  placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
-                />
-                {!itemFormHsn && hsnSuggestions.length > 0 && (
-                  <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2v4" />
-                          <path d="M12 18v4" />
-                          <path d="M4.93 4.93l2.83 2.83" />
-                          <path d="M16.24 16.24l2.83 2.83" />
-                          <path d="M2 12h4" />
-                          <path d="M18 12h4" />
-                          <path d="M4.93 19.07l2.83-2.83" />
-                          <path d="M16.24 7.76l2.83-2.83" />
-                        </svg>
-                        <span>Suggested HSN for "{itemFormName}":</span>
+
+            {/* 2. FORM BODY WITH MODERN RECTANGLE SPLIT-PANEL LAYOUT */}
+            <form onSubmit={handleSaveItem} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '1.25rem 1.5rem',
+                  display: 'grid',
+                  gridTemplateColumns: '320px 1fr',
+                  gap: '1.25rem',
+                  alignItems: 'start',
+                }}
+                className="product-edit-split-grid"
+              >
+                {/* ── LEFT COLUMN: MEDIA & INVENTORY SETTINGS ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Product Photo Studio Card */}
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
+                        Product Image
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
-                        <button
-                          type="button"
-                          onClick={() => setHsnSuggestions([])}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'inline-flex', alignItems: 'center' }}
-                          title="Dismiss"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: itemFormImageUrl ? '#dcfce7' : '#e0e7ff', color: itemFormImageUrl ? '#15803d' : '#4338ca', fontWeight: 600 }}>
+                        {itemFormImageUrl ? 'Attached' : 'Optional'}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      {hsnSuggestions.map((sug) => (
-                        <button
-                          key={sug.code}
-                          type="button"
-                          onClick={() => {
-                            setItemFormHsn(sug.code);
-                            setSelectedHsnDesc(sug.desc);
-                            setShowHsnDropdown(false);
-                            setHsnSuggestions([]); // Instantly closes this box upon selection!
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '5px',
-                            fontSize: '0.76rem',
-                            cursor: 'pointer',
-                            border: '1px solid #334155',
-                            background: 'rgba(30, 41, 59, 0.95)',
-                            color: '#e2e8f0',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#38bdf8';
-                            e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#334155';
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.95)';
-                          }}
-                          title={sug.desc}
-                        >
-                          <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
-                          <span style={{ color: '#cbd5e1', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {sug.desc}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">SKU / Item Code</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormSku}
-                    onChange={(e) => setItemFormSku(e.target.value)}
-                    placeholder="e.g. MED-001 or GROC-100"
-                  />
-                </div>
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
-                    <button
-                      type="button"
-                      style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                      onClick={() => {
-                        const code = '20' + Date.now().toString().slice(-10);
-                        let sum = 0;
-                        for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
-                        const fullBc = code + ((10 - (sum % 10)) % 10);
-                        setItemFormBarcode(fullBc);
-                      }}
-                      title="Generate a unique 13-digit EAN retail barcode"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                      </svg>
-                      <span>Auto-Generate</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormBarcode}
-                    onChange={(e) => setItemFormBarcode(e.target.value)}
-                    placeholder="Scan or enter barcode"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select
-                    className="form-input"
-                    value={itemFormCategory}
-                    onChange={(e) => setItemFormCategory(e.target.value)}
-                  >
-                    <option value="">— Select Category from Category Module —</option>
-                    {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
-                      <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
-                    )}
-                    {categoriesList.filter((c) => c.active).map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                      <line x1="7" y1="7" x2="7.01" y2="7" />
-                    </svg>
-                    <span>Categories are managed and imported in the <strong>Categories</strong> module.</span>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Unit of Measurement (UOM) *</label>
-                  <select
-                    className="form-input"
-                    value={itemFormUnit}
-                    onChange={(e) => setItemFormUnit(e.target.value)}
-                    required
-                  >
-                    {STANDARD_UNITS.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Selling Price (₹) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    required
-                    value={itemFormPrice}
-                    onChange={(e) => setItemFormPrice(e.target.value)}
-                    placeholder="e.g. 150.00"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Purchase / Cost Price (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    value={itemFormCost}
-                    onChange={(e) => setItemFormCost(e.target.value)}
-                    placeholder="e.g. 120.00"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
-                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                      {isHsnSearching ? (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                          </svg>
-                          <span>Searching 22k+ items...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                          </svg>
-                          <span>GST Directory</span>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormHsn}
-                    onChange={(e) => {
-                      setItemFormHsn(e.target.value);
-                      setShowHsnDropdown(true);
-                      if (!e.target.value) setSelectedHsnDesc('');
-                    }}
-                    onFocus={() => {
-                      if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
-                    }}
-                    placeholder="Search code or name (e.g. 1006, rice, 3004)"
-                    autoComplete="off"
-                  />
-                  {/* Live HSN Search Dropdown */}
-                  {showHsnDropdown && hsnSearchResults.length > 0 && (
+                    {/* Image Preview Box with drag-and-drop */}
                     <div
                       style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        maxHeight: '230px',
-                        overflowY: 'auto',
-                        background: '#0f172a',
-                        border: '1px solid #38bdf8',
-                        borderRadius: '8px',
-                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
-                        zIndex: 1050,
-                        marginTop: '4px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: '0.35rem 0.65rem',
-                          fontSize: '0.7rem',
-                          color: '#94a3b8',
-                          borderBottom: '1px solid #1e293b',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          background: '#1e293b',
-                        }}
-                      >
-                        <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowHsnDropdown(false)}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                          <span>Close</span>
-                        </button>
-                      </div>
-                      {hsnSearchResults.map((item) => (
-                        <div
-                          key={item.code}
-                          onClick={() => {
-                            setItemFormHsn(item.code);
-                            setSelectedHsnDesc(item.desc);
-                            setShowHsnDropdown(false);
-                          }}
-                          style={{
-                            padding: '0.45rem 0.65rem',
-                            borderBottom: '1px solid #1e293b',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.15rem',
-                            background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                            textAlign: 'left',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.background =
-                              itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
-                          }
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {item.code}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '0.65rem',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                background: item.type === 'SAC' ? '#0284c7' : '#334155',
-                                color: '#e2e8f0',
-                              }}
-                            >
-                              {item.type}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {selectedHsnDesc && (
-                    <div
-                      style={{
-                        fontSize: '0.72rem',
-                        color: '#10b981',
-                        marginTop: '0.3rem',
+                        width: '100%',
+                        height: '150px',
+                        borderRadius: '10px',
+                        border: itemFormImageUrl ? '1.5px solid #818cf8' : '2px dashed #cbd5e1',
+                        background: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.3rem',
-                        lineHeight: '1.2',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleItemImageFileSelect(e.dataTransfer.files[0]);
+                        }
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {selectedHsnDesc}
-                      </span>
+                      {itemFormImageUrl ? (
+                        <img
+                          src={itemFormImageUrl}
+                          alt="Product Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Drop product photo here</span>
+                          <span style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>or click Upload below</span>
+                        </div>
+                      )}
+                      {isUploadingItemImage && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(255,255,255,0.85)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: '#4f46e5',
+                          }}
+                        >
+                          Optimizing image...
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">GST Tax Rate</label>
-                  <select
-                    className="form-input"
-                    value={itemFormTax}
-                    onChange={(e) => setItemFormTax(e.target.value)}
+
+                    {/* Image Controls */}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <label
+                        style={{
+                          flex: 1,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          padding: '0.38rem 0.65rem',
+                          borderRadius: '7px',
+                          background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                          color: '#ffffff',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 3px rgba(99, 102, 241, 0.25)',
+                        }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleItemImageFileSelect(e.target.files[0]);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      {itemFormImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setItemFormImageUrl('')}
+                          style={{
+                            background: '#fee2e2',
+                            border: '1px solid #fecaca',
+                            color: '#dc2626',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: '0.38rem 0.65rem',
+                            borderRadius: '7px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                          }}
+                          title="Remove attached photo"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Or paste web image link..."
+                        value={itemFormImageUrl.startsWith('data:') ? '' : itemFormImageUrl}
+                        onChange={(e) => setItemFormImageUrl(e.target.value.trim())}
+                        style={{
+                          width: '100%',
+                          padding: '0.3rem 0.55rem',
+                          fontSize: '0.74rem',
+                          height: '28px',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stock & Reorder Alert Card */}
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
                   >
-                    <option value="0">0% (Nil / Exempt)</option>
-                    <option value="500">5% GST (2.5% CGST + 2.5% SGST)</option>
-                    <option value="1200">12% GST (6% CGST + 6% SGST)</option>
-                    <option value="1800">18% GST (9% CGST + 9% SGST)</option>
-                    <option value="2800">28% GST (14% CGST + 14% SGST)</option>
-                  </select>
-                </div>
-              </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                      <span>Inventory &amp; Reorder Alerts</span>
+                    </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <input
-                  type="checkbox"
-                  id="itemTaxInclusive"
-                  checked={itemFormTaxInclusive}
-                  onChange={(e) => setItemFormTaxInclusive(e.target.checked)}
-                />
-                <label htmlFor="itemTaxInclusive" style={{ fontSize: '0.9rem', color: '#cbd5e1', cursor: 'pointer' }}>
-                  Selling price is inclusive of GST (recommended for retail / grocery)
-                </label>
-              </div>
+                    {!editingItem ? (
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Initial Stock ({itemFormUnit})</span>
+                          <span style={{ color: '#10b981', fontWeight: 600 }}>Ledger Tracked</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input"
+                          value={itemFormStock}
+                          onChange={(e) => setItemFormStock(e.target.value)}
+                          placeholder="e.g. 50"
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ background: '#e0f2fe', border: '1px solid #bae6fd', padding: '0.55rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <span style={{ fontWeight: 600 }}>Current Stock:</span>
+                        <strong style={{ fontSize: '0.9rem' }}>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>
+                      </div>
+                    )}
 
-              {!editingItem ? (
-                <div className="form-group" style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Initial Opening Stock Quantity ({itemFormUnit})</span>
-                    <span style={{ color: '#10b981', fontWeight: 600 }}>Ledger Tracked</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="form-input"
-                    value={itemFormStock}
-                    onChange={(e) => setItemFormStock(e.target.value)}
-                    placeholder="e.g. 50"
-                  />
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.35rem' }}>
-                    Note: An opening stock ledger entry will be posted once upon creation.
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.72rem' }}>Reorder Level</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-input"
+                          value={itemFormReorder}
+                          onChange={(e) => setItemFormReorder(e.target.value)}
+                          placeholder="e.g. 10"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.72rem' }}>Buffer Stock</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-input"
+                          value={itemFormMinStock}
+                          onChange={(e) => setItemFormMinStock(e.target.value)}
+                          placeholder="e.g. 5"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.72rem' }}>Preferred Supplier</label>
+                      <select
+                        className="form-input"
+                        value={itemFormSupplierId}
+                        onChange={(e) => setItemFormSupplierId(e.target.value)}
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        <option value="">No Preferred Supplier Assigned</option>
+                        {parties.filter((p) => p.type === 'supplier' && p.active !== false).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.phone ? `(${p.phone})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd', display: 'flex', alignItems: 'flex-start', gap: '0.45rem' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>
-                    Current Ledger Stock: <strong>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>. Opening stock cannot be modified here to protect stock movement audit history.
-                  </span>
-                </div>
-              )}
 
-              <div style={{ background: 'var(--surface-raised, rgba(255,255,255,0.03))', border: '1px solid var(--border, #cbd5e1)', borderRadius: '8px', padding: '0.85rem', marginTop: '1rem' }}>
-                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text, #0f172a)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                  </svg>
-                  <span>Inventory Alert &amp; Reorder Settings</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Reorder Level Threshold ({itemFormUnit})</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="form-input"
-                      value={itemFormReorder}
-                      onChange={(e) => setItemFormReorder(e.target.value)}
-                      placeholder="e.g. 10 (0 = disabled)"
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Minimum Buffer Stock ({itemFormUnit})</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="form-input"
-                      value={itemFormMinStock}
-                      onChange={(e) => setItemFormMinStock(e.target.value)}
-                      placeholder="e.g. 5"
-                    />
-                  </div>
-                </div>
-                <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Preferred Supplier (for Replenishment)</label>
-                  <select
-                    className="form-input"
-                    value={itemFormSupplierId}
-                    onChange={(e) => setItemFormSupplierId(e.target.value)}
+                {/* ── RIGHT COLUMN: PRODUCT IDENTITY & PRICING ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* General Information Card */}
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
                   >
-                    <option value="">No Preferred Supplier Assigned</option>
-                    {parties.filter((p) => p.type === 'supplier' && p.active !== false).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.phone ? `(${p.phone})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.45rem' }}>
+                      Product Identification
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Product / Item Name *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        value={itemFormName}
+                        onChange={(e) => setItemFormName(e.target.value)}
+                        placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
+                      />
+                      {!itemFormHsn && hsnSuggestions.length > 0 && (
+                        <div style={{ marginTop: '0.45rem', padding: '0.45rem 0.65rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                              </svg>
+                              <span>Suggested HSN for "${itemFormName}":</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setHsnSuggestions([])}
+                              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                            {hsnSuggestions.map((sug) => (
+                              <button
+                                key={sug.code}
+                                type="button"
+                                onClick={() => {
+                                  setItemFormHsn(sug.code);
+                                  setSelectedHsnDesc(sug.desc);
+                                  setShowHsnDropdown(false);
+                                  setHsnSuggestions([]);
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.74rem',
+                                  cursor: 'pointer',
+                                  border: '1px solid #334155',
+                                  background: 'rgba(30, 41, 59, 0.95)',
+                                  color: '#e2e8f0',
+                                }}
+                              >
+                                <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
+                                <span style={{ color: '#cbd5e1', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {sug.desc}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">SKU / Item Code</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormSku}
+                          onChange={(e) => setItemFormSku(e.target.value)}
+                          placeholder="e.g. MED-001 or GROC-100"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
+                          <button
+                            type="button"
+                            style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                            onClick={() => {
+                              const code = '20' + Date.now().toString().slice(-10);
+                              let sum = 0;
+                              for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
+                              const fullBc = code + ((10 - (sum % 10)) % 10);
+                              setItemFormBarcode(fullBc);
+                            }}
+                            title="Generate a unique 13-digit EAN retail barcode"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                            </svg>
+                            <span>Auto-Generate</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormBarcode}
+                          onChange={(e) => setItemFormBarcode(e.target.value)}
+                          placeholder="Scan or enter barcode"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Category</label>
+                        <select
+                          className="form-input"
+                          value={itemFormCategory}
+                          onChange={(e) => setItemFormCategory(e.target.value)}
+                        >
+                          <option value="">— Select Category —</option>
+                          {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
+                            <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
+                          )}
+                          {categoriesList.filter((c) => c.active).map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Unit of Measurement (UOM) *</label>
+                        <select
+                          className="form-input"
+                          value={itemFormUnit}
+                          onChange={(e) => setItemFormUnit(e.target.value)}
+                          required
+                        >
+                          {STANDARD_UNITS.map((u) => (
+                            <option key={u.code} value={u.code}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing & Tax Card */}
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.45rem' }}>
+                      Pricing &amp; Taxation
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Selling Price (₹) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          required
+                          value={itemFormPrice}
+                          onChange={(e) => setItemFormPrice(e.target.value)}
+                          placeholder="e.g. 150.00"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Purchase / Cost Price (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          value={itemFormCost}
+                          onChange={(e) => setItemFormCost(e.target.value)}
+                          placeholder="e.g. 120.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ position: 'relative', marginBottom: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
+                          <span style={{ fontSize: '0.72rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            {isHsnSearching ? (
+                              <span>Searching...</span>
+                            ) : (
+                              <span>GST Directory</span>
+                            )}
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormHsn}
+                          onChange={(e) => {
+                            setItemFormHsn(e.target.value);
+                            setShowHsnDropdown(true);
+                            if (!e.target.value) setSelectedHsnDesc('');
+                          }}
+                          onFocus={() => {
+                            if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
+                          }}
+                          placeholder="Search code or name"
+                          autoComplete="off"
+                        />
+                        {showHsnDropdown && hsnSearchResults.length > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              background: '#0f172a',
+                              border: '1px solid #38bdf8',
+                              borderRadius: '8px',
+                              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
+                              zIndex: 1050,
+                              marginTop: '4px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                fontSize: '0.7rem',
+                                color: '#94a3b8',
+                                borderBottom: '1px solid #1e293b',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: '#1e293b',
+                              }}
+                            >
+                              <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
+                              <button
+                                type="button"
+                                onClick={() => setShowHsnDropdown(false)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem' }}
+                              >
+                                ✕ Close
+                              </button>
+                            </div>
+                            {hsnSearchResults.map((item) => (
+                              <div
+                                key={item.code}
+                                onClick={() => {
+                                  setItemFormHsn(item.code);
+                                  setSelectedHsnDesc(item.desc);
+                                  setShowHsnDropdown(false);
+                                }}
+                                style={{
+                                  padding: '0.45rem 0.65rem',
+                                  borderBottom: '1px solid #1e293b',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.15rem',
+                                  background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                                  textAlign: 'left',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background =
+                                    itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
+                                }
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                    {item.code}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      background: item.type === 'SAC' ? '#0284c7' : '#334155',
+                                      color: '#e2e8f0',
+                                    }}
+                                  >
+                                    {item.type}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedHsnDesc && (
+                          <div
+                            style={{
+                              fontSize: '0.72rem',
+                              color: '#10b981',
+                              marginTop: '0.25rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                            }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              ✓ {selectedHsnDesc}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">GST Tax Rate</label>
+                        <select
+                          className="form-input"
+                          value={itemFormTax}
+                          onChange={(e) => setItemFormTax(e.target.value)}
+                        >
+                          <option value="0">0% (Nil / Exempt)</option>
+                          <option value="500">5% GST (2.5% CGST + 2.5% SGST)</option>
+                          <option value="1200">12% GST (6% CGST + 6% SGST)</option>
+                          <option value="1800">18% GST (9% CGST + 9% SGST)</option>
+                          <option value="2800">28% GST (14% CGST + 14% SGST)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '0.2rem' }}>
+                      <input
+                        type="checkbox"
+                        id="itemTaxInclusive"
+                        checked={itemFormTaxInclusive}
+                        onChange={(e) => setItemFormTaxInclusive(e.target.checked)}
+                      />
+                      <label htmlFor="itemTaxInclusive" style={{ fontSize: '0.85rem', color: '#475569', cursor: 'pointer', fontWeight: 500 }}>
+                        Selling price is inclusive of GST (recommended for retail / supermarket)
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowItemModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingItem ? 'Save Changes' : 'Save Product'}
-                </button>
+              {/* 3. FIXED BOTTOM ACTION BAR */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.85rem 1.5rem',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                  {editingItem ? 'Changes will be immediately synchronized across POS and branch catalogs.' : 'New product will be saved to your store master catalog.'}
+                </div>
+                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowItemModal(false)} style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1.35rem', fontSize: '0.85rem', fontWeight: 700 }}>
+                    {editingItem ? 'Save Changes' : 'Save Product'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

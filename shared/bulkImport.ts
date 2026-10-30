@@ -838,6 +838,7 @@ export interface MatchCandidate {
   taxInclusive: boolean;
   hsn: string | null;
   packSize?: string | null;
+  imageUrl?: string | null;
   matchReason?: string;
 }
 

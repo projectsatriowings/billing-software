@@ -43,6 +43,7 @@ import {
   type NatureConfidence,
 } from '../../../shared/bulkImport.ts';
 import { ScanManufacturerBarcodeModal } from './ScanManufacturerBarcodeModal.tsx';
+import { fileToOptimizedDataUrl } from '../imageUtils';
 import { type BarcodeTargetItem } from '../../../shared/barcodeScannerUtils.ts';
 
 const PackageBoxIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -92,6 +93,14 @@ const DownloadIcon = ({ size = 16, color = 'currentColor' }: { size?: number; co
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="7 10 12 15 17 10" />
     <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const ImageIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
   </svg>
 );
 
@@ -339,6 +348,7 @@ export interface GridRow {
   productNature: ProductNature;
   natureConfidence: NatureConfidence;
   isNatureManuallyEdited?: boolean;
+  imageUrl?: string;
   category: string;
   categoryId: string;
   isCategoryManuallyEdited: boolean;
@@ -450,6 +460,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
   const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
+  const [editingImageRow, setEditingImageRow] = useState<{ rowId: number; name: string; currentUrl?: string } | null>(null);
+  const [tempRowImageUrl, setTempRowImageUrl] = useState('');
+  const [isOptimizingRowImage, setIsOptimizingRowImage] = useState(false);
 
   // Prevent background page from scrolling while Bulk Import Modal is open
   useEffect(() => {
@@ -479,6 +492,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       taxInclusive: it.taxInclusive ?? true,
       hsn: it.hsn || null,
       packSize: extractPackSize(it.name)?.raw || it.unit,
+      imageUrl: it.imageUrl || (it as any).image || null,
     }));
   }, [existingItems]);
 
@@ -790,6 +804,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     const iInclusive= findCol(['price inclusive of gst', 'price inclusive', 'inclusive', 'incl']);
     const iStock    = findCol(['opening stock', 'current stock', 'stock', 'qty', 'quantity']);
     const iBarcode  = findCol(['barcode', 'ean', 'upc', 'gtin', 'bar code']);
+    const iImage    = findCol(['image url', 'image_url', 'image', 'photo', 'picture', 'img']);
 
     const getVal = (parts: string[], idx: number, fallbackIdx: number): string => {
       const targetIdx = idx >= 0 ? idx : fallbackIdx;
@@ -814,6 +829,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       const incl     = getVal(parts, iInclusive, 6);
       const stock    = getVal(parts, iStock, 7);
       const barcodeRaw = getVal(parts, iBarcode, -1);
+      const imageRaw = getVal(parts, iImage, -1);
 
       const unitMatch = UOM_OPTIONS.find(
         (u) => u.code.toLowerCase() === unitRaw.toLowerCase() || u.label.toLowerCase().includes(unitRaw.toLowerCase())
@@ -873,6 +889,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         productNature: natureInfo.nature,
         natureConfidence: natureInfo.confidence,
         isNatureManuallyEdited: false,
+        imageUrl: imageRaw || matchedItem?.imageUrl || (matchedItem as any)?.image || '',
         category,
         categoryId,
         isCategoryManuallyEdited: false,
@@ -990,6 +1007,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         productNature: natureInfo.nature,
         natureConfidence: natureInfo.confidence,
         isNatureManuallyEdited: false,
+        imageUrl: '',
         category: cat ? cat.name : '',
         categoryId: cat ? cat.id : '',
         isCategoryManuallyEdited: false,
@@ -1446,6 +1464,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
           barcodeType: finalBarcodeType,
           additionalBarcodes: r.additionalBarcodes || [],
           productNature: r.productNature || null,
+          imageUrl: r.imageUrl ? r.imageUrl.trim() : null,
           hsn: r.hsn.trim() || null,
           unit: r.unit.trim() || 'pcs',
           categoryId: finalCatId,
@@ -2434,6 +2453,25 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                       <span>Undo {generatedBarcodesCount} generated</span>
                     </button>
                   )}
+                  <div style={{ width: '1px', height: '22px', background: '#cbd5e1', margin: '0 0.15rem' }} />
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '20px',
+                      background: rawRows.filter((r) => Boolean(r.imageUrl)).length > 0 ? '#f0fdf4' : '#f1f5f9',
+                      border: rawRows.filter((r) => Boolean(r.imageUrl)).length > 0 ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                      color: rawRows.filter((r) => Boolean(r.imageUrl)).length > 0 ? '#15803d' : '#64748b',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                    }}
+                    title="Number of imported products with images assigned. Click any row photo to change or drag & drop files."
+                  >
+                    <ImageIcon size={14} color={rawRows.filter((r) => Boolean(r.imageUrl)).length > 0 ? '#15803d' : '#64748b'} />
+                    <span>{rawRows.filter((r) => Boolean(r.imageUrl)).length} of {rawRows.length} with Photos</span>
+                  </div>
 
                   <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
                     {generatedBarcodesCount > 0
@@ -2459,6 +2497,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                     <tr>
                       <th style={thStyle}>ROW</th>
                       <th style={thStyle}>STATUS</th>
+                      <th style={{ ...thStyle, width: 62, minWidth: 60, textAlign: 'center' }}>IMAGE</th>
                       <th style={{ ...thStyle, minWidth: 200 }}>PRODUCT / ITEM NAME *</th>
                       <th style={{ ...thStyle, width: 105, minWidth: 95 }}>SKU / CODE</th>
                       <th style={{ ...thStyle, width: 145, minWidth: 140 }}>BARCODE / EAN</th>
@@ -2478,7 +2517,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                   <tbody>
                     {visibleRows.length === 0 ? (
                       <tr>
-                        <td colSpan={16} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                        <td colSpan={17} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                           No rows match the selected &quot;{filter}&quot; filter.
                         </td>
                       </tr>
@@ -2553,6 +2592,94 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                 )}
                               </td>
 
+                                                            {/* IMAGE THUMBNAIL / ATTACH */}
+                              <td
+                                style={{
+                                  padding: '0.35rem 0.35rem',
+                                  textAlign: 'center',
+                                  verticalAlign: 'middle',
+                                  width: 62,
+                                  minWidth: 60,
+                                }}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={async (e) => {
+                                  e.preventDefault();
+                                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                    try {
+                                      const dataUrl = await fileToOptimizedDataUrl(e.dataTransfer.files[0]);
+                                      updateRowField(row._id, 'imageUrl', dataUrl);
+                                    } catch (err: any) {
+                                      alert(err.message || 'Failed to process image');
+                                    }
+                                  }
+                                }}
+                              >
+                                {row.imageUrl ? (
+                                  <div
+                                    style={{
+                                      position: 'relative',
+                                      width: '34px',
+                                      height: '34px',
+                                      margin: '0 auto',
+                                      borderRadius: '6px',
+                                      overflow: 'hidden',
+                                      border: '1.5px solid #818cf8',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                    }}
+                                    onClick={() => {
+                                      setEditingImageRow({ rowId: row._id, name: row.name, currentUrl: row.imageUrl });
+                                      setTempRowImageUrl(row.imageUrl || '');
+                                    }}
+                                    title="Click to edit/replace photo, or drag and drop an image file here"
+                                  >
+                                    <img
+                                      src={row.imageUrl}
+                                      alt={row.name}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingImageRow({ rowId: row._id, name: row.name, currentUrl: '' });
+                                      setTempRowImageUrl('');
+                                    }}
+                                    style={{
+                                      width: '34px',
+                                      height: '34px',
+                                      margin: '0 auto',
+                                      borderRadius: '6px',
+                                      border: '1.5px dashed #cbd5e1',
+                                      background: '#f8fafc',
+                                      color: '#94a3b8',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.borderColor = '#6366f1';
+                                      e.currentTarget.style.color = '#6366f1';
+                                      e.currentTarget.style.background = '#eef2ff';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.borderColor = '#cbd5e1';
+                                      e.currentTarget.style.color = '#94a3b8';
+                                      e.currentTarget.style.background = '#f8fafc';
+                                    }}
+                                    title="Add photo to this product (click to choose or drag & drop file)"
+                                  >
+                                    <CameraIcon size={14} />
+                                  </button>
+                                )}
+                              </td>
                               {/* PRODUCT NAME */}
                               <td style={{ padding: '0.45rem 0.35rem' }}>
                                 <input
@@ -2942,7 +3069,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                             {/* INLINE NOTICE / ERROR / AMBIGUITY ROW */}
                             {(row.errors.length > 0 || row.matchedItem || (row.candidates && row.candidates.length > 1) || row.resolution) && (
                               <tr style={{ borderBottom: '1px solid var(--border)', background: '#ffffff' }}>
-                                <td colSpan={16} style={{ padding: '0.2rem 0.6rem 0.55rem 2.8rem', fontSize: '0.78rem' }}>
+                                <td colSpan={17} style={{ padding: '0.2rem 0.6rem 0.55rem 2.8rem', fontSize: '0.78rem' }}>
                                   {/* Restock details for single-match products */}
                                   {row.matchedItem && (!row.candidates || row.candidates.length <= 1) && (
                                     <div style={{ color: '#047857', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -3757,6 +3884,297 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
             setScanModalInitialId(null);
           }}
         />
+      )}
+          {/* ── ROW IMAGE UPLOAD & PREVIEW STUDIO MODAL ── */}
+      {editingImageRow && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1450,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setEditingImageRow(null)}
+        >
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '460px',
+              width: '100%',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.4)',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '1rem 1.25rem',
+                borderBottom: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#6366f1',
+                    flexShrink: 0,
+                  }}
+                >
+                  <CameraIcon size={18} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
+                    Product Photo
+                  </h4>
+                  <div
+                    style={{
+                      fontSize: '0.78rem',
+                      color: '#64748b',
+                      maxWidth: '280px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={editingImageRow.name}
+                  >
+                    {editingImageRow.name || 'Unnamed Product'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingImageRow(null)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  color: '#64748b',
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Preview Dropzone */}
+              <div
+                style={{
+                  width: '100%',
+                  height: '180px',
+                  borderRadius: '12px',
+                  border: tempRowImageUrl ? '2px solid #818cf8' : '2px dashed #cbd5e1',
+                  background: tempRowImageUrl ? '#ffffff' : '#f8fafc',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    try {
+                      setIsOptimizingRowImage(true);
+                      const dataUrl = await fileToOptimizedDataUrl(e.dataTransfer.files[0]);
+                      setTempRowImageUrl(dataUrl);
+                    } catch (err: any) {
+                      alert(err.message || 'Failed to process image');
+                    } finally {
+                      setIsOptimizingRowImage(false);
+                    }
+                  }
+                }}
+              >
+                {tempRowImageUrl ? (
+                  <img
+                    src={tempRowImageUrl}
+                    alt={editingImageRow.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+                    <CameraIcon size={32} />
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>Drag and drop photo here</span>
+                    <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>Supports JPG, PNG, WebP (auto-optimized)</span>
+                  </div>
+                )}
+
+                {isOptimizingRowImage && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(255,255,255,0.88)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      color: '#4f46e5',
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    Optimizing image...
+                  </div>
+                )}
+              </div>
+
+              {/* Upload from Computer / Remove Button */}
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <label
+                  style={{
+                    flex: 1,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    padding: '0.55rem 1rem',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(99, 102, 241, 0.3)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span>{tempRowImageUrl ? 'Replace Photo' : 'Upload from Computer'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        try {
+                          setIsOptimizingRowImage(true);
+                          const dataUrl = await fileToOptimizedDataUrl(e.target.files[0]);
+                          setTempRowImageUrl(dataUrl);
+                        } catch (err: any) {
+                          alert(err.message || 'Failed to process image');
+                        } finally {
+                          setIsOptimizingRowImage(false);
+                        }
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+
+                {tempRowImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setTempRowImageUrl('')}
+                    style={{
+                      background: '#fee2e2',
+                      border: '1px solid #fecaca',
+                      color: '#dc2626',
+                      borderRadius: '8px',
+                      padding: '0.55rem 0.85rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                    }}
+                  >
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Paste URL Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#64748b', marginBottom: '0.3rem' }}>
+                  Or paste web image link:
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/product-image.jpg"
+                  value={tempRowImageUrl.startsWith('data:') ? '' : tempRowImageUrl}
+                  onChange={(e) => setTempRowImageUrl(e.target.value.trim())}
+                  style={{
+                    ...cellInputStyle,
+                    fontSize: '0.8rem',
+                    padding: '0.45rem 0.65rem',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '0.85rem 1.25rem',
+                borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.65rem',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setEditingImageRow(null)}
+                className="btn btn-secondary"
+                style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateRowField(editingImageRow.rowId, 'imageUrl', tempRowImageUrl.trim());
+                  setEditingImageRow(null);
+                }}
+                className="btn btn-primary"
+                style={{ padding: '0.45rem 1.2rem', fontSize: '0.82rem', fontWeight: 700 }}
+              >
+                Save Photo
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
