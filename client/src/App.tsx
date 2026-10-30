@@ -89,6 +89,9 @@ import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
 import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
 import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx';
 import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
+import { DiscountsPromotionsView } from './components/promotions/DiscountsPromotionsView.tsx';
+import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
+import { fetchPromotions, type PublicPaymentSettings, type PaymentAttempt, type Branch } from './api';
 
 export interface ToastItem {
   id: string;
@@ -392,6 +395,7 @@ export function App() {
     | 'gst-gstr1'
     | 'gst-import-export'
     | 'gst-filing-history'
+    | 'promotions'
   >('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
 
@@ -530,6 +534,53 @@ export function App() {
   const [splitAmount2, setSplitAmount2] = useState<string>('');
   const [splitCashTendered, setSplitCashTendered] = useState<string>('');
   const lastSplitEditedRef = useRef<1 | 2>(1);
+
+  // Shop-specific UPI & QR Payment Configuration & State
+  const [posPaymentConfig, setPosPaymentConfig] = useState<PublicPaymentSettings | null>(null);
+  // Payments & Integrations Settings State
+  const [paySettingsSubTab, setPaySettingsSubTab] = useState<'methods' | 'razorpay' | 'paytm' | 'phonepe' | 'qr' | 'bank' | 'terminal'>('methods');
+  const [payMethodsEnabled, setPayMethodsEnabled] = useState<string[]>(['cash', 'upi', 'card', 'bank', 'credit']);
+  const [payUpiEnabled, setPayUpiEnabled] = useState(true);
+  const [payQrType, setPayQrType] = useState<'static' | 'dynamic'>('static');
+  const [payProvider, setPayProvider] = useState<'manual' | 'razorpay' | 'paytm' | 'phonepe'>('razorpay');
+  const [payStaticUpiId, setPayStaticUpiId] = useState('');
+  const [payStaticMerchantName, setPayStaticMerchantName] = useState('');
+  const [payRzpEnabled, setPayRzpEnabled] = useState(false);
+  const [payRzpMode, setPayRzpMode] = useState<'test' | 'live'>('test');
+  const [payRzpKeyId, setPayRzpKeyId] = useState('');
+  const [payRzpKeySecret, setPayRzpKeySecret] = useState('');
+  const [payRzpWebhookSecret, setPayRzpWebhookSecret] = useState('');
+  const [payRzpExpiryMinutes, setPayRzpExpiryMinutes] = useState(15);
+  const [showRzpSecret, setShowRzpSecret] = useState(false);
+  const [payPaytmEnabled, setPayPaytmEnabled] = useState(false);
+  const [payPaytmMode, setPayPaytmMode] = useState<'test' | 'live'>('test');
+  const [payPaytmMid, setPayPaytmMid] = useState('');
+  const [payPaytmMerchantKey, setPayPaytmMerchantKey] = useState('');
+  const [payPaytmWebsite, setPayPaytmWebsite] = useState('WEBSTAGING');
+  const [showPaytmSecret, setShowPaytmSecret] = useState(false);
+  const [payPhonePeEnabled, setPayPhonePeEnabled] = useState(false);
+  const [payPhonePeMode, setPayPhonePeMode] = useState<'test' | 'live'>('test');
+  const [payPhonePeMid, setPayPhonePeMid] = useState('');
+  const [payPhonePeSaltKey, setPayPhonePeSaltKey] = useState('');
+  const [payPhonePeSaltIndex, setPayPhonePeSaltIndex] = useState('1');
+  const [showPhonePeSecret, setShowPhonePeSecret] = useState(false);
+  const [payBankEnabled, setPayBankEnabled] = useState(false);
+  const [payBankAccountName, setPayBankAccountName] = useState('');
+  const [payBankAccountNo, setPayBankAccountNo] = useState('');
+  const [payBankIfsc, setPayBankIfsc] = useState('');
+  const [payBankName, setPayBankName] = useState('');
+  const [payBankBranch, setPayBankBranch] = useState('');
+  const [isSavingPaySettings, setIsSavingPaySettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [paySettingsStatusMsg, setPaySettingsStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeQrAttempt, setActiveQrAttempt] = useState<PaymentAttempt | null>(null);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [isVerifyingQr, setIsVerifyingQr] = useState(false);
+  const [upiManualRef, setUpiManualRef] = useState('');
+  const [paymentCardRef, setPaymentCardRef] = useState<string>('');
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
+  const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [printModalInvoiceId, setPrintModalInvoiceId] = useState<string | null>(null);
@@ -1123,6 +1174,7 @@ export function App() {
     loadCategories();
     loadParties();
     loadInvoices();
+    loadActivePromotions();
     if (can(user.role as any, 'purchases')) {
       loadPurchases();
     }
@@ -1131,6 +1183,61 @@ export function App() {
     checkActiveShift();
     initSettingsForm(shop);
   }, [user, shop?.id, activeTab]);
+
+
+  // Real-time Promotions Evaluation Engine & BOGO Auto-Free Insertion
+  useEffect(() => {
+    if (activePromotionsList.length === 0 || cart.length === 0) {
+      setPromoEvalResult(null);
+      return;
+    }
+    const cartEvalInput: CartItemForEval[] = cart.map((c) => ({
+      itemId: c.item.id,
+      name: c.item.name,
+      category: c.item.category,
+      barcode: c.item.barcode,
+      sku: c.item.sku,
+      hsn: c.item.hsn,
+      unit: c.item.unit,
+      priceMinor: c.item.priceMinor,
+      taxRateBp: c.item.taxRateBp,
+      taxInclusive: c.item.taxInclusive,
+      qty: c.qty,
+      isFreeItem: Boolean((c as any).isFreeItem),
+      appliedPromotionId: (c as any).appliedPromotionId,
+    }));
+    const evalRes = evaluatePromotions(cartEvalInput, activePromotionsList, {
+      branchCode: branches[0]?.code || 'MAIN',
+      counterCode: 'COUNTER-1',
+      partyId: selectedPartyId || undefined,
+    });
+    setPromoEvalResult(evalRes);
+
+    // Auto-add eligible free items for BOGO
+    if (evalRes.autoFreeItems && evalRes.autoFreeItems.length > 0) {
+      for (const freeItem of evalRes.autoFreeItems) {
+        if (!freeItem.productId) continue;
+        const alreadyInCart = cart.some(
+          (c) => (c as any).isFreeItem && c.item.id === freeItem.productId && (c as any).appliedPromotionId === freeItem.promotionId
+        );
+        if (!alreadyInCart) {
+          const matchedItem = items.find((i) => i.id === freeItem.productId);
+          if (matchedItem) {
+            setCart((prev) => [
+              ...prev,
+              {
+                item: matchedItem,
+                qty: freeItem.qty,
+                isFreeItem: true,
+                appliedPromotionId: freeItem.promotionId,
+              } as any,
+            ]);
+            showToast(`🎉 BOGO Offer Applied: Added ${freeItem.qty} Free ${matchedItem.name}!`);
+          }
+        }
+      }
+    }
+  }, [cart, activePromotionsList, selectedPartyId, branches, items]);
 
   const checkActiveShift = async () => {
     try {
@@ -1177,6 +1284,15 @@ export function App() {
       setDuesSummary(res);
     } catch (err) {
       console.error('Failed to load dues summary', err);
+    }
+  };
+
+  const loadActivePromotions = async () => {
+    try {
+      const res = await fetchPromotions({ status: 'active' });
+      setActivePromotionsList(res.promotions || []);
+    } catch {
+      // non-fatal
     }
   };
 
@@ -1944,7 +2060,8 @@ export function App() {
   const maxRedeemablePoints = shopPointValMinor > 0 ? Math.ceil(potentialDiscountMinor / shopPointValMinor) : 0;
   const pointsDiscountMinor = redeemPoints ? potentialDiscountMinor : 0;
   const pointsActuallyRedeemed = redeemPoints ? maxRedeemablePoints : 0;
-  const discountMinor = percentDiscountMinor + pointsDiscountMinor;
+  const promoDiscountMinor = promoEvalResult?.totalDiscountMinor || 0;
+  const discountMinor = percentDiscountMinor + pointsDiscountMinor + promoDiscountMinor;
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
   const pointsToEarnOnBill = (shopLoyaltyActive && shopPointsPer100 > 0)
     ? Math.floor((finalPayableMinor * shopPointsPer100) / 10000)
@@ -2332,13 +2449,13 @@ export function App() {
 
     setIsCheckingOut(true);
     try {
-      const lines = cart.map((c) => ({
-        itemId: c.item.id,
+      const lines = cart.map((c, idx) => ({
+        itemId: c.item.id?.startsWith('custom-') ? undefined : c.item.id,
         name: c.item.name,
-        qtyMilli: c.qty * 1000,
-        priceMinor: c.item.priceMinor,
-        discountMinor: 0,
-        taxRateBp: c.item.taxRateBp,
+        qtyMilli: Math.round(c.qty * 1000),
+        priceMinor: Math.round(c.item.priceMinor),
+        discountMinor: promoEvalResult?.lineDiscounts[idx] || 0,
+        taxRateBp: Math.round(c.item.taxRateBp || 0),
         inclusive: c.item.taxInclusive,
         unit: c.item.unit,
         hsn: c.item.hsn,
@@ -2411,7 +2528,9 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
-          billDiscountMinor: discountMinor,
+          billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
+          appliedPromotions: promoEvalResult?.appliedPromotions || [],
+          promotionDiscountMinor: promoDiscountMinor,
           payments: paymentsPayload,
           tender: tenderPayload,
           customerName: checkoutCustName,
@@ -4356,6 +4475,26 @@ export function App() {
               </button>
             )}
 
+            {/* Discounts & Promotions: For Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'promotions' ? 'active' : ''}`}
+                onClick={() => setActiveTab('promotions')}
+                title="Discounts & Promotions"
+              >
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="5" x2="5" y2="19"></line>
+                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                  </svg>
+                </span>
+                <span className="nav-text">Discounts &amp; Offers</span>
+                <span className="nav-badge-new">NEW</span>
+              </button>
+            )}
+
             {/* Cashier Recent Bills */}
             {user.role === 'cashier' && (
               <button
@@ -6051,7 +6190,7 @@ export function App() {
 
                         {/* Cart Rows: NO SEPARATE GST ON PRODUCT; SHOWS QTY, MRP, STORE PRICE, TOTAL PRICE, CATEGORY */}
                         <div className="bento-cart-rows-scroll">
-                          {cart.map(({ item, qty }) => {
+                          {cart.map(({ item, qty }, cartIdx) => {
                             const mrp = getItemMrp(item);
                             const storePrice = item.priceMinor;
                             const lineTotal = storePrice * qty;
@@ -6071,6 +6210,14 @@ export function App() {
                                     {lineSavings > 0 && (
                                       <span className="bento-cart-savings-tag">
                                         Save {formatRupees(lineSavings)}
+                                      </span>
+                                    )}
+                                    {promoEvalResult?.lineDiscounts[cartIdx] && promoEvalResult.lineDiscounts[cartIdx] > 0 && (
+                                      <span
+                                        className="bento-cart-savings-tag"
+                                        style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                                      >
+                                        🏷️ Offer: -{formatRupees(promoEvalResult.lineDiscounts[cartIdx])}
                                       </span>
                                     )}
                                   </div>
@@ -6115,9 +6262,20 @@ export function App() {
 
                                 {/* Col 5: Total Product Price */}
                                 <div className="bento-row-total-col">
-                                  <span className="bento-total-val mono">
-                                    {formatRupees(lineTotal)}
-                                  </span>
+                                  {promoEvalResult?.lineDiscounts[cartIdx] && promoEvalResult.lineDiscounts[cartIdx] > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                      <span style={{ fontSize: '0.72rem', textDecoration: 'line-through', color: '#94a3b8' }} className="mono">
+                                        {formatRupees(lineTotal)}
+                                      </span>
+                                      <span className="bento-total-val mono text-success" style={{ fontWeight: 800 }}>
+                                        {formatRupees(Math.max(0, lineTotal - promoEvalResult.lineDiscounts[cartIdx]))}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="bento-total-val mono">
+                                      {formatRupees(lineTotal)}
+                                    </span>
+                                  )}
                                 </div>
 
                                 {/* Col 6: Remove Action */}
@@ -6204,6 +6362,59 @@ export function App() {
                             🪙 Points Redeemed ({pointsActuallyRedeemed} pts)
                           </span>
                           <span className="summary-val mono text-success">-{formatRupees(pointsDiscountMinor)}</span>
+                        </div>
+                      )}
+                      {/* PROMOTION DISCOUNTS & OFFERS APPLIED */}
+                      {promoEvalResult && promoEvalResult.totalDiscountMinor > 0 && (
+                        <div
+                          className="bento-summary-row discount-row"
+                          style={{
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            padding: '0.45rem 0.65rem',
+                            borderRadius: '8px',
+                            margin: '4px 0',
+                            flexDirection: 'column',
+                            alignItems: 'stretch',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#1d4ed8', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span>🏷️</span> Offers Applied ({promoEvalResult.appliedPromotions.length})
+                            </span>
+                            <span className="summary-val mono text-success" style={{ fontWeight: 800 }}>
+                              -{formatRupees(promoEvalResult.totalDiscountMinor)}
+                            </span>
+                          </div>
+                          {promoEvalResult.appliedPromotions.map((p, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#1e40af' }}>
+                              <span>• {p.promotionName}</span>
+                              <span className="mono">-{formatRupees(p.discountMinor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* PROMOTION NUDGE BANNER */}
+                      {promoEvalResult && promoEvalResult.nudges && promoEvalResult.nudges.length > 0 && (
+                        <div
+                          style={{
+                            background: '#fefce8',
+                            border: '1px dashed #eab308',
+                            borderRadius: '8px',
+                            padding: '0.4rem 0.65rem',
+                            margin: '4px 0',
+                            fontSize: '0.75rem',
+                            color: '#854d0e',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <span>💡</span>
+                          <span>{promoEvalResult.nudges[0].message}</span>
                         </div>
                       )}
 
@@ -8353,6 +8564,18 @@ export function App() {
             </div>
           );
         })()}
+
+        {/* TAB: DISCOUNTS & PROMOTIONS */}
+        {activeTab === 'promotions' && (
+          <DiscountsPromotionsView
+            user={user}
+            items={items}
+            categories={categoriesList}
+            branches={branches}
+            parties={parties}
+            onOpenPos={() => setActiveTab('pos')}
+          />
+        )}
 
         {/* TAB: SALES ANALYSIS */}
         {activeTab === 'sales-analysis' && (

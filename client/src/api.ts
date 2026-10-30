@@ -1471,3 +1471,250 @@ export const suggestHsnForProduct = (name: string, category?: string) => {
 };
 
 
+
+
+// --------------------------------------------------------------------------
+// Shop Payment & QR Settings APIs
+// --------------------------------------------------------------------------
+export interface PublicPaymentSettings {
+  upiEnabled: boolean;
+  qrType: 'static' | 'dynamic';
+  provider: 'manual' | 'razorpay' | 'paytm' | 'phonepe';
+  staticUpiId: string | null;
+  staticMerchantName: string | null;
+  rzpEnabled: boolean;
+  rzpMode: 'test' | 'live';
+  rzpKeyId: string | null;
+  hasKeySecret: boolean;
+  hasWebhookSecret: boolean;
+  maskedKeySecret?: string;
+  rzpQrExpiryMinutes: number;
+  paytmEnabled?: boolean;
+  paytmMode?: 'test' | 'live';
+  paytmMid?: string | null;
+  hasPaytmKey?: boolean;
+  paytmWebsite?: string;
+  phonepeEnabled?: boolean;
+  phonepeMode?: 'test' | 'live';
+  phonepeMid?: string | null;
+  hasPhonePeSaltKey?: boolean;
+  phonepeSaltIndex?: string;
+  bankEnabled?: boolean;
+  bankAccountName?: string | null;
+  bankAccountNo?: string | null;
+  bankIfsc?: string | null;
+  bankName?: string | null;
+  bankBranch?: string | null;
+  status: 'not_configured' | 'connected' | 'error';
+  statusMessage: string | null;
+  enabledMethods: string[];
+}
+
+export interface PaymentAttempt {
+  id?: string;
+  attemptId: string;
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
+  amountMinor: number;
+  qrPayload: string;
+  qrSvg?: string;
+  qrImageUrl?: string | null;
+  expiresAt?: string | null;
+  provider: 'manual' | 'razorpay' | 'paytm' | 'phonepe';
+  qrType: 'static' | 'dynamic';
+  providerPaymentId?: string;
+  errorReason?: string;
+}
+
+export const getPaymentSettings = () =>
+  api<PublicPaymentSettings>('/api/shop/payment-settings');
+
+export const updatePaymentSettings = (settings: Partial<PublicPaymentSettings> & { rzpKeySecret?: string; rzpWebhookSecret?: string; paytmMerchantKey?: string; phonepeSaltKey?: string }) =>
+  api<PublicPaymentSettings>('/api/shop/payment-settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  });
+
+export const createPaymentAttempt = (params: {
+  amountMinor: number;
+  qrType?: 'static' | 'dynamic';
+  invoiceId?: string;
+  idempotencyKey?: string;
+  customerName?: string;
+}) =>
+  api<PaymentAttempt>('/api/payment-attempts', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+
+export const getPaymentAttemptStatus = (attemptId: string) =>
+  api<{
+    attemptId: string;
+    status: 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
+    amountMinor: number;
+    invoiceId?: string;
+    providerPaymentId?: string;
+    verifiedAt?: string;
+    errorReason?: string;
+  }>(`/api/payment-attempts/${encodeURIComponent(attemptId)}/status`);
+
+export const verifyPaymentAttempt = (attemptId: string) =>
+  api<{ status: string; verified: boolean; providerPaymentId?: string; message?: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/verify`,
+    { method: 'POST' }
+  );
+
+export const manualVerifyPaymentAttempt = (attemptId: string, referenceNo?: string, note?: string) =>
+  api<{ status: string; referenceNo: string; verifiedByName?: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/manual-verify`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ referenceNo, note }),
+    }
+  );
+
+export const cancelPaymentAttempt = (attemptId: string) =>
+  api<{ ok: boolean; status: string }>(
+    `/api/payment-attempts/${encodeURIComponent(attemptId)}/cancel`,
+    { method: 'POST' }
+  );
+
+
+// ==========================================
+// Discounts & Promotions API
+// ==========================================
+export type {
+  Promotion,
+  PromotionInput,
+  PromotionType,
+  PromotionStatus,
+  PromotionRules,
+  AppliedPromotionDetail,
+  PromotionNudge,
+  PromotionEvalResult,
+  AutoFreeItem,
+  CartItemForEval,
+} from '../../shared/promotions.ts';
+
+import type {
+  Promotion,
+  PromotionInput,
+  PromotionStatus,
+  PromotionEvalResult,
+  CartItemForEval,
+} from '../../shared/promotions.ts';
+
+export interface PromotionSummary {
+  totalPromotions: number;
+  activePromotions: number;
+  scheduledPromotions: number;
+  expiredPromotions: number;
+  draftPromotions: number;
+  pausedPromotions: number;
+  totalDiscountGivenMinor: number;
+  salesGeneratedMinor: number;
+}
+
+export interface PromotionReportsData {
+  overview: {
+    totalDiscountMinor: number;
+    billsCount: number;
+    revenueMinor: number;
+    totalPromotionsCount: number;
+    activePromotionsCount: number;
+  };
+  mostUsedPromotions: Array<{
+    promotionId: string;
+    name: string;
+    type: string;
+    usageCount: number;
+    totalDiscountMinor: number;
+    revenueGeneratedMinor: number;
+  }>;
+  branchPerformance: Array<{
+    branch: string;
+    usageCount: number;
+    totalDiscountMinor: number;
+    totalSalesMinor: number;
+  }>;
+  timeline: Array<{
+    bdate: string;
+    usageCount: number;
+    discountMinor: number;
+    salesMinor: number;
+  }>;
+}
+
+export const fetchPromotions = (query?: {
+  search?: string;
+  type?: string;
+  status?: string;
+  branch?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (query?.search) params.append('search', query.search);
+  if (query?.type && query.type !== 'ALL') params.append('type', query.type);
+  if (query?.status && query.status !== 'all') params.append('status', query.status);
+  if (query?.branch && query.branch !== 'ALL') params.append('branch', query.branch);
+  const qStr = params.toString() ? '?' + params.toString() : '';
+  return api<{ promotions: Promotion[]; summary: PromotionSummary }>('/api/promotions' + qStr);
+};
+
+export const fetchPromotion = (id: string) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}`);
+
+export const createPromotion = (promo: PromotionInput) =>
+  api<{ promotion: Promotion }>('/api/promotions', {
+    method: 'POST',
+    body: JSON.stringify(promo),
+  });
+
+export const updatePromotion = (id: string, promo: Partial<PromotionInput>) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(promo),
+  });
+
+export const duplicatePromotion = (id: string) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+  });
+
+export const updatePromotionStatus = (id: string, status: PromotionStatus) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+
+export const deletePromotion = (id: string) =>
+  api<{ success: boolean }>(`/api/promotions/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+
+export const evaluatePromotionsApi = (payload: {
+  cart: CartItemForEval[];
+  partyId?: string;
+  customerPhone?: string;
+  branch?: string;
+  counter?: string;
+}) =>
+  api<PromotionEvalResult>('/api/promotions/evaluate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const fetchPromotionReports = (query?: {
+  period?: 'today' | 'week' | 'this_month' | 'custom';
+  startDate?: string;
+  endDate?: string;
+  branch?: string;
+  type?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (query?.period) params.append('period', query.period);
+  if (query?.startDate) params.append('startDate', query.startDate);
+  if (query?.endDate) params.append('endDate', query.endDate);
+  if (query?.branch) params.append('branch', query.branch);
+  if (query?.type) params.append('type', query.type);
+  const qStr = params.toString() ? '?' + params.toString() : '';
+  return api<PromotionReportsData>('/api/promotions/reports' + qStr);
+};
