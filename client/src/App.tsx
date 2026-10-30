@@ -7345,6 +7345,134 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* Counter Operations & Live Register Metrics */}
+                  <div className="bento-card bento-register-card">
+                    <div className="bento-card-header">
+                      <div className="bento-header-label">
+                        <span className="dock-status-dot online"></span>
+                        <div>
+                          <h3 className="bento-card-title">Register #1 • Live Synced</h3>
+                          <span className="bento-card-subtitle">{user?.name || 'Cashier'} • Neon DB</span>
+                        </div>
+                      </div>
+                      <span className="bento-status-pill emerald">
+                        <span className="scanner-ready-dot"></span>
+                        Online
+                      </span>
+                    </div>
+
+                    <div className="bento-register-body">
+                      {/* Today's Metrics Grid */}
+                      <div className="bento-register-metrics-grid">
+                        <div className="bento-register-metric-box">
+                          <span className="bento-metric-lbl">Today's Counter Bills</span>
+                          <span className="bento-metric-num mono">
+                            {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length} Bills
+                          </span>
+                        </div>
+                        <div className="bento-register-metric-box">
+                          <span className="bento-metric-lbl">Today's Register Sales</span>
+                          <span className="bento-metric-num mono text-success">
+                            {formatRupees(
+                              invoices
+                                .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
+                                .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Operational Action Buttons Grid */}
+                      <div className="bento-register-actions-grid">
+                        <button
+                          type="button"
+                          className="dock-action-btn park-btn"
+                          onClick={handleHoldOrder}
+                          title="Hold current cart or recall last held order"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="6" y="4" width="4" height="16"></rect>
+                            <rect x="14" y="4" width="4" height="16"></rect>
+                          </svg>
+                          <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall (${heldOrders.length})` : 'Hold Order')}</span>
+                          {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
+                        </button>
+
+                        {heldOrders.length > 0 && (
+                          <button
+                            type="button"
+                            className="dock-action-btn secondary"
+                            onClick={() => setShowHeldOrdersModal(true)}
+                            title="View all currently held parked orders"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <span>Parked ({heldOrders.length})</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          className="dock-action-btn"
+                          onClick={() => setShowCustomItemModal(true)}
+                          title="Add open item custom charge (Carry bag, delivery, etc.)"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>+ Custom Charge</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="dock-action-btn"
+                          onClick={handleReprintLastBill}
+                          disabled={!invoices || invoices.length === 0}
+                          title="Reprint the most recently issued thermal invoice"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <rect x="6" y="14" width="12" height="8"></rect>
+                          </svg>
+                          <span>Reprint Last Bill</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="dock-action-btn"
+                          onClick={() => setShowDiscountPicker(true)}
+                          title="Apply bill percentage or flat rupee discount"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                            <line x1="19" y1="5" x2="5" y2="19"></line>
+                            <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                            <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                          </svg>
+                          <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`dock-action-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
+                          onClick={() => setShowMobileScannerModal(true)}
+                          title="Connect mobile phone as a wireless barcode scanner"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                          </svg>
+                          <span>{isPhoneScannerConnected ? 'Phone Paired ✓' : 'Mobile Scanner'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -7762,130 +7890,6 @@ export function App() {
               </div>
             )}
 
-            {/* ================= BOTTOM POS POWER DOCK ================= */}
-            <div className="bento-pos-dock">
-              {/* Left: Live Register & Shift Status */}
-              <div className="pos-dock-status">
-                <div className="dock-status-item">
-                  <span className="dock-status-dot online"></span>
-                  <div>
-                    <span className="dock-status-title">Register #1 • Live Synced</span>
-                    <span className="dock-status-sub">{user?.name || 'Cashier'} • Neon DB</span>
-                  </div>
-                </div>
-
-                <div className="dock-divider"></div>
-
-                <div className="dock-metrics-item">
-                  <span className="dock-metric-label">Today's Counter Bills</span>
-                  <span className="dock-metric-val mono">
-                    {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length} Bills
-                  </span>
-                </div>
-
-                <div className="dock-divider"></div>
-
-                <div className="dock-metrics-item">
-                  <span className="dock-metric-label">Today's Register Sales</span>
-                  <span className="dock-metric-val mono text-success">
-                    {formatRupees(
-                      invoices
-                        .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
-                        .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right: Operational Tool Actions */}
-              <div className="pos-dock-actions">
-                <button
-                  type="button"
-                  className="dock-action-btn park-btn"
-                  onClick={handleHoldOrder}
-                  title="Hold current cart or recall last held order"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="6" y="4" width="4" height="16"></rect>
-                    <rect x="14" y="4" width="4" height="16"></rect>
-                  </svg>
-                  <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall Order (${heldOrders.length})` : 'Hold Order')}</span>
-                  {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
-                </button>
-
-                {heldOrders.length > 0 && (
-                  <button
-                    type="button"
-                    className="dock-action-btn secondary"
-                    onClick={() => setShowHeldOrdersModal(true)}
-                    title="View all currently held parked orders"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                    </svg>
-                    <span>Parked ({heldOrders.length})</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={() => setShowCustomItemModal(true)}
-                  title="Add open item custom charge (Carry bag, delivery, etc.)"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  <span>+ Custom Charge</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={handleReprintLastBill}
-                  disabled={!invoices || invoices.length === 0}
-                  title="Reprint the most recently issued thermal invoice"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
-                  <span>Reprint Last Bill</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={() => setShowDiscountPicker(true)}
-                  title="Apply bill percentage or flat rupee discount"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <line x1="19" y1="5" x2="5" y2="19"></line>
-                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
-                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
-                  </svg>
-                  <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`dock-action-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
-                  onClick={() => setShowMobileScannerModal(true)}
-                  title="Connect mobile phone as a wireless barcode scanner"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
-                  </svg>
-                  <span>{isPhoneScannerConnected ? 'Phone Paired ✓' : 'Mobile Scanner'}</span>
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

@@ -28703,3 +28703,115 @@ select.expense-input-control {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+
+/* ==========================================================================
+   BENTO POS REGISTER & COUNTER OPERATIONS CARD (SIDE PANEL)
+   ========================================================================== */
+
+.bento-scanner-card {
+  height: auto !important;
+}
+
+.bento-register-card {
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  border: 1.5px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(15, 23, 42, 0.03) !important;
+  overflow: hidden !important;
+}
+
+.bento-register-card .bento-card-header {
+  padding: 0.75rem 0.95rem !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.bento-register-body {
+  padding: 0.85rem 0.95rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+}
+
+.bento-register-metrics-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 0.55rem !important;
+}
+
+.bento-register-metric-box {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 0.55rem 0.7rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.bento-metric-lbl {
+  font-size: 0.64rem !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+}
+
+.bento-metric-num {
+  font-size: 0.92rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+}
+
+.bento-metric-num.text-success {
+  color: #059669 !important;
+}
+
+.bento-register-actions-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.5rem !important;
+}
+
+.bento-register-actions-grid .dock-action-btn {
+  width: 100% !important;
+  justify-content: center !important;
+  padding: 0.55rem 0.5rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+.bento-register-actions-grid .dock-action-btn:hover:not(:disabled) {
+  background: #ffffff !important;
+  border-color: #6366f1 !important;
+  color: #4f46e5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 8px rgba(79, 70, 229, 0.15) !important;
+}
+
+.bento-register-actions-grid .dock-action-btn.park-btn {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+  border-color: #c4b5fd !important;
+  color: #5b21b6 !important;
+}
+
+.bento-register-actions-grid .dock-action-btn.park-btn:hover {
+  background: #5b21b6 !important;
+  border-color: #4c1d95 !important;
+  color: #ffffff !important;
+}
+
+.bento-register-actions-grid .dock-action-btn.connected {
+  background: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
