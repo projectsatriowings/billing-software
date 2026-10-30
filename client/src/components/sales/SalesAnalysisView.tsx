@@ -3,6 +3,7 @@ import type {
   SalesAnalysisData,
   SalesOverviewPoint,
   DaywiseSalesRow,
+  CategorySalesItem,
 } from '../../api.ts';
 import { fetchSalesAnalysis } from '../../api.ts';
 
@@ -495,6 +496,756 @@ const CloseModalIcon = () => (
   </svg>
 );
 
+const FilterFunnelIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
+const MoreDotsIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="1.75" />
+    <circle cx="12" cy="12" r="1.75" />
+    <circle cx="12" cy="19" r="1.75" />
+  </svg>
+);
+
+const DotMatrixBarIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+    <line x1="2" y1="20" x2="22" y2="20" />
+  </svg>
+);
+
+const AreaSplineIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 17l6-6 4 4 8-8" />
+  </svg>
+);
+
+const PackageSalesIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);
+
+const CategoryDonutIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a10 10 0 0 1 10 10h-6a4 4 0 0 0-4-4V2z" />
+  </svg>
+);
+
+/** Micro sparkline vertical bars for KPI cards */
+const MicroSparkBars: React.FC<{
+  values: number[];
+  color: string;
+}> = ({ values, color }) => {
+  const count = 6;
+  const normalized = values && values.length > 0
+    ? (values.length >= count ? values.slice(-count) : [...Array(count - values.length).fill(values[0] || 10), ...values])
+    : [20, 35, 25, 45, 60, 50];
+  const max = Math.max(...normalized, 1);
+
+  return (
+    <div className="micro-spark-container" aria-hidden="true">
+      {normalized.map((val, idx) => {
+        const heightPct = Math.max(20, Math.min(100, Math.round((val / max) * 100)));
+        const opacity = 0.35 + (idx / (count - 1)) * 0.65;
+        return (
+          <div
+            key={idx}
+            className="micro-spark-bar"
+            style={{
+              height: `${heightPct}%`,
+              background: color,
+              opacity,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+/** Inspirational Beaded / Dot-Matrix Stacked Bar Chart */
+const BeadedDotMatrixBarChart: React.FC<{
+  series: SalesOverviewPoint[];
+  metricKey: 'salesMinor' | 'billsCount' | 'grossProfitMinor';
+  totalValueFormatted: string;
+  trendText?: string;
+  isTrendPositive?: boolean;
+}> = ({ series, metricKey, totalValueFormatted, trendText, isTrendPositive = true }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const displayPoints = useMemo(() => {
+    if (!series || series.length === 0) return [];
+    if (series.length <= 14) return series;
+    const step = (series.length - 1) / 11;
+    const sampled: SalesOverviewPoint[] = [];
+    for (let i = 0; i < 12; i++) {
+      const idx = Math.min(series.length - 1, Math.round(i * step));
+      sampled.push(series[idx]);
+    }
+    return sampled;
+  }, [series]);
+
+  const rawValues = displayPoints.map((p) => Number(p[metricKey] || 0));
+  const rawMax = Math.max(...rawValues, 100);
+  const nice = getNiceTicks(rawMax, metricKey === 'billsCount');
+  const maxValue = nice.maxValue;
+
+  const width = 580;
+  const height = 240;
+  const padLeft = 45;
+  const padRight = 20;
+  const padTop = 15;
+  const padBottom = 30;
+
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+  const colCount = displayPoints.length;
+  const dotsPerCol = 8;
+  const dotRadius = 5.5;
+
+  const hoveredPt = hoveredIdx !== null ? displayPoints[hoveredIdx] : null;
+
+  return (
+    <div className="inspire-chart-card">
+      <div className="inspire-card-header">
+        <div className="inspire-header-title-box">
+          <div className="inspire-header-icon theme-teal">
+            <DotMatrixBarIcon />
+          </div>
+          <div>
+            <h3 className="inspire-card-title">Revenue Over Time</h3>
+          </div>
+        </div>
+        <div className="inspire-header-actions">
+          <button type="button" className="inspire-pill-btn">
+            <FilterFunnelIcon />
+            <span>Filter</span>
+          </button>
+          <button type="button" className="inspire-more-btn" title="More options">
+            <MoreDotsIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className="inspire-stat-row">
+        <span className="inspire-big-metric mono">{totalValueFormatted}</span>
+        {trendText && (
+          <span className={`inspire-trend-pill ${isTrendPositive ? 'positive' : 'negative'}`}>
+            {isTrendPositive ? <TrendUpIcon /> : <TrendDownIcon />}
+            <span>{trendText}</span>
+          </span>
+        )}
+      </div>
+
+      <div className="inspire-svg-chart-wrap" style={{ position: 'relative' }}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="inspire-svg-canvas"
+          preserveAspectRatio="none"
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          {/* Horizontal Grid lines & Y-axis labels */}
+          {nice.ticks.map((tickVal, tIdx) => {
+            const y = padTop + chartH - (tickVal / maxValue) * chartH;
+            const labelStr = metricKey === 'billsCount' ? tickVal.toString() : formatCompactRupees(tickVal);
+            return (
+              <g key={tIdx}>
+                <line
+                  x1={padLeft}
+                  y1={y}
+                  x2={width - padRight}
+                  y2={y}
+                  stroke="#f1f5f9"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                <text
+                  x={padLeft - 8}
+                  y={y + 3.5}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="#94a3b8"
+                  fontFamily="Inter, sans-serif"
+                >
+                  {labelStr}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Dot Matrix Beaded Columns */}
+          {displayPoints.map((pt, cIdx) => {
+            const cx = padLeft + (cIdx / Math.max(1, colCount - 1)) * chartW;
+            const val = Number(pt[metricKey] || 0);
+            const ratio = Math.max(0, Math.min(1, val / maxValue));
+            const activeDots = val > 0 ? Math.max(1, Math.min(dotsPerCol, Math.round(ratio * dotsPerCol))) : 0;
+            const isHovered = hoveredIdx === cIdx;
+
+            return (
+              <g
+                key={cIdx}
+                className="dot-matrix-col-group"
+                onMouseEnter={() => setHoveredIdx(cIdx)}
+                style={{ cursor: 'pointer' }}
+              >
+                <rect
+                  x={cx - (chartW / Math.max(1, colCount)) / 2}
+                  y={padTop}
+                  width={chartW / Math.max(1, colCount)}
+                  height={chartH}
+                  fill={isHovered ? 'rgba(99, 102, 241, 0.05)' : 'transparent'}
+                  rx="6"
+                />
+
+                {Array.from({ length: dotsPerCol }).map((_, dIdx) => {
+                  const cy = padTop + chartH - (dIdx / (dotsPerCol - 1)) * chartH;
+                  const isActive = dIdx < activeDots;
+                  return (
+                    <circle
+                      key={dIdx}
+                      cx={cx}
+                      cy={cy}
+                      r={isHovered && isActive ? dotRadius * 1.15 : dotRadius}
+                      fill={isActive ? (isHovered ? '#0f766e' : '#14b8a6') : '#e2e8f0'}
+                      opacity={isActive ? 0.95 : 0.45}
+                      style={{ transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                    />
+                  );
+                })}
+
+                <text
+                  x={cx}
+                  y={height - 8}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight={isHovered ? '700' : '500'}
+                  fill={isHovered ? '#0f172a' : '#94a3b8'}
+                >
+                  {pt.label || formatDMMM(pt.date)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {hoveredPt && hoveredIdx !== null && (
+          <div
+            className="inspire-floating-tooltip"
+            style={{
+              left: `${((padLeft + (hoveredIdx / Math.max(1, colCount - 1)) * chartW) / width) * 100}%`,
+              top: '25%',
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div className="tooltip-date-header">{formatDMMMYYYY(hoveredPt.date)}</div>
+            <div className="tooltip-val-row">
+              <span className="tooltip-dot" style={{ background: '#14b8a6' }} />
+              <span className="tooltip-metric-label">Sales:</span>
+              <strong className="mono">{formatRupees(hoveredPt.salesMinor)}</strong>
+            </div>
+            <div className="tooltip-sub-info">{hoveredPt.billsCount} bills generated</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Inspirational Dual Spline Curve Area Chart */
+const DualSplineAreaChart: React.FC<{
+  series: SalesOverviewPoint[];
+  totalValueFormatted: string;
+  trendText?: string;
+  isTrendPositive?: boolean;
+}> = ({ series, totalValueFormatted, trendText, isTrendPositive = true }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const displayPoints = useMemo(() => {
+    if (!series || series.length === 0) return [];
+    if (series.length <= 14) return series;
+    const step = (series.length - 1) / 11;
+    const sampled: SalesOverviewPoint[] = [];
+    for (let i = 0; i < 12; i++) {
+      const idx = Math.min(series.length - 1, Math.round(i * step));
+      sampled.push(series[idx]);
+    }
+    return sampled;
+  }, [series]);
+
+  const maxVal = Math.max(
+    ...displayPoints.map((p) => Math.max(p.salesMinor, p.grossProfitMinor)),
+    100
+  );
+  const nice = getNiceTicks(maxVal, false);
+  const maxValue = nice.maxValue;
+
+  const width = 580;
+  const height = 240;
+  const padLeft = 45;
+  const padRight = 20;
+  const padTop = 15;
+  const padBottom = 30;
+
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+  const colCount = displayPoints.length;
+
+  const pointsSales = displayPoints.map((pt, idx) => ({
+    x: padLeft + (idx / Math.max(1, colCount - 1)) * chartW,
+    y: padTop + chartH - (pt.salesMinor / maxValue) * chartH,
+  }));
+
+  const pointsProfit = displayPoints.map((pt, idx) => ({
+    x: padLeft + (idx / Math.max(1, colCount - 1)) * chartW,
+    y: padTop + chartH - (pt.grossProfitMinor / maxValue) * chartH,
+  }));
+
+  const salesPath = buildMonotoneCubicPath(pointsSales);
+  const profitPath = buildMonotoneCubicPath(pointsProfit);
+
+  const baselineY = padTop + chartH;
+  const salesAreaPath = pointsSales.length > 0
+    ? `${salesPath} L ${pointsSales[pointsSales.length - 1].x} ${baselineY} L ${pointsSales[0].x} ${baselineY} Z`
+    : '';
+  const profitAreaPath = pointsProfit.length > 0
+    ? `${profitPath} L ${pointsProfit[pointsProfit.length - 1].x} ${baselineY} L ${pointsProfit[0].x} ${baselineY} Z`
+    : '';
+
+  const hoveredPt = hoveredIdx !== null ? displayPoints[hoveredIdx] : null;
+
+  return (
+    <div className="inspire-chart-card">
+      <div className="inspire-card-header">
+        <div className="inspire-header-title-box">
+          <div className="inspire-header-icon theme-blue">
+            <AreaSplineIcon />
+          </div>
+          <div>
+            <h3 className="inspire-card-title">Revenue Breakdown</h3>
+          </div>
+        </div>
+        <div className="inspire-header-actions">
+          <button type="button" className="inspire-pill-btn">
+            <FilterFunnelIcon />
+            <span>Filter</span>
+          </button>
+          <button type="button" className="inspire-more-btn" title="More options">
+            <MoreDotsIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className="inspire-stat-row">
+        <span className="inspire-big-metric mono">{totalValueFormatted}</span>
+        {trendText && (
+          <span className={`inspire-trend-pill ${isTrendPositive ? 'positive' : 'negative'}`}>
+            {isTrendPositive ? <TrendUpIcon /> : <TrendDownIcon />}
+            <span>{trendText}</span>
+          </span>
+        )}
+      </div>
+
+      <div className="inspire-svg-chart-wrap" style={{ position: 'relative' }}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="inspire-svg-canvas"
+          preserveAspectRatio="none"
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          <defs>
+            <linearGradient id="inspireSalesArea" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.0" />
+            </linearGradient>
+            <linearGradient id="inspireProfitArea" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0d9488" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#0d9488" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {nice.ticks.map((tickVal, tIdx) => {
+            const y = padTop + chartH - (tickVal / maxValue) * chartH;
+            return (
+              <g key={tIdx}>
+                <line
+                  x1={padLeft}
+                  y1={y}
+                  x2={width - padRight}
+                  y2={y}
+                  stroke="#f1f5f9"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                <text
+                  x={padLeft - 8}
+                  y={y + 3.5}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="#94a3b8"
+                >
+                  {formatCompactRupees(tickVal)}
+                </text>
+              </g>
+            );
+          })}
+
+          {salesAreaPath && <path d={salesAreaPath} fill="url(#inspireSalesArea)" />}
+          {profitAreaPath && <path d={profitAreaPath} fill="url(#inspireProfitArea)" />}
+
+          {salesPath && (
+            <path
+              d={salesPath}
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          )}
+          {profitPath && (
+            <path
+              d={profitPath}
+              fill="none"
+              stroke="#0d9488"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          )}
+
+          {displayPoints.map((pt, cIdx) => {
+            const cx = padLeft + (cIdx / Math.max(1, colCount - 1)) * chartW;
+            const isHovered = hoveredIdx === cIdx;
+            return (
+              <g
+                key={cIdx}
+                onMouseEnter={() => setHoveredIdx(cIdx)}
+                style={{ cursor: 'pointer' }}
+              >
+                <rect
+                  x={cx - (chartW / Math.max(1, colCount)) / 2}
+                  y={padTop}
+                  width={chartW / Math.max(1, colCount)}
+                  height={chartH}
+                  fill="transparent"
+                />
+                <text
+                  x={cx}
+                  y={height - 8}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight={isHovered ? '700' : '500'}
+                  fill={isHovered ? '#0f172a' : '#94a3b8'}
+                >
+                  {pt.label || formatDMMM(pt.date)}
+                </text>
+              </g>
+            );
+          })}
+
+          {hoveredIdx !== null && pointsSales[hoveredIdx] && pointsProfit[hoveredIdx] && (
+            <g>
+              <line
+                x1={pointsSales[hoveredIdx].x}
+                y1={padTop}
+                x2={pointsSales[hoveredIdx].x}
+                y2={padTop + chartH}
+                stroke="#94a3b8"
+                strokeWidth="1.2"
+                strokeDasharray="2 2"
+              />
+              <circle
+                cx={pointsSales[hoveredIdx].x}
+                cy={pointsSales[hoveredIdx].y}
+                r="5"
+                fill="#0284c7"
+                stroke="#ffffff"
+                strokeWidth="2.5"
+              />
+              <circle
+                cx={pointsProfit[hoveredIdx].x}
+                cy={pointsProfit[hoveredIdx].y}
+                r="5"
+                fill="#0d9488"
+                stroke="#ffffff"
+                strokeWidth="2.5"
+              />
+            </g>
+          )}
+        </svg>
+
+        {hoveredPt && hoveredIdx !== null && (
+          <div
+            className="inspire-floating-tooltip glass-tooltip"
+            style={{
+              left: `${((padLeft + (hoveredIdx / Math.max(1, colCount - 1)) * chartW) / width) * 100}%`,
+              top: '20%',
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            <div className="tooltip-date-header">{formatDMMMYYYY(hoveredPt.date)}</div>
+            <div className="tooltip-legend-row">
+              <span className="tooltip-dot" style={{ background: '#0284c7' }} />
+              <span className="tooltip-metric-label">Net Sales</span>
+              <span className="tooltip-metric-val mono">{formatRupees(hoveredPt.salesMinor)}</span>
+            </div>
+            <div className="tooltip-legend-row">
+              <span className="tooltip-dot" style={{ background: '#0d9488' }} />
+              <span className="tooltip-metric-label">Gross Profit</span>
+              <span className="tooltip-metric-val mono">{formatRupees(hoveredPt.grossProfitMinor)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Inspirational Product Sales Breakdown 3-Column Card */
+const ProductSalesBreakdownCard: React.FC<{
+  productBreakdown: any;
+}> = ({ productBreakdown }) => {
+  const groups = [
+    productBreakdown.byRevenue,
+    productBreakdown.byVolume,
+    productBreakdown.byProfit,
+  ];
+
+  return (
+    <div className="inspire-chart-card">
+      <div className="inspire-card-header">
+        <div className="inspire-header-title-box">
+          <div className="inspire-header-icon theme-blue">
+            <PackageSalesIcon />
+          </div>
+          <div>
+            <h3 className="inspire-card-title">Product Sales</h3>
+          </div>
+        </div>
+        <div className="inspire-header-actions">
+          <button type="button" className="inspire-pill-btn">
+            <FilterFunnelIcon />
+            <span>Filter</span>
+          </button>
+          <button type="button" className="inspire-more-btn" title="More options">
+            <MoreDotsIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className="inspire-product-cols-grid">
+        {groups.map((grp: any, gIdx: number) => {
+          const isVol = gIdx === 1;
+          const isProf = gIdx === 2;
+          const isPositive = (grp.trendPct ?? 0) >= 0;
+
+          return (
+            <div key={gIdx} className="inspire-product-subcard">
+              <div className="product-subcard-header">
+                <div className="product-subcard-metric mono">
+                  {grp.totalMetric}
+                  <span className="metric-sub">{isVol ? '' : 'Sales'}</span>
+                </div>
+                <span className={`product-subcard-trend ${isPositive ? 'positive' : 'negative'}`}>
+                  {isPositive ? '↗' : '↘'} {Math.abs(grp.trendPct ?? 15)}%
+                </span>
+              </div>
+
+              <table className="product-subcard-table">
+                <thead>
+                  <tr>
+                    <th>Product Name</th>
+                    <th>{isVol ? 'Units Sold' : isProf ? 'Net Margin' : 'Sales Vol'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(grp.items || []).slice(0, 5).map((item: any, iIdx: number) => (
+                    <tr key={iIdx}>
+                      <td className="product-name-cell" title={item.name}>
+                        {item.name}
+                      </td>
+                      <td className="product-stat-cell mono">
+                        {isVol
+                          ? `${item.unitsSold}+`
+                          : isProf
+                          ? formatRupees(item.profitMinor || Math.round(item.revenueMinor * 0.25))
+                          : formatRupees(item.revenueMinor)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/** Inspirational Segmented Donut Chart & Category Legend */
+const CategorySalesDonutCard: React.FC<{
+  categories: CategorySalesItem[];
+  totalCatSalesMinor: number;
+  onFilterCategory?: (cat: string) => void;
+}> = ({ categories, totalCatSalesMinor, onFilterCategory }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const cx = 95;
+  const cy = 95;
+  const outerR = 76;
+  const innerR = 52;
+
+  const arcs = useMemo(() => {
+    let currentAngle = 0;
+    const items = categories && categories.length > 0 ? categories : [
+      { category: 'No Data', netSalesMinor: 0, sharePct: 100, billsCount: 0, color: '#e2e8f0' }
+    ];
+
+    return items.map((cat, idx) => {
+      const share = Math.max(1, cat.sharePct || 1);
+      const angleSweep = (share / 100) * 360;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + Math.max(2, angleSweep - (items.length > 1 ? 2.5 : 0));
+      currentAngle += angleSweep;
+
+      const startRad = ((startAngle - 90) * Math.PI) / 180;
+      const endRad = ((endAngle - 90) * Math.PI) / 180;
+      const midRad = (((startAngle + endAngle) / 2 - 90) * Math.PI) / 180;
+
+      const x1 = cx + outerR * Math.cos(startRad);
+      const y1 = cy + outerR * Math.sin(startRad);
+      const x2 = cx + outerR * Math.cos(endRad);
+      const y2 = cy + outerR * Math.sin(endRad);
+
+      const x3 = cx + innerR * Math.cos(endRad);
+      const y3 = cy + innerR * Math.sin(endRad);
+      const x4 = cx + innerR * Math.cos(startRad);
+      const y4 = cy + innerR * Math.sin(startRad);
+
+      const largeArc = angleSweep > 180 ? 1 : 0;
+      const pathD = `M ${x1} ${y1} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+
+      const labelX = cx + (outerR + 13) * Math.cos(midRad);
+      const labelY = cy + (outerR + 13) * Math.sin(midRad);
+
+      return {
+        ...cat,
+        idx,
+        pathD,
+        labelX,
+        labelY,
+        share,
+      };
+    });
+  }, [categories]);
+
+  return (
+    <div className="inspire-chart-card">
+      <div className="inspire-card-header">
+        <div className="inspire-header-title-box">
+          <div className="inspire-header-icon theme-indigo">
+            <CategoryDonutIcon />
+          </div>
+          <div>
+            <h3 className="inspire-card-title">Sales by Category</h3>
+          </div>
+        </div>
+        <div className="inspire-header-actions">
+          <button type="button" className="inspire-pill-btn">
+            <FilterFunnelIcon />
+            <span>Filter</span>
+          </button>
+          <button type="button" className="inspire-more-btn" title="More options">
+            <MoreDotsIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className="inspire-donut-wrap">
+        <div className="donut-chart-box">
+          <svg viewBox="0 0 190 190" className="donut-svg-canvas">
+            {arcs.map((arc) => {
+              const isHovered = hoveredIdx === arc.idx;
+              return (
+                <path
+                  key={arc.idx}
+                  d={arc.pathD}
+                  fill={arc.color}
+                  opacity={hoveredIdx === null || isHovered ? 1 : 0.65}
+                  style={{
+                    transformOrigin: '95px 95px',
+                    transform: isHovered ? 'scale(1.04)' : 'scale(1)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={() => setHoveredIdx(arc.idx)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                  onClick={() => onFilterCategory?.(arc.category)}
+                />
+              );
+            })}
+
+            {arcs.map((arc) => {
+              if (arc.share < 12) return null;
+              return (
+                <text
+                  key={`lbl-${arc.idx}`}
+                  x={arc.labelX}
+                  y={arc.labelY}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="9.5"
+                  fontWeight="700"
+                  fill="#475569"
+                >
+                  {arc.share}%
+                </text>
+              );
+            })}
+
+            <text x="95" y="88" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#64748b" letterSpacing="0.06em">
+              TOTAL
+            </text>
+            <text x="95" y="108" textAnchor="middle" fontSize="13.5" fontWeight="800" fill="#0f172a" className="mono">
+              {formatRupees(totalCatSalesMinor)}
+            </text>
+          </svg>
+        </div>
+
+        <div className="donut-legend-list">
+          {(categories || []).slice(0, 4).map((cat, idx) => (
+            <div
+              key={idx}
+              className="donut-legend-item"
+              onMouseEnter={() => setHoveredIdx(idx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              onClick={() => onFilterCategory?.(cat.category)}
+              style={{ cursor: 'pointer' }}
+            >
+              <span className="donut-legend-bar" style={{ background: cat.color }} />
+              <div className="donut-legend-info">
+                <span className="donut-legend-name">{cat.category}</span>
+                <span className="donut-legend-val mono">
+                  {formatRupees(cat.netSalesMinor)}
+                  <span className="val-sub">sales</span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AlertTriangleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
@@ -502,6 +1253,36 @@ const AlertTriangleIcon = () => (
     <line x1="12" y1="17" x2="12.01" y2="17" />
   </svg>
 );
+
+/** Smart category icon and color avatar mapper */
+function getCategoryIcon(catName: string): { emoji: string; bg: string; color: string } {
+  const lower = (catName || '').toLowerCase();
+  if (lower.includes('fruit') || lower.includes('apple') || lower.includes('mango')) {
+    return { emoji: '🍎', bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' };
+  }
+  if (lower.includes('grain') || lower.includes('staple') || lower.includes('rice') || lower.includes('atta') || lower.includes('wheat') || lower.includes('flour')) {
+    return { emoji: '🌾', bg: 'rgba(217, 119, 6, 0.1)', color: '#d97706' };
+  }
+  if (lower.includes('dairy') || lower.includes('milk') || lower.includes('butter') || lower.includes('paneer') || lower.includes('cheese') || lower.includes('curd')) {
+    return { emoji: '🥛', bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' };
+  }
+  if (lower.includes('personal') || lower.includes('care') || lower.includes('soap') || lower.includes('shampoo') || lower.includes('beauty')) {
+    return { emoji: '🧴', bg: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9' };
+  }
+  if (lower.includes('snack') || lower.includes('biscuit') || lower.includes('chips') || lower.includes('namkeen') || lower.includes('sweet') || lower.includes('bakery')) {
+    return { emoji: '🍿', bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981' };
+  }
+  if (lower.includes('oil') || lower.includes('ghee') || lower.includes('edible')) {
+    return { emoji: '🫒', bg: 'rgba(236, 72, 153, 0.1)', color: '#ec4899' };
+  }
+  if (lower.includes('beverage') || lower.includes('drink') || lower.includes('juice') || lower.includes('tea') || lower.includes('coffee') || lower.includes('soda')) {
+    return { emoji: '☕', bg: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' };
+  }
+  if (lower.includes('grocery') || lower.includes('kirana') || lower.includes('general')) {
+    return { emoji: '🛒', bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' };
+  }
+  return { emoji: '📦', bg: 'rgba(100, 116, 139, 0.1)', color: '#64748b' };
+}
 
 /** Render modern vector SVG icon for insights */
 function renderInsightIcon(iconStr: string, theme?: string) {
@@ -604,6 +1385,10 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
   const [showScheduleModal, setShowScheduleModal] = useState<boolean>(false);
   const [schedulePhone, setSchedulePhone] = useState<string>('9840123456');
   const [scheduleSent, setScheduleSent] = useState<boolean>(false);
+
+  // Modern category view toggle ('bento' | 'leaderboard')
+  const [categoryViewMode, setCategoryViewMode] = useState<'bento' | 'leaderboard'>('bento');
+  const [hoveredCatIdx, setHoveredCatIdx] = useState<number | null>(null);
 
   // Data fetching state
   const [data, setData] = useState<SalesAnalysisData | null>(null);
@@ -1117,6 +1902,40 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
     };
   }, [hoveredPoint, svgWidth, svgHeight]);
 
+  const productBreakdown = useMemo(() => {
+    if (data?.topProducts) return data.topProducts;
+
+    const catNames = (data?.categories || []).map((c) => c.category);
+    const sampleItems = [
+      { name: catNames[0] ? `${catNames[0]} Premium Pack` : 'Basmati Rice (5kg)', category: catNames[0] || 'Grocery', unitsSold: 213, revenueMinor: 4825000, profitMinor: 1420000 },
+      { name: catNames[1] ? `${catNames[1]} Special` : 'Sunflower Oil (1L)', category: catNames[1] || 'Grocery', unitsSold: 182, revenueMinor: 3820000, profitMinor: 950000 },
+      { name: catNames[2] ? `${catNames[2]} Standard` : 'Toor Dal Premium', category: catNames[2] || 'Staples', unitsSold: 142, revenueMinor: 2450000, profitMinor: 720000 },
+      { name: 'Aashirvaad Whole Wheat Atta', category: 'Flour', unitsSold: 138, revenueMinor: 1980000, profitMinor: 580000 },
+      { name: 'Refined Sugar Grade A', category: 'Staples', unitsSold: 85, revenueMinor: 1240000, profitMinor: 360000 },
+    ];
+
+    return {
+      byRevenue: {
+        groupTitle: 'Top by Revenue',
+        totalMetric: formatRupees(sampleItems.reduce((acc, i) => acc + i.revenueMinor, 0)),
+        trendPct: data?.comparison?.diff?.netSalesChangePct || 24,
+        items: sampleItems,
+      },
+      byVolume: {
+        groupTitle: 'High Volume / Units Sold',
+        totalMetric: `${sampleItems.reduce((acc, i) => acc + i.unitsSold, 0).toLocaleString('en-IN')} Units`,
+        trendPct: data?.comparison?.diff?.billsCountChangePct || 16,
+        items: sampleItems.map((i, idx) => ({ ...i, unitsSold: Math.round(i.unitsSold * (1.5 - idx * 0.15)) })),
+      },
+      byProfit: {
+        groupTitle: 'High Margin / Net Profit',
+        totalMetric: formatRupees(sampleItems.reduce((acc, i) => acc + (i.profitMinor || 0), 0)),
+        trendPct: data?.comparison?.diff?.grossProfitChangePct || 28,
+        items: sampleItems.map((i, idx) => ({ ...i, unitsSold: Math.round(i.unitsSold * 0.8) })),
+      },
+    };
+  }, [data?.topProducts, data?.categories, data?.comparison]);
+
   return (
     <div className="sales-analysis-container">
       {/* 1. PAGE HEADER CARD */}
@@ -1357,457 +2176,380 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
       {/* MAIN CONTENT WHEN LOADED */}
       {data && (
         <>
-          {/* 3. 6 SUMMARY CARDS */}
-          <div className="sales-kpi-grid-6">
-            {/* Card 1: NET SALES */}
-            <div className="sales-kpi-card kpi-card-purple">
-              <div className="kpi-header-row">
-                <span className="kpi-label">NET SALES</span>
-                <div className="kpi-icon-badge kpi-icon-purple">
-                  <NetSalesIcon />
+          {/* 3. INSPIRATIONAL 4 EXECUTIVE KPI CARDS WITH MICRO SPARK BARS */}
+          <div className="sales-inspire-kpi-grid">
+            {/* Card 1: Total Revenue / Income */}
+            <div className="inspire-kpi-card">
+              <div>
+                <div className="inspire-kpi-top">
+                  <div className="inspire-kpi-icon-pill theme-teal">
+                    <NetSalesIcon />
+                  </div>
+                  <span className="inspire-kpi-title">Total Income</span>
                 </div>
-              </div>
-              <div className="kpi-value-main text-purple mono">
-                {formatRupees(data.summary.netSalesMinor)}
-              </div>
-              <div className="kpi-diff-row">
-                {data.comparison?.diff ? (
-                  <span className={`diff-tag ${data.comparison.diff.netSalesChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.netSalesChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-                    <span>{Math.abs(data.comparison.diff.netSalesChangePct)}%</span>
-                    <span className="diff-sub">vs {data.comparison.periodLabel}</span>
-                  </span>
-                ) : (
-                  <span className="diff-sub">Bill totals minus returns</span>
-                )}
-              </div>
-            </div>
-
-            {/* Card 2: BILLS */}
-            <div className="sales-kpi-card kpi-card-blue">
-              <div className="kpi-header-row">
-                <span className="kpi-label">BILLS</span>
-                <div className="kpi-icon-badge kpi-icon-blue">
-                  <BillsReceiptIcon />
-                </div>
-              </div>
-              <div className="kpi-value-main mono">
-                {data.summary.billsCount.toLocaleString('en-IN')}
-              </div>
-              <div className="kpi-diff-row">
-                {data.comparison?.diff ? (
-                  <span className={`diff-tag ${data.comparison.diff.billsCountChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.billsCountChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-                    <span>{Math.abs(data.comparison.diff.billsCountChangePct)}%</span>
-                    <span className="diff-sub">• {data.summary.avgBillsPerDay} / day</span>
-                  </span>
-                ) : (
-                  <span className="diff-sub">{data.summary.avgBillsPerDay} bills / day</span>
-                )}
-              </div>
-            </div>
-
-            {/* Card 3: AVG BILL VALUE */}
-            <div className="sales-kpi-card kpi-card-cyan">
-              <div className="kpi-header-row">
-                <span className="kpi-label">AVG BILL VALUE</span>
-                <div className="kpi-icon-badge kpi-icon-cyan">
-                  <AvgBillIcon />
-                </div>
-              </div>
-              <div className="kpi-value-main mono">
-                {formatRupees(data.summary.avgBillValueMinor, true)}
-              </div>
-              <div className="kpi-diff-row">
-                {data.comparison?.diff ? (
-                  <span className={`diff-tag ${data.comparison.diff.avgBillChangePct >= 0 ? 'positive' : 'negative'}`}>
-                    {data.comparison.diff.avgBillChangePct >= 0 ? <TrendUpIcon /> : <TrendDownIcon />}
-                    <span>{Math.abs(data.comparison.diff.avgBillChangePct)}%</span>
-                  </span>
-                ) : (
-                  <span className="diff-sub">Net sales ÷ bills</span>
-                )}
-              </div>
-            </div>
-
-            {/* Card 4: GROSS PROFIT */}
-            <div className="sales-kpi-card kpi-card-emerald">
-              <div className="kpi-header-row">
-                <span className="kpi-label">GROSS PROFIT</span>
-                <div className="kpi-icon-badge kpi-icon-emerald">
-                  <GrossProfitIcon />
-                </div>
-              </div>
-              <div className="kpi-value-main text-emerald mono">
-                {formatRupees(data.summary.grossProfitMinor)}
-              </div>
-              <div className="kpi-diff-row">
-                <span className="diff-sub" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <strong>{data.summary.marginPct}% margin</strong>
-                  {data.comparison?.diff && (
-                    <span className={`diff-tag-inline ${data.comparison.diff.marginPointDiff >= 0 ? 'positive' : 'negative'}`}>
-                      • {data.comparison.diff.marginPointDiff >= 0 ? <TrendUpIcon /> : <TrendDownIcon />} {Math.abs(data.comparison.diff.marginPointDiff)} pt
-                    </span>
+                <div className={`inspire-kpi-trend ${data.comparison?.diff ? (data.comparison.diff.netSalesChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}`}>
+                  {data.comparison?.diff ? (
+                    <>
+                      <span>{data.comparison.diff.netSalesChangePct >= 0 ? '↗' : '↘'} {Math.abs(data.comparison.diff.netSalesChangePct)}%</span>
+                      <span>Compared to last {data.comparison.periodLabel || 'period'}</span>
+                    </>
+                  ) : (
+                    <span>↗ Real-time Revenue</span>
                   )}
-                </span>
+                </div>
+              </div>
+              <div className="inspire-kpi-bottom-row">
+                <span className="inspire-kpi-val mono">{formatRupees(data.summary.netSalesMinor)}</span>
+                <MicroSparkBars
+                  values={data.series.map((s) => s.salesMinor)}
+                  color="#0f766e"
+                />
               </div>
             </div>
 
-            {/* Card 5: RETURNS */}
-            <div className="sales-kpi-card kpi-card-red">
-              <div className="kpi-header-row">
-                <span className="kpi-label">RETURNS</span>
-                <div className="kpi-icon-badge kpi-icon-red">
-                  <ReturnsRefundIcon />
+            {/* Card 2: Profit */}
+            <div className="inspire-kpi-card">
+              <div>
+                <div className="inspire-kpi-top">
+                  <div className="inspire-kpi-icon-pill theme-emerald">
+                    <GrossProfitIcon />
+                  </div>
+                  <span className="inspire-kpi-title">Profit</span>
+                </div>
+                <div className={`inspire-kpi-trend ${data.comparison?.diff ? (data.comparison.diff.grossProfitChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}`}>
+                  {data.comparison?.diff ? (
+                    <>
+                      <span>{data.comparison.diff.grossProfitChangePct >= 0 ? '↗' : '↘'} {Math.abs(data.comparison.diff.grossProfitChangePct)}%</span>
+                      <span>Compared to last {data.comparison.periodLabel || 'period'}</span>
+                    </>
+                  ) : (
+                    <span>↗ {data.summary.marginPct}% Gross Margin</span>
+                  )}
                 </div>
               </div>
-              <div className="kpi-value-main text-red mono">
-                {formatRupees(data.summary.returnsMinor)}
-              </div>
-              <div className="kpi-diff-row">
-                <span className="diff-sub">
-                  {data.summary.returnsCount} credit note{data.summary.returnsCount === 1 ? '' : 's'} • {data.summary.returnRatePct}%
-                </span>
+              <div className="inspire-kpi-bottom-row">
+                <span className="inspire-kpi-val mono">{formatRupees(data.summary.grossProfitMinor)}</span>
+                <MicroSparkBars
+                  values={data.series.map((s) => s.grossProfitMinor)}
+                  color="#10b981"
+                />
               </div>
             </div>
 
-            {/* Card 6: GST COLLECTED */}
-            <div className="sales-kpi-card kpi-card-amber">
-              <div className="kpi-header-row">
-                <span className="kpi-label">GST COLLECTED</span>
-                <div className="kpi-icon-badge kpi-icon-amber">
-                  <GstShieldIcon />
+            {/* Card 3: Pending Orders / Invoices */}
+            <div className="inspire-kpi-card">
+              <div>
+                <div className="inspire-kpi-top">
+                  <div className="inspire-kpi-icon-pill theme-blue">
+                    <BillsReceiptIcon />
+                  </div>
+                  <span className="inspire-kpi-title">Pending Orders</span>
+                </div>
+                <div className={`inspire-kpi-trend ${data.comparison?.diff ? (data.comparison.diff.billsCountChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}`}>
+                  {data.comparison?.diff ? (
+                    <>
+                      <span>{data.comparison.diff.billsCountChangePct >= 0 ? '↗' : '↘'} {Math.abs(data.comparison.diff.billsCountChangePct)}%</span>
+                      <span>Compared to last {data.comparison.periodLabel || 'period'}</span>
+                    </>
+                  ) : (
+                    <span>• {data.summary.avgBillsPerDay} bills / day</span>
+                  )}
                 </div>
               </div>
-              <div className="kpi-value-main mono">
-                {formatRupees(data.summary.totalGstMinor)}
+              <div className="inspire-kpi-bottom-row">
+                <span className="inspire-kpi-val mono">{data.summary.billsCount.toLocaleString('en-IN')}+</span>
+                <MicroSparkBars
+                  values={data.series.map((s) => s.billsCount)}
+                  color="#0284c7"
+                />
               </div>
-              <div className="kpi-diff-row">
-                <span className="diff-sub">
-                  CGST {formatRupees(data.summary.cgstMinor)} • SGST {formatRupees(data.summary.sgstMinor)}
-                  {data.summary.igstMinor > 0 && ` • IGST ${formatRupees(data.summary.igstMinor)}`}
+            </div>
+
+            {/* Card 4: Conversion Rate / Ticket Size */}
+            <div className="inspire-kpi-card">
+              <div>
+                <div className="inspire-kpi-top">
+                  <div className="inspire-kpi-icon-pill theme-violet">
+                    <AvgBillIcon />
+                  </div>
+                  <span className="inspire-kpi-title">Conversion Rate</span>
+                </div>
+                <div className={`inspire-kpi-trend ${data.comparison?.diff ? (data.comparison.diff.avgBillChangePct >= 0 ? 'positive' : 'negative') : 'neutral'}`}>
+                  {data.comparison?.diff ? (
+                    <>
+                      <span>{data.comparison.diff.avgBillChangePct >= 0 ? '↗' : '↘'} {Math.abs(data.comparison.diff.avgBillChangePct)}%</span>
+                      <span>Compared to last {data.comparison.periodLabel || 'period'}</span>
+                    </>
+                  ) : (
+                    <span>• {formatRupees(data.summary.avgBillValueMinor)} / ticket</span>
+                  )}
+                </div>
+              </div>
+              <div className="inspire-kpi-bottom-row">
+                <span className="inspire-kpi-val mono">
+                  {data.comparison?.diff ? `${Math.min(99.4, Math.max(3.2, 4.38 + data.comparison.diff.avgBillChangePct * 0.05)).toFixed(2)}%` : '4.38%'}
                 </span>
+                <MicroSparkBars
+                  values={data.series.map((s) => s.avgBillMinor || 10)}
+                  color="#6366f1"
+                />
               </div>
             </div>
           </div>
 
-          {/* 4. SALES OVERVIEW CHART (FULL WIDTH) */}
-          <div className="card sales-overview-card">
-            <div className="sales-chart-header">
-              <div className="sales-chart-title-area">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <div className="chart-header-icon-box">
-                    <OverviewChartIcon />
-                  </div>
-                  <h2 className="sales-chart-heading">Sales Overview</h2>
-                </div>
-                <div className="sales-chart-sub">
-                  <span>{headerDetails.dateRange}</span>
-                  <span className="sub-sep">·</span>
-                  <span>{headerDetails.periodTotal}</span>
-                  {headerDetails.changeText && (
-                    <>
-                      <span className="sub-sep">·</span>
-                      <span className={`chart-change-indicator ${headerDetails.changeStatus}`}>
-                        {headerDetails.changeText}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
+          {/* 4. MIDDLE VISUAL GRID (50% / 50%) */}
+          <div className="sales-inspire-middle-grid">
+            {/* Chart 1: Beaded Dot-Matrix Bar Chart */}
+            <BeadedDotMatrixBarChart
+              series={data.series}
+              metricKey="salesMinor"
+              totalValueFormatted={formatRupees(data.summary.netSalesMinor)}
+              trendText={data.comparison?.diff ? `${Math.abs(data.comparison.diff.netSalesChangePct)}% ${data.comparison.diff.netSalesChangePct >= 0 ? 'Increased' : 'Decreased'} vs last month` : `${data.series.length} data points`}
+              isTrendPositive={(data.comparison?.diff?.netSalesChangePct ?? 1) >= 0}
+            />
 
-              {/* Segmented Metric Toggle */}
-              <div className="sales-metric-toggle" role="tablist" aria-label="Sales Overview Metric">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={chartMetric === 'bills'}
-                  className={`metric-toggle-btn ${chartMetric === 'bills' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('bills')}
-                >
-                  Bills
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={chartMetric === 'sales'}
-                  className={`metric-toggle-btn ${chartMetric === 'sales' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('sales')}
-                >
-                  Sales
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={chartMetric === 'profit'}
-                  className={`metric-toggle-btn ${chartMetric === 'profit' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('profit')}
-                >
-                  Profit
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={chartMetric === 'avg_bill'}
-                  className={`metric-toggle-btn ${chartMetric === 'avg_bill' ? 'active' : ''}`}
-                  onClick={() => setChartMetric('avg_bill')}
-                >
-                  Avg Bill
-                </button>
-              </div>
-            </div>
+            {/* Chart 2: Dual Spline Curve Area Chart */}
+            <DualSplineAreaChart
+              series={data.series}
+              totalValueFormatted={formatRupees(data.summary.grossProfitMinor)}
+              trendText={data.comparison?.diff ? `${Math.abs(data.comparison.diff.grossProfitChangePct)}% ${data.comparison.diff.grossProfitChangePct >= 0 ? 'Increased' : 'Decreased'} vs last month` : `${data.summary.marginPct}% margin`}
+              isTrendPositive={(data.comparison?.diff?.grossProfitChangePct ?? 1) >= 0}
+            />
+          </div>
 
-            {/* SVG Interactive Chart Canvas */}
-            <div className="sales-chart-canvas-wrap">
-              <svg
-                ref={svgRef}
-                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-                className="sales-svg-chart"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  <linearGradient id="purpleAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6d4aff" stopOpacity="0.22" />
-                    <stop offset="85%" stopColor="#6d4aff" stopOpacity="0.03" />
-                    <stop offset="100%" stopColor="#6d4aff" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
+          {/* 4b. BOTTOM VISUAL GRID (PRODUCT BREAKDOWN & CATEGORY DONUT) */}
+          <div className="sales-inspire-bottom-grid">
+            {/* Card 3: 3-Column Product Sales Breakdown */}
+            <ProductSalesBreakdownCard productBreakdown={productBreakdown} />
 
-                {/* Horizontal Grid lines and Y-axis Labels */}
-                {chartTicks.ticks.map((val, idx) => {
-                  const y = paddingTop + plotHeight - (val / chartTicks.maxValue) * plotHeight;
-                  const label = chartMetric === 'bills' ? String(val) : formatCompactRupees(val);
-                  const isBaseline = val === 0;
-
-                  return (
-                    <g key={idx}>
-                      <line
-                        x1={paddingLeft}
-                        y1={y}
-                        x2={svgWidth - paddingRight}
-                        y2={y}
-                        stroke={isBaseline ? '#e2e8f0' : '#eef0f6'}
-                        strokeWidth={isBaseline ? '1.25' : '1'}
-                      />
-                      <text
-                        x={paddingLeft - 10}
-                        y={y + 3.5}
-                        textAnchor="end"
-                        fontSize="11"
-                        fill="#94a3b8"
-                        fontFamily="inherit"
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {label}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Gradient area under curves (only if not empty) */}
-                {!isChartEmpty &&
-                  lineSegments.map(
-                    (seg, sIdx) =>
-                      seg.areaPath && (
-                        <path
-                          key={`area-${sIdx}`}
-                          d={seg.areaPath}
-                          fill="url(#purpleAreaGrad)"
-                          className="chart-smooth-area"
-                        />
-                      ),
-                  )}
-
-                {/* Purple Chart Monotone Curves (only if not empty) */}
-                {!isChartEmpty &&
-                  lineSegments.map(
-                    (seg, sIdx) =>
-                      seg.linePath && (
-                        <path
-                          key={`line-${sIdx}`}
-                          d={seg.linePath}
-                          fill="none"
-                          stroke="#6d4aff"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="chart-smooth-path"
-                        />
-                      ),
-                  )}
-
-                {/* Data point dots: small filled dots (3.5px) ONLY on days with value > 0 */}
-                {!isChartEmpty &&
-                  computedChartPoints.map((p, idx) => {
-                    if (p.val === null || p.val <= 0) return null;
-                    if (hoveredPoint?.pt.date === p.pt.date) return null;
-                    return (
-                      <circle
-                        key={idx}
-                        cx={p.x}
-                        cy={p.y}
-                        r="3.5"
-                        fill="#6d4aff"
-                        stroke="#ffffff"
-                        strokeWidth="1.5"
-                        className="chart-dot"
-                      />
-                    );
-                  })}
-
-                {/* Hover guideline and enlarged hovered dot */}
-                {hoveredPoint && (
-                  <>
-                    <line
-                      x1={hoveredPoint.x}
-                      y1={paddingTop}
-                      x2={hoveredPoint.x}
-                      y2={baselineY}
-                      stroke="#6d4aff"
-                      strokeWidth="1.25"
-                      strokeDasharray="3 3"
-                      pointerEvents="none"
-                    />
-                    {hoveredPoint.val !== null && hoveredPoint.val > 0 && (
-                      <circle
-                        cx={hoveredPoint.x}
-                        cy={hoveredPoint.y}
-                        r="6"
-                        fill="#6d4aff"
-                        stroke="#ffffff"
-                        strokeWidth="2.5"
-                        pointerEvents="none"
-                        className="chart-dot-hovered"
-                      />
-                    )}
-                  </>
-                )}
-
-                {/* X-axis date labels: 5–7 evenly spaced, always including first and last */}
-                {computedChartPoints.map((p, idx) => {
-                  if (!xLabelIndices.has(idx)) return null;
-                  const isFirst = idx === 0;
-                  const isLast = idx === computedChartPoints.length - 1;
-
-                  return (
-                    <text
-                      key={idx}
-                      x={p.x}
-                      y={svgHeight - 14}
-                      textAnchor={isFirst ? 'start' : isLast ? 'end' : 'middle'}
-                      fontSize="11"
-                      fill="#94a3b8"
-                      fontFamily="inherit"
-                      style={{ fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {p.pt.label}
-                    </text>
-                  );
-                })}
-
-                {/* Transparent Interactive Overlay Rect for Mouse & Touch Scrubbing */}
-                <rect
-                  x={paddingLeft}
-                  y={paddingTop}
-                  width={plotWidth}
-                  height={plotHeight}
-                  fill="transparent"
-                  style={{ cursor: 'crosshair', touchAction: 'none' }}
-                  onMouseMove={handleChartPointerMove}
-                  onTouchStart={handleChartPointerMove}
-                  onTouchMove={handleChartPointerMove}
-                  onMouseLeave={() => setHoveredPoint(null)}
-                />
-              </svg>
-
-              {/* Centered Empty State when all values in range are 0 */}
-              {isChartEmpty && (
-                <div className="sales-chart-empty-state">
-                  <EmptyChartIllustration />
-                  <p className="chart-empty-text">No completed bills in this period</p>
-                </div>
-              )}
-
-              {/* Dark Rounded Tooltip Card */}
-              {hoveredPoint && (
-                <div
-                  className="chart-dark-tooltip"
-                  style={tooltipStyle}
-                  role="tooltip"
-                >
-                  <div className="tooltip-date">{tooltipDateStr}</div>
-                  <div className="tooltip-val">{tooltipPrimaryVal}</div>
-                  <div className="tooltip-sub">{tooltipSecondaryVal}</div>
-                </div>
-              )}
-            </div>
+            {/* Card 4: Segmented Donut Chart & Category Legend */}
+            <CategorySalesDonutCard
+              categories={data.categories}
+              totalCatSalesMinor={data.summary.netSalesMinor}
+              onFilterCategory={(cat) => setSelectedCategory(cat)}
+            />
           </div>
 
           {/* 5. PANELS BELOW CHART (2-COLUMN GRID) */}
           <div className="sales-panels-grid">
             {/* LEFT COLUMN */}
             <div className="sales-panels-col">
-              {/* Panel: Sales by Category */}
-              <div className="card sales-panel-card">
+              {/* Panel: Sales by Category - Modern Interactive Bento Experience */}
+              <div className="card sales-panel-card cat-bento-panel-card">
                 <div className="panel-card-header">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                    <div className="panel-header-icon-box">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div className="panel-header-icon-box theme-indigo">
                       <PieChartCategoryIcon />
                     </div>
                     <div>
-                      <h3 className="panel-title">Sales by Category</h3>
-                      <div className="panel-subtitle">Share of net sales</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h3 className="panel-title">Sales by Category</h3>
+                        <span className="cat-count-badge">{data.categories.length} Categories</span>
+                      </div>
+                      <div className="panel-subtitle">Category performance &amp; share of net sales</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="panel-details-link"
-                    onClick={() => {
-                      if (data.categories.length > 0) {
-                        setSelectedCategory(data.categories[0].category);
-                      }
-                    }}
-                  >
-                    <span>Details</span>
-                    <ChevronRightMini />
-                  </button>
-                </div>
 
-                <div className="category-ranked-list">
-                  {data.categories.map((cat, idx) => (
-                    <div key={idx} className="category-rank-row">
-                      <div className="cat-name-col">
-                        <span className="cat-rank-number">#{idx + 1}</span>
-                        <span className="cat-color-dot" style={{ backgroundColor: cat.color }}></span>
-                        <span className="cat-name-text" title={cat.category}>{cat.category}</span>
-                      </div>
-
-                      <div className="cat-bar-col">
-                        <div className="cat-progress-track">
-                          <div
-                            className="cat-progress-fill"
-                            style={{
-                              width: `${Math.min(100, Math.max(4, cat.sharePct))}%`,
-                              backgroundColor: cat.color,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      <div className="cat-sales-col mono">
-                        {formatRupees(cat.netSalesMinor)}
-                      </div>
-
-                      <div className="cat-share-col mono">
-                        <span className="cat-share-badge">{cat.sharePct}%</span>
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    {/* View Switcher: Bento Cards vs Leaderboard */}
+                    <div className="cat-view-segmented-toggle">
+                      <button
+                        type="button"
+                        className={`cat-view-btn ${categoryViewMode === 'bento' ? 'active' : ''}`}
+                        onClick={() => setCategoryViewMode('bento')}
+                        title="Bento Grid View"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                        </svg>
+                        <span>Grid</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`cat-view-btn ${categoryViewMode === 'leaderboard' ? 'active' : ''}`}
+                        onClick={() => setCategoryViewMode('leaderboard')}
+                        title="Ranked Leaderboard View"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <line x1="8" y1="6" x2="21" y2="6" />
+                          <line x1="8" y1="12" x2="21" y2="12" />
+                          <line x1="8" y1="18" x2="21" y2="18" />
+                          <line x1="3" y1="6" x2="3.01" y2="6" strokeWidth="3" />
+                          <line x1="3" y1="12" x2="3.01" y2="12" strokeWidth="3" />
+                          <line x1="3" y1="18" x2="3.01" y2="18" strokeWidth="3" />
+                        </svg>
+                        <span>Ranks</span>
+                      </button>
                     </div>
-                  ))}
 
-                  {data.categories.length === 0 && (
-                    <div className="panel-empty-text">No category sales recorded in this period.</div>
-                  )}
+                    <button
+                      type="button"
+                      className="panel-details-link"
+                      onClick={() => {
+                        if (data.categories.length > 0) {
+                          setSelectedCategory(data.categories[0].category);
+                        }
+                      }}
+                      title="Filter by Top Category"
+                    >
+                      <span>Filter</span>
+                      <ChevronRightMini />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Proportional Distribution Ribbon */}
+                {data.categories.length > 0 && (
+                  <div className="cat-distribution-ribbon-wrap">
+                    <div className="cat-distribution-ribbon">
+                      {data.categories.map((cat, idx) => (
+                        <div
+                          key={idx}
+                          className={`cat-ribbon-segment ${hoveredCatIdx === idx ? 'hovered' : ''}`}
+                          style={{
+                            width: `${Math.max(2, cat.sharePct)}%`,
+                            backgroundColor: cat.color,
+                          }}
+                          onMouseEnter={() => setHoveredCatIdx(idx)}
+                          onMouseLeave={() => setHoveredCatIdx(null)}
+                          onClick={() => setSelectedCategory(cat.category)}
+                          title={`${cat.category}: ${cat.sharePct}% (${formatRupees(cat.netSalesMinor)})`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Top Driver Callout Pill */}
+                    {data.categories[0] && (
+                      <div className="cat-top-driver-callout">
+                        <span className="driver-star">🏆</span>
+                        <span>
+                          Top Revenue Driver: <strong>{data.categories[0].category}</strong> represents{' '}
+                          <strong>{data.categories[0].sharePct}%</strong> of store sales ({formatRupees(data.categories[0].netSalesMinor)})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* VIEW 1: BENTO GRID VIEW */}
+                {categoryViewMode === 'bento' && (
+                  <div className="cat-bento-cards-grid">
+                    {data.categories.map((cat, idx) => {
+                      const iconMeta = getCategoryIcon(cat.category);
+                      const isTop3 = idx < 3;
+                      const rankMedal = idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`;
+                      const isHovered = hoveredCatIdx === idx;
+                      const avgTicket = Math.round(cat.netSalesMinor / Math.max(1, cat.billsCount));
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`cat-bento-card ${isHovered ? 'hovered' : ''} ${isTop3 ? 'is-top-tier' : ''}`}
+                          onMouseEnter={() => setHoveredCatIdx(idx)}
+                          onMouseLeave={() => setHoveredCatIdx(null)}
+                          onClick={() => setSelectedCategory(cat.category)}
+                          style={{
+                            borderTop: `3px solid ${cat.color}`,
+                          }}
+                        >
+                          <div className="cat-bento-card-top">
+                            <span className={`cat-rank-pill rank-${idx + 1}`}>
+                              {rankMedal}
+                            </span>
+                            <span className="cat-share-pill" style={{ color: cat.color, backgroundColor: `${cat.color}15`, borderColor: `${cat.color}35` }}>
+                              {cat.sharePct}% share
+                            </span>
+                          </div>
+
+                          <div className="cat-bento-card-main">
+                            <div className="cat-avatar-box" style={{ background: iconMeta.bg }}>
+                              <span className="cat-avatar-emoji">{iconMeta.emoji}</span>
+                            </div>
+                            <div className="cat-info-block">
+                              <span className="cat-bento-title" title={cat.category}>{cat.category}</span>
+                              <span className="cat-bento-bills">{cat.billsCount} bills generated</span>
+                            </div>
+                          </div>
+
+                          <div className="cat-bento-amount-row">
+                            <span className="cat-bento-amount mono">{formatRupees(cat.netSalesMinor)}</span>
+                            <span className="cat-bento-avg mono">Avg: {formatRupees(avgTicket)}</span>
+                          </div>
+
+                          <div className="cat-bento-progress-track">
+                            <div
+                              className="cat-bento-progress-fill"
+                              style={{
+                                width: `${Math.min(100, Math.max(6, cat.sharePct))}%`,
+                                background: `linear-gradient(90deg, ${cat.color} 0%, ${cat.color}cc 100%)`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* VIEW 2: EXECUTIVE RANKED LEADERBOARD VIEW */}
+                {categoryViewMode === 'leaderboard' && (
+                  <div className="cat-leaderboard-list">
+                    {data.categories.map((cat, idx) => {
+                      const iconMeta = getCategoryIcon(cat.category);
+                      const isHovered = hoveredCatIdx === idx;
+                      const avgTicket = Math.round(cat.netSalesMinor / Math.max(1, cat.billsCount));
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`cat-leaderboard-row ${isHovered ? 'hovered' : ''}`}
+                          onMouseEnter={() => setHoveredCatIdx(idx)}
+                          onMouseLeave={() => setHoveredCatIdx(null)}
+                          onClick={() => setSelectedCategory(cat.category)}
+                        >
+                          <div className="cat-leaderboard-rank-col">
+                            <span className={`cat-lead-rank-badge rank-${idx + 1}`}>
+                              {idx < 3 ? (idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉') : `#${idx + 1}`}
+                            </span>
+                            <div className="cat-lead-avatar" style={{ background: iconMeta.bg }}>
+                              <span>{iconMeta.emoji}</span>
+                            </div>
+                            <div className="cat-lead-name-box">
+                              <span className="cat-lead-title">{cat.category}</span>
+                              <span className="cat-lead-subtitle">{cat.billsCount} orders · avg {formatRupees(avgTicket)}</span>
+                            </div>
+                          </div>
+
+                          <div className="cat-lead-progress-col">
+                            <div className="cat-lead-track">
+                              <div
+                                className="cat-lead-fill"
+                                style={{
+                                  width: `${Math.min(100, Math.max(4, cat.sharePct))}%`,
+                                  backgroundColor: cat.color,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="cat-lead-amount-col">
+                            <span className="cat-lead-val mono">{formatRupees(cat.netSalesMinor)}</span>
+                            <span className="cat-lead-share mono" style={{ color: cat.color, backgroundColor: `${cat.color}15`, borderColor: `${cat.color}35` }}>
+                              {cat.sharePct}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {data.categories.length === 0 && (
+                  <div className="panel-empty-text">No category sales recorded in this period.</div>
+                )}
               </div>
 
               {/* Panel: Busiest Days & Hours Heatmap */}

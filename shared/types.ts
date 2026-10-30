@@ -987,6 +987,29 @@ export interface CashierSummaryStrip {
   billsOnCreditMinor: number;
 }
 
+export interface ProductPerformanceItem {
+  id?: string;
+  name: string;
+  unitsSold: number;
+  revenueMinor: number;
+  profitMinor?: number;
+  category?: string;
+  trendPct?: number;
+}
+
+export interface ProductPerformanceGroup {
+  groupTitle: string;
+  totalMetric: string;
+  trendPct: number;
+  items: ProductPerformanceItem[];
+}
+
+export interface SalesAnalysisProductBreakdown {
+  byRevenue: ProductPerformanceGroup;
+  byVolume: ProductPerformanceGroup;
+  byProfit: ProductPerformanceGroup;
+}
+
 export interface SalesAnalysisData {
   filters: {
     from: string;
@@ -1028,6 +1051,7 @@ export interface SalesAnalysisData {
     rows: CashierPerformanceRow[];
     summaryStrip: CashierSummaryStrip;
   } | null;
+  topProducts?: SalesAnalysisProductBreakdown;
 }
 
 

@@ -19,6 +19,7 @@ export interface BulkImportRow {
   barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
   additionalBarcodes?: (string | AdditionalBarcode)[] | null;
   productNature?: 'BRANDED' | 'SHOP_PRODUCT' | null;
+  imageUrl?: string | null;
   hsn?: string | null;
   unit?: string | null;
   categoryId?: string | null;
@@ -38,6 +39,7 @@ export interface BulkImportRow {
 interface ValidatedRow extends Omit<BulkImportRow, 'additionalBarcodes'> {
   _rowIndex: number;            // 1-based
   additionalBarcodes?: { barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER' }[];
+  imageUrl?: string | null;
 }
 
 interface RowResult {
@@ -442,7 +444,7 @@ export function registerItemsBulk(r: Router) {
           const newCatId = newId('cat');
           try {
             await ctx.db.exec(
-              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT DO NOTHING',
+              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
               [newCatId, tenantId, catName],
             );
             const createdCat = { id: newCatId, name: catName, active: true };
@@ -502,7 +504,7 @@ export function registerItemsBulk(r: Router) {
           const catId = newId('cat');
           await q.exec(
             `INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true)
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (tenant_id, lower(name)) DO NOTHING`,
             [catId, tenantId, row.category],
           );
           catByName.set(row.category.toLowerCase(), { id: catId, name: row.category, active: true });
@@ -523,7 +525,13 @@ export function registerItemsBulk(r: Router) {
           }
 
           // If price updates requested, update product pricing
-          if (row.updatePrices) {
+          if (row.imageUrl) {
+          await q.exec(
+            'UPDATE items SET image_url = COALESCE(NULLIF(?, \'\'), image_url) WHERE id = ? AND tenant_id = ?',
+            [row.imageUrl, row.matchedItemId, tenantId],
+          );
+        }
+        if (row.updatePrices) {
             await q.exec(
               `UPDATE items
                SET price_minor = ?, cost_minor = ?, tax_rate_bp = ?, tax_inclusive = ?, hsn = COALESCE(?, hsn), updated_at = now()
@@ -663,13 +671,13 @@ export function registerItemsBulk(r: Router) {
             `INSERT INTO items (
               id, tenant_id, name, sku, barcode, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-              reorder_milli, min_stock_milli, favorite, custom, active, import_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
+              reorder_milli, min_stock_milli, favorite, custom, active, import_id, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?, ?)`,
             [
               id, tenantId, row.name, finalSku, finalBarcode, row.hsn || null,
               row.unit || 'pcs', row.category || null,
               row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true,
-              importId,
+              importId, row.imageUrl || null,
             ],
           );
 

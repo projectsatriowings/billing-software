@@ -90,12 +90,15 @@ import {
   UploadCloudIcon,
   DownloadIcon,
   ArrowRightIcon,
+  BarChart3Icon,
+  Building2Icon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
+import { fileToOptimizedDataUrl } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -104,7 +107,7 @@ import { type BarcodeTargetItem } from '../../shared/barcodeScannerUtils.ts';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
-import { TodayDashboardView } from './components/dashboard/TodayDashboardView.tsx';
+import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
 import { CashBankView } from './components/finance/CashBankView.tsx';
@@ -426,6 +429,19 @@ export function App() {
     | 'gst-filing-history'
   >('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
+  const [displayTab, setDisplayTab] = useState<string>('dashboard');
+  const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeTab !== displayTab) {
+      setIsViewExiting(true);
+      const timer = setTimeout(() => {
+        setDisplayTab(activeTab);
+        setIsViewExiting(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, displayTab]);
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
@@ -650,6 +666,7 @@ export function App() {
   const [quickCustomerName, setQuickCustomerName] = useState('');
   const [isQuickEnrolling, setIsQuickEnrolling] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [showCustomerPickerModal, setShowCustomerPickerModal] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
   const [showDiscountPicker, setShowDiscountPicker] = useState(false);
@@ -882,6 +899,21 @@ export function App() {
   const [itemFormReorder, setItemFormReorder] = useState('0');
   const [itemFormMinStock, setItemFormMinStock] = useState('0');
   const [itemFormSupplierId, setItemFormSupplierId] = useState('');
+  const [itemFormImageUrl, setItemFormImageUrl] = useState('');
+  const [isUploadingItemImage, setIsUploadingItemImage] = useState(false);
+
+  const handleItemImageFileSelect = async (file: File) => {
+    if (!file) return;
+    try {
+      setIsUploadingItemImage(true);
+      const dataUrl = await fileToOptimizedDataUrl(file);
+      setItemFormImageUrl(dataUrl);
+    } catch (err: any) {
+      alert(err.message || 'Failed to process image');
+    } finally {
+      setIsUploadingItemImage(false);
+    }
+  };
   // HSN & SAC Smart Directory states
   const [hsnSuggestions, setHsnSuggestions] = useState<HsnItem[]>([]);
   const [hsnSearchResults, setHsnSearchResults] = useState<HsnItem[]>([]);
@@ -912,6 +944,40 @@ export function App() {
   const [editingCatParentId, setEditingCatParentId] = useState('');
   const [catSearchTerm, setCatSearchTerm] = useState('');
   const [catTypeFilter, setCatTypeFilter] = useState<'all' | 'main' | 'sub'>('all');
+  const [catTabSlideDirection, setCatTabSlideDirection] = useState<'right' | 'left'>('right');
+  const [catTabAnimKey, setCatTabAnimKey] = useState<number>(0);
+  const [catTabGliderStyle, setCatTabGliderStyle] = useState<{ left: number; width: number }>({ left: 3, width: 68 });
+  const catSegmentedTabsRef = useRef<HTMLDivElement | null>(null);
+  const catSegmentedBtnRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+
+  const handleCatTypeFilterChange = (newFilter: 'all' | 'main' | 'sub') => {
+    if (newFilter === catTypeFilter) return;
+    const filterOrder: Record<'all' | 'main' | 'sub', number> = { all: 0, main: 1, sub: 2 };
+    setCatTabSlideDirection(filterOrder[newFilter] > filterOrder[catTypeFilter] ? 'right' : 'left');
+    setCatTypeFilter(newFilter);
+    setCatTabAnimKey((k) => k + 1);
+  };
+
+  useEffect(() => {
+    const updateGlider = () => {
+      const btn = catSegmentedBtnRefs.current[catTypeFilter];
+      const container = catSegmentedTabsRef.current;
+      if (btn && container) {
+        setCatTabGliderStyle({
+          left: btn.offsetLeft,
+          width: btn.offsetWidth,
+        });
+      }
+    };
+
+    updateGlider();
+    const rafId = requestAnimationFrame(updateGlider);
+    window.addEventListener('resize', updateGlider);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateGlider);
+    };
+  }, [catTypeFilter, categoriesList.length, displayTab]);
   const [modalCatSearch, setModalCatSearch] = useState('');
   const [modalCatStatusFilter, setModalCatStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -1251,8 +1317,18 @@ export function App() {
   const loadCategories = async () => {
     try {
       const res = await api<{ categories: Category[] }>('/api/categories?includeInactive=1');
-      setCategoriesList(res.categories || []);
-      const activeCats = (res.categories || []).filter((c) => c.active).map((c) => c.name);
+      // Deduplicate by name and preserve canonical items
+      const uniqueCats: Category[] = [];
+      const seen = new Set<string>();
+      for (const c of res.categories || []) {
+        const key = c.name.trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueCats.push(c);
+        }
+      }
+      setCategoriesList(uniqueCats);
+      const activeCats = uniqueCats.filter((c) => c.active).map((c) => c.name);
       setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
@@ -2392,17 +2468,7 @@ export function App() {
   };
 
   const focusCustomerMobile = () => {
-    if (customerMobileInputRef.current) {
-      customerMobileInputRef.current.focus();
-      customerMobileInputRef.current.select();
-    } else {
-      const el = (document.getElementById('pos-customer-mobile-input') ||
-        document.getElementById('bento-customer-search-input')) as HTMLInputElement | null;
-      if (el) {
-        el.focus();
-        el.select();
-      }
-    }
+    setShowCustomerPickerModal(true);
   };
 
   const focusCustomerName = () => {
@@ -2875,6 +2941,11 @@ export function App() {
           setShowProductCatalogDrawer(false);
           return;
         }
+        if (showCustomerPickerModal) {
+          e.preventDefault();
+          setShowCustomerPickerModal(false);
+          return;
+        }
         if (showShortcutsModal) {
           e.preventDefault();
           setShowShortcutsModal(false);
@@ -2900,6 +2971,13 @@ export function App() {
           }
           return next;
         });
+        return;
+      }
+
+      // Handle F3 to toggle quick customer selector
+      if (e.key === 'F3') {
+        e.preventDefault();
+        setShowCustomerPickerModal((prev) => !prev);
         return;
       }
 
@@ -3391,6 +3469,7 @@ export function App() {
     setItemFormReorder('10');
     setItemFormMinStock('5');
     setItemFormSupplierId('');
+    setItemFormImageUrl('');
     setHsnSuggestions([]);
     setHsnSearchResults([]);
     setSelectedHsnDesc('');
@@ -3414,6 +3493,7 @@ export function App() {
     setItemFormReorder(String(((item.reorderMilli ?? item.reorderLevelMilli) || 0) / 1000));
     setItemFormMinStock(String((item.minStockMilli || 0) / 1000));
     setItemFormSupplierId(item.preferredSupplierId || '');
+    setItemFormImageUrl(item.imageUrl || (item as any).image || item.custom?.image || '');
     setHsnSuggestions([]);
     setHsnSearchResults([]);
     setSelectedHsnDesc('');
@@ -3481,6 +3561,7 @@ export function App() {
             reorderLevelMilli: Math.max(Math.round((parseFloat(itemFormReorder) || 0) * 1000), 0),
             minStockMilli: Math.max(Math.round((parseFloat(itemFormMinStock) || 0) * 1000), 0),
             preferredSupplierId: itemFormSupplierId || null,
+            imageUrl: itemFormImageUrl.trim() || null,
           }),
         });
         showToast(`Item "${itemFormName}" updated successfully!`);
@@ -3502,6 +3583,7 @@ export function App() {
             reorderLevelMilli: Math.max(Math.round((parseFloat(itemFormReorder) || 0) * 1000), 0),
             minStockMilli: Math.max(Math.round((parseFloat(itemFormMinStock) || 0) * 1000), 0),
             preferredSupplierId: itemFormSupplierId || null,
+            imageUrl: itemFormImageUrl.trim() || null,
           }),
         });
         showToast(`Item "${itemFormName}" added to inventory!`);
@@ -5611,59 +5693,61 @@ export function App() {
           </div>
         </div>
 
+        {/* View Transition Stage (SPA Bento Transition) */}
+        <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {activeTab !== 'pos' && activeTab !== 'sales-analysis' && activeTab !== 'dashboard' && !(user.role === 'manager' && activeTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
-                {activeTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
-                {activeTab === 'items' && 'Product & Stock Catalog'}
-                {activeTab === 'inventory' && 'Inventory Hub & Stock Operations'}
-                {activeTab === 'product-movement' && 'Product Analysis'}
-                {activeTab === 'purchases' && 'Purchases & Stock Inward'}
-                {activeTab === 'invoices' && 'Sales Invoices & Bills'}
-                {activeTab === 'customers' && 'Customer Directory & Loyalty Points'}
-                {activeTab === 'suppliers' && 'Supplier Directory'}
-                {activeTab === 'reports' && 'Business Analytics & Reports'}
-                {activeTab === 'settings' && 'Business Configuration & Settings'}
-                {activeTab === 'payments' && 'Supplier Payments & Disbursements'}
-                {activeTab === 'expenses' && 'Business Operational Expenses'}
-                {activeTab === 'cashbank' && 'Cash & Bank Reconciliation'}
-                {activeTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
-                {activeTab === 'payables' && 'Accounts Payable & Vendor Balances'}
-                {activeTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
-                {activeTab === 'gst-sales-register' && 'GST Sales Register (Outward)'}
-                {activeTab === 'gst-purchase-register' && 'GST Purchase & Inward Register'}
-                {activeTab === 'gst-itc-reconciliation' && 'Input Tax Credit (ITC) Register & Reconciliation'}
-                {activeTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
-                {activeTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
-                {activeTab === 'gst-import-export' && 'GST Import & Export Hub'}
-                {activeTab === 'gst-filing-history' && 'GST Return Filing History'}
+                {displayTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
+                {displayTab === 'items' && 'Product & Stock Catalog'}
+                {displayTab === 'inventory' && 'Inventory Hub & Stock Operations'}
+                {displayTab === 'product-movement' && 'Product Analysis'}
+                {displayTab === 'purchases' && 'Purchases & Stock Inward'}
+                {displayTab === 'invoices' && 'Sales Invoices & Bills'}
+                {displayTab === 'customers' && 'Customer Directory & Loyalty Points'}
+                {displayTab === 'suppliers' && 'Supplier Directory'}
+                {displayTab === 'reports' && 'Business Analytics & Reports'}
+                {displayTab === 'settings' && 'Business Configuration & Settings'}
+                {displayTab === 'payments' && 'Supplier Payments & Disbursements'}
+                {displayTab === 'expenses' && 'Business Operational Expenses'}
+                {displayTab === 'cashbank' && 'Cash & Bank Reconciliation'}
+                {displayTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
+                {displayTab === 'payables' && 'Accounts Payable & Vendor Balances'}
+                {displayTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
+                {displayTab === 'gst-sales-register' && 'GST Sales Register (Outward)'}
+                {displayTab === 'gst-purchase-register' && 'GST Purchase & Inward Register'}
+                {displayTab === 'gst-itc-reconciliation' && 'Input Tax Credit (ITC) Register & Reconciliation'}
+                {displayTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
+                {displayTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
+                {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
+                {displayTab === 'gst-filing-history' && 'GST Return Filing History'}
               </h1>
               <span className="content-page-subtitle">
-                {activeTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
-                {activeTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
-                {activeTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
-                {activeTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
-                {activeTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
-                {activeTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
-                {activeTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
-                {activeTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
-                {activeTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
-                {activeTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
-                {activeTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
-                {activeTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
-                {activeTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
-                {activeTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
-                {activeTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
-                {activeTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
-                {activeTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
-                {activeTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
-                {activeTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
-                {activeTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
-                {activeTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
-                {activeTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
-                {activeTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
+                {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
+                {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
+                {displayTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
+                {displayTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
+                {displayTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
+                {displayTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
+                {displayTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
+                {displayTab === 'suppliers' && 'Manage vendors, purchase distributors, GSTIN verification, and credit limits'}
+                {displayTab === 'reports' && 'Real-time sales revenue, tax breakdown, and top selling items'}
+                {displayTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
+                {displayTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
+                {displayTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
+                {displayTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
+                {displayTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
+                {displayTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
+                {displayTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
+                {displayTab === 'gst-sales-register' && 'Complete outward invoices register with B2B/B2C categorization and GST breakdown'}
+                {displayTab === 'gst-purchase-register' && 'Consolidated statutory record of stock purchases and business expense vouchers'}
+                {displayTab === 'gst-itc-reconciliation' && 'Reconcile purchases and expenses against GSTR-2B and record authoritative ITC decisions'}
+                {displayTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
+                {displayTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
+                {displayTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                {displayTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
               </span>
             </div>
 
@@ -5679,13 +5763,16 @@ export function App() {
         )}
 
         {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-        {activeTab === 'dashboard' && user && (
+        {displayTab === 'dashboard' && user && (
           <div className="dashboard-tab-wrapper">
             <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
               <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <button
                   type="button"
                   style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                     padding: '6px 14px',
                     borderRadius: '7px',
                     border: 'none',
@@ -5697,13 +5784,20 @@ export function App() {
                     boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
-                  onClick={() => setDashboardViewMode('today')}
+                  onClick={() => {
+                    setDashboardViewMode('today');
+                    setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                  }}
                 >
-                  📊 Today's Live Overview
+                  <BarChart3Icon size={15} />
+                  <span>Today's Live Overview</span>
                 </button>
                 <button
                   type="button"
                   style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                     padding: '6px 14px',
                     borderRadius: '7px',
                     border: 'none',
@@ -5717,7 +5811,8 @@ export function App() {
                   }}
                   onClick={() => setDashboardViewMode('management')}
                 >
-                  🏢 {user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}
+                  <Building2Icon size={15} />
+                  <span>{user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}</span>
                 </button>
               </div>
             </div>
@@ -5781,7 +5876,7 @@ export function App() {
         )}
 
         {/* TAB 1: BENTO POS BILLING TERMINAL */}
-        {activeTab === 'pos' && (
+        {displayTab === 'pos' && (
           <div className="bento-pos-root">
             {/* 1. TOP BENTO BAR: Store & Shift Status, Shortcuts, Alerts */}
             <div className="bento-top-bar">
@@ -6296,51 +6391,69 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Compact Customer & Member Status Chip in Billing Terminal */}
+                    {/* Compact Customer Status in Billing Terminal */}
                     <div className="bento-billing-customer-chip">
                       <div className="cust-chip-info">
                         <span className="cust-chip-icon">{selectedParty ? '👤' : '🛒'}</span>
                         <span className="cust-chip-label">Customer:</span>
                         {selectedParty ? (
                           <>
-                            <span className="chip-walkin-text">{selectedParty.name}</span>
+                            <span className="chip-walkin-text" style={{ fontWeight: 700, color: '#1e293b' }}>{selectedParty.name}</span>
                             {selectedParty.phone && <span className="chip-phone">({selectedParty.phone})</span>}
-                            <span className="chip-pts-badge" style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}>
-                              🪙 {selectedParty.loyaltyPoints ?? 0} pts ({formatRupees((selectedParty.loyaltyPoints ?? 0) * shopPointValMinor)})
-                            </span>
-                            {redeemPoints && pointsDiscountMinor > 0 && (
-                              <span className="chip-discount-tag">-₹{(pointsDiscountMinor / 100).toFixed(2)} Points Discount</span>
-                            )}
                           </>
                         ) : (
-                          <>
-                            <span className="chip-walkin-text">Walk-in Customer (Default)</span>
-                            {shopLoyaltyActive && (
-                              <span
-                                className="chip-pts-badge"
-                                style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}
-                                title={`Store loyalty active: Earn ${shopPointsPer100} pts per ₹100 spent`}
-                              >
-                                🎁 Loyalty: {shopPointsPer100} pts/₹100
-                              </span>
-                            )}
-                          </>
+                          <span className="chip-walkin-text">Walk-in Customer (Default)</span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        className="cust-chip-focus-btn"
-                        onClick={() => {
-                          const input = document.querySelector('.customer-input-wrap input') as HTMLInputElement;
-                          if (input) {
-                            input.focus();
-                            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }}
-                      >
-                        {selectedParty ? 'Change Member' : '+ Member / Loyalty'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        {selectedParty && (
+                          <button
+                            type="button"
+                            className="cust-chip-clear-btn"
+                            style={{
+                              background: '#fee2e2',
+                              color: '#b91c1c',
+                              border: '1px solid #fca5a5',
+                              padding: '0.24rem 0.55rem',
+                              borderRadius: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              setSelectedPartyId('');
+                              setCustomerSearch('');
+                              setRedeemPoints(false);
+                            }}
+                            title="Reset to Walk-in Customer"
+                          >
+                            ✕ Walk-in
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="cust-chip-focus-btn"
+                          onClick={() => setShowCustomerPickerModal(true)}
+                          title="Select customer or enter phone number (F3)"
+                        >
+                          {selectedParty ? 'Change Customer' : '+ Select Customer'}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Pharmacy Doctor Field */}
+                    {shop?.businessType === 'pharmacy' && (
+                      <div className="bento-pharmacy-row" style={{ margin: '0.5rem 0' }}>
+                        <label className="bento-sublabel">Doctor / Prescription:</label>
+                        <input
+                          type="text"
+                          className="bento-input compact"
+                          value={doctorName}
+                          onChange={(e) => setDoctorName(e.target.value)}
+                          placeholder="Dr. Name & Reg No."
+                        />
+                      </div>
+                    )}
 
                     {/* Payment Tender Modes with Stylized Vector Icons */}
                     <div className="bento-payment-modes">
@@ -6380,16 +6493,7 @@ export function App() {
                             </svg>
                           ),
                         },
-                        {
-                          id: 'bank',
-                          label: 'Bank Transfer',
-                          disabled: posPaymentConfig?.bankEnabled === false,
-                          icon: (
-                            <svg className="pay-mode-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M14 10v11M12 2L2 7h20L12 2z" />
-                            </svg>
-                          ),
-                        },
+                        
                         {
                           id: 'split',
                           label: 'Split',
@@ -7136,436 +7240,9 @@ export function App() {
                 </div>
               </div>
 
-              {/* ================= RIGHT / SIDE BENTO COLUMN: Customer & Scanner ================= */}
+              {/* ================= RIGHT / SIDE BENTO COLUMN: Barcode Scanner ================= */}
               <div className="bento-side-col">
-                <div className="bento-card bento-customer-card">
-                    <div className="bento-card-header bento-customer-header">
-                      <div className="bento-header-label">
-                        <span className="bento-icon-circle indigo">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                          </svg>
-                        </span>
-                        <div>
-                          <h3 className="bento-card-title">Customer & Loyalty</h3>
-                          <span className="bento-card-subtitle">
-                            {shopLoyaltyActive
-                              ? `Earn ${shopPointsPer100} pts per ₹100 spent`
-                              : 'Customer directory & account linking'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bento-customer-header-actions">
-                        {shopLoyaltyActive && (
-                          <button
-                            type="button"
-                            className="bento-loyalty-scheme-pill"
-                            onClick={() => setShowPosLoyaltyModal(true)}
-                            title="Click to view & configure loyalty rewards scheme"
-                          >
-                            <span className="loyalty-pill-gift">🎁</span>
-                            <span className="loyalty-pill-text">{shopPointsPer100} pts/₹100</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="bento-add-btn bento-add-cust-btn"
-                          onClick={() => setShowPartyModal(true)}
-                          title="Add New Customer"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>+ Customer</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bento-customer-body">
-                      <div className="customer-input-wrap">
-                        {selectedParty ? (
-                          <div className="bento-selected-member-card">
-                            <div className="selected-member-left">
-                              <span className="selected-member-avatar">👤</span>
-                              <div className="selected-member-info">
-                                <div className="selected-member-name-row">
-                                  <span className="selected-member-name">{selectedParty.name}</span>
-                                  <span className="selected-member-badge">Member Active</span>
-                                </div>
-                                <span className="selected-member-phone mono">{selectedParty.phone ? `📱 ${selectedParty.phone}` : 'No phone linked'}</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="selected-member-change-btn"
-                              onClick={() => {
-                                setSelectedPartyId('');
-                                setCustomerSearch('');
-                                setRedeemPoints(false);
-                              }}
-                              title="Change or switch to Walk-in customer"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                              <span>Change</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="bento-search-box-wrap">
-                            <svg className="bento-search-box-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                              <circle cx="11" cy="11" r="8"></circle>
-                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                            <input
-                              type="text"
-                              className="bento-input bento-customer-search-input"
-                              placeholder="Search customer by mobile or name..."
-                              value={customerSearch}
-                              onChange={(e) => {
-                                setCustomerSearch(e.target.value);
-                                setShowCustomerDropdown(true);
-                              }}
-                              onFocus={() => {
-                                if (customerSearch.trim()) setShowCustomerDropdown(true);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') setShowCustomerDropdown(false);
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const cleanDigits = customerSearch.replace(/\D/g, '');
-                                  const match = cleanDigits.length >= 7
-                                    ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                                    : null;
-                                  if (match) {
-                                    setSelectedPartyId(match.id);
-                                    setCustomerSearch('');
-                                    setShowCustomerDropdown(false);
-                                    showToast(`✓ Linked member: ${match.name}`);
-                                  } else if (cleanDigits.length >= 10) {
-                                    handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                                  } else if (filteredParties.length === 1) {
-                                    setSelectedPartyId(filteredParties[0].id);
-                                    setCustomerSearch('');
-                                    setShowCustomerDropdown(false);
-                                  }
-                                }
-                              }}
-                            />
-                            {customerSearch ? (
-                              <button
-                                type="button"
-                                className="bento-search-box-clear"
-                                onClick={() => {
-                                  setCustomerSearch('');
-                                  setShowCustomerDropdown(false);
-                                }}
-                                title="Clear search"
-                              >
-                                ✕
-                              </button>
-                            ) : (
-                              <span className="bento-search-box-hint">F3</span>
-                            )}
-                          </div>
-                        )}
-
-                        {showCustomerDropdown && customerSearch.trim().length > 0 && (() => {
-                          const cleanDigits = customerSearch.replace(/\D/g, '');
-                          const isPhoneCandidate = cleanDigits.length >= 7;
-                          const exactPhoneMatch = isPhoneCandidate
-                            ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                            : null;
-
-                          return (
-                            <>
-                              <div
-                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
-                                onClick={() => setShowCustomerDropdown(false)}
-                              />
-                              <div className="customer-dropdown-list" style={{ zIndex: 50 }}>
-                                {/* If phone digits typed and no existing customer matches: show fast inline enroll */}
-                                {isPhoneCandidate && !exactPhoneMatch && (
-                                  <div className="pos-quick-enroll-box" style={{ margin: '0.4rem 0.5rem' }}>
-                                    <div className="pos-quick-enroll-head">
-                                      <span className="pos-enroll-star">✨</span>
-                                      <div>
-                                        <div className="pos-enroll-title">
-                                          <span>New Customer Mobile:</span>
-                                          <strong>{cleanDigits}</strong>
-                                        </div>
-                                        <div className="pos-enroll-sub">First-time shopper • Loyalty points will start on this bill!</div>
-                                      </div>
-                                    </div>
-                                    <div className="pos-quick-enroll-inputs">
-                                      <input
-                                        type="text"
-                                        className="bento-input pos-enroll-name-input"
-                                        placeholder="Customer Name (optional)"
-                                        value={quickCustomerName}
-                                        onChange={(e) => setQuickCustomerName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                                          }
-                                        }}
-                                      />
-                                      <button
-                                        type="button"
-                                        className="pos-enroll-btn"
-                                        onClick={() => handleQuickEnrollCustomer(cleanDigits, quickCustomerName)}
-                                        disabled={isQuickEnrolling}
-                                      >
-                                        {isQuickEnrolling ? 'Enrolling...' : '⚡ Enroll (Enter)'}
-                                      </button>
-                                    </div>
-                                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
-                                      💡 Or continue billing — account and points automatically start upon checkout!
-                                    </div>
-                                  </div>
-                                )}
-
-                                {filteredParties.length > 0 ? (
-                                  filteredParties.map((p) => {
-                                    const pts = getPartyLoyaltyPoints(p.id, p.phone);
-                                    const isExact = exactPhoneMatch?.id === p.id;
-                                    return (
-                                      <div
-                                        key={p.id}
-                                        className="customer-dropdown-item"
-                                        style={isExact ? { background: '#f0fdf4', borderLeft: '3px solid #16a34a' } : undefined}
-                                        onClick={() => {
-                                          setSelectedPartyId(p.id);
-                                          setCustomerSearch('');
-                                          setRedeemPoints(false);
-                                          setShowCustomerDropdown(false);
-                                        }}
-                                      >
-                                        <div className="cust-item-main">
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                            <span className="cust-item-name">{p.name}</span>
-                                            {isExact && (
-                                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
-                                                Exact Match
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="cust-item-phone">📱 {p.phone || 'No phone'}</span>
-                                        </div>
-                                        <div className="cust-item-loyalty-tag">
-                                          🪙 {pts.toLocaleString()} pts
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                ) : !isPhoneCandidate ? (
-                                  <div style={{ padding: '0.85rem 1rem', textAlign: 'center', fontSize: '0.82rem', color: '#64748b' }}>
-                                    <div>No customer found matching "{customerSearch}"</div>
-                                    <button
-                                      type="button"
-                                      className="bento-add-btn"
-                                      style={{ margin: '0.5rem auto 0', display: 'inline-flex' }}
-                                      onClick={() => {
-                                        setShowCustomerDropdown(false);
-                                        openAddPartyModal('customer');
-                                      }}
-                                    >
-                                      + Register New Customer
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Customer Info Highlights */}
-                      {selectedParty ? (
-                        <div className="bento-customer-loyalty-card">
-                          <div className="loyalty-card-head">
-                            <div className="loyalty-phone-box">
-                              <span style={{ color: (selectedParty.loyaltyPoints ?? 0) > 0 ? '#15803d' : '#2563eb', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                                {(selectedParty.loyaltyPoints ?? 0) > 0 ? 'Member' : 'Enrolled'}
-                              </span>
-                              <span style={{ color: '#94a3b8' }}>•</span>
-                              <span className="mono bold">{selectedParty.phone || 'No mobile'}</span>
-                            </div>
-                            <div className="loyalty-pts-pill" title={`1 pt = ${formatRupees(shopPointValMinor)} discount`}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
-                              </svg>
-                              <span className="mono bold pts-count">{selectedPartyPoints.toLocaleString()}</span>
-                              <span className="pts-label">pts</span>
-                              <span className="pts-val-bracket">({formatRupees(selectedPartyPoints * shopPointValMinor)})</span>
-                            </div>
-                          </div>
-
-                          {/* 1-Click Points Redemption Button */}
-                          {shopLoyaltyActive && selectedPartyPoints >= shopMinRedeem && cart.length > 0 && (
-                            <button
-                              type="button"
-                              className={`pos-redeem-points-btn ${redeemPoints ? 'redeeming' : ''}`}
-                              onClick={() => setRedeemPoints(!redeemPoints)}
-                              title={redeemPoints ? 'Cancel points redemption' : `Redeem points for instant discount (1 pt = ${formatRupees(shopPointValMinor)})`}
-                            >
-                              {redeemPoints ? (
-                                <>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12" />
-                                  </svg>
-                                  <span>Redeeming <strong>{pointsActuallyRedeemed} pts</strong> (-{formatRupees(pointsDiscountMinor)})</span>
-                                  <span className="redeem-cancel">✕ Cancel</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                                  </svg>
-                                  <span>Redeem Available Points</span>
-                                  <span className="redeem-save-badge">Save up to {formatRupees(Math.min(cartTotalMinor - percentDiscountMinor, selectedPartyPoints * shopPointValMinor))}</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-
-                          {shopLoyaltyActive && selectedPartyPoints < shopMinRedeem && (
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px dashed #cbd5e1', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="16" x2="12" y2="12" />
-                                <line x1="12" y1="8" x2="12.01" y2="8" />
-                              </svg>
-                              <span>
-                                {selectedPartyPoints === 0
-                                  ? `First-time member! Min. ${shopMinRedeem} pts required to redeem.`
-                                  : `Min. ${shopMinRedeem} pts required to redeem (Current: ${selectedPartyPoints} pts).`}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Points Earned Preview */}
-                          {shopLoyaltyActive ? (
-                            <div className="loyalty-earn-notice">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="8" r="7" />
-                                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                              </svg>
-                              <span>
-                                This bill earns: <strong className="mono">+{pointsToEarnOnBill} pts</strong> ({shopPointsPer100} pts per ₹100 spent)
-                                {selectedPartyPoints > 0 && (
-                                  <span style={{ color: '#059669', marginLeft: '6px', fontWeight: 600 }}>
-                                    ➔ Total will be: {(selectedPartyPoints - (redeemPoints ? pointsActuallyRedeemed : 0) + pointsToEarnOnBill).toLocaleString()} pts
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="loyalty-earn-notice" style={{ opacity: 0.7 }}>
-                              <span>Loyalty program paused in shop settings</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="bento-walkin-unified-panel">
-                          <div className="walkin-unified-top">
-                            <div className="walkin-unified-left">
-                              <div className="walkin-unified-avatar">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                  <circle cx="9" cy="21" r="1"></circle>
-                                  <circle cx="20" cy="21" r="1"></circle>
-                                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                                </svg>
-                              </div>
-                              <div className="walkin-unified-info">
-                                <div className="walkin-unified-name-row">
-                                  <span className="walkin-unified-name">Walk-in Customer</span>
-                                  <span className="walkin-unified-badge">Standard</span>
-                                </div>
-                                <span className="walkin-unified-sub">Counter sale · No member account linked</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="walkin-unified-dir-btn"
-                              onClick={() => setShowPartyModal(true)}
-                              title="Browse all customer accounts"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                              </svg>
-                              <span>{parties.length} Saved</span>
-                            </button>
-                          </div>
-
-                          {/* Dynamic Loyalty Reward Bar */}
-                          {shopLoyaltyActive && (
-                            <div className="walkin-loyalty-bottom-bar">
-                              {cart.length > 0 ? (
-                                <div className="walkin-loyalty-earning-row">
-                                  <div className="loyalty-earning-left">
-                                    <span className="loyalty-sparkle-pill">+{pointsToEarnOnBill} pts</span>
-                                    <span className="loyalty-earning-text">
-                                      Earns <strong>+{pointsToEarnOnBill} points</strong> on bill ({formatRupees(pointsToEarnOnBill * shopPointValMinor)})
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="walkin-link-member-btn"
-                                    onClick={() => {
-                                      const input = document.querySelector('.bento-customer-search-input') as HTMLInputElement;
-                                      if (input) {
-                                        input.focus();
-                                        input.select();
-                                      }
-                                    }}
-                                  >
-                                    + Link Member
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="walkin-loyalty-scheme-row">
-                                  <span className="loyalty-gift-tag">🎁 Loyalty</span>
-                                  <span className="loyalty-scheme-text">
-                                    Earn <strong>{shopPointsPer100} pts / ₹100 spent</strong> (1 pt = {formatRupees(shopPointValMinor)}). Enter mobile to credit points!
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Pharmacy Doctor Field */}
-                      {shop?.businessType === 'pharmacy' && (
-                        <div className="bento-pharmacy-row">
-                          <label className="bento-sublabel">Doctor / Prescription:</label>
-                          <input
-                            type="text"
-                            className="bento-input compact"
-                            value={doctorName}
-                            onChange={(e) => setDoctorName(e.target.value)}
-                            placeholder="Dr. Name & Reg No."
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bento-card bento-scanner-card">
+                <div className="bento-card bento-scanner-card">
                     <div className="bento-card-header">
                       <div className="bento-header-label">
                         <span className="bento-icon-circle purple">
@@ -7668,8 +7345,302 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* Bento Register & Counter Operations Hub */}
+                  <div className="bento-card bento-register-card">
+                    <div className="bento-card-header">
+                      <div className="bento-header-label">
+                        <span className="bento-icon-circle purple">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                          </svg>
+                        </span>
+                        <div>
+                          <h3 className="bento-card-title">Register #1 • Live Synced</h3>
+                          <span className="bento-card-subtitle">{user?.name || 'Cashier'} • Neon DB</span>
+                        </div>
+                      </div>
+                      <span className="bento-status-pill green">
+                        <span className="scanner-ready-dot"></span>
+                        Live
+                      </span>
+                    </div>
+
+                    <div className="bento-register-body">
+                      {/* Bento Hero: Register Sales & Counter Invoices */}
+                      <div className="bento-hero-metric">
+                        <div className="bento-hero-cell">
+                          <span className="bento-cell-label">Today's Register Sales</span>
+                          <span className="bento-cell-val mono">
+                            {formatRupees(
+                              invoices
+                                .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
+                                .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
+                            )}
+                          </span>
+                        </div>
+                        <div className="bento-hero-sep"></div>
+                        <div className="bento-hero-cell">
+                          <span className="bento-cell-label">Counter Bills</span>
+                          <span className="bento-cell-val mono">
+                            {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length}{' '}
+                            <span className="bento-cell-unit">bills</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bento Action Grid (2 columns x 3 rows) */}
+                      <div className="bento-action-grid">
+                        {/* 1. Hold Order */}
+                        <button
+                          type="button"
+                          className="bento-action-tile"
+                          onClick={handleHoldOrder}
+                          title="Hold current cart or recall last held order"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="6" y="4" width="4" height="16"></rect>
+                              <rect x="14" y="4" width="4" height="16"></rect>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">{cart.length > 0 ? 'Hold Cart' : (heldOrders.length > 0 ? 'Recall Cart' : 'Hold Cart')}</span>
+                            <span className="bento-tile-caption">Park active sale</span>
+                          </div>
+                          {heldOrders.length > 0 && <span className="bento-badge-pill">{heldOrders.length}</span>}
+                        </button>
+
+                        {/* 2. Parked Orders Drawer */}
+                        <button
+                          type="button"
+                          className="bento-action-tile"
+                          onClick={() => setShowHeldOrdersModal(true)}
+                          title="View all currently held parked orders"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">Parked Orders</span>
+                            <span className="bento-tile-caption">{heldOrders.length > 0 ? `${heldOrders.length} waiting` : 'No held carts'}</span>
+                          </div>
+                          {heldOrders.length > 0 && <span className="bento-badge-pill">{heldOrders.length}</span>}
+                        </button>
+
+                        {/* 3. Custom Item Charge */}
+                        <button
+                          type="button"
+                          className="bento-action-tile"
+                          onClick={() => setShowCustomItemModal(true)}
+                          title="Add open item custom charge (Carry bag, delivery, etc.)"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">Custom Item</span>
+                            <span className="bento-tile-caption">Carry bag, delivery</span>
+                          </div>
+                        </button>
+
+                        {/* 4. Reprint Last Receipt */}
+                        <button
+                          type="button"
+                          className="bento-action-tile"
+                          onClick={handleReprintLastBill}
+                          disabled={!invoices || invoices.length === 0}
+                          title="Reprint the most recently issued thermal invoice"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                              <rect x="6" y="14" width="12" height="8"></rect>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">Reprint Last</span>
+                            <span className="bento-tile-caption">{invoices && invoices.length > 0 ? 'Print receipt copy' : 'No bills yet'}</span>
+                          </div>
+                        </button>
+
+                        {/* 5. Bill Discount */}
+                        <button
+                          type="button"
+                          className="bento-action-tile"
+                          onClick={() => setShowDiscountPicker(true)}
+                          title="Apply bill percentage or flat rupee discount"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <line x1="19" y1="5" x2="5" y2="19"></line>
+                              <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                              <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">Bill Discount</span>
+                            <span className="bento-tile-caption">{appliedDiscountPercent > 0 ? `${appliedDiscountPercent}% active` : 'Special discount'}</span>
+                          </div>
+                        </button>
+
+                        {/* 6. Phone Wireless Scanner */}
+                        <button
+                          type="button"
+                          className={`bento-action-tile ${isPhoneScannerConnected ? 'active-scanner' : ''}`}
+                          onClick={() => setShowMobileScannerModal(true)}
+                          title="Connect mobile phone as a wireless barcode scanner"
+                        >
+                          <div className="bento-tile-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                            </svg>
+                          </div>
+                          <div className="bento-tile-texts">
+                            <span className="bento-tile-heading">Mobile Gun</span>
+                            <span className="bento-tile-caption">{isPhoneScannerConnected ? 'Phone active ✓' : 'Scan via phone'}</span>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+            {/* Quick Customer Picker Modal */}
+            {showCustomerPickerModal && (
+              <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowCustomerPickerModal(false)}>
+                <div
+                  className="modal-content"
+                  style={{ maxWidth: '480px', borderRadius: '14px', padding: '1.25rem', background: '#ffffff', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>👤</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Select Customer</h3>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Search customer by name or phone (Press Esc to close)</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerPickerModal(false)}
+                      style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div style={{ position: 'relative', marginBottom: '0.85rem' }}>
+                    <input
+                      type="text"
+                      autoFocus
+                      className="form-input"
+                      style={{ paddingLeft: '2.4rem', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                      placeholder="Search customer name or mobile..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setShowCustomerPickerModal(false);
+                      }}
+                    />
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2.2"
+                      style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                  </div>
+
+                  <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1rem' }}>
+                    {filteredParties.slice(0, 15).map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setSelectedPartyId(p.id);
+                          setShowCustomerPickerModal(false);
+                          showToast(`Linked customer: ${p.name}`);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: '8px',
+                          border: selectedPartyId === p.id ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                          background: selectedPartyId === p.id ? '#f5f3ff' : '#f8fafc',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 650, fontSize: '0.88rem', color: '#0f172a' }}>{p.name}</div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b' }}>📱 {p.phone || 'No phone'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem' }}
+                        >
+                          {selectedPartyId === p.id ? 'Selected ✓' : 'Select'}
+                        </button>
+                      </div>
+                    ))}
+
+                    {filteredParties.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '1.25rem 0', color: '#64748b', fontSize: '0.84rem' }}>
+                        No customer found matching "{customerSearch}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: '0.85rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setSelectedPartyId('');
+                        setCustomerSearch('');
+                        setShowCustomerPickerModal(false);
+                        showToast('Reset to Walk-in Customer');
+                      }}
+                      style={{ fontSize: '0.8rem' }}
+                    >
+                      Reset to Walk-in
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setShowCustomerPickerModal(false);
+                        openAddPartyModal('customer');
+                      }}
+                      style={{ fontSize: '0.8rem' }}
+                    >
+                      + Add New Customer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
             {showProductCatalogDrawer && (
@@ -7961,135 +7932,11 @@ export function App() {
               </div>
             )}
 
-            {/* ================= BOTTOM POS POWER DOCK ================= */}
-            <div className="bento-pos-dock">
-              {/* Left: Live Register & Shift Status */}
-              <div className="pos-dock-status">
-                <div className="dock-status-item">
-                  <span className="dock-status-dot online"></span>
-                  <div>
-                    <span className="dock-status-title">Register #1 • Live Synced</span>
-                    <span className="dock-status-sub">{user?.name || 'Cashier'} • Neon DB</span>
-                  </div>
-                </div>
-
-                <div className="dock-divider"></div>
-
-                <div className="dock-metrics-item">
-                  <span className="dock-metric-label">Today's Counter Bills</span>
-                  <span className="dock-metric-val mono">
-                    {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length} Bills
-                  </span>
-                </div>
-
-                <div className="dock-divider"></div>
-
-                <div className="dock-metrics-item">
-                  <span className="dock-metric-label">Today's Register Sales</span>
-                  <span className="dock-metric-val mono text-success">
-                    {formatRupees(
-                      invoices
-                        .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
-                        .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right: Operational Tool Actions */}
-              <div className="pos-dock-actions">
-                <button
-                  type="button"
-                  className="dock-action-btn park-btn"
-                  onClick={handleHoldOrder}
-                  title="Hold current cart or recall last held order"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="6" y="4" width="4" height="16"></rect>
-                    <rect x="14" y="4" width="4" height="16"></rect>
-                  </svg>
-                  <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall Order (${heldOrders.length})` : 'Hold Order')}</span>
-                  {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
-                </button>
-
-                {heldOrders.length > 0 && (
-                  <button
-                    type="button"
-                    className="dock-action-btn secondary"
-                    onClick={() => setShowHeldOrdersModal(true)}
-                    title="View all currently held parked orders"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                    </svg>
-                    <span>Parked ({heldOrders.length})</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={() => setShowCustomItemModal(true)}
-                  title="Add open item custom charge (Carry bag, delivery, etc.)"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  <span>+ Custom Charge</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={handleReprintLastBill}
-                  disabled={!invoices || invoices.length === 0}
-                  title="Reprint the most recently issued thermal invoice"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
-                  <span>Reprint Last Bill</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="dock-action-btn"
-                  onClick={() => setShowDiscountPicker(true)}
-                  title="Apply bill percentage or flat rupee discount"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <line x1="19" y1="5" x2="5" y2="19"></line>
-                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
-                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
-                  </svg>
-                  <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`dock-action-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
-                  onClick={() => setShowMobileScannerModal(true)}
-                  title="Connect mobile phone as a wireless barcode scanner"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
-                  </svg>
-                  <span>{isPhoneScannerConnected ? 'Phone Paired ✓' : 'Mobile Scanner'}</span>
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
         {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
-        {activeTab === 'shifts' && user && (
+        {displayTab === 'shifts' && user && (
           user.role === 'manager' ? (
             <StoreManagerDashboard
               user={user}
@@ -8106,7 +7953,7 @@ export function App() {
         )}
 
         {/* TAB 2: PRODUCTS */}
-        {activeTab === 'items' && (() => {
+        {displayTab === 'items' && (() => {
           const filteredMasterItems = items.filter((item) => {
             const q = itemSearchMaster.trim().toLowerCase();
             const matchesQ = !q ||
@@ -8295,6 +8142,7 @@ export function App() {
                   <table className="data-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '74px', minWidth: '70px', textAlign: 'center' }}>Image</th>
                         <th className="col-product-name">Product Name</th>
                         <th className="col-nowrap">Category</th>
                         <th className="col-nowrap">SKU / Code</th>
@@ -8311,6 +8159,90 @@ export function App() {
                     <tbody>
                       {filteredMasterItems.map((i) => (
                         <tr key={i.id} style={{ opacity: i.active === false ? 0.75 : 1 }}>
+                          <td style={{ width: '74px', minWidth: '70px', textAlign: 'center', verticalAlign: 'middle', padding: '0.45rem 0.5rem' }}>
+                            <div
+                              className="product-table-image-cell"
+                              style={{
+                                width: '50px',
+                                height: '50px',
+                                minWidth: '50px',
+                                minHeight: '50px',
+                                maxWidth: '50px',
+                                maxHeight: '50px',
+                                margin: '0 auto',
+                                borderRadius: '10px',
+                                overflow: 'hidden',
+                                border: '1.5px solid #e2e8f0',
+                                background: '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                position: 'relative',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                              }}
+                            >
+                              {i.imageUrl || (i as any).image ? (
+                                <>
+                                  <img
+                                    src={i.imageUrl || (i as any).image}
+                                    alt={i.name}
+                                    className="product-thumb-img"
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'cover',
+                                      display: 'block',
+                                    }}
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
+                                      if (placeholder) placeholder.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div
+                                    className="product-thumb-placeholder"
+                                    style={{
+                                      display: 'none',
+                                      width: '100%',
+                                      height: '100%',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#94a3b8',
+                                      background: '#f8fafc',
+                                    }}
+                                    title="Product Image Placeholder"
+                                  >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                      <circle cx="8.5" cy="8.5" r="1.5" />
+                                      <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                  </div>
+                                </>
+                              ) : (
+                                <div
+                                  className="product-thumb-placeholder"
+                                  style={{
+                                    display: 'flex',
+                                    width: '100%',
+                                    height: '100%',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#94a3b8',
+                                    background: '#f8fafc',
+                                  }}
+                                  title="Product Image Placeholder"
+                                >
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          </td>
                           <td className="col-product-name" style={{ fontWeight: 600 }}>
                             <div style={{ color: '#0f172a', fontWeight: 600 }}>{i.name}</div>
                             {i.custom?.batch && (
@@ -8550,7 +8482,7 @@ export function App() {
                       ))}
                       {filteredMasterItems.length === 0 && (
                         <tr>
-                          <td colSpan={can(user?.role as any, 'purchases') ? 12 : 11} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                          <td colSpan={can(user?.role as any, 'purchases') ? 13 : 12} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
                             No products match your search or filter criteria.
                           </td>
                         </tr>
@@ -8588,7 +8520,7 @@ export function App() {
         })()}
 
         {/* TAB 2b: CATEGORY MANAGEMENT MODULE - BENTO REDESIGN */}
-        {activeTab === 'categories' && (() => {
+        {displayTab === 'categories' && (() => {
           const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
           const subCategories = categoriesList.filter((c) => c.parentId && c.active);
           const activeCategoriesCount = categoriesList.filter((c) => c.active).length;
@@ -8609,7 +8541,7 @@ export function App() {
           return (
             <div className="cat-bento-module-wrapper">
               {/* 1. Bento Header Card */}
-              <div className="cat-bento-header-card">
+              <div className="cat-bento-header-card bento-card-3d">
                 <div className="cat-bento-header-content">
                   <div className="cat-bento-title-group">
                     <div className="cat-bento-icon-box">
@@ -8824,8 +8756,8 @@ export function App() {
               <div className="cat-bento-kpi-grid">
                 {/* Tile 1: Total Categories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'all' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('all')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-total ${catTypeFilter === 'all' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('all')}
                   title="Click to view all categories"
                 >
                   <div className="cat-kpi-header">
@@ -8838,7 +8770,7 @@ export function App() {
                     <span className="kpi-sub-badge purple">All Taxa</span>
                   </div>
                   <div className="cat-kpi-num mono">
-                    {categoriesList.length}
+                    <AnimatedCounter value={categoriesList.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Store classifications</span>
@@ -8848,8 +8780,8 @@ export function App() {
 
                 {/* Tile 2: Main Categories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'main' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('main')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-main ${catTypeFilter === 'main' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('main')}
                   title="Click to filter top-level main categories"
                 >
                   <div className="cat-kpi-header">
@@ -8862,7 +8794,7 @@ export function App() {
                     <span className="kpi-sub-badge green">Top-Level</span>
                   </div>
                   <div className="cat-kpi-num mono text-green">
-                    {mainCategories.length}
+                    <AnimatedCounter value={mainCategories.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Root department shelves</span>
@@ -8872,8 +8804,8 @@ export function App() {
 
                 {/* Tile 3: Subcategories */}
                 <div
-                  className={`cat-bento-kpi-card ${catTypeFilter === 'sub' ? 'active-filter' : ''}`}
-                  onClick={() => setCatTypeFilter('sub')}
+                  className={`cat-bento-kpi-card bento-card-3d bento-cat-kpi-sub ${catTypeFilter === 'sub' ? 'active-filter' : ''}`}
+                  onClick={() => handleCatTypeFilterChange('sub')}
                   title="Click to filter nested subcategories"
                 >
                   <div className="cat-kpi-header">
@@ -8886,7 +8818,7 @@ export function App() {
                     <span className="kpi-sub-badge purple">Nested</span>
                   </div>
                   <div className="cat-kpi-num mono text-blue">
-                    {subCategories.length}
+                    <AnimatedCounter value={subCategories.length} />
                   </div>
                   <div className="cat-kpi-footer">
                     <span>Child classifications</span>
@@ -8896,7 +8828,7 @@ export function App() {
 
                 {/* Tile 4: Active Ratio */}
                 <div
-                  className="cat-bento-kpi-card"
+                  className="cat-bento-kpi-card bento-card-3d bento-cat-kpi-active"
                   title="Active vs Inactive category status"
                 >
                   <div className="cat-kpi-header">
@@ -8907,14 +8839,14 @@ export function App() {
                       <span className="cat-kpi-title">Active Status</span>
                     </div>
                     <span className="kpi-sub-badge green">
-                      {Math.round((activeCategoriesCount / (categoriesList.length || 1)) * 100)}% Live
+                      <AnimatedCounter value={Math.round((activeCategoriesCount / (categoriesList.length || 1)) * 100)} />% Live
                     </span>
                   </div>
                   <div className="cat-kpi-num mono">
-                    {activeCategoriesCount} <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {categoriesList.length}</span>
+                    <AnimatedCounter value={activeCategoriesCount} /> <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {categoriesList.length}</span>
                   </div>
                   <div className="cat-kpi-footer">
-                    <span>{inactiveCategoriesCount} inactive / disabled</span>
+                    <span><AnimatedCounter value={inactiveCategoriesCount} /> inactive / disabled</span>
                     <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
                   </div>
                 </div>
@@ -8923,7 +8855,7 @@ export function App() {
               {/* 3. Bento Middle Row (Asymmetrical Grid: Form 7fr + Guide 5fr) */}
               <div className="cat-bento-middle-grid">
                 {/* Left Bento: Category Creator Box */}
-                <div className="cat-bento-card cat-creator-card">
+                <div className="cat-bento-card bento-card-3d cat-creator-card">
                   <div className="cat-card-header">
                     <div className="cat-card-header-left">
                       <div className="cat-icon-badge purple">
@@ -8975,7 +8907,7 @@ export function App() {
                       </div>
                     </div>
 
-                    <div className="cat-form-row align-bottom">
+                    <div className="cat-form-row">
                       <div className="cat-form-field flex-1">
                         <label className="cat-form-label">
                           Description <span className="cat-opt-label">(Optional)</span>
@@ -8983,12 +8915,24 @@ export function App() {
                         <input
                           type="text"
                           className="cat-form-input"
-                          placeholder="Optional notes or shelf location..."
+                          placeholder="Optional notes, department shelf location, or display subtitle..."
                           value={newCatDesc}
                           onChange={(e) => setNewCatDesc(e.target.value)}
                         />
                       </div>
+                    </div>
 
+                    <div className="cat-form-action-strip">
+                      <div className="cat-form-hint">
+                        <span className="cat-form-hint-icon">{newCatParentId ? '↳' : '🏷️'}</span>
+                        <span>
+                          {newCatParentId ? (
+                            <span>Nesting under <strong>{mainCategories.find((c) => c.id === newCatParentId)?.name || 'Parent'}</strong></span>
+                          ) : (
+                            <span>Creating a <strong>Main Department</strong> (appears as primary POS department tab)</span>
+                          )}
+                        </span>
+                      </div>
                       <button type="submit" className="cat-submit-btn">
                         <PlusIcon size={15} />
                         <span>Add Category</span>
@@ -8998,7 +8942,7 @@ export function App() {
                 </div>
 
                 {/* Right Bento: Best Practices / Quick Navigator */}
-                <div className="cat-bento-card cat-guide-card">
+                <div className="cat-bento-card bento-card-3d cat-guide-card">
                   <div className="cat-card-header">
                     <div className="cat-card-header-left">
                       <div className="cat-icon-badge amber">
@@ -9046,36 +8990,46 @@ export function App() {
               </div>
 
               {/* 4. Bento Bottom Card: Store Category Hierarchy Table */}
-              <div className="cat-bento-card cat-table-card">
+              <div className="cat-bento-card bento-card-3d cat-table-card">
                 <div className="cat-table-toolbar">
                   <div className="cat-toolbar-left">
                     <span className="cat-table-title">Store Category Hierarchy</span>
                     <span className="cat-count-badge">
-                      {filteredCategories.length} listed
+                      <AnimatedCounter value={filteredCategories.length} /> listed
                     </span>
                   </div>
 
                   <div className="cat-toolbar-right">
                     {/* Segmented Filter Pills */}
-                    <div className="cat-segmented-tabs">
+                    <div className="cat-segmented-tabs" ref={catSegmentedTabsRef}>
+                      <span
+                        className="cat-segmented-slider"
+                        style={catTabGliderStyle.width > 0 ? {
+                          left: `${catTabGliderStyle.left}px`,
+                          width: `${catTabGliderStyle.width}px`,
+                        } : undefined}
+                      />
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['all'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'all' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('all')}
+                        onClick={() => handleCatTypeFilterChange('all')}
                       >
                         All ({categoriesList.length})
                       </button>
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['main'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'main' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('main')}
+                        onClick={() => handleCatTypeFilterChange('main')}
                       >
                         <FolderIcon size={13} /> Main ({mainCategories.length})
                       </button>
                       <button
                         type="button"
+                        ref={(el) => { if (catSegmentedBtnRefs.current) catSegmentedBtnRefs.current['sub'] = el; }}
                         className={`cat-segment-btn ${catTypeFilter === 'sub' ? 'active' : ''}`}
-                        onClick={() => setCatTypeFilter('sub')}
+                        onClick={() => handleCatTypeFilterChange('sub')}
                       >
                         <FolderTreeIcon size={13} /> Sub ({subCategories.length})
                       </button>
@@ -9115,7 +9069,8 @@ export function App() {
                         <th>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody key={`cat-tbody-${catTypeFilter}-${catTabAnimKey}`} className={`cat-table-body-slide slide-${catTabSlideDirection}`}>
+
                       {filteredCategories.map((cat) => (
                         <tr key={cat.id} className={!cat.active ? 'row-inactive' : ''}>
                           <td>
@@ -9286,7 +9241,7 @@ export function App() {
                                   style={{ fontSize: '0.82rem', marginTop: '0.45rem' }}
                                   onClick={() => {
                                     setCatSearchTerm('');
-                                    setCatTypeFilter('all');
+                                    handleCatTypeFilterChange('all');
                                   }}
                                 >
                                   Reset Filters
@@ -9305,7 +9260,7 @@ export function App() {
         })()}
 
         {/* TAB: INVENTORY MANAGEMENT */}
-        {activeTab === 'inventory' && (
+        {displayTab === 'inventory' && (
           <InventoryDashboard
             items={items}
             categories={categories}
@@ -9333,7 +9288,7 @@ export function App() {
         )}
 
         {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
-        {activeTab === 'product-movement' && (
+        {displayTab === 'product-movement' && (
           <ProductMovementAnalysisView
             categories={categories}
             userRole={user?.role as any}
@@ -9349,7 +9304,7 @@ export function App() {
         )}
 
         {/* TAB 3: BILLS & INVOICES */}
-        {activeTab === 'invoices' && (() => {
+        {displayTab === 'invoices' && (() => {
           const displayedInvoices = invoices.filter((inv) => {
             if (!invoiceFilterDate) return true;
             return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
@@ -9612,7 +9567,7 @@ export function App() {
         })()}
 
         {/* TAB: SALES ANALYSIS */}
-        {activeTab === 'sales-analysis' && (
+        {displayTab === 'sales-analysis' && (
           <SalesAnalysisView
             userRole={user?.role}
             shopName={shop?.name}
@@ -9625,7 +9580,7 @@ export function App() {
         )}
 
         {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
-        {activeTab === 'customers' && (
+        {displayTab === 'customers' && (
           <CustomerDirectory
             parties={parties}
             invoices={invoices}
@@ -9642,7 +9597,7 @@ export function App() {
         )}
 
         {/* TAB: SUPPLIERS - MODERN UPGRADED SUPPLIER DIRECTORY */}
-        {activeTab === 'suppliers' && (
+        {displayTab === 'suppliers' && (
           <SupplierDirectory
             parties={parties}
             purchases={purchases}
@@ -9663,7 +9618,7 @@ export function App() {
         )}
 
         {/* TAB: PURCHASES & STOCK INWARD */}
-        {activeTab === 'purchases' && (() => {
+        {displayTab === 'purchases' && (() => {
           const filteredPurchases = purchases.filter((p) => {
             if (purchaseStatusFilter === 'voided') {
               if (p.status !== 'voided') return false;
@@ -9975,7 +9930,7 @@ export function App() {
         })()}
 
         {/* TAB 5: REPORTS & ANALYTICS */}
-        {activeTab === 'reports' && report && (
+        {displayTab === 'reports' && report && (
           <div>
             {/* KPI Cards */}
             <div className="kpi-grid">
@@ -10153,7 +10108,7 @@ export function App() {
         )}
 
         {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
-        {activeTab === 'settings' && (
+        {displayTab === 'settings' && (
           <div>
             {/* Section 1: Business Profile Editor */}
             <div className="card settings-section">
@@ -11718,7 +11673,7 @@ export function App() {
 
 
         {/* ACCOUNTS & FINANCE TAB VIEWS */}
-        {activeTab === 'payments' && (
+        {displayTab === 'payments' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <PaymentsView
               onOpenCustomerLedger={(cid) => {
@@ -11743,7 +11698,7 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'expenses' && (
+        {displayTab === 'expenses' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ExpensesView
               userRole={user.role}
@@ -11753,13 +11708,13 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'cashbank' && (
+        {displayTab === 'cashbank' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <CashBankView />
           </div>
         )}
 
-        {activeTab === 'receivables' && (
+        {displayTab === 'receivables' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ReceivablesView
               onCollectPayment={(cid) => {
@@ -11775,7 +11730,7 @@ export function App() {
           </div>
         )}
 
-        {activeTab === 'payables' && (
+        {displayTab === 'payables' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <PayablesView
               onPaySupplier={(sid) => {
@@ -11792,53 +11747,54 @@ export function App() {
         )}
 
         {/* GST FILING TAB VIEWS */}
-        {activeTab === 'gst-overview' && (
+        {displayTab === 'gst-overview' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-sales-register' && (
+        {displayTab === 'gst-sales-register' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-purchase-register' && (
+        {displayTab === 'gst-purchase-register' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-itc-reconciliation' && (
+        {displayTab === 'gst-itc-reconciliation' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-gstr3b' && (
+        {displayTab === 'gst-gstr3b' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-gstr1' && (
+        {displayTab === 'gst-gstr1' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-import-export' && (
+        {displayTab === 'gst-import-export' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
 
-        {activeTab === 'gst-filing-history' && (
+        {displayTab === 'gst-filing-history' && (
           <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
             <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
           </div>
         )}
+        </div>
       </main>
 
       {/* PRINT RECEIPT MODAL */}
@@ -12431,17 +12387,44 @@ export function App() {
         </div>
       )}
 
-      {/* MASTER DATA: ADD / EDIT ITEM MODAL */}
+      {/* Master Data: Item Form Modal (Add & Edit) */}
       {showItemModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+        <div className="modal-overlay" onClick={() => setShowItemModal(false)}>
+          <div
+            className="modal-content product-edit-rectangle-modal"
+            style={{
+              maxWidth: '960px',
+              width: '94vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.4)',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. MODAL HEADER */}
+            <div
+              className="modal-header"
+              style={{
+                padding: '0.9rem 1.5rem',
+                borderBottom: '1px solid #e2e8f0',
+                background: '#ffffff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '8px',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
                     background: 'rgba(99, 102, 241, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
@@ -12450,12 +12433,12 @@ export function App() {
                   }}
                 >
                   {editingItem ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                       <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
                       <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -12463,16 +12446,29 @@ export function App() {
                   )}
                 </div>
                 <div>
-                  <h3 className="card-title" style={{ margin: 0 }}>
+                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
                     {editingItem ? `Edit Product: ${editingItem.name}` : `Add New Item to ${shop?.name}`}
                   </h3>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
                     {editingItem ? 'Update product details, pricing, tax rates and units' : 'Register a new item with unit, tax rate, and opening stock'}
                   </div>
                 </div>
               </div>
               <button
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', borderRadius: '6px' }}
+                type="button"
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  transition: 'all 0.15s ease',
+                }}
                 onClick={() => setShowItemModal(false)}
                 title="Close"
                 aria-label="Close"
@@ -12483,469 +12479,663 @@ export function App() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleSaveItem} className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Product / Item Name *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={itemFormName}
-                  onChange={(e) => setItemFormName(e.target.value)}
-                  placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
-                />
-                {!itemFormHsn && hsnSuggestions.length > 0 && (
-                  <div style={{ marginTop: '0.45rem', padding: '0.5rem 0.75rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2v4" />
-                          <path d="M12 18v4" />
-                          <path d="M4.93 4.93l2.83 2.83" />
-                          <path d="M16.24 16.24l2.83 2.83" />
-                          <path d="M2 12h4" />
-                          <path d="M18 12h4" />
-                          <path d="M4.93 19.07l2.83-2.83" />
-                          <path d="M16.24 7.76l2.83-2.83" />
-                        </svg>
-                        <span>Suggested HSN for "{itemFormName}":</span>
+
+            {/* 2. FORM BODY WITH MODERN RECTANGLE SPLIT-PANEL LAYOUT */}
+            <form onSubmit={handleSaveItem} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '1.25rem 1.5rem',
+                  display: 'grid',
+                  gridTemplateColumns: '320px 1fr',
+                  gap: '1.25rem',
+                  alignItems: 'start',
+                }}
+                className="product-edit-split-grid"
+              >
+                {/* ── LEFT COLUMN: MEDIA & INVENTORY SETTINGS ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Product Photo Studio Card */}
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
+                        Product Image
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 400 }}>Click to select</span>
-                        <button
-                          type="button"
-                          onClick={() => setHsnSuggestions([])}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0 3px', lineHeight: 1, display: 'inline-flex', alignItems: 'center' }}
-                          title="Dismiss"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: itemFormImageUrl ? '#dcfce7' : '#e0e7ff', color: itemFormImageUrl ? '#15803d' : '#4338ca', fontWeight: 600 }}>
+                        {itemFormImageUrl ? 'Attached' : 'Optional'}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      {hsnSuggestions.map((sug) => (
-                        <button
-                          key={sug.code}
-                          type="button"
-                          onClick={() => {
-                            setItemFormHsn(sug.code);
-                            setSelectedHsnDesc(sug.desc);
-                            setShowHsnDropdown(false);
-                            setHsnSuggestions([]); // Instantly closes this box upon selection!
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '5px',
-                            fontSize: '0.76rem',
-                            cursor: 'pointer',
-                            border: '1px solid #334155',
-                            background: 'rgba(30, 41, 59, 0.95)',
-                            color: '#e2e8f0',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#38bdf8';
-                            e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#334155';
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.95)';
-                          }}
-                          title={sug.desc}
-                        >
-                          <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
-                          <span style={{ color: '#cbd5e1', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {sug.desc}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">SKU / Item Code</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormSku}
-                    onChange={(e) => setItemFormSku(e.target.value)}
-                    placeholder="e.g. MED-001 or GROC-100"
-                  />
-                </div>
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
-                    <button
-                      type="button"
-                      style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                      onClick={() => {
-                        const code = '20' + Date.now().toString().slice(-10);
-                        let sum = 0;
-                        for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
-                        const fullBc = code + ((10 - (sum % 10)) % 10);
-                        setItemFormBarcode(fullBc);
-                      }}
-                      title="Generate a unique 13-digit EAN retail barcode"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                      </svg>
-                      <span>Auto-Generate</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormBarcode}
-                    onChange={(e) => setItemFormBarcode(e.target.value)}
-                    placeholder="Scan or enter barcode"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select
-                    className="form-input"
-                    value={itemFormCategory}
-                    onChange={(e) => setItemFormCategory(e.target.value)}
-                  >
-                    <option value="">— Select Category from Category Module —</option>
-                    {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
-                      <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
-                    )}
-                    {categoriesList.filter((c) => c.active).map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m20.59 13.41-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                      <line x1="7" y1="7" x2="7.01" y2="7" />
-                    </svg>
-                    <span>Categories are managed and imported in the <strong>Categories</strong> module.</span>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Unit of Measurement (UOM) *</label>
-                  <select
-                    className="form-input"
-                    value={itemFormUnit}
-                    onChange={(e) => setItemFormUnit(e.target.value)}
-                    required
-                  >
-                    {STANDARD_UNITS.map((u) => (
-                      <option key={u.code} value={u.code}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Selling Price (₹) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    required
-                    value={itemFormPrice}
-                    onChange={(e) => setItemFormPrice(e.target.value)}
-                    placeholder="e.g. 150.00"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Purchase / Cost Price (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-input"
-                    value={itemFormCost}
-                    onChange={(e) => setItemFormCost(e.target.value)}
-                    placeholder="e.g. 120.00"
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
-                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                      {isHsnSearching ? (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                          </svg>
-                          <span>Searching 22k+ items...</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                          </svg>
-                          <span>GST Directory</span>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={itemFormHsn}
-                    onChange={(e) => {
-                      setItemFormHsn(e.target.value);
-                      setShowHsnDropdown(true);
-                      if (!e.target.value) setSelectedHsnDesc('');
-                    }}
-                    onFocus={() => {
-                      if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
-                    }}
-                    placeholder="Search code or name (e.g. 1006, rice, 3004)"
-                    autoComplete="off"
-                  />
-                  {/* Live HSN Search Dropdown */}
-                  {showHsnDropdown && hsnSearchResults.length > 0 && (
+                    {/* Image Preview Box with drag-and-drop */}
                     <div
                       style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        maxHeight: '230px',
-                        overflowY: 'auto',
-                        background: '#0f172a',
-                        border: '1px solid #38bdf8',
-                        borderRadius: '8px',
-                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
-                        zIndex: 1050,
-                        marginTop: '4px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: '0.35rem 0.65rem',
-                          fontSize: '0.7rem',
-                          color: '#94a3b8',
-                          borderBottom: '1px solid #1e293b',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          background: '#1e293b',
-                        }}
-                      >
-                        <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowHsnDropdown(false)}
-                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                          <span>Close</span>
-                        </button>
-                      </div>
-                      {hsnSearchResults.map((item) => (
-                        <div
-                          key={item.code}
-                          onClick={() => {
-                            setItemFormHsn(item.code);
-                            setSelectedHsnDesc(item.desc);
-                            setShowHsnDropdown(false);
-                          }}
-                          style={{
-                            padding: '0.45rem 0.65rem',
-                            borderBottom: '1px solid #1e293b',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.15rem',
-                            background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                            textAlign: 'left',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.background =
-                              itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
-                          }
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {item.code}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '0.65rem',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                background: item.type === 'SAC' ? '#0284c7' : '#334155',
-                                color: '#e2e8f0',
-                              }}
-                            >
-                              {item.type}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {selectedHsnDesc && (
-                    <div
-                      style={{
-                        fontSize: '0.72rem',
-                        color: '#10b981',
-                        marginTop: '0.3rem',
+                        width: '100%',
+                        height: '150px',
+                        borderRadius: '10px',
+                        border: itemFormImageUrl ? '1.5px solid #818cf8' : '2px dashed #cbd5e1',
+                        background: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.3rem',
-                        lineHeight: '1.2',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleItemImageFileSelect(e.dataTransfer.files[0]);
+                        }
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {selectedHsnDesc}
-                      </span>
+                      {itemFormImageUrl ? (
+                        <img
+                          src={itemFormImageUrl}
+                          alt="Product Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Drop product photo here</span>
+                          <span style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>or click Upload below</span>
+                        </div>
+                      )}
+                      {isUploadingItemImage && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(255,255,255,0.85)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: '#4f46e5',
+                          }}
+                        >
+                          Optimizing image...
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">GST Tax Rate</label>
-                  <select
-                    className="form-input"
-                    value={itemFormTax}
-                    onChange={(e) => setItemFormTax(e.target.value)}
+
+                    {/* Image Controls */}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <label
+                        style={{
+                          flex: 1,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          padding: '0.38rem 0.65rem',
+                          borderRadius: '7px',
+                          background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                          color: '#ffffff',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          boxShadow: '0 1px 3px rgba(99, 102, 241, 0.25)',
+                        }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleItemImageFileSelect(e.target.files[0]);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      {itemFormImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setItemFormImageUrl('')}
+                          style={{
+                            background: '#fee2e2',
+                            border: '1px solid #fecaca',
+                            color: '#dc2626',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: '0.38rem 0.65rem',
+                            borderRadius: '7px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                          }}
+                          title="Remove attached photo"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Or paste web image link..."
+                        value={itemFormImageUrl.startsWith('data:') ? '' : itemFormImageUrl}
+                        onChange={(e) => setItemFormImageUrl(e.target.value.trim())}
+                        style={{
+                          width: '100%',
+                          padding: '0.3rem 0.55rem',
+                          fontSize: '0.74rem',
+                          height: '28px',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stock & Reorder Alert Card */}
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
                   >
-                    <option value="0">0% (Nil / Exempt)</option>
-                    <option value="500">5% GST (2.5% CGST + 2.5% SGST)</option>
-                    <option value="1200">12% GST (6% CGST + 6% SGST)</option>
-                    <option value="1800">18% GST (9% CGST + 9% SGST)</option>
-                    <option value="2800">28% GST (14% CGST + 14% SGST)</option>
-                  </select>
-                </div>
-              </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                      <span>Inventory &amp; Reorder Alerts</span>
+                    </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <input
-                  type="checkbox"
-                  id="itemTaxInclusive"
-                  checked={itemFormTaxInclusive}
-                  onChange={(e) => setItemFormTaxInclusive(e.target.checked)}
-                />
-                <label htmlFor="itemTaxInclusive" style={{ fontSize: '0.9rem', color: '#cbd5e1', cursor: 'pointer' }}>
-                  Selling price is inclusive of GST (recommended for retail / grocery)
-                </label>
-              </div>
+                    {!editingItem ? (
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Initial Stock ({itemFormUnit})</span>
+                          <span style={{ color: '#10b981', fontWeight: 600 }}>Ledger Tracked</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input"
+                          value={itemFormStock}
+                          onChange={(e) => setItemFormStock(e.target.value)}
+                          placeholder="e.g. 50"
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ background: '#e0f2fe', border: '1px solid #bae6fd', padding: '0.55rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <span style={{ fontWeight: 600 }}>Current Stock:</span>
+                        <strong style={{ fontSize: '0.9rem' }}>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>
+                      </div>
+                    )}
 
-              {!editingItem ? (
-                <div className="form-group" style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Initial Opening Stock Quantity ({itemFormUnit})</span>
-                    <span style={{ color: '#10b981', fontWeight: 600 }}>Ledger Tracked</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="form-input"
-                    value={itemFormStock}
-                    onChange={(e) => setItemFormStock(e.target.value)}
-                    placeholder="e.g. 50"
-                  />
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.35rem' }}>
-                    Note: An opening stock ledger entry will be posted once upon creation.
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.72rem' }}>Reorder Level</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-input"
+                          value={itemFormReorder}
+                          onChange={(e) => setItemFormReorder(e.target.value)}
+                          placeholder="e.g. 10"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.72rem' }}>Buffer Stock</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-input"
+                          value={itemFormMinStock}
+                          onChange={(e) => setItemFormMinStock(e.target.value)}
+                          placeholder="e.g. 5"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.72rem' }}>Preferred Supplier</label>
+                      <select
+                        className="form-input"
+                        value={itemFormSupplierId}
+                        onChange={(e) => setItemFormSupplierId(e.target.value)}
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        <option value="">No Preferred Supplier Assigned</option>
+                        {parties.filter((p) => p.type === 'supplier' && p.active !== false).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.phone ? `(${p.phone})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd', display: 'flex', alignItems: 'flex-start', gap: '0.45rem' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>
-                    Current Ledger Stock: <strong>{editingItem.currentStockMilli / 1000} {editingItem.unit}</strong>. Opening stock cannot be modified here to protect stock movement audit history.
-                  </span>
-                </div>
-              )}
 
-              <div style={{ background: 'var(--surface-raised, rgba(255,255,255,0.03))', border: '1px solid var(--border, #cbd5e1)', borderRadius: '8px', padding: '0.85rem', marginTop: '1rem' }}>
-                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text, #0f172a)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                  </svg>
-                  <span>Inventory Alert &amp; Reorder Settings</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Reorder Level Threshold ({itemFormUnit})</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="form-input"
-                      value={itemFormReorder}
-                      onChange={(e) => setItemFormReorder(e.target.value)}
-                      placeholder="e.g. 10 (0 = disabled)"
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Minimum Buffer Stock ({itemFormUnit})</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="form-input"
-                      value={itemFormMinStock}
-                      onChange={(e) => setItemFormMinStock(e.target.value)}
-                      placeholder="e.g. 5"
-                    />
-                  </div>
-                </div>
-                <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Preferred Supplier (for Replenishment)</label>
-                  <select
-                    className="form-input"
-                    value={itemFormSupplierId}
-                    onChange={(e) => setItemFormSupplierId(e.target.value)}
+                {/* ── RIGHT COLUMN: PRODUCT IDENTITY & PRICING ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* General Information Card */}
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
                   >
-                    <option value="">No Preferred Supplier Assigned</option>
-                    {parties.filter((p) => p.type === 'supplier' && p.active !== false).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.phone ? `(${p.phone})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.45rem' }}>
+                      Product Identification
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Product / Item Name *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        required
+                        value={itemFormName}
+                        onChange={(e) => setItemFormName(e.target.value)}
+                        placeholder="e.g. Paracetamol 650mg / Basmati Rice 1kg"
+                      />
+                      {!itemFormHsn && hsnSuggestions.length > 0 && (
+                        <div style={{ marginTop: '0.45rem', padding: '0.45rem 0.65rem', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#38bdf8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                              </svg>
+                              <span>Suggested HSN for "${itemFormName}":</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setHsnSuggestions([])}
+                              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                            {hsnSuggestions.map((sug) => (
+                              <button
+                                key={sug.code}
+                                type="button"
+                                onClick={() => {
+                                  setItemFormHsn(sug.code);
+                                  setSelectedHsnDesc(sug.desc);
+                                  setShowHsnDropdown(false);
+                                  setHsnSuggestions([]);
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.74rem',
+                                  cursor: 'pointer',
+                                  border: '1px solid #334155',
+                                  background: 'rgba(30, 41, 59, 0.95)',
+                                  color: '#e2e8f0',
+                                }}
+                              >
+                                <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#38bdf8' }}>{sug.code}</span>
+                                <span style={{ color: '#cbd5e1', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {sug.desc}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">SKU / Item Code</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormSku}
+                          onChange={(e) => setItemFormSku(e.target.value)}
+                          placeholder="e.g. MED-001 or GROC-100"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <label className="form-label" style={{ margin: 0 }}>Barcode / EAN</label>
+                          <button
+                            type="button"
+                            style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                            onClick={() => {
+                              const code = '20' + Date.now().toString().slice(-10);
+                              let sum = 0;
+                              for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);
+                              const fullBc = code + ((10 - (sum % 10)) % 10);
+                              setItemFormBarcode(fullBc);
+                            }}
+                            title="Generate a unique 13-digit EAN retail barcode"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                            </svg>
+                            <span>Auto-Generate</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormBarcode}
+                          onChange={(e) => setItemFormBarcode(e.target.value)}
+                          placeholder="Scan or enter barcode"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Category</label>
+                        <select
+                          className="form-input"
+                          value={itemFormCategory}
+                          onChange={(e) => setItemFormCategory(e.target.value)}
+                        >
+                          <option value="">— Select Category —</option>
+                          {itemFormCategory && !categoriesList.some((c) => c.name.toLowerCase() === itemFormCategory.toLowerCase()) && (
+                            <option value={itemFormCategory}>{itemFormCategory} (Current)</option>
+                          )}
+                          {categoriesList.filter((c) => c.active).map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Unit of Measurement (UOM) *</label>
+                        <select
+                          className="form-input"
+                          value={itemFormUnit}
+                          onChange={(e) => setItemFormUnit(e.target.value)}
+                          required
+                        >
+                          {STANDARD_UNITS.map((u) => (
+                            <option key={u.code} value={u.code}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing & Tax Card */}
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.85rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.45rem' }}>
+                      Pricing &amp; Taxation
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Selling Price (₹) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          required
+                          value={itemFormPrice}
+                          onChange={(e) => setItemFormPrice(e.target.value)}
+                          placeholder="e.g. 150.00"
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Purchase / Cost Price (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-input"
+                          value={itemFormCost}
+                          onChange={(e) => setItemFormCost(e.target.value)}
+                          placeholder="e.g. 120.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div className="form-group" style={{ position: 'relative', marginBottom: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                          <label className="form-label" style={{ margin: 0 }}>HSN / SAC Code</label>
+                          <span style={{ fontSize: '0.72rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            {isHsnSearching ? (
+                              <span>Searching...</span>
+                            ) : (
+                              <span>GST Directory</span>
+                            )}
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={itemFormHsn}
+                          onChange={(e) => {
+                            setItemFormHsn(e.target.value);
+                            setShowHsnDropdown(true);
+                            if (!e.target.value) setSelectedHsnDesc('');
+                          }}
+                          onFocus={() => {
+                            if (hsnSearchResults.length > 0) setShowHsnDropdown(true);
+                          }}
+                          placeholder="Search code or name"
+                          autoComplete="off"
+                        />
+                        {showHsnDropdown && hsnSearchResults.length > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              maxHeight: '200px',
+                              overflowY: 'auto',
+                              background: '#0f172a',
+                              border: '1px solid #38bdf8',
+                              borderRadius: '8px',
+                              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.8)',
+                              zIndex: 1050,
+                              marginTop: '4px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: '0.35rem 0.65rem',
+                                fontSize: '0.7rem',
+                                color: '#94a3b8',
+                                borderBottom: '1px solid #1e293b',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: '#1e293b',
+                              }}
+                            >
+                              <span>Select HSN / SAC ({hsnSearchResults.length} matches)</span>
+                              <button
+                                type="button"
+                                onClick={() => setShowHsnDropdown(false)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem' }}
+                              >
+                                ✕ Close
+                              </button>
+                            </div>
+                            {hsnSearchResults.map((item) => (
+                              <div
+                                key={item.code}
+                                onClick={() => {
+                                  setItemFormHsn(item.code);
+                                  setSelectedHsnDesc(item.desc);
+                                  setShowHsnDropdown(false);
+                                }}
+                                style={{
+                                  padding: '0.45rem 0.65rem',
+                                  borderBottom: '1px solid #1e293b',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.15rem',
+                                  background: itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                                  textAlign: 'left',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)')}
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background =
+                                    itemFormHsn === item.code ? 'rgba(56, 189, 248, 0.15)' : 'transparent')
+                                }
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontWeight: 700, color: '#38bdf8', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                    {item.code}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      background: item.type === 'SAC' ? '#0284c7' : '#334155',
+                                      color: '#e2e8f0',
+                                    }}
+                                  >
+                                    {item.type}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.25' }}>{item.desc}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedHsnDesc && (
+                          <div
+                            style={{
+                              fontSize: '0.72rem',
+                              color: '#10b981',
+                              marginTop: '0.25rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                            }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              ✓ {selectedHsnDesc}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">GST Tax Rate</label>
+                        <select
+                          className="form-input"
+                          value={itemFormTax}
+                          onChange={(e) => setItemFormTax(e.target.value)}
+                        >
+                          <option value="0">0% (Nil / Exempt)</option>
+                          <option value="500">5% GST (2.5% CGST + 2.5% SGST)</option>
+                          <option value="1200">12% GST (6% CGST + 6% SGST)</option>
+                          <option value="1800">18% GST (9% CGST + 9% SGST)</option>
+                          <option value="2800">28% GST (14% CGST + 14% SGST)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '0.2rem' }}>
+                      <input
+                        type="checkbox"
+                        id="itemTaxInclusive"
+                        checked={itemFormTaxInclusive}
+                        onChange={(e) => setItemFormTaxInclusive(e.target.checked)}
+                      />
+                      <label htmlFor="itemTaxInclusive" style={{ fontSize: '0.85rem', color: '#475569', cursor: 'pointer', fontWeight: 500 }}>
+                        Selling price is inclusive of GST (recommended for retail / supermarket)
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowItemModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingItem ? 'Save Changes' : 'Save Product'}
-                </button>
+              {/* 3. FIXED BOTTOM ACTION BAR */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.85rem 1.5rem',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                  {editingItem ? 'Changes will be immediately synchronized across POS and branch catalogs.' : 'New product will be saved to your store master catalog.'}
+                </div>
+                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowItemModal(false)} style={{ padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1.35rem', fontSize: '0.85rem', fontWeight: 700 }}>
+                    {editingItem ? 'Save Changes' : 'Save Product'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

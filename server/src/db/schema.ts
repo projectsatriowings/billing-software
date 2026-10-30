@@ -828,7 +828,7 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
-    version: 29,
+version: 29,
     statements: [
       `CREATE TABLE IF NOT EXISTS card_terminals (
         id TEXT PRIMARY KEY,
@@ -893,6 +893,13 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
+    version: 30,
+    statements: [
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS image_url TEXT`,
+      `CREATE INDEX IF NOT EXISTS items_image ON items (tenant_id) WHERE image_url IS NOT NULL`,
+    ],
+  },
+  {
     version: 31,
     statements: [
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_id TEXT`,
@@ -916,6 +923,18 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS rounding_minor BIGINT DEFAULT 0`,
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'`,
       `CREATE INDEX IF NOT EXISTS invoices_client_id ON invoices (tenant_id, client_id)`,
+    ],
+  },
+  {
+    version: 32,
+    statements: [
+      `DELETE FROM categories 
+       WHERE id NOT IN (
+         SELECT DISTINCT ON (tenant_id, lower(name)) id 
+         FROM categories 
+         ORDER BY tenant_id, lower(name), created_at ASC, id ASC
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS categories_name_uq ON categories (tenant_id, lower(name))`,
     ],
   },
   {

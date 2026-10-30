@@ -198,6 +198,8 @@ export interface Item {
   stockValueMinor?: number | null;
   favorite: boolean;
   active?: boolean;
+  imageUrl?: string | null;
+  image?: string | null;
   custom?: Record<string, any>;
 }
 
@@ -1215,6 +1217,7 @@ export interface BulkImportRow {
   barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
   additionalBarcodes?: (string | AdditionalBarcode)[] | null;
   productNature?: 'BRANDED' | 'SHOP_PRODUCT' | null;
+  imageUrl?: string | null;
   /** Selling price in paise (integer). */
   priceMinor: number;
   /** Cost price in paise (integer). */
