@@ -7167,60 +7167,71 @@ export function App() {
 
                     <div className="bento-customer-body">
                       <div className="customer-input-wrap">
-                        <input
-                          type="text"
-                          className="bento-input"
-                          placeholder="📱 Enter customer mobile or name..."
-                          value={customerSearch}
-                          onChange={(e) => {
-                            setCustomerSearch(e.target.value);
-                            setShowCustomerDropdown(true);
-                          }}
-                          onFocus={() => {
-                            if (customerSearch.trim()) setShowCustomerDropdown(true);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') setShowCustomerDropdown(false);
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const cleanDigits = customerSearch.replace(/\D/g, '');
-                              const match = cleanDigits.length >= 7
-                                ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                                : null;
-                              if (match) {
-                                setSelectedPartyId(match.id);
-                                setCustomerSearch('');
-                                setShowCustomerDropdown(false);
-                                showToast(`✓ Linked member: ${match.name}`);
-                              } else if (cleanDigits.length >= 10) {
-                                handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                              } else if (filteredParties.length === 1) {
-                                setSelectedPartyId(filteredParties[0].id);
-                                setCustomerSearch('');
-                                setShowCustomerDropdown(false);
-                              }
-                            }
-                          }}
-                        />
-                        {selectedParty && (
-                          <div className="selected-customer-pill">
-                            <span className="customer-name-tag">{selectedParty.name}</span>
+                        {selectedParty ? (
+                          <div className="bento-selected-member-card">
+                            <div className="selected-member-left">
+                              <span className="selected-member-avatar">👤</span>
+                              <div className="selected-member-info">
+                                <div className="selected-member-name-row">
+                                  <span className="selected-member-name">{selectedParty.name}</span>
+                                  <span className="selected-member-badge">Member Active</span>
+                                </div>
+                                <span className="selected-member-phone mono">{selectedParty.phone ? `📱 ${selectedParty.phone}` : 'No phone linked'}</span>
+                              </div>
+                            </div>
                             <button
                               type="button"
-                              className="clear-pill-btn"
+                              className="selected-member-change-btn"
                               onClick={() => {
                                 setSelectedPartyId('');
                                 setCustomerSearch('');
                                 setRedeemPoints(false);
                               }}
-                              title="Switch to Walk-in"
+                              title="Change or switch to Walk-in customer"
                             >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                               </svg>
+                              <span>Change</span>
                             </button>
                           </div>
+                        ) : (
+                          <input
+                            type="text"
+                            className="bento-input"
+                            placeholder="📱 Enter customer mobile or name..."
+                            value={customerSearch}
+                            onChange={(e) => {
+                              setCustomerSearch(e.target.value);
+                              setShowCustomerDropdown(true);
+                            }}
+                            onFocus={() => {
+                              if (customerSearch.trim()) setShowCustomerDropdown(true);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') setShowCustomerDropdown(false);
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const cleanDigits = customerSearch.replace(/\D/g, '');
+                                const match = cleanDigits.length >= 7
+                                  ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
+                                  : null;
+                                if (match) {
+                                  setSelectedPartyId(match.id);
+                                  setCustomerSearch('');
+                                  setShowCustomerDropdown(false);
+                                  showToast(`✓ Linked member: ${match.name}`);
+                                } else if (cleanDigits.length >= 10) {
+                                  handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
+                                } else if (filteredParties.length === 1) {
+                                  setSelectedPartyId(filteredParties[0].id);
+                                  setCustomerSearch('');
+                                  setShowCustomerDropdown(false);
+                                }
+                              }
+                            }}
+                          />
                         )}
 
                         {showCustomerDropdown && customerSearch.trim().length > 0 && (() => {
