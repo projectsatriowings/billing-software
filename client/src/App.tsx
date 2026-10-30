@@ -7345,129 +7345,192 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Counter Operations & Live Register Metrics */}
+                  {/* Modern Counter Operations & Live Register Metrics */}
                   <div className="bento-card bento-register-card">
-                    <div className="bento-card-header">
-                      <div className="bento-header-label">
-                        <span className="dock-status-dot online"></span>
-                        <div>
-                          <h3 className="bento-card-title">Register #1 • Live Synced</h3>
-                          <span className="bento-card-subtitle">{user?.name || 'Cashier'} • Neon DB</span>
+                    <div className="ops-card-header">
+                      <div className="ops-header-left">
+                        <div className="ops-terminal-badge">
+                          <span className="ops-pulse-dot"></span>
+                          <span className="ops-terminal-text">POS-01</span>
+                        </div>
+                        <div className="ops-header-meta">
+                          <span className="ops-header-title">Live Terminal & Sales</span>
+                          <span className="ops-header-sub">{user?.name || 'Cashier'} • Neon Cloud DB</span>
                         </div>
                       </div>
-                      <span className="bento-status-pill emerald">
-                        <span className="scanner-ready-dot"></span>
-                        Online
-                      </span>
+                      <div className="ops-status-tag">
+                        <span className="ops-live-icon">⚡</span>
+                        <span>SYNCED</span>
+                      </div>
                     </div>
 
                     <div className="bento-register-body">
-                      {/* Today's Metrics Grid */}
-                      <div className="bento-register-metrics-grid">
-                        <div className="bento-register-metric-box">
-                          <span className="bento-metric-lbl">Today's Counter Bills</span>
-                          <span className="bento-metric-num mono">
-                            {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length} Bills
-                          </span>
+                      {/* 2-Column Metrics Hub */}
+                      <div className="ops-metrics-grid">
+                        <div className="ops-metric-card bills-card">
+                          <div className="ops-metric-icon-wrap bills-icon">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                              <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                          </div>
+                          <div className="ops-metric-details">
+                            <span className="ops-metric-label">Today's Invoices</span>
+                            <div className="ops-metric-val-row">
+                              <span className="ops-metric-value mono">
+                                {invoices.filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString()).length}
+                              </span>
+                              <span className="ops-metric-unit">bills</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="bento-register-metric-box">
-                          <span className="bento-metric-lbl">Today's Register Sales</span>
-                          <span className="bento-metric-num mono text-success">
-                            {formatRupees(
-                              invoices
-                                .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
-                                .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
-                            )}
-                          </span>
+
+                        <div className="ops-metric-card revenue-card">
+                          <div className="ops-metric-icon-wrap revenue-icon">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <line x1="12" y1="1" x2="12" y2="23"></line>
+                              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                          </div>
+                          <div className="ops-metric-details">
+                            <span className="ops-metric-label">Register Sales</span>
+                            <div className="ops-metric-val-row">
+                              <span className="ops-metric-value mono text-emerald">
+                                {formatRupees(
+                                  invoices
+                                    .filter((i) => new Date(i.createdAt).toDateString() === new Date().toDateString())
+                                    .reduce((sum, inv) => sum + (inv.kind === 'credit_note' ? -inv.totalMinor : inv.totalMinor), 0)
+                                )}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Operational Action Buttons Grid */}
-                      <div className="bento-register-actions-grid">
+                      {/* 6 Balanced Tactile Action Tiles (3 x 2 Grid) */}
+                      <div className="ops-tiles-grid">
+                        {/* 1. Hold Order */}
                         <button
                           type="button"
-                          className="dock-action-btn park-btn"
+                          className="ops-action-tile ops-tile-hold"
                           onClick={handleHoldOrder}
                           title="Hold current cart or recall last held order"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="6" y="4" width="4" height="16"></rect>
-                            <rect x="14" y="4" width="4" height="16"></rect>
-                          </svg>
-                          <span>{cart.length > 0 ? 'Hold Order' : (heldOrders.length > 0 ? `Recall (${heldOrders.length})` : 'Hold Order')}</span>
-                          {heldOrders.length > 0 && <span className="dock-badge">{heldOrders.length}</span>}
+                          <div className="ops-tile-icon-badge">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="6" y="4" width="4" height="16"></rect>
+                              <rect x="14" y="4" width="4" height="16"></rect>
+                            </svg>
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">{cart.length > 0 ? 'Hold Cart' : (heldOrders.length > 0 ? 'Recall Cart' : 'Hold Cart')}</span>
+                            <span className="ops-tile-sub">Park active sale</span>
+                          </div>
+                          {heldOrders.length > 0 && <span className="ops-tile-badge">{heldOrders.length}</span>}
                         </button>
 
-                        {heldOrders.length > 0 && (
-                          <button
-                            type="button"
-                            className="dock-action-btn secondary"
-                            onClick={() => setShowHeldOrdersModal(true)}
-                            title="View all currently held parked orders"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                        {/* 2. Parked Orders Drawer */}
+                        <button
+                          type="button"
+                          className="ops-action-tile ops-tile-parked"
+                          onClick={() => setShowHeldOrdersModal(true)}
+                          title="View all currently held parked orders"
+                        >
+                          <div className="ops-tile-icon-badge">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
                               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                               <polyline points="14 2 14 8 20 8"></polyline>
                               <line x1="16" y1="13" x2="8" y2="13"></line>
                               <line x1="16" y1="17" x2="8" y2="17"></line>
                             </svg>
-                            <span>Parked ({heldOrders.length})</span>
-                          </button>
-                        )}
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">Parked Orders</span>
+                            <span className="ops-tile-sub">{heldOrders.length > 0 ? `${heldOrders.length} waiting` : 'No held carts'}</span>
+                          </div>
+                          {heldOrders.length > 0 && <span className="ops-tile-badge">{heldOrders.length}</span>}
+                        </button>
 
+                        {/* 3. Custom Item Charge */}
                         <button
                           type="button"
-                          className="dock-action-btn"
+                          className="ops-action-tile ops-tile-charge"
                           onClick={() => setShowCustomItemModal(true)}
                           title="Add open item custom charge (Carry bag, delivery, etc.)"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>+ Custom Charge</span>
+                          <div className="ops-tile-icon-badge">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">Custom Item</span>
+                            <span className="ops-tile-sub">Carry bag, delivery</span>
+                          </div>
                         </button>
 
+                        {/* 4. Reprint Last Receipt */}
                         <button
                           type="button"
-                          className="dock-action-btn"
+                          className="ops-action-tile ops-tile-reprint"
                           onClick={handleReprintLastBill}
                           disabled={!invoices || invoices.length === 0}
                           title="Reprint the most recently issued thermal invoice"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                            <rect x="6" y="14" width="12" height="8"></rect>
-                          </svg>
-                          <span>Reprint Last Bill</span>
+                          <div className="ops-tile-icon-badge">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                              <rect x="6" y="14" width="12" height="8"></rect>
+                            </svg>
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">Reprint Last</span>
+                            <span className="ops-tile-sub">{invoices && invoices.length > 0 ? 'Print receipt copy' : 'No bills yet'}</span>
+                          </div>
                         </button>
 
+                        {/* 5. Bill Discount */}
                         <button
                           type="button"
-                          className="dock-action-btn"
+                          className="ops-action-tile ops-tile-discount"
                           onClick={() => setShowDiscountPicker(true)}
                           title="Apply bill percentage or flat rupee discount"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                            <line x1="19" y1="5" x2="5" y2="19"></line>
-                            <circle cx="6.5" cy="6.5" r="2.5"></circle>
-                            <circle cx="17.5" cy="17.5" r="2.5"></circle>
-                          </svg>
-                          <span>% Discount {appliedDiscountPercent > 0 ? `(${appliedDiscountPercent}%)` : ''}</span>
+                          <div className="ops-tile-icon-badge">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <line x1="19" y1="5" x2="5" y2="19"></line>
+                              <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                              <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                            </svg>
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">Bill Discount</span>
+                            <span className="ops-tile-sub">{appliedDiscountPercent > 0 ? `${appliedDiscountPercent}% applied` : 'Special % or ₹ off'}</span>
+                          </div>
                         </button>
 
+                        {/* 6. Phone Wireless Scanner */}
                         <button
                           type="button"
-                          className={`dock-action-btn ${isPhoneScannerConnected ? 'connected' : ''}`}
+                          className={`ops-action-tile ops-tile-mobile ${isPhoneScannerConnected ? 'connected' : ''}`}
                           onClick={() => setShowMobileScannerModal(true)}
                           title="Connect mobile phone as a wireless barcode scanner"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                            <line x1="12" y1="18" x2="12.01" y2="18"></line>
-                          </svg>
-                          <span>{isPhoneScannerConnected ? 'Phone Paired ✓' : 'Mobile Scanner'}</span>
+                          <div className="ops-tile-icon-badge">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                            </svg>
+                          </div>
+                          <div className="ops-tile-info">
+                            <span className="ops-tile-title">Mobile Gun</span>
+                            <span className="ops-tile-sub">{isPhoneScannerConnected ? 'Phone active ✓' : 'Scan via phone'}</span>
+                          </div>
                         </button>
                       </div>
                     </div>
