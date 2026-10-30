@@ -165,3 +165,4 @@ export class MockTerminalAdapter implements TerminalAdapter {
     };
   }
 }
+

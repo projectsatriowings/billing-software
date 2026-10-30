@@ -175,12 +175,13 @@ export class PaytmPosAdapter implements TerminalAdapter {
       };
     }
 
-    const statusUrl = (terminal.apiEndpoint || terminal.api_endpoint)
-      ? `${(terminal.apiEndpoint || terminal.api_endpoint).replace(/initiate$/, '')}status`
+    const apiEp = terminal.apiEndpoint || (terminal as any).api_endpoint;
+    const statusUrl = apiEp
+      ? `${apiEp.replace(/initiate$/, '')}status`
       : 'https://securegw.paytm.in/order/status';
 
     try {
-      if ((terminal.apiEndpoint || terminal.api_endpoint) || (terminal.ipAddress || terminal.ip_address)) {
+      if (apiEp || (terminal.ipAddress || (terminal as any).ip_address)) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(statusUrl, {
@@ -236,18 +237,19 @@ export class PaytmPosAdapter implements TerminalAdapter {
 
   async cancelPayment(params: CancelPaymentParams): Promise<CancelPaymentResult> {
     const { terminal, transaction, decryptedSecrets } = params;
-    const cancelUrl = (terminal.apiEndpoint || terminal.api_endpoint)
-      ? `${(terminal.apiEndpoint || terminal.api_endpoint).replace(/initiate$/, '')}cancel`
+    const apiEp = terminal.apiEndpoint || (terminal as any).api_endpoint;
+    const cancelUrl = apiEp
+      ? `${apiEp.replace(/initiate$/, '')}cancel`
       : 'https://securegw.paytm.in/order/cancel';
 
     try {
-      if ((terminal.apiEndpoint || terminal.api_endpoint) || (terminal.ipAddress || terminal.ip_address)) {
+      if (apiEp || (terminal.ipAddress || (terminal as any).ip_address)) {
         await fetch(cancelUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            head: { token: decryptedSecrets.authToken || '', mid: (terminal.merchantId || terminal.merchant_id) },
-            body: { mid: (terminal.merchantId || terminal.merchant_id), tid: (terminal.terminalId || terminal.terminal_id), orderId: (transaction.providerTxId || transaction.provider_tx_id) },
+            head: { token: decryptedSecrets.authToken || '', mid: (terminal.merchantId || (terminal as any).merchant_id) },
+            body: { mid: (terminal.merchantId || (terminal as any).merchant_id), tid: (terminal.terminalId || (terminal as any).terminal_id), orderId: (transaction.providerTxId || (transaction as any).provider_tx_id) },
           }),
         }).catch(() => {});
       }
@@ -266,12 +268,13 @@ export class PaytmPosAdapter implements TerminalAdapter {
   }
 
   async reconcileTransaction(params: ReconcileParams): Promise<ReconcileResult> {
+    const tx = params.transaction;
     const statusRes = await this.getPaymentStatus(params);
     return {
       matched: statusRes.status === 'success',
       providerStatus: statusRes.status,
-      providerRefNo: statusRes.providerRefNo || (transaction.providerRefNo || transaction.provider_ref_no) || undefined,
-      amountMinor: Number((transaction.amountMinor || transaction.amount_minor)),
+      providerRefNo: statusRes.providerRefNo || (tx.providerRefNo || (tx as any).provider_ref_no) || undefined,
+      amountMinor: Number((tx.amountMinor || (tx as any).amount_minor)),
     };
   }
 

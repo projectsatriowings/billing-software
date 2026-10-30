@@ -173,12 +173,13 @@ export class VerifoneAdapter implements TerminalAdapter {
   }
 
   async reconcileTransaction(params: ReconcileParams): Promise<ReconcileResult> {
-    const hasRrn = !!(transaction.providerRefNo || transaction.provider_ref_no);
+    const tx = params.transaction;
+    const hasRrn = !!(tx.providerRefNo || (tx as any).provider_ref_no);
     return {
       matched: hasRrn,
-      providerStatus: params.transaction.status,
-      providerRefNo: (transaction.providerRefNo || transaction.provider_ref_no) || undefined,
-      amountMinor: Number((transaction.amountMinor || transaction.amount_minor)),
+      providerStatus: tx.status,
+      providerRefNo: (tx.providerRefNo || (tx as any).provider_ref_no) || undefined,
+      amountMinor: Number((tx.amountMinor || (tx as any).amount_minor)),
     };
   }
 

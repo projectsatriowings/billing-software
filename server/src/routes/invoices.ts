@@ -377,22 +377,32 @@ export function registerInvoices(r: Router) {
       }
       const balanceMinor = Math.max(0, calculated.totalMinor - totalPaidMinor);
 
+      // Check for active cashier shift
+      const activeShift = await q.one<{ id: string }>(
+        "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
+        [tenantId, ctx.user!.id],
+      );
+
       // 3. Insert invoice
       if (tenderData) {
         tenderData.changeReturnedMinor = Math.max(0, tenderData.cashReceivedMinor - calculated.totalMinor);
       }
 
+      const paymentStatus = balanceMinor === 0 ? 'paid' : (totalPaidMinor > 0 ? 'partial' : 'unpaid');
+
       await q.exec(
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
-          customer_name, customer_phone, place_state, intra,
-          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor, round_off_minor, total_minor,
-          paid_minor, balance_minor, rule_version, calc, share_token, created_by, location, counter, custom
+          customer_name, customer_phone, party_name, party_phone, place_state, intra,
+          subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
+          round_off_minor, rounding_minor, total_minor,
+          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom
         ) VALUES (
           ?, ?, ?, ?, 'sale', 'posted', ?, ?,
-          ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?::jsonb
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb
         )`,
         [
           invoiceId,
@@ -401,6 +411,8 @@ export function registerInvoices(r: Router) {
           assignedNumber,
           todayStr,
           partyId || null,
+          customerName || null,
+          customerPhone || null,
           customerName || null,
           customerPhone || null,
           b.placeState || '33',
@@ -412,14 +424,17 @@ export function registerInvoices(r: Router) {
           calculated.sgstMinor,
           calculated.igstMinor,
           calculated.roundOffMinor,
+          calculated.roundOffMinor,
           calculated.totalMinor,
           totalPaidMinor,
           balanceMinor,
+          paymentStatus,
           j(calculated),
           shareToken,
           ctx.user!.id,
           location,
           counter,
+          activeShift?.id || null,
           j(tenderData ? { tender: tenderData } : {}),
         ],
       );
@@ -472,11 +487,6 @@ export function registerInvoices(r: Router) {
       }
 
       // 5. Insert payments
-      const activeShift = await q.one<{ id: string }>(
-        "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
-        [tenantId, ctx.user!.id],
-      );
-
       for (const p of paymentsInput) {
         const amt = V.int(p.amountMinor, 'Payment amount', { min: 1 });
         const rawMethod = (p.method ?? p.mode ?? 'cash').toLowerCase();
@@ -502,6 +512,18 @@ export function registerInvoices(r: Router) {
            VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, counter],
         );
+
+        if (method === 'card' && p.reference) {
+          const rrnMatch = p.reference.match(/RRN:([^\s|]+)/i);
+          if (rrnMatch && rrnMatch[1]) {
+            await q.exec(
+              `UPDATE terminal_transactions
+               SET invoice_id = ?
+               WHERE tenant_id = ? AND (provider_ref_no = ? OR provider_tx_id = ?) AND invoice_id IS NULL`,
+              [invoiceId, tenantId, rrnMatch[1], rrnMatch[1]],
+            );
+          }
+        }
       }
 
       // 6. Customer loyalty points calculation & update based on shop's custom rule

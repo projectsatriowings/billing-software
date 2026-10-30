@@ -68,6 +68,18 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
     setInstructions(null);
   }, [branchId, counter]);
 
+  useEffect(() => {
+    const handleBillCompleted = () => {
+      setActiveTx(null);
+      setInstructions(null);
+      setStandaloneRrn('');
+      setStandaloneLast4('');
+      setStandaloneAuthCode('');
+    };
+    window.addEventListener('bill_completed', handleBillCompleted);
+    return () => window.removeEventListener('bill_completed', handleBillCompleted);
+  }, []);
+
   // Auto-polling for in-flight integrated transaction
   useEffect(() => {
     if (!activeTx || activeTx.status !== 'processing') return;

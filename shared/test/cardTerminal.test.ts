@@ -111,7 +111,7 @@ describe('Universal Payment Engine & Card Terminal Integration', () => {
         metadata: {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
+      } as any,
       decryptedSecrets: {},
     });
 
@@ -172,3 +172,4 @@ describe('Universal Payment Engine & Card Terminal Integration', () => {
     assert.equal((paytm as any).normalizeCardNetwork('UNKNOWN'), 'OTHER');
   });
 });
+

@@ -474,19 +474,22 @@ export function registerCreditNotes(r: Router) {
       const todayStr = new Date().toISOString().slice(0, 10);
 
       // 8. Insert credit note invoice
+      const cnCustName = origInv.customer_name || origInv.customerName || origInv.party_name || origInv.partyName || null;
+      const cnCustPhone = origInv.customer_phone || origInv.customerPhone || origInv.party_phone || origInv.partyPhone || null;
+
       await q.exec(
         `INSERT INTO invoices (
           id, tenant_id, client_id, number, kind, status, bdate, party_id,
-          customer_name, customer_phone, place_state, intra,
+          customer_name, customer_phone, party_name, party_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
-          round_off_minor, total_minor, paid_minor, balance_minor,
+          round_off_minor, rounding_minor, total_minor, paid_minor, balance_minor,
           advance_amount_minor, refund_amount_minor, refund_mode, refund_reference,
           rule_version, calc, share_token, idempotency_key, note, linked_invoice_id, created_by, created_at
         ) VALUES (
           ?, ?, ?, ?, 'credit_note', 'posted', ?, ?,
-          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
           ?, 0, ?, ?, ?, ?,
-          ?, ?, 0, 0,
+          ?, ?, ?, 0, 0,
           ?, ?, ?, ?,
           '1.0', ?::jsonb, ?, ?, ?, ?, ?, NOW()
         )`,
@@ -497,8 +500,10 @@ export function registerCreditNotes(r: Router) {
           assignedNumber,
           todayStr,
           partyId || null,
-          origInv.customer_name || origInv.customerName || null,
-          origInv.customer_phone || origInv.customerPhone || null,
+          cnCustName,
+          cnCustPhone,
+          cnCustName,
+          cnCustPhone,
           origInv.place_state || origInv.placeState || '33',
           isIntraState,
           calculated.taxableTotalMinor,
@@ -506,6 +511,7 @@ export function registerCreditNotes(r: Router) {
           calculated.cgstMinor,
           calculated.sgstMinor,
           calculated.igstMinor,
+          calculated.roundOffMinor,
           calculated.roundOffMinor,
           calculated.totalCreditMinor,
           settlement.advanceAmountMinor,
