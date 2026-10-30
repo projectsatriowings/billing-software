@@ -43,6 +43,7 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
   const [standaloneLast4, setStandaloneLast4] = useState('');
   const [standaloneAuthCode, setStandaloneAuthCode] = useState('');
   const [isConfirmingStandalone, setIsConfirmingStandalone] = useState(false);
+  const [manualOverrideMode, setManualOverrideMode] = useState<'integrated' | 'standalone' | null>(null);
 
   // Fetch active terminal for counter
   const loadActiveTerminal = async () => {
@@ -272,7 +273,15 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
     }
   };
 
-  const isIntegrated = terminal && terminal.connectionMode === 'integrated';
+  // If the terminal has no MID/TID configured (and is not mock), it cannot connect via API.
+  // Fall back gracefully to standalone so the cashier is never blocked!
+  const hasApiCredentials = terminal?.provider === 'mock' || !!(terminal?.merchantId && terminal?.terminalId);
+  const autoMode = (terminal?.connectionMode === 'integrated' && !hasApiCredentials)
+    ? 'standalone'
+    : (terminal?.connectionMode || 'standalone');
+
+  const effectiveMode = manualOverrideMode || autoMode;
+  const isIntegrated = effectiveMode === 'integrated';
 
   return (
     <div style={{
@@ -283,6 +292,47 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
       marginTop: '0.85rem',
       boxShadow: '0 4px 16px rgba(109, 74, 255, 0.06)',
     }}>
+      {/* Informational banner when operating in standalone fallback */}
+      {terminal?.connectionMode === 'integrated' && !hasApiCredentials && effectiveMode === 'standalone' && (
+        <div style={{
+          background: '#fefce8',
+          border: '1px solid #fde047',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          marginBottom: '0.85rem',
+          fontSize: '0.78rem',
+          color: '#854d0e',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+        }}>
+          <span>
+            ℹ️ No Merchant ID / TID configured for this terminal. Operating in <strong>Standalone Slip mode</strong>. Enter the slip RRN below to complete the bill.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setManualOverrideMode('integrated');
+              setActiveTx(null);
+            }}
+            style={{
+              background: '#fef08a',
+              border: '1px solid #ca8a04',
+              color: '#854d0e',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Try Integrated ⚡
+          </button>
+        </div>
+      )}
+
       {/* Header with Terminal Identity & Connection Mode */}
       <div style={{
         display: 'flex',
@@ -335,10 +385,38 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
           </div>
         </div>
 
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600 }}>Amount Due</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>
-            ₹{(payableMinor / 100).toFixed(2)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {terminal?.connectionMode === 'integrated' && (
+            <button
+              type="button"
+              onClick={() => {
+                setManualOverrideMode(isIntegrated ? 'standalone' : 'integrated');
+                setActiveTx(null);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                borderRadius: '8px',
+                border: isIntegrated ? '1px solid #cbd5e1' : '1px solid #93c5fd',
+                background: isIntegrated ? '#f8fafc' : '#eff6ff',
+                color: isIntegrated ? '#475569' : '#1d4ed8',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+              title="Toggle between automatic card machine and manual swipe slip RRN"
+            >
+              <span>{isIntegrated ? '📠 Switch to Standalone' : '⚡ Switch to Integrated'}</span>
+            </button>
+          )}
+
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600 }}>Amount Due</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>
+              ₹{(payableMinor / 100).toFixed(2)}
+            </div>
           </div>
         </div>
       </div>
@@ -356,7 +434,7 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
               textAlign: 'center',
             }}>
               <p style={{ fontSize: '0.86rem', color: '#475569', margin: '0 0 1rem 0' }}>
-                Click below to send the exact payable amount (<strong>₹{(payableMinor / 100).toFixed(2)}</strong>) to <strong>{terminal.name}</strong>.
+                Click below to send the exact payable amount (<strong>₹{(payableMinor / 100).toFixed(2)}</strong>) to <strong>{terminal?.name || 'Card Terminal'}</strong>.
               </p>
 
               <button
@@ -544,22 +622,44 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
               <p style={{ fontSize: '0.82rem', color: '#b91c1c', margin: '0 0 1rem 0' }}>
                 {activeTx.errorReason || 'Card declined or session timed out on machine.'}
               </p>
-              <button
-                type="button"
-                onClick={handleInitiatePayment}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                }}
-              >
-                Retry on Card Machine
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleInitiatePayment}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Retry on Card Machine
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualOverrideMode('standalone');
+                    setActiveTx(null);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    background: '#ffffff',
+                    color: '#334155',
+                    border: '1.5px solid #cbd5e1',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📠 Switch to Standalone Slip (Manual RRN)
+                </button>
+              </div>
             </div>
           )}
         </div>

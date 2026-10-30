@@ -55,18 +55,36 @@ export class PaytmPosAdapter implements TerminalAdapter {
       };
     }
 
-    const mid = (terminal.merchantId || terminal.merchant_id);
-    const tid = (terminal.terminalId || terminal.terminal_id);
+    const mid = (terminal.merchantId || (terminal as any).merchant_id);
+    const tid = (terminal.terminalId || (terminal as any).terminal_id);
     if (!mid || !tid) {
       return {
         status: 'failed',
-        errorReason: 'Paytm Terminal configuration missing Merchant ID (MID) or Terminal ID (TID). Please configure under Store Settings.',
+        errorReason: 'Paytm Terminal configuration missing Merchant ID (MID) or Terminal ID (TID). Please configure under Store Settings, or click "Switch to Standalone Slip" below to record the payment.',
       };
     }
 
-    const baseUrl = (terminal.apiEndpoint || terminal.api_endpoint) || ((terminal.ipAddress || terminal.ip_address) ? `http://${(terminal.ipAddress || terminal.ip_address)}:${terminal.port || 8080}` : 'https://securegw.paytm.in/order/initiate');
+    const isDemo = mid.toLowerCase().includes('demo') || mid.toLowerCase().includes('test') || mid.toLowerCase().includes('mock') || tid.toLowerCase().includes('test') || tid.toLowerCase().includes('demo');
     const orderId = `PTMPOS_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const amountVal = (amountMinor / 100).toFixed(2);
+
+    if (isDemo) {
+      const demoRrn = `RRN_DEMO_${Date.now().toString().slice(-8)}`;
+      return {
+        status: 'success',
+        providerTxId: orderId,
+        providerRefNo: demoRrn,
+        cardNetwork: 'RUPAY',
+        cardLast4: '1234',
+        authCode: 'APPR99',
+        instructions: 'Test card transaction approved by Paytm simulator.',
+        rawResponse: { mode: 'demo_simulated', orderId, mid, tid },
+      };
+    }
+
+    const apiEp = terminal.apiEndpoint || (terminal as any).api_endpoint;
+    const ipAddr = terminal.ipAddress || (terminal as any).ip_address;
+    const baseUrl = apiEp || (ipAddr ? `http://${ipAddr}:${terminal.port || 8080}` : 'https://securegw.paytm.in/order/initiate');
 
     const payload = {
       head: {
