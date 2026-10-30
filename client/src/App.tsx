@@ -71,6 +71,9 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import type { Branch } from '../../shared/types.ts';
+import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
+import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
 import {
   TagIcon,
   PackageIcon,
@@ -602,6 +605,8 @@ export function App() {
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [isVerifyingQr, setIsVerifyingQr] = useState(false);
   const [upiManualRef, setUpiManualRef] = useState('');
+  const [paymentCardRef, setPaymentCardRef] = useState<string>('');
+  const [branches, setBranches] = useState<Branch[]>([]);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const customerMobileInputRef = useRef<HTMLInputElement>(null);
   const customerNameInputRef = useRef<HTMLInputElement>(null);
@@ -1214,6 +1219,7 @@ export function App() {
     loadItems();
     loadCategories();
     loadParties();
+    loadBranches();
     loadInvoices();
     if (can(user.role as any, 'purchases')) {
       loadPurchases();
@@ -1250,6 +1256,15 @@ export function App() {
       setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      const res = await api<{ branches: Branch[] }>('/api/branches');
+      setBranches(res.branches || []);
+    } catch {
+      // non-fatal
     }
   };
 
@@ -2698,7 +2713,7 @@ export function App() {
         if (finalPayableMinor > 0) {
           const upiRef = (selectedPayMode === 'upi' || selectedPayMode === 'bank')
             ? (activeQrAttempt?.providerPaymentId || (upiManualRef.trim() ? upiManualRef.trim() : undefined))
-            : undefined;
+            : (selectedPayMode === 'card' ? (paymentCardRef || 'CARD_PAYMENT') : undefined);
           paymentsPayload = [{
             method: selectedPayMode,
             amountMinor: Math.round(finalPayableMinor),
@@ -2748,6 +2763,7 @@ export function App() {
       });
 
       setRedeemPoints(false);
+      setPaymentCardRef('');
 
       if (selectedPayMode === 'upi' && activeQrAttempt && activeQrAttempt.status !== 'paid') {
         if (posPaymentConfig?.qrType === 'static' || !posPaymentConfig?.rzpEnabled) {
@@ -6890,6 +6906,19 @@ export function App() {
                           ℹ️ Customer transfers amount via Net Banking / IMPS / NEFT and provides UTR. Cashier verifies bank deposit before completing sale.
                         </div>
                       </div>
+                    )}
+
+                    {/* CARD PAYMENT TERMINAL (INTEGRATED & STANDALONE EDC) */}
+                    {selectedPayMode === 'card' && cart.length > 0 && (
+                      <PosCardCheckoutPanel
+                        branchId={branches[0]?.id || 'b_main'}
+                        payableMinor={finalPayableMinor}
+                        cashierName={user?.name}
+                        onPaymentSuccess={(details) => {
+                          setPaymentCardRef(details.reference);
+                        }}
+                        showToast={showToast}
+                      />
                     )}
 
                     {/* SPLIT TENDER ASSISTANT CARD (MULTI-TENDER: HALF UPI / HALF CASH / CUSTOM) */}
@@ -11593,62 +11622,13 @@ export function App() {
 
               {/* Subtab 6: Card Terminal */}
               {paySettingsSubTab === 'terminal' && (
-                <div style={{ maxWidth: '640px' }}>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
-                    Card Payment Terminal (Swipe / Tap)
-                  </h4>
-                  <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Configure external EDC card machine or integrated POS terminal for credit and debit cards.
-                  </p>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.9rem 1.15rem',
-                    background: '#faf9ff',
-                    border: '1px solid #ede9fe',
-                    borderRadius: '12px',
-                    marginBottom: '1.25rem'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        Card Payment in POS Checkout
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Shows card tender option during billing
-                      </div>
-                    </div>
-                    <ToggleSwitch
-                      checked={payMethodsEnabled.includes('card')}
-                      disabled={user?.role === 'cashier'}
-                      onChange={() => {
-                        if (payMethodsEnabled.includes('card')) {
-                          setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== 'card'));
-                        } else {
-                          setPayMethodsEnabled([...payMethodsEnabled, 'card']);
-                        }
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{
-                      padding: '0.7rem 1.5rem',
-                      fontSize: '0.88rem',
-                      fontWeight: 700,
-                      background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => handleSavePaymentSettings()}
-                  >
-                    Save Card Settings
-                  </button>
-                </div>
+                <TerminalManagementTab
+                  userRole={user?.role}
+                  payMethodsEnabled={payMethodsEnabled}
+                  setPayMethodsEnabled={setPayMethodsEnabled}
+                  onSavePaymentSettings={handleSavePaymentSettings}
+                  showToast={showToast}
+                />
               )}
             </div>
 
