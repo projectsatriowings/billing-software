@@ -28706,7 +28706,7 @@ select.expense-input-control {
 
 
 /* ==========================================================================
-   LUXURY POS COUNTER OPERATIONS & REGISTER LIVE SUITE
+   BENTO POS REGISTER & COUNTER OPERATIONS (TRUE BENTO LAYOUT)
    ========================================================================== */
 
 .bento-scanner-card {
@@ -28716,265 +28716,159 @@ select.expense-input-control {
 .bento-register-card {
   display: flex !important;
   flex-direction: column !important;
-  border-radius: 16px !important;
+  border-radius: 14px !important;
   background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 3px 14px -2px rgba(15, 23, 42, 0.04), 0 1px 4px -1px rgba(15, 23, 42, 0.02) !important;
   overflow: hidden !important;
-  transition: all 0.25s ease !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
 }
 
-.ops-card-header {
+.bento-register-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 6px 18px -4px rgba(15, 23, 42, 0.06), 0 2px 6px -2px rgba(15, 23, 42, 0.03) !important;
+}
+
+.bento-register-body {
   padding: 0.85rem 1rem !important;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-  color: #ffffff !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+  background: #ffffff !important;
+}
+
+/* Bento Hero Compartment: Sales & Bills */
+.bento-hero-metric {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 0.95rem !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 0.5rem !important;
-}
-
-.ops-header-left {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.65rem !important;
-  min-width: 0 !important;
-}
-
-.ops-terminal-badge {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 5px !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  padding: 0.2rem 0.55rem !important;
-  border-radius: 6px !important;
-  font-size: 0.72rem !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.04em !important;
-  color: #38bdf8 !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-}
-
-.ops-pulse-dot {
-  width: 7px !important;
-  height: 7px !important;
-  border-radius: 50% !important;
-  background: #10b981 !important;
-  box-shadow: 0 0 8px #10b981 !important;
-  animation: ops-pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
-}
-
-@keyframes ops-pulse-ring {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-}
-
-.ops-header-meta {
-  display: flex !important;
-  flex-direction: column !important;
-  min-width: 0 !important;
-}
-
-.ops-header-title {
-  font-size: 0.85rem !important;
-  font-weight: 800 !important;
-  color: #f8fafc !important;
-  letter-spacing: -0.01em !important;
-  line-height: 1.2 !important;
-}
-
-.ops-header-sub {
-  font-size: 0.68rem !important;
-  color: #94a3b8 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-.ops-status-tag {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 3px !important;
-  background: rgba(16, 185, 129, 0.15) !important;
-  border: 1px solid rgba(16, 185, 129, 0.4) !important;
-  color: #34d399 !important;
-  padding: 0.2rem 0.5rem !important;
-  border-radius: 9999px !important;
-  font-size: 0.64rem !important;
-  font-weight: 850 !important;
-  letter-spacing: 0.05em !important;
-}
-
-.ops-live-icon {
-  font-size: 0.72rem !important;
-}
-
-/* Body & Content */
-.bento-register-body {
-  padding: 0.95rem 1rem !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0.95rem !important;
-  background: #ffffff !important;
-}
-
-/* 2-Column Metrics Hub */
-.ops-metrics-grid {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 0.65rem !important;
-}
-
-.ops-metric-card {
-  padding: 0.65rem 0.75rem !important;
-  border-radius: 11px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.65rem !important;
-  transition: all 0.2s ease !important;
   box-sizing: border-box !important;
 }
 
-.ops-metric-card.bills-card {
-  background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%) !important;
-  border: 1.2px solid #bae6fd !important;
-}
-
-.ops-metric-card.revenue-card {
-  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%) !important;
-  border: 1.2px solid #a7f3d0 !important;
-}
-
-.ops-metric-icon-wrap {
-  width: 34px !important;
-  height: 34px !important;
-  border-radius: 9px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-shrink: 0 !important;
-}
-
-.ops-metric-icon-wrap.bills-icon {
-  background: #0284c7 !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25) !important;
-}
-
-.ops-metric-icon-wrap.revenue-icon {
-  background: #059669 !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25) !important;
-}
-
-.ops-metric-details {
+.bento-hero-cell {
   display: flex !important;
   flex-direction: column !important;
+  gap: 2px !important;
   min-width: 0 !important;
 }
 
-.ops-metric-label {
-  font-size: 0.64rem !important;
+.bento-cell-label {
+  font-size: 0.65rem !important;
   font-weight: 750 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em !important;
-  color: #475569 !important;
+  color: #64748b !important;
 }
 
-.ops-metric-val-row {
-  display: flex !important;
-  align-items: baseline !important;
-  gap: 3px !important;
-}
-
-.ops-metric-value {
+.bento-cell-val {
   font-size: 1.05rem !important;
   font-weight: 850 !important;
   color: #0f172a !important;
   line-height: 1.2 !important;
 }
 
-.ops-metric-value.text-emerald {
-  color: #047857 !important;
-}
-
-.ops-metric-unit {
-  font-size: 0.68rem !important;
-  color: #64748b !important;
+.bento-cell-unit {
+  font-size: 0.72rem !important;
   font-weight: 600 !important;
+  color: #64748b !important;
 }
 
-/* 6 Tactile Action Tiles Grid (3 x 2) */
-.ops-tiles-grid {
+.bento-hero-sep {
+  width: 1px !important;
+  height: 32px !important;
+  background: #e2e8f0 !important;
+  margin: 0 0.5rem !important;
+}
+
+/* Bento 2-Column Action Tiles Grid */
+.bento-action-grid {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 0.6rem !important;
+  gap: 0.55rem !important;
 }
 
-.ops-action-tile {
+.bento-action-tile {
   display: flex !important;
   align-items: center !important;
-  gap: 0.65rem !important;
+  gap: 0.6rem !important;
   padding: 0.65rem 0.75rem !important;
-  border-radius: 12px !important;
+  border-radius: 11px !important;
   background: #ffffff !important;
-  border: 1.5px solid #e2e8f0 !important;
+  border: 1px solid #e2e8f0 !important;
   cursor: pointer !important;
   text-align: left !important;
   position: relative !important;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: all 0.15s ease !important;
   box-sizing: border-box !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
 }
 
-.ops-action-tile:hover:not(:disabled) {
-  transform: translateY(-2px) !important;
-  border-color: #cbd5e1 !important;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+.bento-action-tile:hover:not(:disabled) {
+  border-color: #c7d2fe !important;
+  background: #fdfcff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.08) !important;
 }
 
-.ops-action-tile:active:not(:disabled) {
+.bento-action-tile:active:not(:disabled) {
   transform: scale(0.98) !important;
 }
 
-.ops-action-tile:disabled {
+.bento-action-tile:disabled {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
   transform: none !important;
-  box-shadow: none !important;
 }
 
-/* Tile Icon Wrappers */
-.ops-tile-icon-badge {
-  width: 32px !important;
-  height: 32px !important;
+/* Bento Icon Badge (Brand Purple Theme matching Barcode Scanner) */
+.bento-tile-icon {
+  width: 30px !important;
+  height: 30px !important;
   border-radius: 8px !important;
+  background: #f5f3ff !important;
+  border: 1px solid #ede9fe !important;
+  color: #6366f1 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   flex-shrink: 0 !important;
-  transition: all 0.2s ease !important;
+  transition: all 0.15s ease !important;
 }
 
-/* Tile Text Info */
-.ops-tile-info {
+.bento-action-tile:hover:not(:disabled) .bento-tile-icon {
+  background: #6366f1 !important;
+  border-color: #6366f1 !important;
+  color: #ffffff !important;
+}
+
+.bento-action-tile.active-scanner .bento-tile-icon {
+  background: #ecfdf5 !important;
+  border-color: #d1fae5 !important;
+  color: #10b981 !important;
+}
+
+.bento-tile-texts {
   display: flex !important;
   flex-direction: column !important;
   min-width: 0 !important;
   gap: 1px !important;
 }
 
-.ops-tile-title {
+.bento-tile-heading {
   font-size: 0.78rem !important;
-  font-weight: 800 !important;
-  color: #1e293b !important;
+  font-weight: 750 !important;
+  color: #0f172a !important;
   letter-spacing: -0.01em !important;
   line-height: 1.2 !important;
 }
 
-.ops-tile-sub {
+.bento-tile-caption {
   font-size: 0.65rem !important;
   color: #64748b !important;
   font-weight: 500 !important;
@@ -28983,109 +28877,17 @@ select.expense-input-control {
   text-overflow: ellipsis !important;
 }
 
-/* Theme 1: Hold Order (Violet) */
-.ops-tile-hold {
-  background: #faf5ff !important;
-  border-color: #e9d5ff !important;
-}
-.ops-tile-hold:hover:not(:disabled) {
-  border-color: #c084fc !important;
-  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.15) !important;
-}
-.ops-tile-hold .ops-tile-icon-badge {
-  background: #9333ea !important;
-  color: #ffffff !important;
-}
-
-/* Theme 2: Parked Orders (Amber) */
-.ops-tile-parked {
-  background: #fffbeb !important;
-  border-color: #fde68a !important;
-}
-.ops-tile-parked:hover:not(:disabled) {
-  border-color: #f59e0b !important;
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.15) !important;
-}
-.ops-tile-parked .ops-tile-icon-badge {
-  background: #d97706 !important;
-  color: #ffffff !important;
-}
-
-/* Theme 3: Custom Charge (Emerald) */
-.ops-tile-charge {
-  background: #f0fdf4 !important;
-  border-color: #bbf7d0 !important;
-}
-.ops-tile-charge:hover:not(:disabled) {
-  border-color: #4ade80 !important;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.15) !important;
-}
-.ops-tile-charge .ops-tile-icon-badge {
-  background: #16a34a !important;
-  color: #ffffff !important;
-}
-
-/* Theme 4: Reprint Receipt (Sky/Blue) */
-.ops-tile-reprint {
-  background: #f0f9ff !important;
-  border-color: #bae6fd !important;
-}
-.ops-tile-reprint:hover:not(:disabled) {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.15) !important;
-}
-.ops-tile-reprint .ops-tile-icon-badge {
-  background: #0284c7 !important;
-  color: #ffffff !important;
-}
-
-/* Theme 5: Discount (Rose) */
-.ops-tile-discount {
-  background: #fff1f2 !important;
-  border-color: #fecdd3 !important;
-}
-.ops-tile-discount:hover:not(:disabled) {
-  border-color: #fb7185 !important;
-  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.15) !important;
-}
-.ops-tile-discount .ops-tile-icon-badge {
-  background: #e11d48 !important;
-  color: #ffffff !important;
-}
-
-/* Theme 6: Mobile Scanner (Cyan) */
-.ops-tile-mobile {
-  background: #ecfeff !important;
-  border-color: #a5f3fc !important;
-}
-.ops-tile-mobile:hover:not(:disabled) {
-  border-color: #22d3ee !important;
-  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.15) !important;
-}
-.ops-tile-mobile .ops-tile-icon-badge {
-  background: #0891b2 !important;
-  color: #ffffff !important;
-}
-.ops-tile-mobile.connected {
-  border-color: #10b981 !important;
-  background: #ecfdf5 !important;
-}
-.ops-tile-mobile.connected .ops-tile-icon-badge {
-  background: #059669 !important;
-}
-
-/* Floating Notification Count Pill */
-.ops-tile-badge {
+.bento-badge-pill {
   position: absolute !important;
-  top: -6px !important;
-  right: -6px !important;
+  top: -5px !important;
+  right: -5px !important;
   background: #ef4444 !important;
   color: #ffffff !important;
   font-size: 0.62rem !important;
   font-weight: 850 !important;
-  padding: 0.15rem 0.45rem !important;
+  padding: 0.12rem 0.45rem !important;
   border-radius: 9999px !important;
-  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.35) !important;
   border: 1.5px solid #ffffff !important;
   line-height: 1 !important;
 }
