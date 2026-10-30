@@ -14481,14 +14481,26 @@ body {
 }
 
 .cust-chip-icon {
-  font-size: 1.05rem;
-  line-height: 1;
-  display: inline-block;
-  transition: transform 0.2s ease;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #ede9fe;
+  color: #6366f1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cust-chip-icon svg {
+  display: block;
 }
 
 .bento-billing-customer-chip:hover .cust-chip-icon {
-  transform: scale(1.15);
+  background: #6366f1;
+  color: #ffffff;
+  transform: scale(1.06);
 }
 
 .cust-chip-label {

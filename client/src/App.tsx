@@ -5927,7 +5927,13 @@ export function App() {
                     onClick={() => setShowPosLoyaltyModal(true)}
                     title={`Customer Loyalty Active: Earn ${shopPointsPer100} pts per ₹100 spent (1 pt = ${formatRupees(shopPointValMinor)}). Click to view or adjust scheme.`}
                   >
-                    <span style={{ fontSize: '0.9rem' }}>🎁</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                      <rect x="2" y="7" width="20" height="5"></rect>
+                      <line x1="12" y1="22" x2="12" y2="7"></line>
+                      <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                      <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                    </svg>
                     <span>Loyalty: <strong>{shopPointsPer100} pts</strong> / ₹100</span>
                     <span style={{ fontSize: '0.68rem', background: '#d946ef', color: '#fff', padding: '1px 6px', borderRadius: '10px' }}>Active</span>
                   </div>
@@ -6328,8 +6334,12 @@ export function App() {
 
                       {pointsDiscountMinor > 0 && (
                         <div className="bento-summary-row discount-row" style={{ background: '#ecfdf5', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
-                          <span className="summary-label" style={{ color: '#047857', fontWeight: 700 }}>
-                            🪙 Points Redeemed ({pointsActuallyRedeemed} pts)
+                          <span className="summary-label" style={{ color: '#047857', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="8" r="7"></circle>
+                              <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                            </svg>
+                            Points Redeemed ({pointsActuallyRedeemed} pts)
                           </span>
                           <span className="summary-val mono text-success">-{formatRupees(pointsDiscountMinor)}</span>
                         </div>
@@ -6348,7 +6358,13 @@ export function App() {
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '0.85rem' }}>🎁</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86198f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                              <rect x="2" y="7" width="20" height="5"></rect>
+                              <line x1="12" y1="22" x2="12" y2="7"></line>
+                              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                            </svg>
                             <span className="summary-label" style={{ color: '#86198f', fontWeight: 700 }}>
                               Loyalty Points on Bill
                             </span>
@@ -6394,7 +6410,20 @@ export function App() {
                     {/* Compact Customer Status in Billing Terminal */}
                     <div className="bento-billing-customer-chip">
                       <div className="cust-chip-info">
-                        <span className="cust-chip-icon">{selectedParty ? '👤' : '🛒'}</span>
+                        <span className="cust-chip-icon">
+                          {selectedParty ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="9" cy="21" r="1"></circle>
+                              <circle cx="20" cy="21" r="1"></circle>
+                              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                            </svg>
+                          )}
+                        </span>
                         <span className="cust-chip-label">Customer:</span>
                         {selectedParty ? (
                           <>
@@ -6419,6 +6448,9 @@ export function App() {
                               fontSize: '0.72rem',
                               fontWeight: 700,
                               cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                             }}
                             onClick={() => {
                               setSelectedPartyId('');
@@ -6427,7 +6459,11 @@ export function App() {
                             }}
                             title="Reset to Walk-in Customer"
                           >
-                            ✕ Walk-in
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                            <span>Walk-in</span>
                           </button>
                         )}
                         <button
@@ -6435,8 +6471,26 @@ export function App() {
                           className="cust-chip-focus-btn"
                           onClick={() => setShowCustomerPickerModal(true)}
                           title="Select customer or enter phone number (F3)"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                         >
-                          {selectedParty ? 'Change Customer' : '+ Select Customer'}
+                          {selectedParty ? (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="8.5" cy="7" r="4"></circle>
+                                <polyline points="17 11 19 13 23 9"></polyline>
+                              </svg>
+                              <span>Change Customer</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                              </svg>
+                              <span>Select Customer</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -6661,7 +6715,14 @@ export function App() {
                               title="Click to launch customer display on 2nd monitor"
                             >
                               <span className={`pulse-dot ${isCfdConnected ? 'active' : ''}`}></span>
-                              <span>{isCfdConnected ? '🖥️ Live on 2nd Monitor' : '🖥️ Launch on 2nd Monitor'}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <span>{isCfdConnected ? 'Live on 2nd Monitor' : 'Launch on 2nd Monitor'}</span>
+                              </span>
                             </button>
                           </div>
                         </div>
@@ -6696,7 +6757,16 @@ export function App() {
                                   disabled={isGeneratingQr}
                                   onClick={handleGenerateDynamicQr}
                                 >
-                                  {isGeneratingQr ? 'Generating QR...' : `⚡ Generate Dynamic QR (${posPaymentConfig.provider === 'paytm' ? 'Paytm' : posPaymentConfig.provider === 'phonepe' ? 'PhonePe' : 'Razorpay'} - ₹${(finalPayableMinor / 100).toFixed(2)})`}
+                                  {isGeneratingQr ? (
+                                    'Generating QR...'
+                                  ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                      </svg>
+                                      <span>Generate Dynamic QR ({posPaymentConfig.provider === 'paytm' ? 'Paytm' : posPaymentConfig.provider === 'phonepe' ? 'PhonePe' : 'Razorpay'} - ₹{(finalPayableMinor / 100).toFixed(2)})</span>
+                                    </span>
+                                  )}
                                 </button>
                               </div>
                             ) : (
@@ -6728,23 +6798,40 @@ export function App() {
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
                                     <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Status:</span>
                                     {activeQrAttempt.status === 'paid' && (
-                                      <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
-                                        ✅ Paid & Verified
+                                      <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        Paid & Verified
                                       </span>
                                     )}
                                     {activeQrAttempt.status === 'pending' && (
-                                      <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
-                                        ⏳ Waiting for Payment...
+                                      <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#854d0e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <circle cx="12" cy="12" r="10"></circle>
+                                          <polyline points="12 6 12 12 16 14"></polyline>
+                                        </svg>
+                                        Waiting for Payment...
                                       </span>
                                     )}
                                     {activeQrAttempt.status === 'expired' && (
-                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
-                                        ⚠️ QR Expired
+                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#991b1b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                          <line x1="12" y1="9" x2="12" y2="13"></line>
+                                          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                        </svg>
+                                        QR Expired
                                       </span>
                                     )}
                                     {activeQrAttempt.status === 'failed' && (
-                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
-                                        ❌ Payment Failed
+                                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#991b1b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <circle cx="12" cy="12" r="10"></circle>
+                                          <line x1="15" y1="9" x2="9" y2="15"></line>
+                                          <line x1="9" y1="9" x2="15" y2="15"></line>
+                                        </svg>
+                                        Payment Failed
                                       </span>
                                     )}
                                   </div>
@@ -6771,7 +6858,18 @@ export function App() {
                                         cursor: 'pointer',
                                       }}
                                     >
-                                      {isVerifyingQr ? 'Checking...' : '🔄 Check Status'}
+                                      {isVerifyingQr ? (
+                                        'Checking...'
+                                      ) : (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                            <polyline points="1 20 1 14 7 14"></polyline>
+                                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                          </svg>
+                                          <span>Check Status</span>
+                                        </span>
+                                      )}
                                     </button>
                                     {(activeQrAttempt.status === 'expired' || activeQrAttempt.status === 'failed') && (
                                       <button
@@ -6789,7 +6887,12 @@ export function App() {
                                           cursor: 'pointer',
                                         }}
                                       >
-                                        ⚡ New QR
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                          </svg>
+                                          <span>New QR</span>
+                                        </span>
                                       </button>
                                     )}
                                   </div>
@@ -6843,13 +6946,26 @@ export function App() {
                                   }}
                                   title="Edit Shop UPI VPA"
                                 >
-                                  ✏️ Edit VPA
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    <span>Edit VPA</span>
+                                  </span>
                                 </button>
                               </div>
 
                               {/* Strict safety rule: Manual verification notice */}
                               <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '6px', padding: '6px 8px', marginTop: '6px', fontSize: '0.74rem', color: '#92400e', lineHeight: 1.3 }}>
-                                <strong>⚠️ Manual Verification:</strong> Verify receipt in your UPI/Bank app. Do not mark paid based solely on customer screenshots.
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-1px' }}>
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                  </svg>
+                                  <strong>Manual Verification:</strong>
+                                </span> Verify receipt in your UPI/Bank app. Do not mark paid based solely on customer screenshots.
                               </div>
 
                               <div style={{ marginTop: '6px', display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -6889,9 +7005,15 @@ export function App() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: '1.15rem'
                             }}>
-                              🏦
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="3" y1="21" x2="21" y2="21"></line>
+                                <line x1="6" y1="18" x2="6" y2="11"></line>
+                                <line x1="10" y1="18" x2="10" y2="11"></line>
+                                <line x1="14" y1="18" x2="14" y2="11"></line>
+                                <line x1="18" y1="18" x2="18" y2="11"></line>
+                                <polygon points="12 2 20 7 4 7"></polygon>
+                              </svg>
                             </div>
                             <div>
                               <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)' }}>
@@ -6942,7 +7064,13 @@ export function App() {
                                 boxShadow: '0 2px 6px rgba(109, 74, 255, 0.25)'
                               }}
                             >
-                              📋 Copy Details
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copy Details</span>
+                              </span>
                             </button>
                           </div>
 
@@ -7527,8 +7655,13 @@ export function App() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '1.25rem' }}>👤</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#ede9fe', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </div>
                       <div>
                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Select Customer</h3>
                         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Search customer by name or phone (Press Esc to close)</span>
@@ -7537,9 +7670,13 @@ export function App() {
                     <button
                       type="button"
                       onClick={() => setShowCustomerPickerModal(false)}
-                      style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title="Close"
                     >
-                      ✕
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
                     </button>
                   </div>
 
@@ -7593,14 +7730,29 @@ export function App() {
                       >
                         <div>
                           <div style={{ fontWeight: 650, fontSize: '0.88rem', color: '#0f172a' }}>{p.name}</div>
-                          <div style={{ fontSize: '0.76rem', color: '#64748b' }}>📱 {p.phone || 'No phone'}</div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                            </svg>
+                            <span>{p.phone || 'No phone'}</span>
+                          </div>
                         </div>
                         <button
                           type="button"
                           className="btn btn-secondary"
-                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem' }}
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
-                          {selectedPartyId === p.id ? 'Selected ✓' : 'Select'}
+                          {selectedPartyId === p.id ? (
+                            <>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                              <span>Selected</span>
+                            </>
+                          ) : (
+                            <span>Select</span>
+                          )}
                         </button>
                       </div>
                     ))}
