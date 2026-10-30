@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   api,
   setToken,
@@ -7795,7 +7796,7 @@ export function App() {
             )}
 
             {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
-            {showProductCatalogDrawer && (
+            {showProductCatalogDrawer && createPortal(
               <div className="bento-catalog-drawer-overlay" onClick={() => setShowProductCatalogDrawer(false)}>
                 <div className="bento-catalog-drawer" onClick={(e) => e.stopPropagation()}>
                   {/* Drawer Header */}
@@ -8126,7 +8127,7 @@ export function App() {
                   </div>
                 </div>
               </div>
-            )}
+            , document.body)}
 
           </div>
         )}
