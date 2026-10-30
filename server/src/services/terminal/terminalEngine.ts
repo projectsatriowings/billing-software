@@ -74,7 +74,7 @@ export class TerminalEngine {
     if (terminalId) {
       return (
         (await db.one<CardTerminalRecord>(
-          'SELECT * FROM card_terminals WHERE id = ? AND tenant_id = ? AND active = TRUE',
+          'SELECT * FROM card_terminals WHERE id = ? AND tenant_id = ? AND active = TRUE AND (deleted_at IS NULL)',
           [terminalId, tenantId],
         )) || null
       );
@@ -83,7 +83,7 @@ export class TerminalEngine {
     // Try exact branch + counter match
     if (counter) {
       const counterTerminal = await db.one<CardTerminalRecord>(
-        'SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND counter = ? AND active = TRUE ORDER BY updated_at DESC LIMIT 1',
+        'SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND counter = ? AND active = TRUE AND (deleted_at IS NULL) ORDER BY updated_at DESC LIMIT 1',
         [tenantId, branchId, counter],
       );
       if (counterTerminal) return counterTerminal;
@@ -91,7 +91,7 @@ export class TerminalEngine {
 
     // Try branch-wide default terminal (counter IS NULL or counter = '')
     const branchTerminal = await db.one<CardTerminalRecord>(
-      `SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND (counter IS NULL OR counter = '' OR counter = 'ALL') AND active = TRUE ORDER BY updated_at DESC LIMIT 1`,
+      `SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND (counter IS NULL OR counter = '' OR counter = 'ALL') AND active = TRUE AND (deleted_at IS NULL) ORDER BY updated_at DESC LIMIT 1`,
       [tenantId, branchId],
     );
     if (branchTerminal) return branchTerminal;
@@ -99,7 +99,7 @@ export class TerminalEngine {
     // Fallback: any active terminal in this branch
     return (
       (await db.one<CardTerminalRecord>(
-        'SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND active = TRUE ORDER BY updated_at DESC LIMIT 1',
+        'SELECT * FROM card_terminals WHERE tenant_id = ? AND branch_id = ? AND active = TRUE AND (deleted_at IS NULL) ORDER BY updated_at DESC LIMIT 1',
         [tenantId, branchId],
       )) || null
     );

@@ -46,6 +46,8 @@ export interface CardTerminalRecord {
   secretKeyEncrypted: string | null;
   secret_key_encrypted?: string | null;
   active: boolean;
+  deletedAt?: string | null;
+  deleted_at?: string | null;
   status: TerminalStatus;
   lastSeenAt: string | null;
   last_seen_at?: string | null;

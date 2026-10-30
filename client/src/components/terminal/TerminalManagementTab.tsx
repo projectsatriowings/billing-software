@@ -112,7 +112,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
   const openEditModal = (t: CardTerminal) => {
     setEditingId(t.id);
     setForm({
-      branchId: t.branchId,
+      branchId: t.branchId || (t as any).branch_id || branches[0]?.id || '',
       counter: t.counter || '',
       name: t.name,
       provider: t.provider,
@@ -132,7 +132,8 @@ export const TerminalManagementTab: React.FC<Props> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.branchId) {
+    const targetBranchId = form.branchId || branches[0]?.id || '';
+    if (!targetBranchId) {
       showToast('Please select a branch', 'error');
       return;
     }
@@ -144,7 +145,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
     setIsSaving(true);
     try {
       const payload: any = {
-        branchId: form.branchId,
+        branchId: targetBranchId,
         counter: form.counter.trim() || null,
         name: form.name.trim(),
         provider: form.provider,
@@ -666,7 +667,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                     Branch *
                   </label>
                   <select
-                    value={form.branchId}
+                    value={form.branchId || branches[0]?.id || ''}
                     onChange={(e) => setForm({ ...form, branchId: e.target.value })}
                     required
                     style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.84rem' }}

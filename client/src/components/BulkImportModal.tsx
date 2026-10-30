@@ -1259,8 +1259,14 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       barcode: r.barcode,
       barcodeType: r.barcodeType,
       category: r.category,
-      priceFormatted: r.sellingPrice ? `₹${parseFloat(r.sellingPrice).toFixed(2)}` : null,
-      priceMinor: r.sellingPrice ? Math.round(parseFloat(r.sellingPrice) * 100) : null,
+      priceFormatted: (() => {
+        const p = r.sellingPrice !== undefined && r.sellingPrice !== null && String(r.sellingPrice).trim() !== '' ? parseFloat(String(r.sellingPrice).replace(/[^0-9.-]/g, '')) : NaN;
+        return !isNaN(p) && p >= 0 ? `₹${p.toFixed(2)}` : null;
+      })(),
+      priceMinor: (() => {
+        const p = r.sellingPrice !== undefined && r.sellingPrice !== null && String(r.sellingPrice).trim() !== '' ? parseFloat(String(r.sellingPrice).replace(/[^0-9.-]/g, '')) : NaN;
+        return !isNaN(p) && p >= 0 ? Math.round(p * 100) : null;
+      })(),
       unit: r.unit,
       scannedInSession: r.scannedInSession,
     }));

@@ -1401,10 +1401,13 @@ export function ScanManufacturerBarcodeModal({
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
                         boxShadow: isSelected ? '0 4px 14px rgba(99, 102, 241, 0.12)' : '0 1px 2px rgba(0,0,0,0.02)',
-                        position: 'relative',
-                        overflow: 'hidden',
                         flexShrink: 0,
                         minHeight: '66px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        overflow: 'hidden',
                         boxSizing: 'border-box',
                       }}
                     >
@@ -1578,7 +1581,7 @@ export function ScanManufacturerBarcodeModal({
                         <strong style={{ color: '#0f172a' }}>{selectedTarget.category || 'Unassigned'}</strong>
                       </span>
 
-                      {selectedTarget.priceFormatted && (
+                      {selectedTarget.priceFormatted && !selectedTarget.priceFormatted.includes('NaN') && (
                         <span
                           style={{
                             fontSize: '0.78rem',
@@ -2151,7 +2154,7 @@ export function ScanManufacturerBarcodeModal({
                               flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '1rem',
+                              padding: '0.9rem 1.2rem',
                               textAlign: 'center',
                               color: '#f8fafc',
                               zIndex: 12,
@@ -2179,6 +2182,9 @@ export function ScanManufacturerBarcodeModal({
                             <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>
                               Camera Scanner Ready
                             </div>
+                            <p style={{ fontSize: '0.78rem', color: '#cbd5e1', margin: '0.2rem 0 0.6rem', maxWidth: '360px', lineHeight: 1.35 }}>
+                              Hold product packaging (e.g. Marie Gold biscuits) up to your webcam to automatically read and assign its manufacturer barcode.
+                            </p>
                             <button
                               id="scan-start-camera-feed-btn"
                               type="button"
