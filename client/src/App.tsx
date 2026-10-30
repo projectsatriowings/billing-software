@@ -75,6 +75,19 @@ import type { Branch } from '../../shared/types.ts';
 import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
 import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
 import {
+  CreditCardIcon,
+  BanknoteIcon,
+  QrCodeIcon,
+  LandmarkIcon,
+  BookUserIcon,
+  TerminalIcon,
+  ZapIcon,
+  PaytmIcon,
+  PhonePeIcon,
+  WhatsAppIcon,
+  AlertTriangleIcon,
+} from './components/terminal/PaymentIcons.tsx';
+import {
   TagIcon,
   PackageIcon,
   CheckCircleIcon,
@@ -10220,8 +10233,8 @@ export function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
-                      💳
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
+                      <CreditCardIcon size={20} />
                     </div>
                     <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
                       Payments & Integrations
@@ -10282,13 +10295,13 @@ export function App() {
                 scrollbarWidth: 'none'
               }}>
                 {[
-                  { id: 'methods', label: 'Payment Methods', icon: '💳' },
-                  { id: 'razorpay', label: 'Razorpay', icon: '⚡' },
-                  { id: 'paytm', label: 'Paytm Gateway', icon: '🅿️' },
-                  { id: 'phonepe', label: 'PhonePe Gateway', icon: '🟣' },
-                  { id: 'qr', label: 'UPI QR', icon: '📱' },
-                  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
-                  { id: 'terminal', label: 'Card Terminal', icon: '📠' },
+                  { id: 'methods', label: 'Payment Methods', icon: <CreditCardIcon size={16} /> },
+                  { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={16} /> },
+                  { id: 'paytm', label: 'Paytm Gateway', icon: <PaytmIcon size={16} /> },
+                  { id: 'phonepe', label: 'PhonePe Gateway', icon: <PhonePeIcon size={16} /> },
+                  { id: 'qr', label: 'UPI QR', icon: <QrCodeIcon size={16} /> },
+                  { id: 'bank', label: 'Bank Transfer', icon: <LandmarkIcon size={16} /> },
+                  { id: 'terminal', label: 'Card Terminal', icon: <TerminalIcon size={16} /> },
                 ].map((tab) => {
                   const isActive = paySettingsSubTab === tab.id;
                   return (
@@ -10342,11 +10355,11 @@ export function App() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {[
-                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: '💵' },
-                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: '📱' },
-                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: '💳' },
-                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: '🏦' },
-                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: '👤' },
+                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: <BanknoteIcon size={20} />, color: '#16a34a', bg: '#f0fdf4' },
+                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: <QrCodeIcon size={20} />, color: '#2563eb', bg: '#eff6ff' },
+                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: <CreditCardIcon size={20} />, color: '#6366f1', bg: '#f5f3ff' },
+                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: <LandmarkIcon size={20} />, color: '#0d9488', bg: '#f0fdfa' },
+                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: <BookUserIcon size={20} />, color: '#9333ea', bg: '#faf5ff' },
                       ].map((item) => {
                         const isChecked = item.id === 'bank' ? payBankEnabled : payMethodsEnabled.includes(item.id);
                         return (
@@ -10369,11 +10382,13 @@ export function App() {
                                 width: '42px',
                                 height: '42px',
                                 borderRadius: '10px',
-                                background: isChecked ? 'var(--primary-light)' : '#f8fafc',
+                                background: isChecked ? item.bg : '#f8fafc',
+                                color: isChecked ? item.color : '#64748b',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '1.25rem',
+                                flexShrink: 0,
+                                border: `1px solid ${isChecked ? item.color + '33' : '#e2e8f0'}`,
                               }}>
                                 {item.icon}
                               </div>
@@ -11213,8 +11228,8 @@ export function App() {
                               transition: 'all 0.15s ease',
                             }}
                           >
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)' }}>
-                              📱 Static QR
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <QrCodeIcon size={16} /> Static QR
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                               Shop VPA with manual cashier verification
@@ -11230,9 +11245,9 @@ export function App() {
                           </label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem' }}>
                             {[
-                              { id: 'razorpay', label: 'Razorpay', icon: '⚡', active: posPaymentConfig?.rzpEnabled },
-                              { id: 'paytm', label: 'Paytm', icon: '🅿️', active: posPaymentConfig?.paytmEnabled },
-                              { id: 'phonepe', label: 'PhonePe', icon: '🟣', active: posPaymentConfig?.phonepeEnabled },
+                              { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={14} />, active: posPaymentConfig?.rzpEnabled },
+                              { id: 'paytm', label: 'Paytm', icon: <PaytmIcon size={14} />, active: posPaymentConfig?.paytmEnabled },
+                              { id: 'phonepe', label: 'PhonePe', icon: <PhonePeIcon size={14} />, active: posPaymentConfig?.phonepeEnabled },
                             ].map((prov) => {
                               const isSel = payProvider === prov.id;
                               return (
@@ -11257,7 +11272,7 @@ export function App() {
                                     transition: 'all 0.15s ease',
                                   }}
                                 >
-                                  <span>{prov.icon} {prov.label}</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{prov.icon}<span>{prov.label}</span></span>
                                   <span style={{ fontSize: '0.7rem', color: prov.active ? '#059669' : '#94a3b8', fontWeight: 600 }}>
                                     {prov.active ? '●' : '○'}
                                   </span>
@@ -11316,7 +11331,7 @@ export function App() {
 
                       {/* Manual verification safety note */}
                       <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.8rem', color: '#92400e', lineHeight: 1.45 }}>
-                        <strong>⚠️ Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
+                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={14} style={{ color: '#d97706' }} /> Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
                       </div>
 
                       <button
@@ -11537,7 +11552,9 @@ export function App() {
                     top: '1rem',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '1.4rem' }}>🏦</span>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <LandmarkIcon size={20} />
+                      </div>
                       <div>
                         <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
                           Customer Payment Slip Preview
@@ -11597,8 +11614,11 @@ export function App() {
 
             {/* WhatsApp Bill Sharing Settings Card (Section 9.1) */}
             <div className="card settings-section">
-              <div className="card-title">
-                <span>📲 WhatsApp Bill Sharing</span>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center' }}>
+                  <WhatsAppIcon size={20} />
+                </span>
+                <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)' }}>WhatsApp Bill Sharing</span>
                 <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                   Configure click-to-chat WhatsApp receipts for POS checkout and invoice resends
                 </span>
