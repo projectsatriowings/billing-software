@@ -666,6 +666,7 @@ export function App() {
   const [quickCustomerName, setQuickCustomerName] = useState('');
   const [isQuickEnrolling, setIsQuickEnrolling] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [showCustomerPickerModal, setShowCustomerPickerModal] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
   const [showDiscountPicker, setShowDiscountPicker] = useState(false);
@@ -2467,17 +2468,7 @@ export function App() {
   };
 
   const focusCustomerMobile = () => {
-    if (customerMobileInputRef.current) {
-      customerMobileInputRef.current.focus();
-      customerMobileInputRef.current.select();
-    } else {
-      const el = (document.getElementById('pos-customer-mobile-input') ||
-        document.getElementById('bento-customer-search-input')) as HTMLInputElement | null;
-      if (el) {
-        el.focus();
-        el.select();
-      }
-    }
+    setShowCustomerPickerModal(true);
   };
 
   const focusCustomerName = () => {
@@ -2950,6 +2941,11 @@ export function App() {
           setShowProductCatalogDrawer(false);
           return;
         }
+        if (showCustomerPickerModal) {
+          e.preventDefault();
+          setShowCustomerPickerModal(false);
+          return;
+        }
         if (showShortcutsModal) {
           e.preventDefault();
           setShowShortcutsModal(false);
@@ -2975,6 +2971,13 @@ export function App() {
           }
           return next;
         });
+        return;
+      }
+
+      // Handle F3 to toggle quick customer selector
+      if (e.key === 'F3') {
+        e.preventDefault();
+        setShowCustomerPickerModal((prev) => !prev);
         return;
       }
 
@@ -6388,51 +6391,69 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Compact Customer & Member Status Chip in Billing Terminal */}
+                    {/* Compact Customer Status in Billing Terminal */}
                     <div className="bento-billing-customer-chip">
                       <div className="cust-chip-info">
                         <span className="cust-chip-icon">{selectedParty ? '👤' : '🛒'}</span>
                         <span className="cust-chip-label">Customer:</span>
                         {selectedParty ? (
                           <>
-                            <span className="chip-walkin-text">{selectedParty.name}</span>
+                            <span className="chip-walkin-text" style={{ fontWeight: 700, color: '#1e293b' }}>{selectedParty.name}</span>
                             {selectedParty.phone && <span className="chip-phone">({selectedParty.phone})</span>}
-                            <span className="chip-pts-badge" style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}>
-                              🪙 {selectedParty.loyaltyPoints ?? 0} pts ({formatRupees((selectedParty.loyaltyPoints ?? 0) * shopPointValMinor)})
-                            </span>
-                            {redeemPoints && pointsDiscountMinor > 0 && (
-                              <span className="chip-discount-tag">-₹{(pointsDiscountMinor / 100).toFixed(2)} Points Discount</span>
-                            )}
                           </>
                         ) : (
-                          <>
-                            <span className="chip-walkin-text">Walk-in Customer (Default)</span>
-                            {shopLoyaltyActive && (
-                              <span
-                                className="chip-pts-badge"
-                                style={{ background: '#fdf4ff', color: '#86198f', border: '1px solid #f0abfc' }}
-                                title={`Store loyalty active: Earn ${shopPointsPer100} pts per ₹100 spent`}
-                              >
-                                🎁 Loyalty: {shopPointsPer100} pts/₹100
-                              </span>
-                            )}
-                          </>
+                          <span className="chip-walkin-text">Walk-in Customer (Default)</span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        className="cust-chip-focus-btn"
-                        onClick={() => {
-                          const input = document.querySelector('.customer-input-wrap input') as HTMLInputElement;
-                          if (input) {
-                            input.focus();
-                            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }}
-                      >
-                        {selectedParty ? 'Change Member' : '+ Member / Loyalty'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        {selectedParty && (
+                          <button
+                            type="button"
+                            className="cust-chip-clear-btn"
+                            style={{
+                              background: '#fee2e2',
+                              color: '#b91c1c',
+                              border: '1px solid #fca5a5',
+                              padding: '0.24rem 0.55rem',
+                              borderRadius: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              setSelectedPartyId('');
+                              setCustomerSearch('');
+                              setRedeemPoints(false);
+                            }}
+                            title="Reset to Walk-in Customer"
+                          >
+                            ✕ Walk-in
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="cust-chip-focus-btn"
+                          onClick={() => setShowCustomerPickerModal(true)}
+                          title="Select customer or enter phone number (F3)"
+                        >
+                          {selectedParty ? 'Change Customer' : '+ Select Customer'}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Pharmacy Doctor Field */}
+                    {shop?.businessType === 'pharmacy' && (
+                      <div className="bento-pharmacy-row" style={{ margin: '0.5rem 0' }}>
+                        <label className="bento-sublabel">Doctor / Prescription:</label>
+                        <input
+                          type="text"
+                          className="bento-input compact"
+                          value={doctorName}
+                          onChange={(e) => setDoctorName(e.target.value)}
+                          placeholder="Dr. Name & Reg No."
+                        />
+                      </div>
+                    )}
 
                     {/* Payment Tender Modes with Stylized Vector Icons */}
                     <div className="bento-payment-modes">
@@ -7219,436 +7240,9 @@ export function App() {
                 </div>
               </div>
 
-              {/* ================= RIGHT / SIDE BENTO COLUMN: Customer & Scanner ================= */}
+              {/* ================= RIGHT / SIDE BENTO COLUMN: Barcode Scanner ================= */}
               <div className="bento-side-col">
-                <div className="bento-card bento-customer-card">
-                    <div className="bento-card-header bento-customer-header">
-                      <div className="bento-header-label">
-                        <span className="bento-icon-circle indigo">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                          </svg>
-                        </span>
-                        <div>
-                          <h3 className="bento-card-title">Customer & Loyalty</h3>
-                          <span className="bento-card-subtitle">
-                            {shopLoyaltyActive
-                              ? `Earn ${shopPointsPer100} pts per ₹100 spent`
-                              : 'Customer directory & account linking'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bento-customer-header-actions">
-                        {shopLoyaltyActive && (
-                          <button
-                            type="button"
-                            className="bento-loyalty-scheme-pill"
-                            onClick={() => setShowPosLoyaltyModal(true)}
-                            title="Click to view & configure loyalty rewards scheme"
-                          >
-                            <span className="loyalty-pill-gift">🎁</span>
-                            <span className="loyalty-pill-text">{shopPointsPer100} pts/₹100</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="bento-add-btn bento-add-cust-btn"
-                          onClick={() => setShowPartyModal(true)}
-                          title="Add New Customer"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>+ Customer</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bento-customer-body">
-                      <div className="customer-input-wrap">
-                        {selectedParty ? (
-                          <div className="bento-selected-member-card">
-                            <div className="selected-member-left">
-                              <span className="selected-member-avatar">👤</span>
-                              <div className="selected-member-info">
-                                <div className="selected-member-name-row">
-                                  <span className="selected-member-name">{selectedParty.name}</span>
-                                  <span className="selected-member-badge">Member Active</span>
-                                </div>
-                                <span className="selected-member-phone mono">{selectedParty.phone ? `📱 ${selectedParty.phone}` : 'No phone linked'}</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="selected-member-change-btn"
-                              onClick={() => {
-                                setSelectedPartyId('');
-                                setCustomerSearch('');
-                                setRedeemPoints(false);
-                              }}
-                              title="Change or switch to Walk-in customer"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                              <span>Change</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="bento-search-box-wrap">
-                            <svg className="bento-search-box-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                              <circle cx="11" cy="11" r="8"></circle>
-                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                            <input
-                              type="text"
-                              className="bento-input bento-customer-search-input"
-                              placeholder="Search customer by mobile or name..."
-                              value={customerSearch}
-                              onChange={(e) => {
-                                setCustomerSearch(e.target.value);
-                                setShowCustomerDropdown(true);
-                              }}
-                              onFocus={() => {
-                                if (customerSearch.trim()) setShowCustomerDropdown(true);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') setShowCustomerDropdown(false);
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const cleanDigits = customerSearch.replace(/\D/g, '');
-                                  const match = cleanDigits.length >= 7
-                                    ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                                    : null;
-                                  if (match) {
-                                    setSelectedPartyId(match.id);
-                                    setCustomerSearch('');
-                                    setShowCustomerDropdown(false);
-                                    showToast(`✓ Linked member: ${match.name}`);
-                                  } else if (cleanDigits.length >= 10) {
-                                    handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                                  } else if (filteredParties.length === 1) {
-                                    setSelectedPartyId(filteredParties[0].id);
-                                    setCustomerSearch('');
-                                    setShowCustomerDropdown(false);
-                                  }
-                                }
-                              }}
-                            />
-                            {customerSearch ? (
-                              <button
-                                type="button"
-                                className="bento-search-box-clear"
-                                onClick={() => {
-                                  setCustomerSearch('');
-                                  setShowCustomerDropdown(false);
-                                }}
-                                title="Clear search"
-                              >
-                                ✕
-                              </button>
-                            ) : (
-                              <span className="bento-search-box-hint">F3</span>
-                            )}
-                          </div>
-                        )}
-
-                        {showCustomerDropdown && customerSearch.trim().length > 0 && (() => {
-                          const cleanDigits = customerSearch.replace(/\D/g, '');
-                          const isPhoneCandidate = cleanDigits.length >= 7;
-                          const exactPhoneMatch = isPhoneCandidate
-                            ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                            : null;
-
-                          return (
-                            <>
-                              <div
-                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
-                                onClick={() => setShowCustomerDropdown(false)}
-                              />
-                              <div className="customer-dropdown-list" style={{ zIndex: 50 }}>
-                                {/* If phone digits typed and no existing customer matches: show fast inline enroll */}
-                                {isPhoneCandidate && !exactPhoneMatch && (
-                                  <div className="pos-quick-enroll-box" style={{ margin: '0.4rem 0.5rem' }}>
-                                    <div className="pos-quick-enroll-head">
-                                      <span className="pos-enroll-star">✨</span>
-                                      <div>
-                                        <div className="pos-enroll-title">
-                                          <span>New Customer Mobile:</span>
-                                          <strong>{cleanDigits}</strong>
-                                        </div>
-                                        <div className="pos-enroll-sub">First-time shopper • Loyalty points will start on this bill!</div>
-                                      </div>
-                                    </div>
-                                    <div className="pos-quick-enroll-inputs">
-                                      <input
-                                        type="text"
-                                        className="bento-input pos-enroll-name-input"
-                                        placeholder="Customer Name (optional)"
-                                        value={quickCustomerName}
-                                        onChange={(e) => setQuickCustomerName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                                          }
-                                        }}
-                                      />
-                                      <button
-                                        type="button"
-                                        className="pos-enroll-btn"
-                                        onClick={() => handleQuickEnrollCustomer(cleanDigits, quickCustomerName)}
-                                        disabled={isQuickEnrolling}
-                                      >
-                                        {isQuickEnrolling ? 'Enrolling...' : '⚡ Enroll (Enter)'}
-                                      </button>
-                                    </div>
-                                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
-                                      💡 Or continue billing — account and points automatically start upon checkout!
-                                    </div>
-                                  </div>
-                                )}
-
-                                {filteredParties.length > 0 ? (
-                                  filteredParties.map((p) => {
-                                    const pts = getPartyLoyaltyPoints(p.id, p.phone);
-                                    const isExact = exactPhoneMatch?.id === p.id;
-                                    return (
-                                      <div
-                                        key={p.id}
-                                        className="customer-dropdown-item"
-                                        style={isExact ? { background: '#f0fdf4', borderLeft: '3px solid #16a34a' } : undefined}
-                                        onClick={() => {
-                                          setSelectedPartyId(p.id);
-                                          setCustomerSearch('');
-                                          setRedeemPoints(false);
-                                          setShowCustomerDropdown(false);
-                                        }}
-                                      >
-                                        <div className="cust-item-main">
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                            <span className="cust-item-name">{p.name}</span>
-                                            {isExact && (
-                                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
-                                                Exact Match
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="cust-item-phone">📱 {p.phone || 'No phone'}</span>
-                                        </div>
-                                        <div className="cust-item-loyalty-tag">
-                                          🪙 {pts.toLocaleString()} pts
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                ) : !isPhoneCandidate ? (
-                                  <div style={{ padding: '0.85rem 1rem', textAlign: 'center', fontSize: '0.82rem', color: '#64748b' }}>
-                                    <div>No customer found matching "{customerSearch}"</div>
-                                    <button
-                                      type="button"
-                                      className="bento-add-btn"
-                                      style={{ margin: '0.5rem auto 0', display: 'inline-flex' }}
-                                      onClick={() => {
-                                        setShowCustomerDropdown(false);
-                                        openAddPartyModal('customer');
-                                      }}
-                                    >
-                                      + Register New Customer
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Customer Info Highlights */}
-                      {selectedParty ? (
-                        <div className="bento-customer-loyalty-card">
-                          <div className="loyalty-card-head">
-                            <div className="loyalty-phone-box">
-                              <span style={{ color: (selectedParty.loyaltyPoints ?? 0) > 0 ? '#15803d' : '#2563eb', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                                {(selectedParty.loyaltyPoints ?? 0) > 0 ? 'Member' : 'Enrolled'}
-                              </span>
-                              <span style={{ color: '#94a3b8' }}>•</span>
-                              <span className="mono bold">{selectedParty.phone || 'No mobile'}</span>
-                            </div>
-                            <div className="loyalty-pts-pill" title={`1 pt = ${formatRupees(shopPointValMinor)} discount`}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 7v10M15 9.5a2.5 2.5 0 0 0-5 0c0 4 5 2 5 6a2.5 2.5 0 0 1-5 0" />
-                              </svg>
-                              <span className="mono bold pts-count">{selectedPartyPoints.toLocaleString()}</span>
-                              <span className="pts-label">pts</span>
-                              <span className="pts-val-bracket">({formatRupees(selectedPartyPoints * shopPointValMinor)})</span>
-                            </div>
-                          </div>
-
-                          {/* 1-Click Points Redemption Button */}
-                          {shopLoyaltyActive && selectedPartyPoints >= shopMinRedeem && cart.length > 0 && (
-                            <button
-                              type="button"
-                              className={`pos-redeem-points-btn ${redeemPoints ? 'redeeming' : ''}`}
-                              onClick={() => setRedeemPoints(!redeemPoints)}
-                              title={redeemPoints ? 'Cancel points redemption' : `Redeem points for instant discount (1 pt = ${formatRupees(shopPointValMinor)})`}
-                            >
-                              {redeemPoints ? (
-                                <>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12" />
-                                  </svg>
-                                  <span>Redeeming <strong>{pointsActuallyRedeemed} pts</strong> (-{formatRupees(pointsDiscountMinor)})</span>
-                                  <span className="redeem-cancel">✕ Cancel</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                                  </svg>
-                                  <span>Redeem Available Points</span>
-                                  <span className="redeem-save-badge">Save up to {formatRupees(Math.min(cartTotalMinor - percentDiscountMinor, selectedPartyPoints * shopPointValMinor))}</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-
-                          {shopLoyaltyActive && selectedPartyPoints < shopMinRedeem && (
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', background: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px dashed #cbd5e1', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="16" x2="12" y2="12" />
-                                <line x1="12" y1="8" x2="12.01" y2="8" />
-                              </svg>
-                              <span>
-                                {selectedPartyPoints === 0
-                                  ? `First-time member! Min. ${shopMinRedeem} pts required to redeem.`
-                                  : `Min. ${shopMinRedeem} pts required to redeem (Current: ${selectedPartyPoints} pts).`}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Points Earned Preview */}
-                          {shopLoyaltyActive ? (
-                            <div className="loyalty-earn-notice">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="8" r="7" />
-                                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                              </svg>
-                              <span>
-                                This bill earns: <strong className="mono">+{pointsToEarnOnBill} pts</strong> ({shopPointsPer100} pts per ₹100 spent)
-                                {selectedPartyPoints > 0 && (
-                                  <span style={{ color: '#059669', marginLeft: '6px', fontWeight: 600 }}>
-                                    ➔ Total will be: {(selectedPartyPoints - (redeemPoints ? pointsActuallyRedeemed : 0) + pointsToEarnOnBill).toLocaleString()} pts
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="loyalty-earn-notice" style={{ opacity: 0.7 }}>
-                              <span>Loyalty program paused in shop settings</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="bento-walkin-unified-panel">
-                          <div className="walkin-unified-top">
-                            <div className="walkin-unified-left">
-                              <div className="walkin-unified-avatar">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                  <circle cx="9" cy="21" r="1"></circle>
-                                  <circle cx="20" cy="21" r="1"></circle>
-                                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                                </svg>
-                              </div>
-                              <div className="walkin-unified-info">
-                                <div className="walkin-unified-name-row">
-                                  <span className="walkin-unified-name">Walk-in Customer</span>
-                                  <span className="walkin-unified-badge">Standard</span>
-                                </div>
-                                <span className="walkin-unified-sub">Counter sale · No member account linked</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="walkin-unified-dir-btn"
-                              onClick={() => setShowPartyModal(true)}
-                              title="Browse all customer accounts"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                              </svg>
-                              <span>{parties.length} Saved</span>
-                            </button>
-                          </div>
-
-                          {/* Dynamic Loyalty Reward Bar */}
-                          {shopLoyaltyActive && (
-                            <div className="walkin-loyalty-bottom-bar">
-                              {cart.length > 0 ? (
-                                <div className="walkin-loyalty-earning-row">
-                                  <div className="loyalty-earning-left">
-                                    <span className="loyalty-sparkle-pill">+{pointsToEarnOnBill} pts</span>
-                                    <span className="loyalty-earning-text">
-                                      Earns <strong>+{pointsToEarnOnBill} points</strong> on bill ({formatRupees(pointsToEarnOnBill * shopPointValMinor)})
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="walkin-link-member-btn"
-                                    onClick={() => {
-                                      const input = document.querySelector('.bento-customer-search-input') as HTMLInputElement;
-                                      if (input) {
-                                        input.focus();
-                                        input.select();
-                                      }
-                                    }}
-                                  >
-                                    + Link Member
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="walkin-loyalty-scheme-row">
-                                  <span className="loyalty-gift-tag">🎁 Loyalty</span>
-                                  <span className="loyalty-scheme-text">
-                                    Earn <strong>{shopPointsPer100} pts / ₹100 spent</strong> (1 pt = {formatRupees(shopPointValMinor)}). Enter mobile to credit points!
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Pharmacy Doctor Field */}
-                      {shop?.businessType === 'pharmacy' && (
-                        <div className="bento-pharmacy-row">
-                          <label className="bento-sublabel">Doctor / Prescription:</label>
-                          <input
-                            type="text"
-                            className="bento-input compact"
-                            value={doctorName}
-                            onChange={(e) => setDoctorName(e.target.value)}
-                            placeholder="Dr. Name & Reg No."
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bento-card bento-scanner-card">
+                <div className="bento-card bento-scanner-card">
                     <div className="bento-card-header">
                       <div className="bento-header-label">
                         <span className="bento-icon-circle purple">
@@ -7753,6 +7347,130 @@ export function App() {
 
                 </div>
               </div>
+
+            {/* Quick Customer Picker Modal */}
+            {showCustomerPickerModal && (
+              <div className="modal-overlay" style={{ zIndex: 100 }} onClick={() => setShowCustomerPickerModal(false)}>
+                <div
+                  className="modal-content"
+                  style={{ maxWidth: '480px', borderRadius: '14px', padding: '1.25rem', background: '#ffffff', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.25rem' }}>👤</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Select Customer</h3>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Search customer by name or phone (Press Esc to close)</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerPickerModal(false)}
+                      style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div style={{ position: 'relative', marginBottom: '0.85rem' }}>
+                    <input
+                      type="text"
+                      autoFocus
+                      className="form-input"
+                      style={{ paddingLeft: '2.4rem', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                      placeholder="Search customer name or mobile..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setShowCustomerPickerModal(false);
+                      }}
+                    />
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2.2"
+                      style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }}
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                  </div>
+
+                  <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1rem' }}>
+                    {filteredParties.slice(0, 15).map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setSelectedPartyId(p.id);
+                          setShowCustomerPickerModal(false);
+                          showToast(`Linked customer: ${p.name}`);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: '8px',
+                          border: selectedPartyId === p.id ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                          background: selectedPartyId === p.id ? '#f5f3ff' : '#f8fafc',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 650, fontSize: '0.88rem', color: '#0f172a' }}>{p.name}</div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b' }}>📱 {p.phone || 'No phone'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem' }}
+                        >
+                          {selectedPartyId === p.id ? 'Selected ✓' : 'Select'}
+                        </button>
+                      </div>
+                    ))}
+
+                    {filteredParties.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '1.25rem 0', color: '#64748b', fontSize: '0.84rem' }}>
+                        No customer found matching "{customerSearch}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: '0.85rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setSelectedPartyId('');
+                        setCustomerSearch('');
+                        setShowCustomerPickerModal(false);
+                        showToast('Reset to Walk-in Customer');
+                      }}
+                      style={{ fontSize: '0.8rem' }}
+                    >
+                      Reset to Walk-in
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setShowCustomerPickerModal(false);
+                        openAddPartyModal('customer');
+                      }}
+                      style={{ fontSize: '0.8rem' }}
+                    >
+                      + Add New Customer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
             {showProductCatalogDrawer && (
