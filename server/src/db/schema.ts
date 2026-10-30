@@ -923,7 +923,6 @@ version: 29,
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS rounding_minor BIGINT DEFAULT 0`,
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid'`,
       `CREATE INDEX IF NOT EXISTS invoices_client_id ON invoices (tenant_id, client_id)`,
-    ]
     ],
   },
 ];
