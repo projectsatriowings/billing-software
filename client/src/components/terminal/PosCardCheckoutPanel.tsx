@@ -108,7 +108,8 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
       showToast('Payable amount must be greater than ₹0', 'error');
       return;
     }
-    if (!branchId) {
+    const effectiveBranchId = terminal?.branchId || branchId;
+    if (!effectiveBranchId) {
       showToast('Branch must be assigned to start terminal payment', 'error');
       return;
     }
@@ -121,7 +122,7 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
       }>('/api/terminals/payments/initiate', {
         method: 'POST',
         body: JSON.stringify({
-          branchId,
+          branchId: effectiveBranchId,
           counter: counter || undefined,
           terminalId: terminal?.id || undefined,
           amountMinor: payableMinor,
@@ -213,10 +214,11 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
       // 1. Create transaction if not created yet
       let txId = activeTx?.id;
       if (!txId) {
+        const effectiveBranchId = terminal?.branchId || branchId;
         const init = await api<{ transaction: TerminalTransaction }>('/api/terminals/payments/initiate', {
           method: 'POST',
           body: JSON.stringify({
-            branchId,
+            branchId: effectiveBranchId,
             counter: counter || undefined,
             terminalId: terminal?.id || undefined,
             amountMinor: payableMinor,
@@ -735,3 +737,4 @@ export const PosCardCheckoutPanel: React.FC<Props> = ({
     </div>
   );
 };
+
