@@ -2356,16 +2356,13 @@ export function App() {
 
   // Fast input focusing helpers for cashier keyboard shortcuts
   const focusProductSearch = () => {
-    if (catalogSearchInputRef.current) {
-      catalogSearchInputRef.current.focus();
-      catalogSearchInputRef.current.select();
-    } else {
-      const el = document.getElementById('pos-product-search-input') as HTMLInputElement | null;
-      if (el) {
-        el.focus();
-        el.select();
+    setShowProductCatalogDrawer(true);
+    setTimeout(() => {
+      if (catalogSearchInputRef.current) {
+        catalogSearchInputRef.current.focus();
+        catalogSearchInputRef.current.select();
       }
-    }
+    }, 60);
   };
 
   const focusBarcodeScanner = () => {
@@ -2855,8 +2852,13 @@ export function App() {
         activeTag === 'TEXTAREA' ||
         activeEl?.isContentEditable;
 
-      // Handle Escape to dismiss modals
+      // Handle Escape to dismiss modals / drawer
       if (e.key === 'Escape') {
+        if (showProductCatalogDrawer) {
+          e.preventDefault();
+          setShowProductCatalogDrawer(false);
+          return;
+        }
         if (showShortcutsModal) {
           e.preventDefault();
           setShowShortcutsModal(false);
@@ -2867,6 +2869,22 @@ export function App() {
           setShowDiscountPicker(false);
           return;
         }
+      }
+
+      // Handle F2 to toggle product catalog drawer
+      if (e.key === 'F2') {
+        e.preventDefault();
+        setShowProductCatalogDrawer((prev) => {
+          const next = !prev;
+          if (next) {
+            setTimeout(() => {
+              catalogSearchInputRef.current?.focus();
+              catalogSearchInputRef.current?.select();
+            }, 60);
+          }
+          return next;
+        });
+        return;
       }
 
       // If a popup modal is open, let user interact with modal
@@ -3185,6 +3203,7 @@ export function App() {
     showCustomItemModal,
     showPartyModal,
     showCfdModal,
+    showProductCatalogDrawer,
   ]);
 
   const handleSendWhatsAppFromSuccessModal = async () => {
@@ -7626,6 +7645,296 @@ export function App() {
 
                 </div>
               </div>
+
+            {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
+            {showProductCatalogDrawer && (
+              <div className="bento-catalog-drawer-overlay" onClick={() => setShowProductCatalogDrawer(false)}>
+                <div className="bento-catalog-drawer" onClick={(e) => e.stopPropagation()}>
+                  {/* Drawer Header */}
+                  <div className="bento-drawer-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <span className="bento-icon-circle indigo">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                      </span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>Quick Product Catalog</h3>
+                        <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                          {filteredItems.length} items • Click + Add to bill (No barcode needed)
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {can(user?.role as any, 'items.write') && (
+                        <button
+                          type="button"
+                          className="bento-add-btn"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}
+                          onClick={() => {
+                            openAddItemModal();
+                          }}
+                        >
+                          + New Item
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="bento-drawer-close-btn"
+                        onClick={() => setShowProductCatalogDrawer(false)}
+                        title="Close (Esc)"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Drawer Search Bar */}
+                  <div className="bento-drawer-search-bar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input
+                      id="pos-catalog-search-input"
+                      ref={catalogSearchInputRef}
+                      type="text"
+                      autoFocus
+                      className="bento-drawer-search-input"
+                      placeholder="Search items by name, barcode, SKU (F2)..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setShowProductCatalogDrawer(false);
+                        } else if (e.key === 'Enter') {
+                          if (filteredItems.length === 1) {
+                            addToCart(filteredItems[0]);
+                            playSupermarketBeep();
+                            showToast(`Added ${filteredItems[0].name} to cart`);
+                          }
+                        }
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          catalogSearchInputRef.current?.focus();
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', padding: '0 4px' }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Pills Bar */}
+                  <div className="bento-drawer-cats">
+                    <button
+                      type="button"
+                      className={`bento-drawer-cat-pill ${selectedCategory === 'ALL' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedCategory('ALL');
+                        setSearchQuery('');
+                      }}
+                    >
+                      All ({items.length})
+                    </button>
+                    {[
+                      { id: 'Groceries', label: 'Groceries' },
+                      { id: 'Fresh Produce', label: 'Produce' },
+                      { id: 'Beverages', label: 'Beverages' },
+                      { id: 'Snacks', label: 'Snacks' },
+                      { id: 'Household', label: 'Household' },
+                      { id: 'Personal Care', label: 'Personal Care' },
+                      { id: 'Dairy', label: 'Dairy' },
+                      { id: 'Others', label: 'Others' },
+                    ].map((cat) => {
+                      const count = items.filter((i) => {
+                        if (cat.id === 'Others') {
+                          return !/grocery|flour|grain|oil|sugar|salt|pulse|produce|fruit|veg|fresh|beverage|tea|coffee|snack|biscuit|bakery|household|personal|dairy/i.test(i.category || i.name);
+                        }
+                        if (cat.id === 'Groceries') return /grocery|flour|grain|oil|sugar|salt|pulse/i.test(i.category || i.name);
+                        if (cat.id === 'Fresh Produce') return /produce|fruit|veg|fresh/i.test(i.category || i.name);
+                        if (cat.id === 'Beverages') return /beverage|tea|coffee|drink|juice/i.test(i.category || i.name);
+                        if (cat.id === 'Snacks') return /snack|biscuit|bakery|sweet|chip/i.test(i.category || i.name);
+                        if (cat.id === 'Household') return /household|clean|detergent|wash/i.test(i.category || i.name);
+                        if (cat.id === 'Personal Care') return /personal|soap|paste|cream|care/i.test(i.category || i.name);
+                        if (cat.id === 'Dairy') return /dairy|milk|butter|cheese|paneer|ghee/i.test(i.category || i.name);
+                        return (i.category || '').toLowerCase() === cat.id.toLowerCase();
+                      }).length;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          className={`bento-drawer-cat-pill ${selectedCategory === cat.id ? 'active' : ''}`}
+                          onClick={() => setSelectedCategory(selectedCategory === cat.id ? 'ALL' : cat.id)}
+                        >
+                          {cat.label} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Products Grid in Drawer */}
+                  <div className="bento-drawer-grid">
+                    {filteredItems.length === 0 ? (
+                      <div className="bento-empty-catalog" style={{ gridColumn: '1 / -1', padding: '3rem 1rem', textAlign: 'center' }}>
+                        <span className="empty-catalog-icon">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                        </span>
+                        <h4 style={{ margin: '0.75rem 0 0.25rem', color: '#1e293b', fontSize: '1rem' }}>No products found</h4>
+                        <p style={{ margin: 0, color: '#64748b', fontSize: '0.82rem' }}>Try searching with another keyword or barcode</p>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ marginTop: '1rem', padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedCategory('ALL');
+                          }}
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
+                    ) : (
+                      filteredItems.slice(0, 60).map((item, index) => {
+                        const mrp = getItemMrp(item);
+                        const storePrice = item.priceMinor;
+                        const savings = Math.max(0, mrp - storePrice);
+                        const discountPercent = mrp > storePrice && mrp > 0 ? Math.round((savings / mrp) * 100) : 0;
+                        const inCartCount = cart.find((c) => c.item.id === item.id)?.qty || 0;
+                        const isOutOfStock = item.currentStockMilli <= 0;
+                        const displayName = item.name.replace(/\s+\d{10,15}$/, '');
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bento-product-tile ${inCartCount > 0 ? 'in-cart' : ''} ${isOutOfStock ? 'out-of-stock' : ''} ${catalogSelectedIndex === index ? 'keyboard-selected' : ''}`}
+                            onClick={() => {
+                              if (!isOutOfStock) {
+                                addToCart(item);
+                                playSupermarketBeep();
+                                showToast(`Added ${displayName} to cart`);
+                              }
+                            }}
+                            title={`Click to add ${displayName} to cart`}
+                          >
+                            <div className="bento-tile-top">
+                              <span className="bento-tile-cat" title={item.category || 'General'}>
+                                {item.category || 'General'}
+                              </span>
+                              {item.stockStatus === 'out_of_stock' || isOutOfStock ? (
+                                <span className="bento-stock-tag out">Out</span>
+                              ) : (
+                                <span className="bento-stock-tag in">In Stock</span>
+                              )}
+                            </div>
+
+                            <div className="bento-tile-title" title={item.name}>
+                              {displayName}
+                            </div>
+
+                            <div className="bento-tile-pricing">
+                              <div className="pricing-store-row">
+                                <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
+                                {mrp > storePrice && (
+                                  <span className="mrp-strikethrough mono">₹{(mrp / 100).toFixed(0)}</span>
+                                )}
+                              </div>
+                              {savings > 0 && (
+                                <span className="pricing-save-badge">
+                                  Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="bento-tile-footer">
+                              <span className="bento-tile-sku mono">
+                                {item.barcode ? (item.barcode.length > 8 ? `..${item.barcode.slice(-6)}` : item.barcode) : item.sku || ''}
+                              </span>
+                              {inCartCount > 0 ? (
+                                <div className="bento-tile-stepper" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="tile-stepper-btn minus"
+                                    onClick={() => updateCartQty(item.id, -1)}
+                                  >
+                                    -
+                                  </button>
+                                  <span className="tile-stepper-qty mono">{inCartCount}</span>
+                                  <button
+                                    type="button"
+                                    className="tile-stepper-btn plus"
+                                    onClick={() => updateCartQty(item.id, 1)}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="bento-quick-add-btn"
+                                  disabled={isOutOfStock}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isOutOfStock) {
+                                      addToCart(item);
+                                      playSupermarketBeep();
+                                      showToast(`Added ${displayName} to cart`);
+                                    }
+                                  }}
+                                >
+                                  + Add
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Drawer Footer with Cart Total & Proceed to Bill Button */}
+                  <div className="bento-drawer-footer">
+                    <div>
+                      {cart.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#1e293b' }}>
+                            Cart: {cart.length} {cart.length === 1 ? 'item' : 'items'} ({cart.reduce((s, c) => s + c.qty, 0)} units)
+                          </span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#16a34a' }}>
+                            Bill Total: {formatRupees(finalPayableMinor)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                          Click <strong>+ Add</strong> on any product to add to bill
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '0.5rem 1.15rem', fontSize: '0.84rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                      onClick={() => setShowProductCatalogDrawer(false)}
+                    >
+                      <span>Done & Bill</span>
+                      <kbd style={{ background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.72rem' }}>Esc</kbd>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ================= BOTTOM POS POWER DOCK ================= */}
             <div className="bento-pos-dock">

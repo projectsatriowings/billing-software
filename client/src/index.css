@@ -12563,6 +12563,17 @@ body {
   border-color: #4f46e5;
 }
 
+.bento-drawer-footer {
+  padding: 0.85rem 1.25rem;
+  background: #ffffff;
+  border-top: 1.5px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.05);
+}
+
 .bento-drawer-grid {
   flex: 1;
   overflow-y: auto;
