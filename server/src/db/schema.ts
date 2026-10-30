@@ -819,4 +819,12 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE shop_payment_settings ADD COLUMN IF NOT EXISTS bank_branch TEXT`,
     ],
   },
+  {
+    version: 23,
+    statements: [
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS reason TEXT`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS correlation_id TEXT`,
+      `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS seq BIGSERIAL`,
+    ],
+  },
 ];
