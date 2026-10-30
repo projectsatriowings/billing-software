@@ -675,6 +675,7 @@ export function App() {
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
   const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
   const [customItemForm, setCustomItemForm] = useState({ name: 'Custom Charge', price: '50', taxRateBp: 1800 });
@@ -699,7 +700,13 @@ export function App() {
 
   useEffect(() => {
     if (activeTab === 'pos') {
-      setIsSidebarCollapsed(true);
+      if (!isSidebarCollapsed) {
+        setIsSidebarCollapsed(true);
+        setAutoCollapsedForPos(true);
+      }
+    } else if (autoCollapsedForPos && typeof window !== 'undefined' && window.innerWidth >= 1200) {
+      setIsSidebarCollapsed(false);
+      setAutoCollapsedForPos(false);
     }
   }, [activeTab]);
 
@@ -4882,6 +4889,7 @@ export function App() {
               className="sidebar-collapse-toggle"
               onClick={(e) => {
                 e.stopPropagation();
+                setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
@@ -5103,7 +5111,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">My Cashier Shift</span>
-                {activeShiftNumber ? (
+                {!isSidebarCollapsed && activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
                   </span>
@@ -5129,7 +5137,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                <span className="nav-count-badge">{items.length}</span>
+                {!isSidebarCollapsed && <span className="nav-count-badge">{items.length}</span>}
               </button>
             )}
 
@@ -5148,7 +5156,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                <span className="nav-count-badge">{categoriesList.length}</span>
+                {!isSidebarCollapsed && <span className="nav-count-badge">{categoriesList.length}</span>}
               </button>
             )}
 
@@ -5179,7 +5187,7 @@ export function App() {
                   </span>
                   <span className="nav-text">Inventory Hub</span>
                   <div className="nav-trailing">
-                    {totalStockAlerts > 0 && (
+                    {!isSidebarCollapsed && totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
                         title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
@@ -5237,7 +5245,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
-                <span className="nav-badge-new">NEW</span>
+                {!isSidebarCollapsed && <span className="nav-badge-new">NEW</span>}
               </button>
             )}
 
@@ -5279,7 +5287,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+                {!isSidebarCollapsed && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
               </button>
             )}
 
@@ -5300,7 +5308,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+                {!isSidebarCollapsed && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
               </button>
             )}
 
@@ -5362,7 +5370,7 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
-                        <span className="nav-count-badge">{purchases.length}</span>
+                        {!isSidebarCollapsed && <span className="nav-count-badge">{purchases.length}</span>}
                       </button>
                     )}
 

@@ -28891,3 +28891,121 @@ select.expense-input-control {
   border: 1.5px solid #ffffff !important;
   line-height: 1 !important;
 }
+
+
+/* ==========================================================================
+   INVENTORY HUB BENTO FILTER STATES & EMPTY TABLE RECOVERY
+   ========================================================================== */
+
+.bento-stat-card.bento-filter-active {
+  box-shadow: 0 0 0 2px var(--filter-ring-color, #6366f1), 0 8px 24px -4px rgba(99, 102, 241, 0.2) !important;
+  transform: translateY(-2px);
+}
+
+.bento-stat-card.bento-filter-active.active-purple {
+  --filter-ring-color: #6366f1;
+  background: linear-gradient(135deg, #ffffff 0%, #faf8ff 60%, #f5f3ff 100%) !important;
+  border-color: #6366f1 !important;
+}
+
+.bento-stat-card.bento-filter-active.active-green {
+  --filter-ring-color: #10b981;
+  background: linear-gradient(135deg, #ffffff 0%, #f6fef9 60%, #ecfdf5 100%) !important;
+  border-color: #10b981 !important;
+}
+
+.bento-stat-card.bento-filter-active.active-amber {
+  --filter-ring-color: #f59e0b;
+  background: linear-gradient(135deg, #ffffff 0%, #fffdf5 60%, #fffbeb 100%) !important;
+  border-color: #f59e0b !important;
+}
+
+.bento-stat-card.bento-filter-active.active-red {
+  --filter-ring-color: #ef4444;
+  background: linear-gradient(135deg, #ffffff 0%, #fff8f8 60%, #fef2f2 100%) !important;
+  border-color: #ef4444 !important;
+}
+
+/* Empty Table State & Recovery */
+.table-empty-state {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 3.5rem 1.5rem !important;
+  background: #ffffff !important;
+  border-radius: 12px !important;
+}
+
+.table-empty-icon-wrap {
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  background: #f1f5f9 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #64748b !important;
+  margin-bottom: 1.15rem !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+.table-empty-state h3 {
+  font-size: 1.15rem !important;
+  font-weight: 750 !important;
+  color: #0f172a !important;
+  margin-bottom: 0.45rem !important;
+  letter-spacing: -0.01em !important;
+}
+
+.table-empty-state p {
+  font-size: 0.88rem !important;
+  color: #64748b !important;
+  max-width: 480px !important;
+  line-height: 1.55 !important;
+  margin: 0 auto 1.35rem auto !important;
+}
+
+.table-empty-state .reset-filter-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  padding: 0.7rem 1.45rem !important;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 9px !important;
+  font-weight: 650 !important;
+  font-size: 0.88rem !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.table-empty-state .reset-filter-btn:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Bulletproof Sidebar Rail Mode Badges & Text suppression */
+.app-sidebar.icon-only .nav-count-badge,
+.app-sidebar.icon-only .nav-shift-badge,
+.app-sidebar.icon-only .nav-badge-new,
+.app-sidebar.icon-only .nav-tag-shortcut,
+.app-sidebar.icon-only .nav-trailing,
+.app-sidebar.icon-only .sidebar-chevron,
+.app-sidebar.icon-only .sidebar-brand-text,
+.app-sidebar.icon-only .sidebar-store-info,
+.app-sidebar.icon-only .sidebar-store-badge,
+.app-sidebar.icon-only .sidebar-user-meta,
+.app-sidebar.icon-only .sidebar-action-row-btn span:last-child {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
