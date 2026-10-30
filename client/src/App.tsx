@@ -98,7 +98,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
-import { fileToOptimizedDataUrl } from './imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -12698,7 +12698,8 @@ export function App() {
                           alt="Product Preview"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            (e.currentTarget as HTMLImageElement).src =
+                              'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23dc2626" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
                           }}
                         />
                       ) : (
@@ -12731,7 +12732,7 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Image Controls */}
+                    {/* Image Controls: Option 1 - Upload from Computer */}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <label
                         style={{
@@ -12739,9 +12740,9 @@ export function App() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '0.35rem',
-                          padding: '0.38rem 0.65rem',
-                          borderRadius: '7px',
+                          gap: '0.4rem',
+                          padding: '0.42rem 0.65rem',
+                          borderRadius: '8px',
                           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                           color: '#ffffff',
                           fontSize: '0.78rem',
@@ -12755,7 +12756,7 @@ export function App() {
                           <polyline points="17 8 12 3 7 8" />
                           <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
-                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload from Computer'}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -12780,8 +12781,8 @@ export function App() {
                             fontSize: '0.75rem',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            padding: '0.38rem 0.65rem',
-                            borderRadius: '7px',
+                            padding: '0.42rem 0.65rem',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '3px',
@@ -12797,20 +12798,39 @@ export function App() {
                       )}
                     </div>
 
-                    <div>
+                    {/* Image Controls: Option 2 - Google Drive Link or Web Image URL */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155' }}>
+                          Or Google Drive / Image Link:
+                        </label>
+                        {isGoogleDriveUrl(itemFormImageUrl) && (
+                          <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                            Google Drive Linked
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Or paste web image link..."
+                        placeholder="Paste Google Drive link or web image URL..."
                         value={itemFormImageUrl.startsWith('data:') ? '' : itemFormImageUrl}
-                        onChange={(e) => setItemFormImageUrl(e.target.value.trim())}
+                        onChange={(e) => {
+                          const resolved = resolveDriveImageUrl(e.target.value);
+                          setItemFormImageUrl(resolved);
+                        }}
                         style={{
                           width: '100%',
-                          padding: '0.3rem 0.55rem',
+                          padding: '0.35rem 0.55rem',
                           fontSize: '0.74rem',
-                          height: '28px',
+                          height: '30px',
+                          boxSizing: 'border-box',
                         }}
                       />
+                      <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                        Paste any Google Drive share link (ensure link sharing is set to &quot;Anyone with the link can view&quot;).
+                      </div>
                     </div>
                   </div>
 

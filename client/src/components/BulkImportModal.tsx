@@ -43,7 +43,7 @@ import {
   type NatureConfidence,
 } from '../../../shared/bulkImport.ts';
 import { ScanManufacturerBarcodeModal } from './ScanManufacturerBarcodeModal.tsx';
-import { fileToOptimizedDataUrl } from '../imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from '../imageUtils';
 import { type BarcodeTargetItem } from '../../../shared/barcodeScannerUtils.ts';
 
 const PackageBoxIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -312,14 +312,16 @@ export const TEMPLATE_COLUMNS = [
   'GST Rate',
   'Price Inclusive of GST',
   'Opening Stock',
+  'Barcode',
+  'Drive Link / Image URL',
 ];
 
 export const SAMPLE_SUPPLIER_ROWS = [
-  ['Toor Dal 1kg', 'kg', '145.50', '120', '0713', '5%', 'Yes', '50'],
-  ['Basmati Rice 1kg', 'kg', '89', '65', '1006', '5%', 'Yes', '100'],
-  ['Amul Butter 100g', 'pcs', '55', '48', '0401', '12%', 'Yes', '40'],
-  ['Surf Excel 1kg', 'pcs', '200', '165', '3402', '18%', 'Yes', '25'],
-  ['Moong Dal 1kg', 'kg', '110', '95', '0713', '5%', 'Yes', '30'],
+  ['Toor Dal 1kg', 'kg', '145.50', '120', '0713', '5%', 'Yes', '50', '8901030384812', 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs/view'],
+  ['Basmati Rice 1kg', 'kg', '89', '65', '1006', '5%', 'Yes', '100', '8901030384850', ''],
+  ['Amul Butter 100g', 'pcs', '55', '48', '0401', '12%', 'Yes', '40', '8901262010011', ''],
+  ['Surf Excel 1kg', 'pcs', '200', '165', '3402', '18%', 'Yes', '25', '', ''],
+  ['Moong Dal 1kg', 'kg', '110', '95', '0713', '5%', 'Yes', '30', '', ''],
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -804,7 +806,30 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     const iInclusive= findCol(['price inclusive of gst', 'price inclusive', 'inclusive', 'incl']);
     const iStock    = findCol(['opening stock', 'current stock', 'stock', 'qty', 'quantity']);
     const iBarcode  = findCol(['barcode', 'ean', 'upc', 'gtin', 'bar code']);
-    const iImage    = findCol(['image url', 'image_url', 'image', 'photo', 'picture', 'img']);
+    const iImage    = findCol([
+      'drive link',
+      'drive_link',
+      'google drive',
+      'google_drive',
+      'gdrive',
+      'drive url',
+      'drive_url',
+      'drive',
+      'image url',
+      'image_url',
+      'image link',
+      'image_link',
+      'product image',
+      'item image',
+      'product photo',
+      'photo link',
+      'photo_link',
+      'thumbnail',
+      'image',
+      'photo',
+      'picture',
+      'img',
+    ]);
 
     const getVal = (parts: string[], idx: number, fallbackIdx: number): string => {
       const targetIdx = idx >= 0 ? idx : fallbackIdx;
@@ -828,8 +853,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       const gst      = getVal(parts, iGst, 5);
       const incl     = getVal(parts, iInclusive, 6);
       const stock    = getVal(parts, iStock, 7);
-      const barcodeRaw = getVal(parts, iBarcode, -1);
-      const imageRaw = getVal(parts, iImage, -1);
+      const barcodeRaw = getVal(parts, iBarcode, parts.length >= 9 ? 8 : -1);
+      const imageRaw = getVal(parts, iImage, parts.length >= 10 ? 9 : -1);
+      const resolvedImage = resolveDriveImageUrl(imageRaw);
 
       const unitMatch = UOM_OPTIONS.find(
         (u) => u.code.toLowerCase() === unitRaw.toLowerCase() || u.label.toLowerCase().includes(unitRaw.toLowerCase())
@@ -889,7 +915,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         productNature: natureInfo.nature,
         natureConfidence: natureInfo.confidence,
         isNatureManuallyEdited: false,
-        imageUrl: imageRaw || matchedItem?.imageUrl || (matchedItem as any)?.image || '',
+        imageUrl: resolvedImage || matchedItem?.imageUrl || (matchedItem as any)?.image || '',
         category,
         categoryId,
         isCategoryManuallyEdited: false,
@@ -1510,6 +1536,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       r.gstRate,
       r.taxInclusive ? 'Yes' : 'No',
       r.openingStock,
+      r.barcode || '',
+      r.imageUrl || '',
       r.status,
       r.errors.map((e) => e.message).join(' | '),
     ]);
@@ -4129,22 +4157,33 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                 )}
               </div>
 
-              {/* Paste URL Input */}
+              {/* Paste Google Drive / Web URL Input */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#64748b', marginBottom: '0.3rem' }}>
-                  Or paste web image link:
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.76rem', fontWeight: 700, color: '#334155' }}>
+                    Google Drive Link or Web Image URL:
+                  </label>
+                  {isGoogleDriveUrl(tempRowImageUrl) && (
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                      Google Drive Linked
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
-                  placeholder="https://example.com/product-image.jpg"
+                  placeholder="Paste Google Drive share link (drive.google.com/...) or image URL"
                   value={tempRowImageUrl.startsWith('data:') ? '' : tempRowImageUrl}
-                  onChange={(e) => setTempRowImageUrl(e.target.value.trim())}
+                  onChange={(e) => setTempRowImageUrl(resolveDriveImageUrl(e.target.value))}
                   style={{
                     ...cellInputStyle,
                     fontSize: '0.8rem',
                     padding: '0.45rem 0.65rem',
                   }}
                 />
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem' }}>
+                  Paste any Google Drive share link (ensure link sharing is set to &quot;Anyone with the link can view&quot;).
+                </div>
               </div>
             </div>
 
