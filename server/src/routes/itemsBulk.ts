@@ -93,7 +93,14 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
   const sku = toStr(raw.sku);
   if (sku && sku.length > 60) errors.push('SKU is too long (max 60 characters)');
 
-  const barcode = toStr(raw.barcode);
+  let barcode = toStr(raw.barcode);
+  let imageUrl = toStr(raw.imageUrl);
+
+  // If barcode is a Drive link or web URL, move it to imageUrl and clear barcode
+  if (barcode && (/^https?:\/\//i.test(barcode) || /drive\.google\.com/i.test(barcode) || /googleusercontent\.com/i.test(barcode))) {
+    if (!imageUrl) imageUrl = barcode;
+    barcode = null;
+  }
   if (barcode && barcode.length > 60) errors.push('Barcode is too long (max 60 characters)');
 
   const rawBarcodeType = toStr(raw.barcodeType);
@@ -171,6 +178,7 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
       isRestock,
       matchedItemId,
       updatePrices: Boolean(raw.updatePrices),
+      imageUrl: imageUrl || null,
     },
   };
 }
