@@ -28527,663 +28527,26 @@ select.expense-input-control {
   }
 }
 
-.inspire-kpi-card {
+.sales-inspire-kpi-card {
   background: #ffffff;
-  border-radius: 18px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  padding: 1.25rem 1.35rem;
-  box-shadow: 
-    0 1px 3px rgba(15, 23, 42, 0.04),
-    0 8px 24px -4px rgba(15, 23, 42, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
-}
-.inspire-kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 4px 12px rgba(15, 23, 42, 0.06),
-    0 14px 28px -6px rgba(15, 23, 42, 0.08);
-}
-
-.inspire-kpi-top {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.35rem;
-}
-.inspire-kpi-icon-pill {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.inspire-kpi-icon-pill.theme-teal {
-  background: rgba(15, 118, 110, 0.12);
-  color: #0f766e;
-}
-.inspire-kpi-icon-pill.theme-emerald {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-}
-.inspire-kpi-icon-pill.theme-blue {
-  background: rgba(2, 132, 199, 0.12);
-  color: #0284c7;
-}
-.inspire-kpi-icon-pill.theme-violet {
-  background: rgba(99, 102, 241, 0.12);
-  color: #6366f1;
-}
-.inspire-kpi-title {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.inspire-kpi-trend {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.74rem;
-  font-weight: 600;
-  margin-bottom: 0.85rem;
-}
-.inspire-kpi-trend.positive {
-  color: #059669;
-}
-.inspire-kpi-trend.negative {
-  color: #e11d48;
-}
-.inspire-kpi-trend.neutral {
-  color: #64748b;
-}
-
-.inspire-kpi-bottom-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-.inspire-kpi-val {
-  font-size: 1.55rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-/* Micro Spark Bars on the right side of KPI cards */
-.micro-spark-container {
-  display: flex;
-  align-items: flex-end;
-  gap: 3.5px;
-  height: 34px;
-  padding-bottom: 2px;
-}
-.micro-spark-bar {
-  width: 5.5px;
-  border-radius: 99px;
-  min-height: 4px;
-  transition: height 0.3s ease;
-}
-
-/* Middle Visual Grid (50% / 50%) */
-.sales-inspire-middle-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.15rem;
-}
-@media (max-width: 960px) {
-  .sales-inspire-middle-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.inspire-chart-card {
-  background: #ffffff;
-  border-radius: 18px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  padding: 1.35rem 1.5rem;
-  box-shadow: 
-    0 1px 3px rgba(15, 23, 42, 0.04),
-    0 8px 24px -4px rgba(15, 23, 42, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.inspire-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-.inspire-header-title-box {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-.inspire-header-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.inspire-header-icon.theme-teal {
-  background: rgba(15, 118, 110, 0.1);
-  color: #0f766e;
-}
-.inspire-header-icon.theme-blue {
-  background: rgba(2, 132, 199, 0.1);
-  color: #0284c7;
-}
-.inspire-header-icon.theme-indigo {
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
-}
-.inspire-card-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0;
-}
-
-.inspire-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.inspire-pill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 99px;
   border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-.inspire-pill-btn:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-  color: #0f172a;
-}
-.inspire-more-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-.inspire-more-btn:hover {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.inspire-stat-row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  margin-bottom: 1.15rem;
-}
-.inspire-big-metric {
-  font-size: 1.7rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-}
-.inspire-trend-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.18rem 0.5rem;
-  border-radius: 6px;
-}
-.inspire-trend-pill.positive {
-  background: #ecfdf5;
-  color: #059669;
-}
-.inspire-trend-pill.negative {
-  background: #fff1f2;
-  color: #e11d48;
-}
-
-.inspire-svg-chart-wrap {
-  width: 100%;
-  height: 240px;
-}
-.inspire-svg-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  overflow: visible;
-}
-
-/* Glassmorphic floating tooltip */
-.inspire-floating-tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 12px;
-  padding: 0.65rem 0.85rem;
-  box-shadow: 
-    0 4px 6px -1px rgba(15, 23, 42, 0.08),
-    0 12px 24px -4px rgba(15, 23, 42, 0.12);
-  z-index: 10;
-  min-width: 140px;
-  transition: left 0.1s ease, top 0.1s ease;
-}
-.tooltip-date-header {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #64748b;
-  margin-bottom: 0.4rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px solid #f1f5f9;
-}
-.tooltip-val-row,
-.tooltip-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.76rem;
-  color: #334155;
-  margin-bottom: 0.2rem;
-}
-.tooltip-dot {
-  width: 6.5px;
-  height: 6.5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.tooltip-metric-label {
-  color: #64748b;
-  font-size: 0.72rem;
-}
-.tooltip-metric-val {
-  margin-left: auto;
-  font-weight: 700;
-  color: #0f172a;
-}
-.tooltip-sub-info {
-  font-size: 0.68rem;
-  color: #94a3b8;
-  margin-top: 0.25rem;
-}
-
-/* Bottom Visual Grid */
-.sales-inspire-bottom-grid {
-  display: grid;
-  grid-template-columns: 1.55fr 1fr;
-  gap: 1.15rem;
-}
-@media (max-width: 1080px) {
-  .sales-inspire-bottom-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* 3-Column Product Sales Inside Left Card */
-.inspire-product-cols-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-@media (max-width: 720px) {
-  .inspire-product-cols-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.inspire-product-subcard {
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.75);
-  padding: 0.85rem 0.95rem;
-  display: flex;
-  flex-direction: column;
-}
-.product-subcard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-.product-subcard-metric {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #0f172a;
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-}
-.product-subcard-metric .metric-sub {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #64748b;
-}
-.product-subcard-trend {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.12rem 0.35rem;
-  border-radius: 4px;
-}
-.product-subcard-trend.positive {
-  background: #ecfdf5;
-  color: #059669;
-}
-.product-subcard-trend.negative {
-  background: #fff1f2;
-  color: #e11d48;
-}
-
-.product-subcard-table {
-  width: 100%;
-  font-size: 0.75rem;
-  border-collapse: collapse;
-}
-.product-subcard-table th {
-  color: #94a3b8;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  padding: 0 0 0.45rem 0;
-  text-align: left;
-}
-.product-subcard-table th:last-child {
-  text-align: right;
-}
-.product-subcard-table td {
-  padding: 0.38rem 0;
-  border-bottom: 1px solid #f1f5f9;
-  color: #1e293b;
-}
-.product-subcard-table tr:last-child td {
-  border-bottom: none;
-}
-.product-name-cell {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 110px;
-}
-.product-stat-cell {
-  text-align: right;
-  font-weight: 700;
-  color: #0f172a;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Segmented Donut & Vertical Legend Layout */
-.inspire-donut-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  padding-top: 0.5rem;
-  flex-wrap: wrap;
-}
-.donut-chart-box {
-  position: relative;
-  width: 190px;
-  height: 190px;
-  flex-shrink: 0;
-  margin: 0 auto;
-}
-.donut-svg-canvas {
-  width: 100%;
-  height: 100%;
-}
-
-.donut-legend-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  flex-grow: 1;
-  min-width: 140px;
-}
-.donut-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.donut-legend-bar {
-  width: 4px;
-  height: 32px;
-  border-radius: 99px;
-  flex-shrink: 0;
-}
-.donut-legend-info {
-  display: flex;
-  flex-direction: column;
-}
-.donut-legend-name {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: #64748b;
-  line-height: 1.2;
-}
-.donut-legend-val {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #0f172a;
-  line-height: 1.2;
-}
-.donut-legend-val .val-sub {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #94a3b8;
-  margin-left: 2px;
-}
-
-/* ==========================================================================
-   MODERN CATEGORY BENTO GRID & INTERACTIVE LEADERBOARD SYSTEM
-   ========================================================================== */
-
-.cat-bento-panel-card {
-  overflow: hidden;
-  position: relative;
-}
-
-.cat-count-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #4f46e5;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
-  padding: 0.15rem 0.55rem;
-  border-radius: 99px;
-}
-
-/* View Mode Segmented Switch */
-.cat-view-segmented-toggle {
-  display: inline-flex;
-  align-items: center;
-  background: #f1f5f9;
-  padding: 2.5px;
-  border-radius: 9px;
-  border: 1px solid #e2e8f0;
-}
-.cat-view-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.28rem 0.65rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.cat-view-btn:hover:not(.active) {
-  color: #0f172a;
-}
-.cat-view-btn.active {
-  background: #ffffff;
-  color: #0f172a;
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-}
-
-/* Proportional Distribution Ribbon */
-.cat-distribution-ribbon-wrap {
-  margin: 0.85rem 0 1.15rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.cat-distribution-ribbon {
-  display: flex;
-  height: 10px;
-  width: 100%;
-  border-radius: 99px;
-  overflow: hidden;
-  background: #f1f5f9;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
-  gap: 1.5px;
-}
-.cat-ribbon-segment {
-  height: 100%;
-  transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
-  cursor: pointer;
-}
-.cat-ribbon-segment:hover,
-.cat-ribbon-segment.hovered {
-  filter: brightness(1.15);
-  transform: scaleY(1.3);
-}
-
-.cat-top-driver-callout {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: linear-gradient(90deg, rgba(254, 243, 199, 0.5) 0%, rgba(248, 250, 252, 0.8) 100%);
-  border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: 10px;
-  padding: 0.45rem 0.8rem;
-  font-size: 0.76rem;
-  color: #78350f;
-}
-.driver-star {
-  font-size: 0.95rem;
-}
-
-/* Category Bento Cards Grid (2-columns) */
-.cat-bento-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.85rem;
-}
-@media (max-width: 600px) {
-  .cat-bento-cards-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.cat-bento-card {
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 14px;
-  padding: 0.95rem 1rem;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  box-shadow: 
-    0 1px 3px rgba(15, 23, 42, 0.03),
-    0 4px 12px -2px rgba(15, 23, 42, 0.03);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
-  cursor: pointer;
   position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
 }
-.cat-bento-card:hover,
-.cat-bento-card.hovered {
-  transform: translateY(-2.5px);
-  box-shadow: 
-    0 6px 18px -2px rgba(15, 23, 42, 0.08),
-    0 2px 6px -1px rgba(15, 23, 42, 0.04);
-}
-
-.cat-bento-card.is-top-tier {
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+.sales-inspire-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(99, 102, 241, 0.12);
+  border-color: #cbd5e1;
 }
 
-.cat-bento-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.cat-rank-pill {
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 0.14rem 0.45rem;
-  border-radius: 6px;
-  background: #f1f5f9;
-  color: #475569;
-}
-.cat-rank-pill.rank-1 {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #b45309;
-  border: 1px solid #fcd34d;
-}
-.cat-rank-pill.rank-2 {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  color: #334155;
-  border: 1px solid #cbd5e1;
-}
-.cat-rank-pill.rank-3 {
-  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
-  color: #c2410c;
-  border: 1px solid #fdba74;
-}
-
-.cat-share-pill {
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.14rem 0.5rem;
-  border-radius: 99px;
-  border: 1px solid transparent;
-}
-
-.cat-bento-card-main {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-.cat-avatar-box {
+.sales-inspire-kpi-icon {
   width: 36px;
   height: 36px;
   border-radius: 10px;
@@ -29192,162 +28555,64 @@ select.expense-input-control {
   justify-content: center;
   flex-shrink: 0;
 }
-.cat-avatar-emoji {
-  font-size: 1.15rem;
-  line-height: 1;
-}
-.cat-info-block {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.cat-bento-title {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #0f172a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cat-bento-bills {
-  font-size: 0.7rem;
-  color: #94a3b8;
-  font-weight: 500;
-}
 
-.cat-bento-amount-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding-top: 0.2rem;
-}
-.cat-bento-amount {
-  font-size: 1.15rem;
+.sales-inspire-kpi-value {
+  font-size: 1.6rem;
   font-weight: 800;
   color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
-.cat-bento-avg {
-  font-size: 0.72rem;
-  color: #64748b;
+
+.sales-inspire-kpi-title {
+  font-size: 0.8rem;
   font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.cat-bento-progress-track {
-  height: 6px;
-  background: #f1f5f9;
-  border-radius: 99px;
+.sales-inspire-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   overflow: hidden;
-}
-.cat-bento-progress-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.35s ease;
-}
-
-/* Executive Ranked Leaderboard View */
-.cat-leaderboard-list {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
 }
 
-.cat-leaderboard-row {
+.sales-inspire-card-header {
+  padding: 1.15rem 1.4rem;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 0.85rem;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid rgba(226, 232, 240, 0.75);
-  transition: all 0.18s ease;
-  cursor: pointer;
   gap: 0.75rem;
-}
-.cat-leaderboard-row:hover,
-.cat-leaderboard-row.hovered {
-  background: #ffffff;
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-  transform: translateX(3px);
+  flex-wrap: wrap;
 }
 
-.cat-leaderboard-rank-col {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 170px;
-}
-.cat-lead-rank-badge {
-  font-size: 0.76rem;
-  font-weight: 800;
-  width: 24px;
-  text-align: center;
-  color: #64748b;
-}
-.cat-lead-rank-badge.rank-1 { color: #b45309; }
-.cat-lead-rank-badge.rank-2 { color: #334155; }
-.cat-lead-rank-badge.rank-3 { color: #c2410c; }
-
-.cat-lead-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.95rem;
-  flex-shrink: 0;
-}
-.cat-lead-name-box {
-  display: flex;
-  flex-direction: column;
-}
-.cat-lead-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-.cat-lead-subtitle {
-  font-size: 0.68rem;
-  color: #94a3b8;
-}
-
-.cat-lead-progress-col {
-  flex: 1;
-  max-width: 180px;
-}
-.cat-lead-track {
-  height: 7px;
-  background: #e2e8f0;
-  border-radius: 99px;
+/* Category Beaded Bars */
+.beaded-bar-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: #f1f5f9;
   overflow: hidden;
-}
-.cat-lead-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.35s ease;
-}
-
-.cat-lead-amount-col {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 120px;
-  justify-content: flex-end;
-}
-.cat-lead-val {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-.cat-lead-share {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.12rem 0.45rem;
-  border-radius: 99px;
-  border: 1px solid transparent;
 }
 
+.beaded-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dual Spline Chart Area */
+.sales-dual-spline-container {
+  width: 100%;
+  position: relative;
+}
 
 /* ─────────────────────────────────────────────────────────────
    Product Table Image Thumbnail Styles (Perfect 50px Squircle)
@@ -29388,4 +28653,238 @@ select.expense-input-control {
   justify-content: center !important;
   color: #94a3b8 !important;
   background: #f8fafc !important;
+}
+
+/* ==========================================================================
+   ENHANCED POS CUSTOMER & LOYALTY CARD DESIGN (CLEAN, FLUID & PROFESSIONAL)
+   ========================================================================== */
+
+.bento-customer-header {
+  padding: 0.75rem 0.95rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  box-sizing: border-box !important;
+}
+
+.bento-customer-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  flex-shrink: 0 !important;
+}
+
+.bento-loyalty-scheme-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 0.28rem 0.65rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  color: #6d28d9 !important;
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  border: 1.2px solid #d8b4fe !important;
+  border-radius: 9999px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 1px 3px rgba(109, 40, 217, 0.08) !important;
+}
+
+.bento-loyalty-scheme-pill:hover {
+  transform: translateY(-1px) !important;
+  background: #ede9fe !important;
+  border-color: #c084fc !important;
+  box-shadow: 0 3px 8px rgba(109, 40, 217, 0.2) !important;
+}
+
+.loyalty-pill-gift {
+  font-size: 0.85rem !important;
+  line-height: 1 !important;
+}
+
+.loyalty-pill-text {
+  letter-spacing: -0.01em !important;
+}
+
+.walkin-customer-avatar {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border: 1.5px solid #a7f3d0 !important;
+  color: #059669 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15) !important;
+}
+
+.walkin-unified-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+
+.walkin-unified-name-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+}
+
+.walkin-unified-name {
+  font-size: 0.94rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.01em !important;
+}
+
+.walkin-unified-badge {
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+  font-size: 0.62rem !important;
+  font-weight: 800 !important;
+  padding: 0.12rem 0.4rem !important;
+  border-radius: 4px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.walkin-unified-sub {
+  font-size: 0.73rem !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.walkin-unified-dir-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  background: #ffffff !important;
+  border: 1.2px solid #cbd5e1 !important;
+  color: #334155 !important;
+  padding: 0.35rem 0.65rem !important;
+  border-radius: 7px !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.walkin-unified-dir-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Loyalty Bottom Bar */
+.walkin-loyalty-bottom-bar {
+  padding: 0.6rem 0.85rem !important;
+  border-top: 1px dashed #e2e8f0 !important;
+  background: #ffffff !important;
+}
+
+.walkin-loyalty-earning-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  background: #f0fdf4 !important;
+  border: 1.2px solid #bbf7d0 !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 8px !important;
+}
+
+.loyalty-earning-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  min-width: 0 !important;
+}
+
+.loyalty-sparkle-pill {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+  padding: 0.15rem 0.5rem !important;
+  border-radius: 9999px !important;
+  white-space: nowrap !important;
+}
+
+.loyalty-earning-text {
+  font-size: 0.76rem !important;
+  color: #166534 !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+}
+
+.walkin-link-member-btn {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.35rem 0.7rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 1px 4px rgba(22, 163, 74, 0.25) !important;
+}
+
+.walkin-link-member-btn:hover {
+  background: #15803d !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.35) !important;
+}
+
+.walkin-loyalty-scheme-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  line-height: 1.35 !important;
+}
+
+.loyalty-gift-tag {
+  background: #faf5ff !important;
+  border: 1px solid #d8b4fe !important;
+  color: #7c3aed !important;
+  font-size: 0.7rem !important;
+  font-weight: 800 !important;
+  padding: 0.12rem 0.45rem !important;
+  border-radius: 5px !important;
+  white-space: nowrap !important;
+}
+
+.loyalty-scheme-text {
+  flex: 1 !important;
+  font-size: 0.74rem !important;
+  color: #475569 !important;
+}
+
+@media (max-width: 900px) {
+  .bento-customer-header {
+    flex-wrap: wrap !important;
+  }
+  .bento-loyalty-scheme-pill {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.7rem !important;
+  }
+  .walkin-unified-top {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+}
+
+
 }

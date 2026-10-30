@@ -71,6 +71,9 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import type { Branch } from '../../shared/types.ts';
+import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
+import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
 import {
   TagIcon,
   PackageIcon,
@@ -618,6 +621,8 @@ export function App() {
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [isVerifyingQr, setIsVerifyingQr] = useState(false);
   const [upiManualRef, setUpiManualRef] = useState('');
+  const [paymentCardRef, setPaymentCardRef] = useState<string>('');
+  const [branches, setBranches] = useState<Branch[]>([]);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const customerMobileInputRef = useRef<HTMLInputElement>(null);
   const customerNameInputRef = useRef<HTMLInputElement>(null);
@@ -1279,6 +1284,7 @@ export function App() {
     loadItems();
     loadCategories();
     loadParties();
+    loadBranches();
     loadInvoices();
     if (can(user.role as any, 'purchases')) {
       loadPurchases();
@@ -1315,6 +1321,15 @@ export function App() {
       setCategories(activeCats);
     } catch (err) {
       console.error('Failed to load categories', err);
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      const res = await api<{ branches: Branch[] }>('/api/branches');
+      setBranches(res.branches || []);
+    } catch {
+      // non-fatal
     }
   };
 
@@ -2763,7 +2778,7 @@ export function App() {
         if (finalPayableMinor > 0) {
           const upiRef = (selectedPayMode === 'upi' || selectedPayMode === 'bank')
             ? (activeQrAttempt?.providerPaymentId || (upiManualRef.trim() ? upiManualRef.trim() : undefined))
-            : undefined;
+            : (selectedPayMode === 'card' ? (paymentCardRef || 'CARD_PAYMENT') : undefined);
           paymentsPayload = [{
             method: selectedPayMode,
             amountMinor: Math.round(finalPayableMinor),
@@ -2813,6 +2828,7 @@ export function App() {
       });
 
       setRedeemPoints(false);
+      setPaymentCardRef('');
 
       if (selectedPayMode === 'upi' && activeQrAttempt && activeQrAttempt.status !== 'paid') {
         if (posPaymentConfig?.qrType === 'static' || !posPaymentConfig?.rzpEnabled) {
@@ -6974,6 +6990,19 @@ export function App() {
                       </div>
                     )}
 
+                    {/* CARD PAYMENT TERMINAL (INTEGRATED & STANDALONE EDC) */}
+                    {selectedPayMode === 'card' && cart.length > 0 && (
+                      <PosCardCheckoutPanel
+                        branchId={branches[0]?.id || 'b_main'}
+                        payableMinor={finalPayableMinor}
+                        cashierName={user?.name}
+                        onPaymentSuccess={(details) => {
+                          setPaymentCardRef(details.reference);
+                        }}
+                        showToast={showToast}
+                      />
+                    )}
+
                     {/* SPLIT TENDER ASSISTANT CARD (MULTI-TENDER: HALF UPI / HALF CASH / CUSTOM) */}
                     {selectedPayMode === 'split' && cart.length > 0 && (
                       <div className="bento-split-tender-card">
@@ -7192,49 +7221,40 @@ export function App() {
               {/* ================= RIGHT / SIDE BENTO COLUMN: Customer & Scanner ================= */}
               <div className="bento-side-col">
                 <div className="bento-card bento-customer-card">
-                    <div className="bento-card-header">
+                    <div className="bento-card-header bento-customer-header">
                       <div className="bento-header-label">
-                        <span className="bento-icon-circle blue">
+                        <span className="bento-icon-circle indigo">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                           </svg>
                         </span>
                         <div>
-                          <h3 className="bento-card-title">Customer & Loyalty Rewards</h3>
+                          <h3 className="bento-card-title">Customer & Loyalty</h3>
                           <span className="bento-card-subtitle">
                             {shopLoyaltyActive
-                              ? `Earn ${shopPointsPer100} pts per ₹100 (1 pt = ${formatRupees(shopPointValMinor)}) • Redeem at checkout`
-                              : 'Loyalty rewards paused in store settings'}
+                              ? `Earn ${shopPointsPer100} pts per ₹100 spent`
+                              : 'Customer directory & account linking'}
                           </span>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <div className="bento-customer-header-actions">
+                        {shopLoyaltyActive && (
+                          <button
+                            type="button"
+                            className="bento-loyalty-scheme-pill"
+                            onClick={() => setShowPosLoyaltyModal(true)}
+                            title="Click to view & configure loyalty rewards scheme"
+                          >
+                            <span className="loyalty-pill-gift">🎁</span>
+                            <span className="loyalty-pill-text">{shopPointsPer100} pts/₹100</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="bento-loyalty-scheme-btn"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '0.35rem 0.65rem',
-                            fontSize: '0.74rem',
-                            fontWeight: 700,
-                            color: '#6b21a8',
-                            background: '#faf5ff',
-                            border: '1.2px solid #d8b4fe',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => setShowPosLoyaltyModal(true)}
-                          title="View & Configure Loyalty Rewards Scheme"
-                        >
-                          <span>🎁</span>
-                          <span>Scheme ({shopPointsPer100} pts/₹100)</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="bento-add-btn"
+                          className="bento-add-btn bento-add-cust-btn"
                           onClick={() => setShowPartyModal(true)}
                           title="Add New Customer"
                         >
@@ -7242,7 +7262,7 @@ export function App() {
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                           </svg>
-                          <span>Customer</span>
+                          <span>+ Customer</span>
                         </button>
                       </div>
                     </div>
@@ -7279,41 +7299,62 @@ export function App() {
                             </button>
                           </div>
                         ) : (
-                          <input
-                            type="text"
-                            className="bento-input"
-                            placeholder="📱 Enter customer mobile or name..."
-                            value={customerSearch}
-                            onChange={(e) => {
-                              setCustomerSearch(e.target.value);
-                              setShowCustomerDropdown(true);
-                            }}
-                            onFocus={() => {
-                              if (customerSearch.trim()) setShowCustomerDropdown(true);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') setShowCustomerDropdown(false);
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const cleanDigits = customerSearch.replace(/\D/g, '');
-                                const match = cleanDigits.length >= 7
-                                  ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
-                                  : null;
-                                if (match) {
-                                  setSelectedPartyId(match.id);
-                                  setCustomerSearch('');
-                                  setShowCustomerDropdown(false);
-                                  showToast(`✓ Linked member: ${match.name}`);
-                                } else if (cleanDigits.length >= 10) {
-                                  handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
-                                } else if (filteredParties.length === 1) {
-                                  setSelectedPartyId(filteredParties[0].id);
-                                  setCustomerSearch('');
-                                  setShowCustomerDropdown(false);
+                          <div className="bento-search-box-wrap">
+                            <svg className="bento-search-box-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <circle cx="11" cy="11" r="8"></circle>
+                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input
+                              type="text"
+                              className="bento-input bento-customer-search-input"
+                              placeholder="Search customer by mobile or name..."
+                              value={customerSearch}
+                              onChange={(e) => {
+                                setCustomerSearch(e.target.value);
+                                setShowCustomerDropdown(true);
+                              }}
+                              onFocus={() => {
+                                if (customerSearch.trim()) setShowCustomerDropdown(true);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') setShowCustomerDropdown(false);
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const cleanDigits = customerSearch.replace(/\D/g, '');
+                                  const match = cleanDigits.length >= 7
+                                    ? parties.find(p => p.type === 'customer' && p.phone && (p.phone === cleanDigits || p.phone.replace(/\D/g, '').endsWith(cleanDigits)))
+                                    : null;
+                                  if (match) {
+                                    setSelectedPartyId(match.id);
+                                    setCustomerSearch('');
+                                    setShowCustomerDropdown(false);
+                                    showToast(`✓ Linked member: ${match.name}`);
+                                  } else if (cleanDigits.length >= 10) {
+                                    handleQuickEnrollCustomer(cleanDigits, quickCustomerName);
+                                  } else if (filteredParties.length === 1) {
+                                    setSelectedPartyId(filteredParties[0].id);
+                                    setCustomerSearch('');
+                                    setShowCustomerDropdown(false);
+                                  }
                                 }
-                              }
-                            }}
-                          />
+                              }}
+                            />
+                            {customerSearch ? (
+                              <button
+                                type="button"
+                                className="bento-search-box-clear"
+                                onClick={() => {
+                                  setCustomerSearch('');
+                                  setShowCustomerDropdown(false);
+                                }}
+                                title="Clear search"
+                              >
+                                ✕
+                              </button>
+                            ) : (
+                              <span className="bento-search-box-hint">F3</span>
+                            )}
+                          </div>
                         )}
 
                         {showCustomerDropdown && customerSearch.trim().length > 0 && (() => {
@@ -7518,20 +7559,31 @@ export function App() {
                           )}
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <div className="bento-customer-quick-row">
-                            <div className="bento-walkin-pill">
-                              <span className="walkin-dot"></span>
-                              <span>Walk-in Customer</span>
-                              <span className="walkin-tag">Default</span>
+                        <div className="bento-walkin-unified-panel">
+                          <div className="walkin-unified-top">
+                            <div className="walkin-unified-left">
+                              <div className="walkin-unified-avatar">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                  <circle cx="9" cy="21" r="1"></circle>
+                                  <circle cx="20" cy="21" r="1"></circle>
+                                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                </svg>
+                              </div>
+                              <div className="walkin-unified-info">
+                                <div className="walkin-unified-name-row">
+                                  <span className="walkin-unified-name">Walk-in Customer</span>
+                                  <span className="walkin-unified-badge">Standard</span>
+                                </div>
+                                <span className="walkin-unified-sub">Counter sale · No member account linked</span>
+                              </div>
                             </div>
                             <button
                               type="button"
-                              className="bento-cust-count-badge"
+                              className="walkin-unified-dir-btn"
                               onClick={() => setShowPartyModal(true)}
-                              title="Open Customer Accounts Directory"
+                              title="Browse all customer accounts"
                             >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="9" cy="7" r="4"></circle>
                                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -7541,75 +7593,37 @@ export function App() {
                             </button>
                           </div>
 
-                          {/* Loyalty Program Active Notice in POS Walk-in View */}
+                          {/* Dynamic Loyalty Reward Bar */}
                           {shopLoyaltyActive && (
-                            <div
-                              className="bento-pos-loyalty-promo"
-                              style={{
-                                padding: '0.65rem 0.85rem',
-                                borderRadius: '8px',
-                                background: 'linear-gradient(135deg, #faf5ff 0%, #fdf4ff 100%)',
-                                border: '1.2px solid #e9d5ff',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '0.35rem',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 700, fontSize: '0.78rem', color: '#6b21a8' }}>
-                                  <span>🎁</span>
-                                  <span>Customer Loyalty Rewards Active</span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px', border: '1px solid #a7f3d0' }}>
-                                  {shopPointsPer100} pts / ₹100
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.72rem', color: '#4b5563', lineHeight: 1.4 }}>
-                                Customers earn <strong>{shopPointsPer100} points</strong> for every ₹100 spent (1 pt = {formatRupees(shopPointValMinor)} discount).
-                              </div>
+                            <div className="walkin-loyalty-bottom-bar">
                               {cart.length > 0 ? (
-                                <div
-                                  style={{
-                                    marginTop: '0.2rem',
-                                    padding: '0.35rem 0.6rem',
-                                    background: '#f0fdf4',
-                                    border: '1px dashed #86efac',
-                                    borderRadius: '6px',
-                                    fontSize: '0.73rem',
-                                    color: '#166534',
-                                    fontWeight: 700,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                  }}
-                                >
-                                  <span>✨ This bill will earn: <strong>+{pointsToEarnOnBill} pts</strong></span>
+                                <div className="walkin-loyalty-earning-row">
+                                  <div className="loyalty-earning-left">
+                                    <span className="loyalty-sparkle-pill">+{pointsToEarnOnBill} pts</span>
+                                    <span className="loyalty-earning-text">
+                                      Earns <strong>+{pointsToEarnOnBill} points</strong> on bill ({formatRupees(pointsToEarnOnBill * shopPointValMinor)})
+                                    </span>
+                                  </div>
                                   <button
                                     type="button"
+                                    className="walkin-link-member-btn"
                                     onClick={() => {
-                                      const input = document.querySelector('.customer-input-wrap input') as HTMLInputElement;
+                                      const input = document.querySelector('.bento-customer-search-input') as HTMLInputElement;
                                       if (input) {
                                         input.focus();
-                                        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        input.select();
                                       }
-                                    }}
-                                    style={{
-                                      background: '#16a34a',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      padding: '2px 8px',
-                                      fontSize: '0.7rem',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
                                     }}
                                   >
                                     + Link Member
                                   </button>
                                 </div>
                               ) : (
-                                <div style={{ fontSize: '0.7rem', color: '#7c3aed', fontStyle: 'italic' }}>
-                                  💡 Enter customer mobile above or add items to calculate points!
+                                <div className="walkin-loyalty-scheme-row">
+                                  <span className="loyalty-gift-tag">🎁 Loyalty</span>
+                                  <span className="loyalty-scheme-text">
+                                    Earn <strong>{shopPointsPer100} pts / ₹100 spent</strong> (1 pt = {formatRupees(shopPointValMinor)}). Enter mobile to credit points!
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -11786,62 +11800,13 @@ export function App() {
 
               {/* Subtab 6: Card Terminal */}
               {paySettingsSubTab === 'terminal' && (
-                <div style={{ maxWidth: '640px' }}>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
-                    Card Payment Terminal (Swipe / Tap)
-                  </h4>
-                  <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Configure external EDC card machine or integrated POS terminal for credit and debit cards.
-                  </p>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.9rem 1.15rem',
-                    background: '#faf9ff',
-                    border: '1px solid #ede9fe',
-                    borderRadius: '12px',
-                    marginBottom: '1.25rem'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        Card Payment in POS Checkout
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Shows card tender option during billing
-                      </div>
-                    </div>
-                    <ToggleSwitch
-                      checked={payMethodsEnabled.includes('card')}
-                      disabled={user?.role === 'cashier'}
-                      onChange={() => {
-                        if (payMethodsEnabled.includes('card')) {
-                          setPayMethodsEnabled(payMethodsEnabled.filter((m) => m !== 'card'));
-                        } else {
-                          setPayMethodsEnabled([...payMethodsEnabled, 'card']);
-                        }
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{
-                      padding: '0.7rem 1.5rem',
-                      fontSize: '0.88rem',
-                      fontWeight: 700,
-                      background: 'linear-gradient(135deg, #6d4aff 0%, #5b3ee0 100%)',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 14px rgba(109, 74, 255, 0.3)',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => handleSavePaymentSettings()}
-                  >
-                    Save Card Settings
-                  </button>
-                </div>
+                <TerminalManagementTab
+                  userRole={user?.role}
+                  payMethodsEnabled={payMethodsEnabled}
+                  setPayMethodsEnabled={setPayMethodsEnabled}
+                  onSavePaymentSettings={handleSavePaymentSettings}
+                  showToast={showToast}
+                />
               )}
             </div>
 
