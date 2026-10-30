@@ -918,4 +918,14 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS invoices_client_id ON invoices (tenant_id, client_id)`,
     ],
   },
+  {
+    version: 33,
+    statements: [
+      `ALTER TABLE card_terminals ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      `CREATE INDEX IF NOT EXISTS card_terminals_deleted_at ON card_terminals (tenant_id, deleted_at)`,
+      `ALTER TABLE terminal_transactions ALTER COLUMN terminal_id DROP NOT NULL`,
+      `ALTER TABLE terminal_transactions DROP CONSTRAINT IF EXISTS terminal_transactions_terminal_id_fkey`,
+      `ALTER TABLE terminal_transactions ADD CONSTRAINT terminal_transactions_terminal_id_fkey FOREIGN KEY (terminal_id) REFERENCES card_terminals(id) ON DELETE SET NULL`,
+    ],
+  },
 ];
