@@ -1,12 +1,12 @@
 // Types and rules shared by server and client.
 
-export type Role = 'owner' | 'manager' | 'cashier' | 'accountant';
-export const ROLES: Role[] = ['owner', 'manager', 'cashier', 'accountant'];
+export type Role = 'owner' | 'manager' | 'cashier' | 'accountant' | 'counter';
+export const ROLES: Role[] = ['owner', 'manager', 'cashier', 'accountant', 'counter'];
 
 const ALL: Role[] = ['owner', 'manager', 'cashier', 'accountant'];
 /** Who may do what. The server enforces this; the client only uses it to hide buttons. */
 export const PERMS = {
-  sell: ['owner', 'manager', 'cashier'],
+  sell: ['owner', 'manager', 'cashier', 'counter'],
   'bills.view': ALL,
   returns: ['owner', 'manager'],
   'items.view': ALL,
@@ -58,7 +58,7 @@ export interface Branch {
   active: boolean;
   counters: string[];
   managerId?: string | null;
-  managerName?: string | null;
+  managerName?: string | null; managerEmail?: string | null; managerUsername?: string | null; countersTotal?: number; countersActive?: number;
   createdAt?: string;
   updatedAt?: string;
 }

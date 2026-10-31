@@ -23,7 +23,11 @@ export const userView = (u: any) => {
     employeeId: u.id,
     name: u.name,
     email: u.email,
+    username: u.username || null,
     role: u.role as Role,
+    status: u.status || (u.active ? 'ACTIVE' : 'DISABLED'),
+    mustChangePassword: Boolean(u.mustChangePassword ?? u.must_change_password),
+    branchId: u.branchId ?? u.branch_id ?? null,
     assignedLocation,
     assignedCounter,
     allowedLocations,
@@ -37,8 +41,8 @@ const weak = (pw: unknown) => {
 
 /** The secret that signs tokens is the same one the request checker uses: it is passed in once, from createApp. */
 export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: number }) {
-  const issueToken = (u: { id: string; tenantId: string; passwordHash: string }) =>
-    signToken({ sub: u.id, tid: u.tenantId, ph: passwordStamp(u.passwordHash) }, tokens.secret, tokens.ttlSeconds);
+  const issueToken = (u: any) =>
+    signToken({ sub: u.id, tid: u.tenantId, ph: passwordStamp(u.passwordHash), role: u.role, branchId: u.branchId ?? u.branch_id ?? null }, tokens.secret, tokens.ttlSeconds);
 
   // Create a new shop and its first (owner) user.
   r.post('/api/auth/register', async (ctx) => {
@@ -73,36 +77,65 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
   });
 
   r.post('/api/auth/login', async (ctx) => {
-    const rawLogin = V.str(ctx.body?.email || ctx.body?.login || ctx.body?.employeeId, 'Email or Employee ID', { required: true, max: 254 }).trim();
+    const rawLogin = V.str(
+      ctx.body?.identifier || ctx.body?.email || ctx.body?.login || ctx.body?.employeeId,
+      'Username or email ID',
+      { required: true, max: 254 }
+    ).trim();
     const password = V.str(ctx.body?.password, 'Password', { required: true, max: 128 });
     const loginLower = rawLogin.toLowerCase();
     const loginUpper = rawLogin.toUpperCase();
     rateLimit(`login:${ctx.ip}:${loginLower}`, 10, 15 * 60_000);
     rateLimit(`login-ip:${ctx.ip}`, 100, 15 * 60_000);
-    const u = await ctx.db.one(
-      `SELECT id, tenant_id, name, email, role, active, password_hash, assigned_location, assigned_counter, allowed_locations
-       FROM users
-       WHERE lower(email) = ? OR upper(id) = ? OR lower(id) = ? OR lower(email) = ?`,
-      [loginLower, loginUpper, loginLower, `${loginLower}@billing.local`]
-    );
+
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawLogin);
+    let u: any;
+    if (isEmail) {
+      u = await ctx.db.one(
+        `SELECT id, tenant_id, name, email, username, role, active, status, must_change_password, branch_id, password_hash, assigned_location, assigned_counter, allowed_locations
+         FROM users
+         WHERE lower(email) = ? AND deleted_at IS NULL`,
+        [loginLower]
+      );
+    } else {
+      const cleanUsername = loginLower.startsWith('@') ? loginLower.slice(1) : loginLower;
+      u = await ctx.db.one(
+        `SELECT id, tenant_id, name, email, username, role, active, status, must_change_password, branch_id, password_hash, assigned_location, assigned_counter, allowed_locations
+         FROM users
+         WHERE (lower(username) = ? OR upper(id) = ? OR lower(id) = ? OR lower(email) = ?) AND deleted_at IS NULL`,
+        [cleanUsername, loginUpper, loginLower, `${cleanUsername}@billing.local`]
+      );
+    }
+
     if (!u) {
       burnPasswordTime(password);
-      throw new HttpError(401, 'BAD_LOGIN', 'Email or password is wrong');
+      throw new HttpError(401, 'BAD_LOGIN', 'Incorrect username/email or password');
     }
     if (!verifyPassword(password, u.passwordHash)) {
       await audit(ctx.db, ctx, { action: 'auth.login_failed', entity: 'user', entityId: u.id, tenantId: u.tenantId, userId: u.id, userName: u.name });
-      throw new HttpError(401, 'BAD_LOGIN', 'Email or password is wrong');
+      throw new HttpError(401, 'BAD_LOGIN', 'Incorrect username/email or password');
     }
-    if (!u.active) throw new HttpError(403, 'ACCOUNT_OFF', 'This account has been switched off. Please ask the shop owner.');
-    await ctx.db.exec('UPDATE users SET last_login_at = now() WHERE id = ?', [u.id]);
+    if (u.status === 'DISABLED' || !u.active) {
+      throw new HttpError(403, 'ACCOUNT_OFF', 'This account has been switched off. Please contact your Super Admin.');
+    }
+
+    const nextStatus = u.status === 'INVITED' ? 'ACTIVE' : (u.status || 'ACTIVE');
+    await ctx.db.exec(
+      'UPDATE users SET last_login_at = now(), status = ? WHERE id = ?',
+      [nextStatus, u.id]
+    );
+    u.status = nextStatus;
+
     await audit(ctx.db, ctx, { action: 'auth.login', entity: 'user', entityId: u.id, tenantId: u.tenantId, userId: u.id, userName: u.name });
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [u.tenantId]);
-    return { token: issueToken(u), user: userView(u), shop: shopView(shop), perms: permsFor(u.role) };
+    const uv = userView(u);
+    return { token: issueToken(u), user: uv, shop: shopView(shop), perms: permsFor(u.role), role: uv.role, branchId: uv.branchId };
   });
 
   r.get('/api/auth/me', requireUser, async (ctx) => {
     const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [ctx.user!.tenantId]);
-    return { user: userView(ctx.user), shop: shopView(shop), perms: permsFor(ctx.user!.role) };
+    const uv = userView(ctx.user);
+    return { user: uv, shop: shopView(shop), perms: permsFor(ctx.user!.role), role: uv.role, branchId: uv.branchId };
   });
 
   // Tokens are stateless: the browser simply forgets its token. Recorded so the audit trail shows sign-outs.
@@ -121,7 +154,7 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
     if (next === cur) throw bad('Please choose a new password that is different from the current one', 'VALIDATION', { field: 'New password' });
     const passwordHash = hashPassword(next);
     await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, u.id]);
+      await q.exec('UPDATE users SET password_hash = ?, must_change_password = false, updated_at = now() WHERE id = ?', [passwordHash, u.id]);
       await audit(q, ctx, { action: 'auth.password_changed', entity: 'user', entityId: u.id });
     });
     return { token: issueToken({ id: u.id, tenantId: u.tenantId, passwordHash }) };

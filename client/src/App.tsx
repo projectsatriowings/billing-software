@@ -75,6 +75,8 @@ import { ProductMovementAnalysisView } from './components/inventory/ProductMovem
 import { StockTransferView } from './components/inventory/StockTransferView';
 import type { Branch } from '../../shared/types.ts';
 import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
+import { UserManagementView } from './components/users/UserManagementView';
+import { BranchUserManagementView } from './components/users/BranchUserManagementView';
 import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
 import {
   CreditCardIcon,
@@ -142,7 +144,6 @@ import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx'
 import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
 import { DiscountsPromotionsView } from './components/promotions/DiscountsPromotionsView.tsx';
 import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
-import { fetchPromotions, type PublicPaymentSettings, type PaymentAttempt, type Branch } from './api';
 import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
 
@@ -450,6 +451,7 @@ export function App() {
     | 'gst-import-export'
     | 'gst-filing-history'
     | 'promotions'
+    | 'user-management'
   >('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
   const [displayTab, setDisplayTab] = useState<string>('dashboard');
@@ -765,6 +767,7 @@ export function App() {
   const [settingsAddress, setSettingsAddress] = useState('');
   const [settingsUpiId, setSettingsUpiId] = useState('');
   const [settingsPrefix, setSettingsPrefix] = useState('');
+  const [settingsOwnerEmail, setSettingsOwnerEmail] = useState('');
   const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
 
   // Settings: WhatsApp Bill Sharing (Section 9.1)
@@ -1217,24 +1220,32 @@ export function App() {
     }
   };
 
-  // Listen for hash changes
+  // Listen for hash & pathname / popstate changes
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleLocationChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
+      const path = window.location.pathname;
+      if (path === '/user-management') {
+        setView('dashboard');
+        setActiveTab('user-management');
+      } else if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
         setView(hash as any);
-      } else if (hash === 'stock-transfer') {
+      } else if (hash === 'stock-transfer' || path === '/stock-transfer') {
         setView('dashboard');
         setActiveTab('stock-transfer');
         setShowInventoryDropdown(true);
-      } else if (hash === 'product-analysis' || hash === 'product-movement') {
+      } else if (hash === 'product-analysis' || hash === 'product-movement' || path === '/product-analysis' || path === '/product-movement') {
         setView('dashboard');
         setActiveTab('product-movement');
         setShowInventoryDropdown(true);
       }
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+    };
   }, []);
 
   // Check auth
@@ -1264,13 +1275,28 @@ export function App() {
           currentHash === 'stock-transfer' ||
           tabParam === 'stock-transfer' ||
           window.location.pathname === '/stock-transfer';
+        const isUserManagementRoute =
+          window.location.pathname === '/user-management' ||
+          currentHash === 'user-management' ||
+          tabParam === 'user-management';
         const isProductAnalysisRoute =
           ['product-analysis', 'product-movement'].includes(currentHash) ||
           ['product-analysis', 'product-movement'].includes(tabParam || '') ||
           window.location.pathname === '/product-analysis' ||
           window.location.pathname === '/product-movement';
 
-        if (isStockTransferRoute) {
+        if (isUserManagementRoute) {
+          const rUpper = String(res.user?.role || '').toUpperCase();
+          if (rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER') {
+            setView('dashboard');
+            setActiveTab('user-management');
+          } else {
+            setView('dashboard');
+            setActiveTab('pos');
+            try { window.history.replaceState({}, '', '/'); } catch {}
+            showToast("You don't have access to User Management");
+          }
+        } else if (isStockTransferRoute) {
           setView('dashboard');
           setActiveTab('stock-transfer');
           setShowInventoryDropdown(true);
@@ -1278,7 +1304,7 @@ export function App() {
           setView('dashboard');
           setActiveTab('product-movement');
           setShowInventoryDropdown(true);
-        } else if (currentHash === 'dashboard') {
+        } else if (currentHash === 'dashboard' || window.location.pathname === '/' || !currentHash) {
           setView('dashboard');
         } else if (currentHash === 'selector') {
           setView('selector');
@@ -1287,7 +1313,7 @@ export function App() {
         } else if (currentHash === 'login') {
           setView('login');
         } else {
-          setView('landing');
+          setView('dashboard');
         }
       } catch {
         clearToken();
@@ -1307,6 +1333,7 @@ export function App() {
     setSettingsAddress(s.address || '');
     setSettingsUpiId(s.upiId || '');
     setSettingsPrefix(s.invoicePrefix || 'INV');
+    setSettingsOwnerEmail(s.ownerEmail || '');
     setSettingsWhatsAppEnabled(s.whatsappEnabled !== false);
     setSettingsWhatsAppDefaultLang(s.whatsappDefaultLang || 'en');
     setSettingsWhatsAppIncludeLink(Boolean(s.whatsappIncludeLink));
@@ -1324,6 +1351,17 @@ export function App() {
     }
     if (!can(user.role as any, 'expenses') && activeTab === 'expenses') {
       setActiveTab('pos');
+    }
+    const rUpper = String(user?.role || '').toUpperCase();
+    const canAccessUm = rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER';
+    if (!canAccessUm && activeTab === 'user-management') {
+      setActiveTab('pos');
+      try {
+        if (window.location.pathname === '/user-management') {
+          window.history.replaceState({}, '', '/');
+        }
+      } catch {}
+      showToast("You don't have access to User Management");
     }
     if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
@@ -1901,6 +1939,7 @@ export function App() {
           address: settingsAddress || null,
           upiId: settingsUpiId || null,
           invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
           whatsappEnabled: settingsWhatsAppEnabled,
           whatsappDefaultLang: settingsWhatsAppDefaultLang,
           whatsappIncludeLink: settingsWhatsAppIncludeLink,
@@ -1940,6 +1979,7 @@ export function App() {
           address: shop.address || null,
           upiId: shop.upiId || null,
           invoicePrefix: shop.invoicePrefix || 'INV',
+          ownerEmail: shop.ownerEmail || null,
           language: shop.language || 'en',
           locations: shop.locations || ['MAIN'],
           whatsappEnabled: shop.whatsappEnabled !== false,
@@ -5808,11 +5848,54 @@ export function App() {
           </div>
 
           <div className="sidebar-footer-buttons-list">
+            {(() => {
+              const rUpper = String(user?.role || '').toUpperCase();
+              const canAccessUm = rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER';
+              if (!canAccessUm) return null;
+              return (
+                <button
+                  type="button"
+                  className={`sidebar-action-row-btn ${activeTab === 'user-management' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('user-management');
+                    try {
+                      const url = new URL(window.location.href);
+                      url.pathname = '/user-management';
+                      window.history.pushState({}, '', url.toString());
+                    } catch {}
+                  }}
+                  title="User Management"
+                  aria-label="User Management"
+                >
+                  <span className="action-row-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <circle cx="19" cy="11" r="2" />
+                      <path d="M19 8v1" />
+                      <path d="M19 13v1" />
+                      <path d="M21.6 9.5l-.87.5" />
+                      <path d="M17.27 12l-.87.5" />
+                      <path d="M21.6 12.5l-.87-.5" />
+                      <path d="M17.27 10l-.87-.5" />
+                    </svg>
+                  </span>
+                  <span>User Management</span>
+                </button>
+              );
+            })()}
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className="sidebar-action-row-btn"
-                onClick={() => setActiveTab('settings')}
+                className={`sidebar-action-row-btn ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('settings');
+                  try {
+                    if (window.location.pathname === '/user-management') {
+                      window.history.pushState({}, '', '/');
+                    }
+                  } catch {}
+                }}
                 title="Store Configuration & Settings"
               >
                 <span className="action-row-icon">
@@ -5885,7 +5968,7 @@ export function App() {
         {/* View Transition Stage (SPA Bento Transition) */}
         <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && !(user.role === 'manager' && displayTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -10049,6 +10132,24 @@ export function App() {
           />
         )}
 
+        {/* TAB: USER MANAGEMENT (SUPER ADMIN & STORE MANAGER) */}
+        {(activeTab === 'user-management' || displayTab === 'user-management') && (
+          (() => {
+            const roleUpper = String(user?.role || '').toUpperCase();
+            if (roleUpper === 'OWNER' || roleUpper === 'SUPER_ADMIN') {
+              return <UserManagementView />;
+            }
+            if (roleUpper === 'MANAGER' || roleUpper === 'STORE_MANAGER') {
+              return <BranchUserManagementView user={user} />;
+            }
+            return (
+              <div style={{ padding: '60px 24px', textAlign: 'center', color: '#5F5B76' }}>
+                <p style={{ fontSize: '16px', fontWeight: 600 }}>You don't have access to User Management</p>
+              </div>
+            );
+          })()
+        )}
+
         {/* TAB: SALES ANALYSIS */}
         {displayTab === 'sales-analysis' && (
           <SalesAnalysisView
@@ -10678,6 +10779,18 @@ export function App() {
                     />
                   </div>
                   <div className="form-group">
+                    <label className="form-label">
+                      Owner Email ID <span style={{ color: '#5B3BE8', fontSize: '0.8rem', fontWeight: 500 }}>(Receives critical deletion &amp; security alerts)</span>
+                    </label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="owner@supermarket.com"
+                      value={settingsOwnerEmail}
+                      onChange={(e) => setSettingsOwnerEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">UPI ID for Payment QR (VPA)</label>
                     <input
                       type="text"
@@ -10830,8 +10943,6 @@ export function App() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'colu
-... [truncated for diff preview]
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {[
                         { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: <BanknoteIcon size={20} />, color: '#16a34a', bg: '#f0fdf4' },

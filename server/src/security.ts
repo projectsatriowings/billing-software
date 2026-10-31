@@ -37,11 +37,11 @@ export function passwordProblem(pw: unknown): string | null {
 }
 
 // ---------------------------------------------------------------- signed login tokens (HS256 JWT)
-export interface TokenPayload { sub: string; tid: string; ph: string; iat: number; exp: number }
+export interface TokenPayload { sub: string; tid: string; ph: string; iat: number; exp: number; role?: string; branchId?: string | null }
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const sign = (data: string, secret: string) => crypto.createHmac('sha256', secret).update(data).digest('base64url');
 
-export function signToken(p: { sub: string; tid: string; ph: string }, secret: string, ttlSeconds: number, nowSec = Math.floor(Date.now() / 1000)): string {
+export function signToken(p: { sub: string; tid: string; ph: string; role?: string; branchId?: string | null }, secret: string, ttlSeconds: number, nowSec = Math.floor(Date.now() / 1000)): string {
   const head = b64({ alg: 'HS256', typ: 'JWT' });
   const body = b64({ ...p, iat: nowSec, exp: nowSec + ttlSeconds });
   return `${head}.${body}.${sign(`${head}.${body}`, secret)}`;

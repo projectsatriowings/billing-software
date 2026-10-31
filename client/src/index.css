@@ -2910,9 +2910,41 @@ body {
 }
 
 .sidebar-action-row-btn.active {
-  background: rgba(99, 102, 241, 0.28);
+  background: #5B3BE8 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(91, 59, 232, 0.35);
+}
+
+.sidebar-action-row-btn.active .action-row-icon,
+.sidebar-action-row-btn.active .action-row-icon svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.app-sidebar.icon-only .sidebar-action-row-btn.active {
+  background: #5B3BE8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(91, 59, 232, 0.45);
+}
+
+.app-sidebar.icon-only .sidebar-action-row-btn[title]:hover::after {
+  content: attr(title);
+  position: fixed;
+  left: 78px;
+  background: #1e1b4b;
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.4);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 0.01em;
+  animation: railTooltipIn 0.15s ease-out;
 }
 
 .sidebar-action-row-btn.signout {

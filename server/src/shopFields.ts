@@ -21,12 +21,13 @@ export interface ShopFields {
   loyaltyPointsPer100: number;
   loyaltyPointValueMinor: number;
   loyaltyMinPointsRedeem: number;
+  ownerEmail: string | null;
 }
 
 export const SHOP_DEFAULTS: ShopFields = {
   name: '', businessType: 'retail', gstin: null, stateCode: '33', address: null, phone: null, upiId: null, invoicePrefix: 'INV', language: 'en', locations: ['MAIN'],
   whatsappEnabled: true, whatsappDefaultLang: 'en', whatsappIncludeLink: false,
-  loyaltyEnabled: true, loyaltyPointsPer100: 10, loyaltyPointValueMinor: 10, loyaltyMinPointsRedeem: 10,
+  loyaltyEnabled: true, loyaltyPointsPer100: 10, loyaltyPointValueMinor: 10, loyaltyMinPointsRedeem: 10, ownerEmail: null,
 };
 
 const has = (o: any, k: string) => o != null && Object.prototype.hasOwnProperty.call(o, k);
@@ -112,6 +113,14 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
   if (has(body, 'loyaltyPointsPer100')) out.loyaltyPointsPer100 = V.int(body.loyaltyPointsPer100 ?? 10, 'Loyalty points per ₹100', { min: 0, max: 1000 });
   if (has(body, 'loyaltyPointValueMinor')) out.loyaltyPointValueMinor = V.int(body.loyaltyPointValueMinor ?? 10, 'Point cash value (paise)', { min: 1, max: 10000 });
   if (has(body, 'loyaltyMinPointsRedeem')) out.loyaltyMinPointsRedeem = V.int(body.loyaltyMinPointsRedeem ?? 10, 'Minimum points to redeem', { min: 0, max: 10000 });
+  if (has(body, 'ownerEmail')) {
+    const raw = V.optStr(body.ownerEmail, 'Owner email', 254);
+    if (raw) {
+      out.ownerEmail = parseEmail(raw, 'Owner email');
+    } else {
+      out.ownerEmail = null;
+    }
+  }
 
   return out;
 }
@@ -128,6 +137,7 @@ export function shopView(t: any) {
     loyaltyPointsPer100: Number(t.loyaltyPointsPer100 ?? t.loyalty_points_per_100 ?? 10),
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
+    ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
     createdAt: t.createdAt ?? t.created_at,
   };
 }
@@ -143,5 +153,6 @@ export function shopFromRow(t: any): ShopFields {
     loyaltyPointsPer100: Number(t.loyaltyPointsPer100 ?? t.loyalty_points_per_100 ?? 10),
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
+    ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
   };
 }

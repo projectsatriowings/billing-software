@@ -54,7 +54,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     try {
       const data = await api<{ token: string; user: User; shop: Shop }>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), identifier: email.trim(), password }),
       });
 
       setToken(data.token);
@@ -285,17 +285,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="form-group">
                 <label className="form-label" htmlFor="login-email">
                   {selectedRole === 'super_admin' && 'Super Admin Email'}
-                  {selectedRole === 'store_manager' && 'Store Manager Email'}
+                  {selectedRole === 'store_manager' && 'Store Manager Username or Email'}
                   {selectedRole === 'cashier' && 'Cashier Employee ID or Email'}{' '}
                   <span className="required-star">*</span>
                 </label>
                 <div className="input-with-icon">
                   <input
                     id="login-email"
-                    type={selectedRole === 'cashier' ? 'text' : 'email'}
+                    type={selectedRole === 'super_admin' ? 'email' : 'text'}
                     className="form-input"
                     required
-                    placeholder={selectedRole === 'cashier' ? 'e.g. CSH-101 or cashier@billing.local' : 'you@business.com'}
+                    placeholder={selectedRole === 'cashier' ? 'e.g. CSH-101 or cashier@billing.local' : selectedRole === 'store_manager' ? 'e.g. @karthik.r or manager@store.com' : 'you@business.com'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete={selectedRole === 'cashier' ? 'username' : 'email'}
