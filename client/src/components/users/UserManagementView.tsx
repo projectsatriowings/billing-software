@@ -281,6 +281,44 @@ export const UserManagementView: React.FC = () => {
   const [cntBranchFilter, setCntBranchFilter] = useState('ALL');
   const [cntStatusFilter, setCntStatusFilter] = useState('ALL');
 
+  // Derived card metrics directly from the loaded tables data (single source of truth)
+  const computedBranchTotal = branches.length;
+  const computedBranchActive = branches.filter((b) => b.active).length;
+  const computedBranchInactive = computedBranchTotal - computedBranchActive;
+
+  // A manager is assigned if their branchId is set and points to an existing branch
+  const activeBranchIds = new Set(branches.map((b) => b.id));
+  const computedManagersTotal = managers.length;
+  const computedManagersAssigned = managers.filter((m) => Boolean(m.branchId && activeBranchIds.has(m.branchId))).length;
+  const computedManagersUnassigned = computedManagersTotal - computedManagersAssigned;
+
+  // A branch is without a manager if no manager is assigned to its branchId and branch.managerId is empty
+  const assignedBranchIds = new Set(
+    managers.filter((m) => Boolean(m.branchId)).map((m) => m.branchId as string)
+  );
+  const computedBranchesWithoutManager = branches.filter(
+    (b) => !assignedBranchIds.has(b.id) && !b.managerId
+  ).length;
+
+  const computedCounterTotal = counters.length;
+  const computedCounterActive = counters.filter((c) => c.status === 'ACTIVE').length;
+  const computedCounterBranches = new Set(counters.map((c) => c.branch.id)).size;
+
+  // Prefer computed values from the live loaded tables, falling back to summary
+  const displayBranchesTotal = branches.length > 0 ? computedBranchTotal : summary.branches.total;
+  const displayBranchesActive = branches.length > 0 ? computedBranchActive : summary.branches.active;
+  const displayBranchesInactive = branches.length > 0 ? computedBranchInactive : summary.branches.inactive;
+
+  const displayManagersTotal = managers.length > 0 ? computedManagersTotal : summary.managers.total;
+  const displayManagersAssigned = managers.length > 0 ? computedManagersAssigned : summary.managers.assigned;
+  const displayManagersUnassigned = managers.length > 0 ? computedManagersUnassigned : summary.managers.unassigned;
+
+  const displayCountersTotal = counters.length > 0 ? computedCounterTotal : summary.counters.total;
+  const displayCountersActive = counters.length > 0 ? computedCounterActive : summary.counters.active;
+  const displayCounterBranches = counters.length > 0 ? computedCounterBranches : summary.counters.branches;
+
+  const displayBranchesWithoutManager = branches.length > 0 ? computedBranchesWithoutManager : summary.branchesWithoutManager;
+
   // Toast
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -1125,9 +1163,9 @@ export const UserManagementView: React.FC = () => {
               </div>
               <span className="um-stat-label">Branches</span>
             </div>
-            <div className="um-stat-value">{summary.branches.total}</div>
+            <div className="um-stat-value">{displayBranchesTotal}</div>
             <div className="um-stat-hint">
-              {summary.branches.active} active · {summary.branches.inactive} inactive
+              {displayBranchesActive} active · {displayBranchesInactive} inactive
             </div>
           </div>
 
@@ -1139,9 +1177,9 @@ export const UserManagementView: React.FC = () => {
               </div>
               <span className="um-stat-label">Store Managers</span>
             </div>
-            <div className="um-stat-value">{summary.managers.total}</div>
+            <div className="um-stat-value">{displayManagersTotal}</div>
             <div className="um-stat-hint">
-              {summary.managers.assigned} assigned · {summary.managers.unassigned} not assigned
+              {displayManagersAssigned} assigned · {displayManagersUnassigned} not assigned
             </div>
           </div>
 
@@ -1153,9 +1191,9 @@ export const UserManagementView: React.FC = () => {
               </div>
               <span className="um-stat-label">Counters</span>
             </div>
-            <div className="um-stat-value">{summary.counters.total}</div>
+            <div className="um-stat-value">{displayCountersTotal}</div>
             <div className="um-stat-hint">
-              {summary.counters.active} active · across {summary.counters.branches} branches
+              {displayCountersActive} active · {displayCounterBranches === 1 ? 'across 1 branch' : `across ${displayCounterBranches} branches`}
             </div>
           </div>
 
@@ -1167,7 +1205,7 @@ export const UserManagementView: React.FC = () => {
               </div>
               <span className="um-stat-label">Branches Without Manager</span>
             </div>
-            <div className="um-stat-value">{summary.branchesWithoutManager}</div>
+            <div className="um-stat-value">{displayBranchesWithoutManager}</div>
             <div className="um-stat-hint">Assign one so the branch can be run</div>
           </div>
         </div>
@@ -1184,7 +1222,7 @@ export const UserManagementView: React.FC = () => {
             onClick={() => handleTabSwitch('managers')}
           >
             <span>Store managers</span>
-            <span className="um-tab-badge">{summary.managers.total}</span>
+            <span className="um-tab-badge">{displayManagersTotal}</span>
           </button>
 
           <button
@@ -1195,7 +1233,7 @@ export const UserManagementView: React.FC = () => {
             onClick={() => handleTabSwitch('branches')}
           >
             <span>Branches</span>
-            <span className="um-tab-badge">{summary.branches.total}</span>
+            <span className="um-tab-badge">{displayBranchesTotal}</span>
           </button>
 
           <button
@@ -1206,7 +1244,7 @@ export const UserManagementView: React.FC = () => {
             onClick={() => handleTabSwitch('counters')}
           >
             <span>All counters</span>
-            <span className="um-tab-badge">{summary.counters.total}</span>
+            <span className="um-tab-badge">{displayCountersTotal}</span>
           </button>
         </div>
 

@@ -250,33 +250,82 @@ export function registerUserManagement(r: Router) {
     requireSuperAdmin(ctx);
     const tenantId = ctx.user!.tenantId;
 
-    // Branches total, active, inactive
-    const branches = await ctx.db.query<{ active: boolean; manager_id: string | null }>(
-      'SELECT active, manager_id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL',
-      [tenantId],
+    // 1. Branches total, active, inactive, branchesWithoutManager
+    const branchStats = await ctx.db.one<any>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE active = true)::int AS active,
+         COUNT(*) FILTER (WHERE active = false)::int AS inactive,
+         COUNT(*) FILTER (
+           WHERE NOT EXISTS (
+             SELECT 1 FROM users u
+             WHERE (u.branch_id = branches.id OR u.id = branches.manager_id)
+               AND lower(u.role) IN ('manager', 'store_manager')
+               AND u.tenant_id = branches.tenant_id
+               AND u.deleted_at IS NULL
+           )
+         )::int AS branches_without_manager
+       FROM branches
+       WHERE tenant_id = ? AND deleted_at IS NULL`,
+      [tenantId]
     );
-    const branchTotal = branches.length;
-    const branchActive = branches.filter((b) => b.active).length;
-    const branchInactive = branchTotal - branchActive;
-    const branchesWithoutManager = branches.filter((b) => !b.manager_id).length;
 
-    // Managers total, assigned, unassigned
-    const managers = await ctx.db.query<{ branch_id: string | null }>(
-      `SELECT branch_id FROM users WHERE tenant_id = ? AND role = 'manager' AND deleted_at IS NULL`,
-      [tenantId],
+    // 2. Managers total, assigned, unassigned
+    const managerStats = await ctx.db.one<any>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (
+           WHERE u.branch_id IS NOT NULL
+             AND EXISTS (
+               SELECT 1 FROM branches b
+               WHERE b.id = u.branch_id
+                 AND b.tenant_id = u.tenant_id
+                 AND b.deleted_at IS NULL
+             )
+         )::int AS assigned,
+         COUNT(*) FILTER (
+           WHERE u.branch_id IS NULL
+              OR NOT EXISTS (
+               SELECT 1 FROM branches b
+               WHERE b.id = u.branch_id
+                 AND b.tenant_id = u.tenant_id
+                 AND b.deleted_at IS NULL
+             )
+         )::int AS unassigned
+       FROM users u
+       WHERE u.tenant_id = ?
+         AND lower(u.role) IN ('manager', 'store_manager')
+         AND u.deleted_at IS NULL`,
+      [tenantId]
     );
-    const managerTotal = managers.length;
-    const managerAssigned = managers.filter((m) => !!m.branch_id).length;
-    const managerUnassigned = managerTotal - managerAssigned;
 
-    // Counters total, active, distinct branches
-    const counters = await ctx.db.query<{ status: string; branch_id: string }>(
-      'SELECT status, branch_id FROM counters WHERE tenant_id = ?',
-      [tenantId],
+    // 3. Counters total, active, distinct branches
+    const counterStats = await ctx.db.one<any>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS active,
+         COUNT(DISTINCT branch_id)::int AS branches
+       FROM counters
+       WHERE tenant_id = ?`,
+      [tenantId]
     );
-    const counterTotal = counters.length;
-    const counterActive = counters.filter((c) => c.status === 'ACTIVE').length;
-    const counterBranches = new Set(counters.map((c) => c.branch_id)).size;
+
+    const branchTotal = Number(branchStats?.total ?? 0);
+    const branchActive = Number(branchStats?.active ?? 0);
+    const branchInactive = Number(branchStats?.inactive ?? 0);
+    const branchesWithoutManager = Number(
+      branchStats?.branchesWithoutManager ?? branchStats?.branches_without_manager ?? 0
+    );
+
+    const managerTotal = Number(managerStats?.total ?? 0);
+    const managerAssigned = Number(managerStats?.assigned ?? 0);
+    const managerUnassigned = Number(
+      managerStats?.unassigned ?? (managerTotal - managerAssigned)
+    );
+
+    const counterTotal = Number(counterStats?.total ?? 0);
+    const counterActive = Number(counterStats?.active ?? 0);
+    const counterBranches = Number(counterStats?.branches ?? 0);
 
     return {
       branches: {
@@ -502,14 +551,15 @@ export function registerUserManagement(r: Router) {
         const br = await q.one<any>('SELECT id, name, manager_id FROM branches WHERE id = ? AND tenant_id = ?', [branchId, tenantId]);
         if (!br) throw notFound('Branch');
 
+        const prevMgrId = br.managerId ?? br.manager_id;
         // Unassign old manager from this branch
-        if (br.manager_id) {
-          await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [br.manager_id]);
+        if (prevMgrId) {
+          await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [prevMgrId]);
           await audit(q, ctx, {
             action: 'branch.unassign_manager',
             entity: 'branch',
             entityId: branchId,
-            detail: { previousManagerId: br.manager_id, branchName: br.name },
+            detail: { previousManagerId: prevMgrId, branchName: br.name },
           });
         }
 
@@ -625,14 +675,15 @@ export function registerUserManagement(r: Router) {
     }
 
     const phone = b.phone !== undefined ? (b.phone ? String(b.phone).trim() : null) : existing.phone;
-    const branchId = b.branchId !== undefined ? (b.branchId ? String(b.branchId).trim() : null) : existing.branch_id;
+    const prevBranchId = existing.branchId ?? existing.branch_id;
+    const branchId = b.branchId !== undefined ? (b.branchId ? String(b.branchId).trim() : null) : prevBranchId;
 
     await ctx.db.tx(async (q) => {
       // If branch changed:
-      if (branchId !== existing.branch_id) {
+      if (branchId !== prevBranchId) {
         // Clear previous branch manager
-        if (existing.branch_id) {
-          await q.exec('UPDATE branches SET manager_id = NULL WHERE id = ? AND manager_id = ?', [existing.branch_id, managerId]);
+        if (prevBranchId) {
+          await q.exec('UPDATE branches SET manager_id = NULL WHERE id = ? AND (manager_id = ? OR manager_id IS NULL)', [prevBranchId, managerId]);
         }
 
         // If new branch selected, unassign any old manager and set this one
@@ -640,8 +691,9 @@ export function registerUserManagement(r: Router) {
           const br = await q.one<any>('SELECT id, manager_id FROM branches WHERE id = ? AND tenant_id = ?', [branchId, tenantId]);
           if (!br) throw notFound('Branch');
 
-          if (br.manager_id && br.manager_id !== managerId) {
-            await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [br.manager_id]);
+          const prevMgrOnNewBranch = br.managerId ?? br.manager_id;
+          if (prevMgrOnNewBranch && prevMgrOnNewBranch !== managerId) {
+            await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [prevMgrOnNewBranch]);
           }
           await q.exec('UPDATE branches SET manager_id = ?, updated_at = now() WHERE id = ?', [managerId, branchId]);
         }
@@ -786,24 +838,26 @@ export function registerUserManagement(r: Router) {
       [branchId, tenantId],
     );
     if (!branch) throw notFound('Branch');
+    const curManagerId = branch.managerId ?? branch.manager_id;
 
     await ctx.db.tx(async (q) => {
       // 1. If branch had a previous manager, unassign them
-      if (branch.manager_id && branch.manager_id !== managerId) {
-        await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [branch.manager_id]);
+      if (curManagerId && curManagerId !== managerId) {
+        await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [curManagerId]);
       }
 
       // 2. If assigning a new manager
       if (managerId) {
         const mgr = await q.one<any>(
-          `SELECT id, name, branch_id FROM users WHERE id = ? AND tenant_id = ? AND role = 'manager'`,
+          `SELECT id, name, branch_id FROM users WHERE id = ? AND tenant_id = ? AND lower(role) IN ('manager', 'store_manager')`,
           [managerId, tenantId],
         );
         if (!mgr) throw notFound('Store Manager');
 
+        const mgrPrevBranchId = mgr.branchId ?? mgr.branch_id;
         // If this manager previously had another branch, unassign from that branch
-        if (mgr.branch_id && mgr.branch_id !== branchId) {
-          await q.exec('UPDATE branches SET manager_id = NULL WHERE id = ?', [mgr.branch_id]);
+        if (mgrPrevBranchId && mgrPrevBranchId !== branchId) {
+          await q.exec('UPDATE branches SET manager_id = NULL WHERE id = ?', [mgrPrevBranchId]);
         }
 
         // Assign manager to branch
@@ -812,6 +866,9 @@ export function registerUserManagement(r: Router) {
       } else {
         // Clear branch manager
         await q.exec('UPDATE branches SET manager_id = NULL, updated_at = now() WHERE id = ?', [branchId]);
+        if (curManagerId) {
+          await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [curManagerId]);
+        }
       }
 
       await audit(q, ctx, {
@@ -970,13 +1027,14 @@ export function registerUserManagement(r: Router) {
     const email = b.email ? String(b.email).trim().toLowerCase() : null;
     const sendEmail = Boolean(b.sendEmail && email);
     const password = b.password ? String(b.password).trim() : null;
+    const mustChangePassword = b.mustChangePassword !== undefined ? Boolean(b.mustChangePassword) : true;
     if (password && (loginUsername || email)) {
       const passwordHash = hashPassword(password);
       const uId = newId('u');
       await ctx.db.exec(
-        `INSERT INTO users (id, tenant_id, name, username, email, password_hash, role, status, active, branch_id, counter_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'counter', 'INVITED', true, ?, ?, now(), now())`,
-        [uId, tenantId, name, loginUsername, email, passwordHash, branchId, counterId]
+        `INSERT INTO users (id, tenant_id, name, username, email, password_hash, role, status, active, branch_id, counter_id, must_change_password, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'counter', 'INVITED', true, ?, ?, ?, now(), now())`,
+        [uId, tenantId, name, loginUsername, email, passwordHash, branchId, counterId, mustChangePassword]
       );
       if (sendEmail && email) {
         const brInfo = await ctx.db.one<any>('SELECT name, code FROM branches WHERE id = ?', [branchId]);
@@ -994,6 +1052,7 @@ export function registerUserManagement(r: Router) {
             username: loginUsername,
             email,
             password,
+            mustChangePassword,
           },
         });
       }
@@ -1094,7 +1153,7 @@ export function registerUserManagement(r: Router) {
       });
 
       // 2. Unassign from branches
-      await q.exec('UPDATE branches SET manager_id = NULL WHERE manager_id = ?', [mgr.id]);
+      await q.exec('UPDATE branches SET manager_id = NULL WHERE manager_id = ? OR id = ?', [mgr.id, mgr.branchId ?? mgr.branch_id]);
 
       // 3. Clear non-cascading user references
       await q.exec('UPDATE invoices SET whatsapp_last_sent_by = NULL WHERE whatsapp_last_sent_by = ?', [mgr.id]);

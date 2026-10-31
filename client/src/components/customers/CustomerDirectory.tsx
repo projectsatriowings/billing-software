@@ -296,11 +296,7 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="header-title">
-                Customer Directory &amp; Points ({filteredCustomers.length}{' '}
-                {filteredCustomers.length === customersList.length ? 'total' : `of ${customersList.length}`})
-              </h2>
-              <p className="header-subtitle">
+              <p className="header-subtitle" style={{ margin: 0 }}>
                 Customer Name, Mobile Number, and Automatically Earned Points from Purchases
               </p>
             </div>

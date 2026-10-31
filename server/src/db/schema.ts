@@ -1131,6 +1131,10 @@ version: 29,
     ],
   },
   {
+    version: 42,
+    statements: [],
+  },
+  {
     version: 43,
     statements: [
       `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_number TEXT`,
@@ -1165,6 +1169,73 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS expenses_tenant_date ON expenses (tenant_id, expense_date DESC)`,
       `CREATE INDEX IF NOT EXISTS expenses_tenant_category ON expenses (tenant_id, category)`,
       `CREATE INDEX IF NOT EXISTS expenses_tenant_supplier ON expenses (tenant_id, supplier_id)`,
+    ],
+  },
+  {
+    version: 44,
+    statements: [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ`,
+      `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS password_reset_tokens_hash_idx ON password_reset_tokens (token_hash)`,
+      `CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens (user_id)`,
+      `ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_type_check`,
+      `ALTER TABLE email_logs ADD CONSTRAINT email_logs_type_check CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND','DELETION_ALERT','FORGOT_PASSWORD'))`,
+    ],
+  },
+  {
+    version: 45,
+    statements: [
+      `UPDATE branches b
+       SET manager_id = u.id, updated_at = now()
+       FROM users u
+       WHERE u.branch_id = b.id
+         AND lower(u.role) IN ('manager', 'store_manager')
+         AND u.tenant_id = b.tenant_id
+         AND u.deleted_at IS NULL
+         AND (b.manager_id IS NULL OR b.manager_id != u.id)`,
+      `UPDATE users u
+       SET branch_id = b.id, updated_at = now()
+       FROM branches b
+       WHERE b.manager_id = u.id
+         AND lower(u.role) IN ('manager', 'store_manager')
+         AND b.tenant_id = u.tenant_id
+         AND b.deleted_at IS NULL
+         AND (u.branch_id IS NULL OR u.branch_id != b.id)`,
+      `UPDATE users u
+       SET branch_id = b.id
+       FROM branches b
+       WHERE b.code = 'SKS_POR'
+         AND (lower(u.email) LIKE '%srishakram%' OR lower(u.name) LIKE '%sri%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE branches b
+       SET manager_id = u.id
+       FROM users u
+       WHERE b.code = 'SKS_POR'
+         AND (lower(u.email) LIKE '%srishakram%' OR lower(u.name) LIKE '%sri%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE users u
+       SET branch_id = b.id
+       FROM branches b
+       WHERE b.code = 'MAIN'
+         AND (lower(u.email) LIKE '%manager@billing.local%' OR lower(u.name) LIKE '%kavitha%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE branches b
+       SET manager_id = u.id
+       FROM users u
+       WHERE b.code = 'MAIN'
+         AND (lower(u.email) LIKE '%manager@billing.local%' OR lower(u.name) LIKE '%kavitha%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
     ],
   },
 ];

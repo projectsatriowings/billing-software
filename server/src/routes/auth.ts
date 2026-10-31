@@ -1,10 +1,22 @@
+import crypto from 'node:crypto';
 import { PERMS, type Perm, type Role } from '../../../shared/types.ts';
 import { audit } from '../audit.ts';
 import { requireUser } from '../auth.ts';
-import { bad, conflict, HttpError, rateLimit, V, type Router } from '../http.ts';
-import { burnPasswordTime, hashPassword, newId, passwordProblem, passwordStamp, signToken, verifyPassword } from '../security.ts';
+import { bad, conflict, HttpError, rateLimit, unauthorized, V, type Router } from '../http.ts';
+import {
+  burnPasswordTime,
+  generateTemporaryPassword,
+  hashPassword,
+  newId,
+  passwordProblem,
+  passwordStamp,
+  signToken,
+  validateNewPassword,
+  verifyPassword,
+} from '../security.ts';
 import { parseEmail, parseShopFields, shopView } from '../shopFields.ts';
 import { j } from '../db/index.ts';
+import { enqueuePasswordResetLinkEmail, getMailerConfig } from '../services/mailer.ts';
 
 export const permsFor = (role: Role): Perm[] => (Object.keys(PERMS) as Perm[]).filter((p) => (PERMS[p] as readonly Role[]).includes(role));
 export const userView = (u: any) => {
@@ -119,6 +131,26 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
       throw new HttpError(403, 'ACCOUNT_OFF', 'This account has been switched off. Please contact your Super Admin.');
     }
 
+    const mustChange = Boolean(u.mustChangePassword ?? u.must_change_password);
+    if (mustChange) {
+      const changeToken = signToken(
+        {
+          sub: u.id,
+          tid: u.tenantId,
+          ph: passwordStamp(u.passwordHash),
+          role: u.role,
+          branchId: u.branchId ?? u.branch_id ?? null,
+          scope: 'pwd_change',
+        },
+        tokens.secret,
+        15 * 60
+      );
+      return {
+        requirePasswordChange: true,
+        changeToken,
+      };
+    }
+
     const nextStatus = u.status === 'INVITED' ? 'ACTIVE' : (u.status || 'ACTIVE');
     await ctx.db.exec(
       'UPDATE users SET last_login_at = now(), status = ? WHERE id = ?',
@@ -147,65 +179,153 @@ export function registerAuth(r: Router, tokens: { secret: string; ttlSeconds: nu
   r.post('/api/auth/change-password', requireUser, async (ctx) => {
     rateLimit(`pw:${ctx.user!.id}`, 10, 15 * 60_000);
     const cur = V.str(ctx.body?.currentPassword, 'Current password', { required: true, max: 128 });
-    const next = ctx.body?.newPassword;
-    weak(next);
-    const u = await ctx.db.one('SELECT id, tenant_id, password_hash FROM users WHERE id = ?', [ctx.user!.id]);
-    if (!u || !verifyPassword(cur, u.passwordHash)) throw new HttpError(400, 'BAD_PASSWORD', 'Your current password is not correct');
-    if (next === cur) throw bad('Please choose a new password that is different from the current one', 'VALIDATION', { field: 'New password' });
-    const passwordHash = hashPassword(next);
-    await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE users SET password_hash = ?, must_change_password = false, updated_at = now() WHERE id = ?', [passwordHash, u.id]);
-      await audit(q, ctx, { action: 'auth.password_changed', entity: 'user', entityId: u.id });
-    });
-    return { token: issueToken({ id: u.id, tenantId: u.tenantId, passwordHash }) };
-  });
-  // Step 5: Forgot-password flow
-  const resetTokens = new Map<string, { userId: string; expiresAt: number }>();
+    const next = V.str(ctx.body?.newPassword, 'New password', { required: true, max: 128 });
 
-  r.post('/api/auth/forgot-password', async (ctx) => {
-    rateLimit(`forgot-pw:${ctx.ip}`, 5, 15 * 60_000);
-    const email = parseEmail(ctx.body?.email);
-    const u = await ctx.db.one('SELECT id, name, email FROM users WHERE lower(email) = ?', [email]);
+    const u = await ctx.db.one<any>(
+      `SELECT id, tenant_id, name, email, username, role, status, active, branch_id, password_hash, assigned_location, assigned_counter, allowed_locations
+       FROM users WHERE id = ? AND tenant_id = ?`,
+      [ctx.user!.id, ctx.user!.tenantId]
+    );
+    if (!u) throw unauthorized('User not found');
 
-    if (u) {
-      const rawToken = crypto.randomUUID();
-      const expiresAt = Date.now() + 15 * 60_000;
-      resetTokens.set(rawToken, { userId: u.id, expiresAt });
+    if (!verifyPassword(cur, u.passwordHash)) {
+      throw new HttpError(400, 'BAD_PASSWORD', 'Current password is incorrect', { field: 'Current password' });
     }
 
-    const emailConfigured = Boolean(process.env.SMTP_HOST || process.env.SENDGRID_API_KEY || process.env.RESEND_API_KEY);
-    const note = !emailConfigured
-      ? 'Outbound email delivery is not configured on this server (SMTP_HOST is not set). In development, please use the provided demo accounts or configure SMTP credentials.'
-      : undefined;
+    const valErr = validateNewPassword(next, cur);
+    if (valErr) {
+      throw bad(valErr, 'VALIDATION', { field: 'New password' });
+    }
+
+    const passwordHash = hashPassword(next);
+    const nextStatus = u.status === 'INVITED' ? 'ACTIVE' : (u.status || 'ACTIVE');
+
+    await ctx.db.tx(async (q) => {
+      await q.exec(
+        `UPDATE users
+         SET password_hash = ?,
+             must_change_password = false,
+             password_changed_at = now(),
+             status = ?,
+             updated_at = now()
+         WHERE id = ?`,
+        [passwordHash, nextStatus, u.id]
+      );
+      await audit(q, ctx, { action: 'auth.password_changed', entity: 'user', entityId: u.id });
+    });
+
+    u.passwordHash = passwordHash;
+    u.mustChangePassword = false;
+    u.status = nextStatus;
+
+    const token = issueToken(u);
+    const shop = await ctx.db.one('SELECT * FROM tenants WHERE id = ?', [u.tenantId]);
+    const uv = userView(u);
+    return {
+      token,
+      user: uv,
+      shop: shopView(shop),
+      perms: permsFor(u.role),
+      role: uv.role,
+      branchId: uv.branchId,
+    };
+  });
+
+  // Step 5: Forgot-password flow with database tokens and single-use link
+  r.post('/api/auth/forgot-password', async (ctx) => {
+    const rawIdentifier = V.str(
+      ctx.body?.identifier || ctx.body?.email || ctx.body?.username || ctx.body?.login,
+      'Username or email ID',
+      { required: true, max: 254 }
+    ).trim();
+
+    rateLimit(`forgot-pw:${ctx.ip}`, 5, 15 * 60_000);
+    rateLimit(`forgot-pw-id:${rawIdentifier.toLowerCase()}`, 5, 15 * 60_000);
+
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawIdentifier);
+    let u: any = null;
+    if (isEmail) {
+      u = await ctx.db.one<any>(
+        'SELECT id, tenant_id, name, email, username FROM users WHERE lower(email) = ? AND deleted_at IS NULL',
+        [rawIdentifier.toLowerCase()]
+      );
+    } else {
+      const cleanUsername = rawIdentifier.startsWith('@') ? rawIdentifier.slice(1) : rawIdentifier;
+      u = await ctx.db.one<any>(
+        'SELECT id, tenant_id, name, email, username FROM users WHERE (lower(username) = ? OR lower(id) = ?) AND deleted_at IS NULL',
+        [cleanUsername.toLowerCase(), rawIdentifier.toLowerCase()]
+      );
+    }
+
+    if (u && u.email) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      const tokenId = newId('rst');
+
+      await ctx.db.exec(
+        `INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at)
+         VALUES (?, ?, ?, now() + interval '30 minutes', now())`,
+        [tokenId, u.id, tokenHash]
+      );
+
+      const config = getMailerConfig();
+      const resetUrl = `${config.appLoginUrl || 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+
+      enqueuePasswordResetLinkEmail(ctx.db, {
+        tenantId: u.tenant_id,
+        userId: u.id,
+        toEmail: u.email,
+        userName: u.name,
+        resetUrl,
+      }).catch((err) => {
+        console.warn('[Forgot Password] Failed to enqueue email:', err.message);
+      });
+    }
 
     return {
       ok: true,
-      message: 'If an account associated with that email exists, reset instructions have been processed.',
-      emailConfigured,
-      note,
+      message: "If an account exists, we've emailed a reset link.",
     };
   });
 
   r.post('/api/auth/reset-password', async (ctx) => {
     rateLimit(`reset-pw:${ctx.ip}`, 5, 15 * 60_000);
     const token = V.str(ctx.body?.token, 'Reset token', { required: true });
-    const next = ctx.body?.newPassword;
-    weak(next);
+    const next = V.str(ctx.body?.newPassword, 'New password', { required: true, max: 128 });
 
-    const record = resetTokens.get(token);
-    if (!record || record.expiresAt < Date.now()) {
-      resetTokens.delete(token);
-      throw new HttpError(400, 'EXPIRED_TOKEN', 'This password reset link is invalid or has expired.');
+    const valErr = validateNewPassword(next);
+    if (valErr) throw bad(valErr, 'VALIDATION', { field: 'New password' });
+
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+    const record = await ctx.db.one<any>(
+      `SELECT t.id, t.user_id, t.expires_at, t.used_at, u.tenant_id, u.name
+       FROM password_reset_tokens t
+       JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = ?`,
+      [tokenHash]
+    );
+
+    if (!record || record.used_at || new Date(record.expires_at).getTime() < Date.now()) {
+      throw bad('This password reset link is invalid or has expired.', 'EXPIRED_TOKEN');
     }
 
-    resetTokens.delete(token);
     const passwordHash = hashPassword(next);
     await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, record.userId]);
-      await audit(q, ctx, { action: 'auth.password_reset', entity: 'user', entityId: record.userId });
+      await q.exec(
+        `UPDATE users
+         SET password_hash = ?,
+             must_change_password = false,
+             password_changed_at = now(),
+             status = CASE WHEN status = 'INVITED' THEN 'ACTIVE' ELSE status END,
+             updated_at = now()
+         WHERE id = ?`,
+        [passwordHash, record.user_id]
+      );
+      await q.exec('UPDATE password_reset_tokens SET used_at = now() WHERE id = ?', [record.id]);
+      await audit(q, ctx, { action: 'auth.password_reset', entity: 'user', entityId: record.user_id });
     });
 
-    return { ok: true, message: 'Password has been successfully updated. You may now log in.' };
+    return { ok: true, message: 'Password reset. Sign in with your new password.' };
   });
 
   // Return ONLY public demo businesses (t_demo_*) for preview and sandbox exploration.

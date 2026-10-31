@@ -27,6 +27,56 @@ export const burnPasswordTime = (password: string) => { verifyPassword(password,
 
 const COMMON = new Set(['password', 'password1', '12345678', '123456789', '1234567890', 'qwertyui', 'qwerty123', 'iloveyou', 'admin123', 'welcome1', 'abcd1234', '11111111', 'password123']);
 /** Returns a plain-language problem, or null when the password is acceptable. */
+
+/**
+ * Validates password rules:
+ * - At least 8 characters (max 128)
+ * - At least one number
+ * - At least 3 of (uppercase, lowercase, number, symbol)
+ * - Not equal to current password
+ */
+export function validateNewPassword(pw: unknown, currentPassword?: string): string | null {
+  if (typeof pw !== 'string' || !pw) return 'New password is required.';
+  if (pw.length < 8) return 'Password must be at least 8 characters.';
+  if (pw.length > 128) return 'Password is too long (maximum 128 characters).';
+  if (/^(.)\1+$/.test(pw)) return 'Password cannot be one repeated character.';
+  if (COMMON.has(pw.toLowerCase())) return 'That password is too common. Please choose another.';
+  if (!/[0-9]/.test(pw)) return 'Password must contain at least one number.';
+
+  let typesCount = 0;
+  if (/[A-Z]/.test(pw)) typesCount++;
+  if (/[a-z]/.test(pw)) typesCount++;
+  if (/[0-9]/.test(pw)) typesCount++;
+  if (/[^A-Za-z0-9]/.test(pw)) typesCount++;
+  if (typesCount < 3) {
+    return 'Password must contain at least 3 of: uppercase letters, lowercase letters, numbers, or symbols.';
+  }
+
+  if (currentPassword && pw === currentPassword) {
+    return 'Please choose a new password that is different from your current temporary password.';
+  }
+  return null;
+}
+
+/** Generates a 12-character strong temporary password */
+export function generateTemporaryPassword(length = 12): string {
+  const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowers = 'abcdefghijkmnopqrstuvwxyz';
+  const digits = '23456789';
+  const symbols = '!@#$%^&*';
+  const required = [
+    uppers[crypto.randomInt(uppers.length)],
+    lowers[crypto.randomInt(lowers.length)],
+    digits[crypto.randomInt(digits.length)],
+    symbols[crypto.randomInt(symbols.length)],
+  ];
+  const all = uppers + lowers + digits + symbols;
+  while (required.length < length) {
+    required.push(all[crypto.randomInt(all.length)]);
+  }
+  return required.sort(() => crypto.randomInt(3) - 1).join('');
+}
+
 export function passwordProblem(pw: unknown): string | null {
   if (typeof pw !== 'string') return 'Password is required';
   if (pw.length < 8) return 'Password must be at least 8 characters';
@@ -37,11 +87,11 @@ export function passwordProblem(pw: unknown): string | null {
 }
 
 // ---------------------------------------------------------------- signed login tokens (HS256 JWT)
-export interface TokenPayload { sub: string; tid: string; ph: string; iat: number; exp: number; role?: string; branchId?: string | null }
+export interface TokenPayload { sub: string; tid: string; ph: string; iat: number; exp: number; role?: string; branchId?: string | null; scope?: string }
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const sign = (data: string, secret: string) => crypto.createHmac('sha256', secret).update(data).digest('base64url');
 
-export function signToken(p: { sub: string; tid: string; ph: string; role?: string; branchId?: string | null }, secret: string, ttlSeconds: number, nowSec = Math.floor(Date.now() / 1000)): string {
+export function signToken(p: { sub: string; tid: string; ph: string; role?: string; branchId?: string | null; scope?: string }, secret: string, ttlSeconds: number, nowSec = Math.floor(Date.now() / 1000)): string {
   const head = b64({ alg: 'HS256', typ: 'JWT' });
   const body = b64({ ...p, iat: nowSec, exp: nowSec + ttlSeconds });
   return `${head}.${body}.${sign(`${head}.${body}`, secret)}`;

@@ -2,7 +2,7 @@ import { ROLES, type Role } from '../../../shared/types.ts';
 import { audit } from '../audit.ts';
 import { requirePerm } from '../auth.ts';
 import { bad, conflict, notFound, V, type Router } from '../http.ts';
-import { hashPassword, newId, passwordProblem } from '../security.ts';
+import { generateTemporaryPassword, hashPassword, newId, passwordProblem } from '../security.ts';
 import { parseEmail } from '../shopFields.ts';
 import { j } from '../db/index.ts';
 
@@ -172,7 +172,8 @@ export function registerUsers(r: Router) {
 
   // Owner or Store Manager sets a new password for a staff member who forgot theirs. Their old sessions stop working at once.
   r.post('/api/users/:id/reset-password', requirePerm('users'), async (ctx) => {
-    const pwErr = passwordProblem(ctx.body?.newPassword);
+    const newPassword = ctx.body?.newPassword || generateTemporaryPassword(12);
+    const pwErr = passwordProblem(newPassword);
     if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD', { field: 'Password' });
     const isManager = ctx.user!.role === 'manager';
     const t = await ctx.db.one(
@@ -187,12 +188,12 @@ export function registerUsers(r: Router) {
         throw bad('You cannot reset passwords for staff outside your authorized branches.', 'UNAUTHORIZED_BRANCH');
       }
     }
-    const hash = hashPassword(ctx.body.newPassword);
+    const hash = hashPassword(newPassword);
     await ctx.db.tx(async (q) => {
-      await q.exec('UPDATE users SET password_hash = ? WHERE id = ? AND tenant_id = ?', [hash, t.id, ctx.user!.tenantId]);
+      await q.exec('UPDATE users SET password_hash = ?, must_change_password = true WHERE id = ? AND tenant_id = ?', [hash, t.id, ctx.user!.tenantId]);
       await audit(q, ctx, { action: 'user.password_reset', entity: 'user', entityId: t.id });
     });
-    return { ok: true, message: 'Password reset successfully' };
+    return { ok: true, message: 'Password reset successfully', temporaryPassword: newPassword };
   });
 
   // Permanently delete user & reclaim DB storage
