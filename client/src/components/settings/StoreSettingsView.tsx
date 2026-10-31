@@ -6,6 +6,12 @@ import { STATES } from '../../../../shared/states.ts';
 import { qrSvg, upiUri } from '../../../../shared/qr.ts';
 import { billMessage } from '../../../../shared/whatsapp.ts';
 import { StrictIsolationBanner } from '../StrictIsolationBanner';
+import {
+  CreditCardIcon,
+  QrCodeIcon,
+  ZapIcon,
+  WhatsAppIcon,
+} from '../terminal/PaymentIcons.tsx';
 
 export interface StoreSettingsViewProps {
   shop: Shop | null;
@@ -45,6 +51,7 @@ export function StoreSettingsView({
   const [address, setAddress] = useState('');
   const [upiId, setUpiId] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
+  const [ownerEmail, setOwnerEmail] = useState('');
 
   // WhatsApp
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
@@ -165,6 +172,7 @@ export function StoreSettingsView({
       setAddress(shop.address || '');
       setUpiId(shop.upiId || '');
       setInvoicePrefix(shop.invoicePrefix || 'INV');
+      setOwnerEmail(shop.ownerEmail || '');
       setWhatsappEnabled(shop.whatsappEnabled !== false);
       setWhatsappDefaultLang(shop.whatsappDefaultLang || 'en');
       setWhatsappIncludeLink(Boolean(shop.whatsappIncludeLink));
@@ -470,6 +478,23 @@ export function StoreSettingsView({
                 />
                 <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
                   10-digit customer helpline printed on receipts.
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  Owner Email ID (Security &amp; Deletion Alerts)
+                </label>
+                <input
+                  type="email"
+                  className="form-input"
+                  disabled={!isEditable}
+                  placeholder="owner@supermarket.com"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                />
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
+                  Critical notification email where permanent deletion alerts for branches, managers, counters, and cashiers are sent.
                 </span>
               </div>
 
@@ -871,9 +896,9 @@ export function StoreSettingsView({
             {/* Top Sub-tabs Bar */}
             <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem', gap: '1rem' }}>
               {[
-                { id: 'methods', label: 'Payment Methods', icon: '💳' },
-                { id: 'qr', label: 'UPI / QR Configuration', icon: '📱' },
-                { id: 'razorpay', label: 'Razorpay Integration', icon: '🌐' },
+                { id: 'methods', label: 'Payment Methods', icon: <CreditCardIcon size={15} /> },
+                { id: 'qr', label: 'UPI / QR Configuration', icon: <QrCodeIcon size={15} /> },
+                { id: 'razorpay', label: 'Razorpay Integration', icon: <ZapIcon size={15} /> },
               ].map((sub) => (
                 <button
                   key={sub.id}
@@ -1282,7 +1307,7 @@ export function StoreSettingsView({
           <div className="card settings-section" style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
             <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
               <div>
-                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e1b4b' }}>📲 WhatsApp Bill Sharing</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e1b4b', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><WhatsAppIcon size={18} style={{ color: '#16a34a' }} /> WhatsApp Bill Sharing</span>
                 <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
                   Instant Click-to-Chat digital receipt sharing at POS checkout and historical invoice view.
                 </div>

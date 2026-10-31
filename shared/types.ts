@@ -1,12 +1,12 @@
 // Types and rules shared by server and client.
 
-export type Role = 'owner' | 'manager' | 'cashier' | 'accountant';
-export const ROLES: Role[] = ['owner', 'manager', 'cashier', 'accountant'];
+export type Role = 'owner' | 'manager' | 'cashier' | 'accountant' | 'counter';
+export const ROLES: Role[] = ['owner', 'manager', 'cashier', 'accountant', 'counter'];
 
 const ALL: Role[] = ['owner', 'manager', 'cashier', 'accountant'];
 /** Who may do what. The server enforces this; the client only uses it to hide buttons. */
 export const PERMS = {
-  sell: ['owner', 'manager', 'cashier'],
+  sell: ['owner', 'manager', 'cashier', 'counter'],
   'bills.view': ALL,
   returns: ['owner', 'manager'],
   'items.view': ALL,
@@ -18,6 +18,7 @@ export const PERMS = {
   'purchases.pay': ['owner', 'manager', 'accountant'],
   'stock.view': ALL,
   'stock.adjust': ['owner', 'manager'],
+  'stock.transfer': ['owner', 'manager'],
   collect: ['owner', 'manager', 'cashier', 'accountant'],
   'payments.reverse': ['owner', 'manager'],
   'payments.backdate': ['owner', 'manager', 'accountant'],
@@ -40,6 +41,10 @@ export const PERMS = {
   'expenses.void': ['owner', 'manager'],
   'gst.view': ['owner', 'manager', 'accountant'],
   'gst.manage': ['owner', 'accountant'],
+  'promotions.view': ['owner', 'manager'],
+  'promotions.write': ['owner', 'manager'],
+  'promotions.reports': ['owner', 'manager'],
+  'promotions.apply': ['owner', 'manager', 'cashier'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Perm = keyof typeof PERMS;
 export const can = (role: Role | undefined, perm: Perm): boolean => !!role && (PERMS[perm] as readonly Role[]).includes(role);
@@ -53,7 +58,7 @@ export interface Branch {
   active: boolean;
   counters: string[];
   managerId?: string | null;
-  managerName?: string | null;
+  managerName?: string | null; managerEmail?: string | null; managerUsername?: string | null; countersTotal?: number; countersActive?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -405,6 +410,82 @@ export interface StockCount {
   createdAt: string;
   updatedAt: string;
   lines?: StockCountLine[];
+}
+
+export type StockTransferStatus =
+  | 'draft'
+  | 'requested'
+  | 'approved'
+  | 'in_transit'
+  | 'partially_received'
+  | 'received'
+  | 'completed'
+  | 'rejected'
+  | 'cancelled';
+
+export interface StockTransferLine {
+  id: string;
+  transferId: string;
+  itemId: string;
+  itemName?: string;
+  itemSku?: string | null;
+  itemBarcode?: string | null;
+  qtyMilli: number;
+  receivedQtyMilli: number;
+  discrepancyMilli: number;
+  discrepancyReason?: string | null;
+  unit: string;
+  batchNo?: string | null;
+  expiry?: string | null;
+  availableStockMilli?: number;
+  createdAt?: string;
+}
+
+export interface StockTransfer {
+  id: string;
+  tenantId: string;
+  transferNumber: string;
+  fromBranch: string;
+  fromBranchName?: string;
+  toBranch: string;
+  toBranchName?: string;
+  status: StockTransferStatus;
+  transferDate: string;
+  requestedBy: string;
+  requestedByName?: string;
+  approvedBy?: string | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  dispatchedBy?: string | null;
+  dispatchedByName?: string | null;
+  dispatchedAt?: string | null;
+  receivedBy?: string | null;
+  receivedByName?: string | null;
+  receivedAt?: string | null;
+  notes?: string | null;
+  itemsCount?: number;
+  lines?: StockTransferLine[];
+  stockMoves?: {
+    source: StockMove[];
+    destination: StockMove[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStockTransferInput {
+  fromBranch: string;
+  toBranch: string;
+  transferDate?: string;
+  notes?: string;
+  status?: StockTransferStatus;
+  lines: {
+    itemId: string;
+    qtyMilli: number;
+    unit?: string;
+    batchNo?: string;
+    expiry?: string;
+  }[];
 }
 
 export interface InventoryDashboardStats {

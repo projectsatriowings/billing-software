@@ -72,9 +72,27 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import { StockTransferView } from './components/inventory/StockTransferView';
 import type { Branch } from '../../shared/types.ts';
 import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
+import { UserManagementView } from './components/users/UserManagementView';
+import { BranchUserManagementView } from './components/users/BranchUserManagementView';
 import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
+import {
+  CreditCardIcon,
+  BanknoteIcon,
+  QrCodeIcon,
+  LandmarkIcon,
+  BookUserIcon,
+  TerminalIcon,
+  ZapIcon,
+  PaytmIcon,
+  PhonePeIcon,
+  WhatsAppIcon,
+  AlertTriangleIcon,
+  SettingsIcon,
+  StoreIcon,
+} from './components/terminal/PaymentIcons.tsx';
 import {
   TagIcon,
   PackageIcon,
@@ -124,6 +142,9 @@ import { GstImportExportView } from './components/gst/GstImportExportView.tsx';
 import { GstFilingHistoryView } from './components/gst/GstFilingHistoryView.tsx';
 import { CustomerDirectory } from './components/customers/CustomerDirectory.tsx';
 import { SupplierDirectory } from './components/suppliers/SupplierDirectory.tsx';
+import { DiscountsPromotionsView } from './components/promotions/DiscountsPromotionsView.tsx';
+import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
+import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
 
 export interface ToastItem {
@@ -377,12 +398,12 @@ export const buildWhatsAppMessage = (opts: {
 // Business Type Helper Functions
 export const getBusinessIcon = (type?: string) => {
   switch (type) {
-    case 'pharmacy': return '💊';
-    case 'restaurant': return '🍽️';
-    case 'wholesale': return '📦';
-    case 'service': return '💼';
-    case 'retail': return '🛒';
-    default: return '🏢';
+    case 'pharmacy': return '';
+    case 'restaurant': return '';
+    case 'wholesale': return '';
+    case 'service': return '';
+    case 'retail': return '';
+    default: return '';
   }
 };
 
@@ -407,6 +428,7 @@ export function App() {
     | 'items'
     | 'categories'
     | 'inventory'
+    | 'stock-transfer'
     | 'product-movement'
     | 'sales-analysis'
     | 'purchases'
@@ -428,6 +450,8 @@ export function App() {
     | 'gst-gstr1'
     | 'gst-import-export'
     | 'gst-filing-history'
+    | 'promotions'
+    | 'user-management'
   >('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
   const [displayTab, setDisplayTab] = useState<string>('dashboard');
@@ -518,7 +542,7 @@ export function App() {
   };
 
   const isInventorySubmenuVisible =
-    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement';
+    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement' || activeTab === 'stock-transfer';
 
   // Close inventory dropdown on outside click
   useEffect(() => {
@@ -541,7 +565,7 @@ export function App() {
 
   // Close submenu when navigating away to unrelated modules
   useEffect(() => {
-    if (activeTab !== 'inventory' && activeTab !== 'product-movement') {
+    if (activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer') {
       setShowInventoryDropdown(false);
       setIsInventoryHovered(false);
     }
@@ -624,6 +648,8 @@ export function App() {
   const [upiManualRef, setUpiManualRef] = useState('');
   const [paymentCardRef, setPaymentCardRef] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
+  const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
   const customerMobileInputRef = useRef<HTMLInputElement>(null);
   const customerNameInputRef = useRef<HTMLInputElement>(null);
@@ -676,6 +702,9 @@ export function App() {
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const isSidebarVisuallyExpanded = !isSidebarCollapsed || isSidebarHovered;
+  const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
   const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
   const [customItemForm, setCustomItemForm] = useState({ name: 'Custom Charge', price: '50', taxRateBp: 1800 });
@@ -700,7 +729,13 @@ export function App() {
 
   useEffect(() => {
     if (activeTab === 'pos') {
-      setIsSidebarCollapsed(true);
+      if (!isSidebarCollapsed) {
+        setIsSidebarCollapsed(true);
+        setAutoCollapsedForPos(true);
+      }
+    } else if (autoCollapsedForPos && typeof window !== 'undefined' && window.innerWidth >= 1200) {
+      setIsSidebarCollapsed(false);
+      setAutoCollapsedForPos(false);
     }
   }, [activeTab]);
 
@@ -732,6 +767,7 @@ export function App() {
   const [settingsAddress, setSettingsAddress] = useState('');
   const [settingsUpiId, setSettingsUpiId] = useState('');
   const [settingsPrefix, setSettingsPrefix] = useState('');
+  const [settingsOwnerEmail, setSettingsOwnerEmail] = useState('');
   const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
 
   // Settings: WhatsApp Bill Sharing (Section 9.1)
@@ -1184,20 +1220,32 @@ export function App() {
     }
   };
 
-  // Listen for hash changes
+  // Listen for hash & pathname / popstate changes
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleLocationChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
+      const path = window.location.pathname;
+      if (path === '/user-management') {
+        setView('dashboard');
+        setActiveTab('user-management');
+      } else if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
         setView(hash as any);
-      } else if (hash === 'product-analysis' || hash === 'product-movement') {
+      } else if (hash === 'stock-transfer' || path === '/stock-transfer') {
+        setView('dashboard');
+        setActiveTab('stock-transfer');
+        setShowInventoryDropdown(true);
+      } else if (hash === 'product-analysis' || hash === 'product-movement' || path === '/product-analysis' || path === '/product-movement') {
         setView('dashboard');
         setActiveTab('product-movement');
         setShowInventoryDropdown(true);
       }
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+    };
   }, []);
 
   // Check auth
@@ -1223,17 +1271,40 @@ export function App() {
         loadMyBusinesses();
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
+        const isStockTransferRoute =
+          currentHash === 'stock-transfer' ||
+          tabParam === 'stock-transfer' ||
+          window.location.pathname === '/stock-transfer';
+        const isUserManagementRoute =
+          window.location.pathname === '/user-management' ||
+          currentHash === 'user-management' ||
+          tabParam === 'user-management';
         const isProductAnalysisRoute =
           ['product-analysis', 'product-movement'].includes(currentHash) ||
           ['product-analysis', 'product-movement'].includes(tabParam || '') ||
           window.location.pathname === '/product-analysis' ||
           window.location.pathname === '/product-movement';
 
-        if (isProductAnalysisRoute) {
+        if (isUserManagementRoute) {
+          const rUpper = String(res.user?.role || '').toUpperCase();
+          if (rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER') {
+            setView('dashboard');
+            setActiveTab('user-management');
+          } else {
+            setView('dashboard');
+            setActiveTab('pos');
+            try { window.history.replaceState({}, '', '/'); } catch {}
+            showToast("You don't have access to User Management");
+          }
+        } else if (isStockTransferRoute) {
+          setView('dashboard');
+          setActiveTab('stock-transfer');
+          setShowInventoryDropdown(true);
+        } else if (isProductAnalysisRoute) {
           setView('dashboard');
           setActiveTab('product-movement');
           setShowInventoryDropdown(true);
-        } else if (currentHash === 'dashboard') {
+        } else if (currentHash === 'dashboard' || window.location.pathname === '/' || !currentHash) {
           setView('dashboard');
         } else if (currentHash === 'selector') {
           setView('selector');
@@ -1242,7 +1313,7 @@ export function App() {
         } else if (currentHash === 'login') {
           setView('login');
         } else {
-          setView('landing');
+          setView('dashboard');
         }
       } catch {
         clearToken();
@@ -1262,6 +1333,7 @@ export function App() {
     setSettingsAddress(s.address || '');
     setSettingsUpiId(s.upiId || '');
     setSettingsPrefix(s.invoicePrefix || 'INV');
+    setSettingsOwnerEmail(s.ownerEmail || '');
     setSettingsWhatsAppEnabled(s.whatsappEnabled !== false);
     setSettingsWhatsAppDefaultLang(s.whatsappDefaultLang || 'en');
     setSettingsWhatsAppIncludeLink(Boolean(s.whatsappIncludeLink));
@@ -1280,6 +1352,17 @@ export function App() {
     if (!can(user.role as any, 'expenses') && activeTab === 'expenses') {
       setActiveTab('pos');
     }
+    const rUpper = String(user?.role || '').toUpperCase();
+    const canAccessUm = rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER';
+    if (!canAccessUm && activeTab === 'user-management') {
+      setActiveTab('pos');
+      try {
+        if (window.location.pathname === '/user-management') {
+          window.history.replaceState({}, '', '/');
+        }
+      } catch {}
+      showToast("You don't have access to User Management");
+    }
     if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
@@ -1288,6 +1371,7 @@ export function App() {
     loadParties();
     loadBranches();
     loadInvoices();
+    loadActivePromotions();
     if (can(user.role as any, 'purchases')) {
       loadPurchases();
     }
@@ -1296,6 +1380,61 @@ export function App() {
     checkActiveShift();
     initSettingsForm(shop);
   }, [user, shop?.id, activeTab]);
+
+
+  // Real-time Promotions Evaluation Engine & BOGO Auto-Free Insertion
+  useEffect(() => {
+    if (activePromotionsList.length === 0 || cart.length === 0) {
+      setPromoEvalResult(null);
+      return;
+    }
+    const cartEvalInput: CartItemForEval[] = cart.map((c) => ({
+      itemId: c.item.id,
+      name: c.item.name,
+      category: c.item.category,
+      barcode: c.item.barcode,
+      sku: c.item.sku,
+      hsn: c.item.hsn,
+      unit: c.item.unit,
+      priceMinor: c.item.priceMinor,
+      taxRateBp: c.item.taxRateBp,
+      taxInclusive: c.item.taxInclusive,
+      qty: c.qty,
+      isFreeItem: Boolean((c as any).isFreeItem),
+      appliedPromotionId: (c as any).appliedPromotionId,
+    }));
+    const evalRes = evaluatePromotions(cartEvalInput, activePromotionsList, {
+      branchCode: branches[0]?.code || 'MAIN',
+      counterCode: 'COUNTER-1',
+      partyId: selectedPartyId || undefined,
+    });
+    setPromoEvalResult(evalRes);
+
+    // Auto-add eligible free items for BOGO
+    if (evalRes.autoFreeItems && evalRes.autoFreeItems.length > 0) {
+      for (const freeItem of evalRes.autoFreeItems) {
+        if (!freeItem.productId) continue;
+        const alreadyInCart = cart.some(
+          (c) => (c as any).isFreeItem && c.item.id === freeItem.productId && (c as any).appliedPromotionId === freeItem.promotionId
+        );
+        if (!alreadyInCart) {
+          const matchedItem = items.find((i) => i.id === freeItem.productId);
+          if (matchedItem) {
+            setCart((prev) => [
+              ...prev,
+              {
+                item: matchedItem,
+                qty: freeItem.qty,
+                isFreeItem: true,
+                appliedPromotionId: freeItem.promotionId,
+              } as any,
+            ]);
+            showToast(`🎉 BOGO Offer Applied: Added ${freeItem.qty} Free ${matchedItem.name}!`);
+          }
+        }
+      }
+    }
+  }, [cart, activePromotionsList, selectedPartyId, branches, items]);
 
   const checkActiveShift = async () => {
     try {
@@ -1361,6 +1500,15 @@ export function App() {
       setDuesSummary(res);
     } catch (err) {
       console.error('Failed to load dues summary', err);
+    }
+  };
+
+  const loadActivePromotions = async () => {
+    try {
+      const res = await fetchPromotions({ status: 'active' });
+      setActivePromotionsList(res.promotions || []);
+    } catch {
+      // non-fatal
     }
   };
 
@@ -1791,6 +1939,7 @@ export function App() {
           address: settingsAddress || null,
           upiId: settingsUpiId || null,
           invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
           whatsappEnabled: settingsWhatsAppEnabled,
           whatsappDefaultLang: settingsWhatsAppDefaultLang,
           whatsappIncludeLink: settingsWhatsAppIncludeLink,
@@ -1830,6 +1979,7 @@ export function App() {
           address: shop.address || null,
           upiId: shop.upiId || null,
           invoicePrefix: shop.invoicePrefix || 'INV',
+          ownerEmail: shop.ownerEmail || null,
           language: shop.language || 'en',
           locations: shop.locations || ['MAIN'],
           whatsappEnabled: shop.whatsappEnabled !== false,
@@ -2131,7 +2281,8 @@ export function App() {
   const maxRedeemablePoints = shopPointValMinor > 0 ? Math.ceil(potentialDiscountMinor / shopPointValMinor) : 0;
   const pointsDiscountMinor = redeemPoints ? potentialDiscountMinor : 0;
   const pointsActuallyRedeemed = redeemPoints ? maxRedeemablePoints : 0;
-  const discountMinor = percentDiscountMinor + pointsDiscountMinor;
+  const promoDiscountMinor = promoEvalResult?.totalDiscountMinor || 0;
+  const discountMinor = percentDiscountMinor + pointsDiscountMinor + promoDiscountMinor;
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
   const pointsToEarnOnBill = (shopLoyaltyActive && shopPointsPer100 > 0)
     ? Math.floor((finalPayableMinor * shopPointsPer100) / 10000)
@@ -2729,12 +2880,12 @@ export function App() {
 
     setIsCheckingOut(true);
     try {
-      const lines = cart.map((c) => ({
+      const lines = cart.map((c, idx) => ({
         itemId: c.item.id?.startsWith('custom-') ? undefined : c.item.id,
         name: c.item.name,
         qtyMilli: Math.round(c.qty * 1000),
         priceMinor: Math.round(c.item.priceMinor),
-        discountMinor: 0,
+        discountMinor: promoEvalResult?.lineDiscounts[idx] || 0,
         taxRateBp: Math.round(c.item.taxRateBp || 0),
         inclusive: c.item.taxInclusive,
         unit: c.item.unit,
@@ -2819,7 +2970,9 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
-          billDiscountMinor: Math.round(discountMinor),
+          billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
+          appliedPromotions: promoEvalResult?.appliedPromotions || [],
+          promotionDiscountMinor: promoDiscountMinor,
           payments: paymentsPayload,
           tender: tenderPayload,
           customerName: checkoutCustName,
@@ -4856,7 +5009,15 @@ export function App() {
       )}
 
       {/* Left Sidebar Navigation */}
-      <aside className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''}`}>
+      <aside
+        className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''} ${isSidebarCollapsed && isSidebarHovered ? 'hover-expanded' : ''}`}
+        onMouseEnter={() => {
+          if (isSidebarCollapsed) setIsSidebarHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsSidebarHovered(false);
+        }}
+      >
         <div className="sidebar-top">
           {/* Header row with Brand & Collapse/Expand Toggle */}
           <div className="sidebar-header-row">
@@ -4883,13 +5044,15 @@ export function App() {
               className="sidebar-collapse-toggle"
               onClick={(e) => {
                 e.stopPropagation();
+                setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
+                setIsSidebarHovered(false);
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
               aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
+                <polyline points={!isSidebarVisuallyExpanded ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
               </svg>
             </button>
           </div>
@@ -4925,7 +5088,7 @@ export function App() {
               </div>
             </button>
 
-            {!isSidebarCollapsed && showBusinessDropdown && (
+            {isSidebarVisuallyExpanded && showBusinessDropdown && (
               <>
                 <div
                   className="dropdown-backdrop"
@@ -5104,7 +5267,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">My Cashier Shift</span>
-                {activeShiftNumber ? (
+                {isSidebarVisuallyExpanded && activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
                   </span>
@@ -5130,7 +5293,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                <span className="nav-count-badge">{items.length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{items.length}</span>}
               </button>
             )}
 
@@ -5149,7 +5312,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                <span className="nav-count-badge">{categoriesList.length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{categoriesList.length}</span>}
               </button>
             )}
 
@@ -5164,8 +5327,8 @@ export function App() {
                 <button
                   type="button"
                   className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
-                    activeTab === 'product-movement' ? 'has-active-child' : ''
-                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
+                    activeTab === 'product-movement' || activeTab === 'stock-transfer' ? 'has-active-child' : ''
+                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer' ? 'open-highlight' : ''}`}
                   onClick={handleInventoryClick}
                   aria-haspopup="true"
                   aria-expanded={isInventorySubmenuVisible}
@@ -5180,7 +5343,7 @@ export function App() {
                   </span>
                   <span className="nav-text">Inventory Hub</span>
                   <div className="nav-trailing">
-                    {totalStockAlerts > 0 && (
+                    {isSidebarVisuallyExpanded && totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
                         title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
@@ -5201,12 +5364,57 @@ export function App() {
                     <button
                       type="button"
                       role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'stock-transfer' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('stock-transfer');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Transfer"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Transfer</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('inventory');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Adjustment"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="4" y1="21" x2="4" y2="14" />
+                          <line x1="4" y1="10" x2="4" y2="3" />
+                          <line x1="12" y1="21" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12" y2="3" />
+                          <line x1="20" y1="21" x2="20" y2="16" />
+                          <line x1="20" y1="12" x2="20" y2="3" />
+                          <line x1="1" y1="14" x2="7" y2="14" />
+                          <line x1="9" y1="8" x2="15" y2="8" />
+                          <line x1="17" y1="16" x2="23" y2="16" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Adjustment</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
                       onClick={() => {
                         setActiveTab('product-movement');
                         setShowInventoryDropdown(true);
                       }}
-                      title="Product Analysis"
+                      title="Stock Report"
                     >
                       <span className="submenu-icon" aria-hidden="true">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -5214,7 +5422,7 @@ export function App() {
                           <polyline points="17 6 23 6 23 12" />
                         </svg>
                       </span>
-                      <span className="submenu-text">Product Analysis</span>
+                      <span className="submenu-text">Stock Report</span>
                     </button>
                   </div>
                 )}
@@ -5238,6 +5446,26 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
+                {isSidebarVisuallyExpanded && <span className="nav-badge-new">NEW</span>}
+              </button>
+            )}
+
+            {/* Discounts & Promotions: For Store Manager and Super Admin */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'promotions' ? 'active' : ''}`}
+                onClick={() => setActiveTab('promotions')}
+                title="Discounts & Promotions"
+              >
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="5" x2="5" y2="19"></line>
+                    <circle cx="6.5" cy="6.5" r="2.5"></circle>
+                    <circle cx="17.5" cy="17.5" r="2.5"></circle>
+                  </svg>
+                </span>
+                <span className="nav-text">Discounts &amp; Offers</span>
                 <span className="nav-badge-new">NEW</span>
               </button>
             )}
@@ -5280,7 +5508,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
               </button>
             )}
 
@@ -5301,7 +5529,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
               </button>
             )}
 
@@ -5363,7 +5591,7 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
-                        <span className="nav-count-badge">{purchases.length}</span>
+                        {isSidebarVisuallyExpanded && <span className="nav-count-badge">{purchases.length}</span>}
                       </button>
                     )}
 
@@ -5620,11 +5848,54 @@ export function App() {
           </div>
 
           <div className="sidebar-footer-buttons-list">
+            {(() => {
+              const rUpper = String(user?.role || '').toUpperCase();
+              const canAccessUm = rUpper === 'OWNER' || rUpper === 'SUPER_ADMIN' || rUpper === 'MANAGER' || rUpper === 'STORE_MANAGER';
+              if (!canAccessUm) return null;
+              return (
+                <button
+                  type="button"
+                  className={`sidebar-action-row-btn ${activeTab === 'user-management' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('user-management');
+                    try {
+                      const url = new URL(window.location.href);
+                      url.pathname = '/user-management';
+                      window.history.pushState({}, '', url.toString());
+                    } catch {}
+                  }}
+                  title="User Management"
+                  aria-label="User Management"
+                >
+                  <span className="action-row-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <circle cx="19" cy="11" r="2" />
+                      <path d="M19 8v1" />
+                      <path d="M19 13v1" />
+                      <path d="M21.6 9.5l-.87.5" />
+                      <path d="M17.27 12l-.87.5" />
+                      <path d="M21.6 12.5l-.87-.5" />
+                      <path d="M17.27 10l-.87-.5" />
+                    </svg>
+                  </span>
+                  <span>User Management</span>
+                </button>
+              );
+            })()}
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className="sidebar-action-row-btn"
-                onClick={() => setActiveTab('settings')}
+                className={`sidebar-action-row-btn ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('settings');
+                  try {
+                    if (window.location.pathname === '/user-management') {
+                      window.history.pushState({}, '', '/');
+                    }
+                  } catch {}
+                }}
                 title="Store Configuration & Settings"
               >
                 <span className="action-row-icon">
@@ -5697,7 +5968,7 @@ export function App() {
         {/* View Transition Stage (SPA Bento Transition) */}
         <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && !(user.role === 'manager' && displayTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -6186,7 +6457,7 @@ export function App() {
 
                         {/* Cart Rows: NO SEPARATE GST ON PRODUCT; SHOWS QTY, MRP, STORE PRICE, TOTAL PRICE, CATEGORY */}
                         <div className="bento-cart-rows-scroll">
-                          {cart.map(({ item, qty }) => {
+                          {cart.map(({ item, qty }, cartIdx) => {
                             const mrp = getItemMrp(item);
                             const storePrice = item.priceMinor;
                             const lineTotal = storePrice * qty;
@@ -6206,6 +6477,14 @@ export function App() {
                                     {lineSavings > 0 && (
                                       <span className="bento-cart-savings-tag">
                                         Save {formatRupees(lineSavings)}
+                                      </span>
+                                    )}
+                                    {promoEvalResult?.lineDiscounts[cartIdx] && promoEvalResult.lineDiscounts[cartIdx] > 0 && (
+                                      <span
+                                        className="bento-cart-savings-tag"
+                                        style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}
+                                      >
+                                        🏷️ Offer: -{formatRupees(promoEvalResult.lineDiscounts[cartIdx])}
                                       </span>
                                     )}
                                   </div>
@@ -6250,9 +6529,20 @@ export function App() {
 
                                 {/* Col 5: Total Product Price */}
                                 <div className="bento-row-total-col">
-                                  <span className="bento-total-val mono">
-                                    {formatRupees(lineTotal)}
-                                  </span>
+                                  {promoEvalResult?.lineDiscounts[cartIdx] && promoEvalResult.lineDiscounts[cartIdx] > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                      <span style={{ fontSize: '0.72rem', textDecoration: 'line-through', color: '#94a3b8' }} className="mono">
+                                        {formatRupees(lineTotal)}
+                                      </span>
+                                      <span className="bento-total-val mono text-success" style={{ fontWeight: 800 }}>
+                                        {formatRupees(Math.max(0, lineTotal - promoEvalResult.lineDiscounts[cartIdx]))}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="bento-total-val mono">
+                                      {formatRupees(lineTotal)}
+                                    </span>
+                                  )}
                                 </div>
 
                                 {/* Col 6: Remove Action */}
@@ -6343,6 +6633,59 @@ export function App() {
                             Points Redeemed ({pointsActuallyRedeemed} pts)
                           </span>
                           <span className="summary-val mono text-success">-{formatRupees(pointsDiscountMinor)}</span>
+                        </div>
+                      )}
+                      {/* PROMOTION DISCOUNTS & OFFERS APPLIED */}
+                      {promoEvalResult && promoEvalResult.totalDiscountMinor > 0 && (
+                        <div
+                          className="bento-summary-row discount-row"
+                          style={{
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            padding: '0.45rem 0.65rem',
+                            borderRadius: '8px',
+                            margin: '4px 0',
+                            flexDirection: 'column',
+                            alignItems: 'stretch',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#1d4ed8', fontWeight: 700, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span>🏷️</span> Offers Applied ({promoEvalResult.appliedPromotions.length})
+                            </span>
+                            <span className="summary-val mono text-success" style={{ fontWeight: 800 }}>
+                              -{formatRupees(promoEvalResult.totalDiscountMinor)}
+                            </span>
+                          </div>
+                          {promoEvalResult.appliedPromotions.map((p, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#1e40af' }}>
+                              <span>• {p.promotionName}</span>
+                              <span className="mono">-{formatRupees(p.discountMinor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* PROMOTION NUDGE BANNER */}
+                      {promoEvalResult && promoEvalResult.nudges && promoEvalResult.nudges.length > 0 && (
+                        <div
+                          style={{
+                            background: '#fefce8',
+                            border: '1px dashed #eab308',
+                            borderRadius: '8px',
+                            padding: '0.4rem 0.65rem',
+                            margin: '4px 0',
+                            fontSize: '0.75rem',
+                            color: '#854d0e',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <span>💡</span>
+                          <span>{promoEvalResult.nudges[0].message}</span>
                         </div>
                       )}
 
@@ -9470,6 +9813,20 @@ export function App() {
           />
         )}
 
+        {/* TAB: STOCK TRANSFER (BRANCH TO BRANCH) */}
+        {displayTab === 'stock-transfer' && user && (
+          <StockTransferView
+            user={user}
+            onNavigateToTab={(tab) => {
+              if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                setShowInventoryDropdown(true);
+              }
+              setActiveTab(tab as any);
+            }}
+            showToast={showToast}
+          />
+        )}
+
         {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
         {displayTab === 'product-movement' && (
           <ProductMovementAnalysisView
@@ -9748,6 +10105,36 @@ export function App() {
             </div>
           );
         })()}
+
+        {/* TAB: DISCOUNTS & PROMOTIONS */}
+        {activeTab === 'promotions' && (
+          <DiscountsPromotionsView
+            user={user}
+            items={items}
+            categories={categoriesList}
+            branches={branches}
+            parties={parties}
+            onOpenPos={() => setActiveTab('pos')}
+          />
+        )}
+
+        {/* TAB: USER MANAGEMENT (SUPER ADMIN & STORE MANAGER) */}
+        {(activeTab === 'user-management' || displayTab === 'user-management') && (
+          (() => {
+            const roleUpper = String(user?.role || '').toUpperCase();
+            if (roleUpper === 'OWNER' || roleUpper === 'SUPER_ADMIN') {
+              return <UserManagementView />;
+            }
+            if (roleUpper === 'MANAGER' || roleUpper === 'STORE_MANAGER') {
+              return <BranchUserManagementView user={user} />;
+            }
+            return (
+              <div style={{ padding: '60px 24px', textAlign: 'center', color: '#5F5B76' }}>
+                <p style={{ fontSize: '16px', fontWeight: 600 }}>You don't have access to User Management</p>
+              </div>
+            );
+          })()
+        )}
 
         {/* TAB: SALES ANALYSIS */}
         {displayTab === 'sales-analysis' && (
@@ -10296,7 +10683,22 @@ export function App() {
             {/* Section 1: Business Profile Editor */}
             <div className="card settings-section">
               <div className="card-title">
-                <span>⚙️ Active Store Configuration & Profile</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'var(--primary-light, #ede9fe)',
+                    color: 'var(--primary, #6366f1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(99, 102, 241, 0.15)'
+                  }}>
+                    <SettingsIcon size={18} />
+                  </span>
+                  <span>Active Store Configuration & Profile</span>
+                </span>
                 <span className={`biz-badge biz-${shop?.businessType}`}>
                   Current: {getBusinessLabel(shop?.businessType)}
                 </span>
@@ -10327,12 +10729,12 @@ export function App() {
                       value={settingsType}
                       onChange={(e) => setSettingsType(e.target.value)}
                     >
-                      <option value="retail">🛒 Retail / Kirana / Supermarket</option>
-                      <option value="pharmacy">💊 Pharmacy & Healthcare</option>
-                      <option value="restaurant">🍽️ Restaurant / Cafe / Bakery</option>
-                      <option value="wholesale">📦 Wholesale & Distribution</option>
-                      <option value="service">💼 Professional & Technical Services</option>
-                      <option value="general">🏢 General Business</option>
+                      <option value="retail">Retail / Kirana / Supermarket</option>
+                      <option value="pharmacy">Pharmacy & Healthcare</option>
+                      <option value="restaurant">Restaurant / Cafe / Bakery</option>
+                      <option value="wholesale">Wholesale & Distribution</option>
+                      <option value="service">Professional & Technical Services</option>
+                      <option value="general">General Business</option>
                     </select>
                   </div>
                   <div className="form-group">
@@ -10360,6 +10762,18 @@ export function App() {
                       className="form-input"
                       value={settingsAddress}
                       onChange={(e) => setSettingsAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">
+                      Owner Email ID <span style={{ color: '#5B3BE8', fontSize: '0.8rem', fontWeight: 500 }}>(Receives critical deletion &amp; security alerts)</span>
+                    </label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="owner@supermarket.com"
+                      value={settingsOwnerEmail}
+                      onChange={(e) => setSettingsOwnerEmail(e.target.value)}
                     />
                   </div>
                   <div className="form-group">
@@ -10395,8 +10809,8 @@ export function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
-                      💳
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
+                      <CreditCardIcon size={20} />
                     </div>
                     <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
                       Payments & Integrations
@@ -10457,13 +10871,13 @@ export function App() {
                 scrollbarWidth: 'none'
               }}>
                 {[
-                  { id: 'methods', label: 'Payment Methods', icon: '💳' },
-                  { id: 'razorpay', label: 'Razorpay', icon: '⚡' },
-                  { id: 'paytm', label: 'Paytm Gateway', icon: '🅿️' },
-                  { id: 'phonepe', label: 'PhonePe Gateway', icon: '🟣' },
-                  { id: 'qr', label: 'UPI QR', icon: '📱' },
-                  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
-                  { id: 'terminal', label: 'Card Terminal', icon: '📠' },
+                  { id: 'methods', label: 'Payment Methods', icon: <CreditCardIcon size={16} /> },
+                  { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={16} /> },
+                  { id: 'paytm', label: 'Paytm Gateway', icon: <PaytmIcon size={16} /> },
+                  { id: 'phonepe', label: 'PhonePe Gateway', icon: <PhonePeIcon size={16} /> },
+                  { id: 'qr', label: 'UPI QR', icon: <QrCodeIcon size={16} /> },
+                  { id: 'bank', label: 'Bank Transfer', icon: <LandmarkIcon size={16} /> },
+                  { id: 'terminal', label: 'Card Terminal', icon: <TerminalIcon size={16} /> },
                 ].map((tab) => {
                   const isActive = paySettingsSubTab === tab.id;
                   return (
@@ -10517,11 +10931,11 @@ export function App() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {[
-                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: '💵' },
-                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: '📱' },
-                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: '💳' },
-                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: '🏦' },
-                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: '👤' },
+                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: <BanknoteIcon size={20} />, color: '#16a34a', bg: '#f0fdf4' },
+                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: <QrCodeIcon size={20} />, color: '#2563eb', bg: '#eff6ff' },
+                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: <CreditCardIcon size={20} />, color: '#6366f1', bg: '#f5f3ff' },
+                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: <LandmarkIcon size={20} />, color: '#0d9488', bg: '#f0fdfa' },
+                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: <BookUserIcon size={20} />, color: '#9333ea', bg: '#faf5ff' },
                       ].map((item) => {
                         const isChecked = item.id === 'bank' ? payBankEnabled : payMethodsEnabled.includes(item.id);
                         return (
@@ -10544,11 +10958,13 @@ export function App() {
                                 width: '42px',
                                 height: '42px',
                                 borderRadius: '10px',
-                                background: isChecked ? 'var(--primary-light)' : '#f8fafc',
+                                background: isChecked ? item.bg : '#f8fafc',
+                                color: isChecked ? item.color : '#64748b',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '1.25rem',
+                                flexShrink: 0,
+                                border: `1px solid ${isChecked ? item.color + '33' : '#e2e8f0'}`,
                               }}>
                                 {item.icon}
                               </div>
@@ -11388,8 +11804,8 @@ export function App() {
                               transition: 'all 0.15s ease',
                             }}
                           >
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)' }}>
-                              📱 Static QR
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <QrCodeIcon size={16} /> Static QR
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                               Shop VPA with manual cashier verification
@@ -11405,9 +11821,9 @@ export function App() {
                           </label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem' }}>
                             {[
-                              { id: 'razorpay', label: 'Razorpay', icon: '⚡', active: posPaymentConfig?.rzpEnabled },
-                              { id: 'paytm', label: 'Paytm', icon: '🅿️', active: posPaymentConfig?.paytmEnabled },
-                              { id: 'phonepe', label: 'PhonePe', icon: '🟣', active: posPaymentConfig?.phonepeEnabled },
+                              { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={14} />, active: posPaymentConfig?.rzpEnabled },
+                              { id: 'paytm', label: 'Paytm', icon: <PaytmIcon size={14} />, active: posPaymentConfig?.paytmEnabled },
+                              { id: 'phonepe', label: 'PhonePe', icon: <PhonePeIcon size={14} />, active: posPaymentConfig?.phonepeEnabled },
                             ].map((prov) => {
                               const isSel = payProvider === prov.id;
                               return (
@@ -11432,7 +11848,7 @@ export function App() {
                                     transition: 'all 0.15s ease',
                                   }}
                                 >
-                                  <span>{prov.icon} {prov.label}</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{prov.icon}<span>{prov.label}</span></span>
                                   <span style={{ fontSize: '0.7rem', color: prov.active ? '#059669' : '#94a3b8', fontWeight: 600 }}>
                                     {prov.active ? '●' : '○'}
                                   </span>
@@ -11491,7 +11907,7 @@ export function App() {
 
                       {/* Manual verification safety note */}
                       <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.8rem', color: '#92400e', lineHeight: 1.45 }}>
-                        <strong>⚠️ Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
+                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={14} style={{ color: '#d97706' }} /> Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
                       </div>
 
                       <button
@@ -11712,7 +12128,9 @@ export function App() {
                     top: '1rem',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '1.4rem' }}>🏦</span>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <LandmarkIcon size={20} />
+                      </div>
                       <div>
                         <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
                           Customer Payment Slip Preview
@@ -11772,8 +12190,11 @@ export function App() {
 
             {/* WhatsApp Bill Sharing Settings Card (Section 9.1) */}
             <div className="card settings-section">
-              <div className="card-title">
-                <span>📲 WhatsApp Bill Sharing</span>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center' }}>
+                  <WhatsAppIcon size={20} />
+                </span>
+                <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)' }}>WhatsApp Bill Sharing</span>
                 <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                   Configure click-to-chat WhatsApp receipts for POS checkout and invoice resends
                 </span>

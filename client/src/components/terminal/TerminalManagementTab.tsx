@@ -1,3 +1,12 @@
+import {
+  CreditCardIcon,
+  TerminalIcon,
+  ZapIcon,
+  ActivityIcon,
+  Edit2Icon,
+  Trash2Icon,
+  MapPinIcon,
+} from './PaymentIcons.tsx';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api';
 import type {
@@ -253,7 +262,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
       }}>
         <div>
           <div style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>💳 Card Payment Mode in POS Checkout</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CreditCardIcon size={16} style={{ color: '#6366f1' }} /> Card Payment Mode in POS Checkout</span>
             {payMethodsEnabled.includes('card') && (
               <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', background: '#dcfce7', color: '#166534', borderRadius: '12px' }}>
                 Active in POS
@@ -316,7 +325,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                 color: 'var(--text-main)',
               }}
             >
-              <option value="ALL">🏢 All Branches ({terminals.length})</option>
+              <option value="ALL">All Branches ({terminals.length})</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name} ({terminals.filter((t) => t.branchId === b.id).length})
@@ -490,7 +499,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                   </h5>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
-                    <span>📍 {t.branchName || 'Main Branch'}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPinIcon size={12} style={{ color: '#6366f1' }} /> {t.branchName || 'Main Branch'}</span>
                     <span>•</span>
                     <strong style={{ color: 'var(--primary)' }}>
                       {t.counter ? `Counter: ${t.counter}` : 'All Counters (Default)'}
@@ -511,7 +520,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                   }}>
                     <div>
                       <span style={{ color: '#64748b' }}>Mode: </span>
-                      <strong>{t.connectionMode === 'integrated' ? '⚡ Integrated' : '✍️ Standalone'}</strong>
+                      <strong>{t.connectionMode === 'integrated' ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><ZapIcon size={12} style={{ color: '#eab308' }} /> Integrated</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Edit2Icon size={12} style={{ color: '#f59e0b' }} /> Standalone</span>}</strong>
                     </div>
                     {t.terminalId && (
                       <div>
@@ -574,7 +583,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                       cursor: 'pointer',
                     }}
                   >
-                    {isPinging ? 'Pinging...' : '📡 Test Ping'}
+                    {isPinging ? 'Pinging...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ActivityIcon size={13} /> Test Ping</span>}
                   </button>
 
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -592,7 +601,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                         cursor: 'pointer',
                       }}
                     >
-                      ✏️ Edit
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Edit2Icon size={13} /> Edit</span>
                     </button>
                     <button
                       type="button"
@@ -608,7 +617,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                         cursor: 'pointer',
                       }}
                     >
-                      🗑️
+                      <Trash2Icon size={14} />
                     </button>
                   </div>
                 </div>
@@ -759,7 +768,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                       checked={form.connectionMode === 'integrated'}
                       onChange={() => setForm({ ...form, connectionMode: 'integrated' })}
                     />
-                    <span>⚡ Integrated (Cloud / LAN API)</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><ZapIcon size={13} style={{ color: '#eab308' }} /> Integrated (Cloud / LAN API)</span>
                   </label>
 
                   <label style={{
@@ -781,7 +790,7 @@ export const TerminalManagementTab: React.FC<Props> = ({
                       checked={form.connectionMode === 'standalone'}
                       onChange={() => setForm({ ...form, connectionMode: 'standalone' })}
                     />
-                    <span>✍️ Standalone (Cashier RRN)</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Edit2Icon size={13} style={{ color: '#f59e0b' }} /> Standalone (Cashier RRN)</span>
                   </label>
                 </div>
               </div>
