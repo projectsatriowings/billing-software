@@ -6350,7 +6350,7 @@ export function App() {
                       {shopLoyaltyActive && cart.length > 0 && (
                         <div className="bento-summary-row loyalty-earn-row">
                           <div className="loyalty-label-group">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86198f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg className="loyalty-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86198f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 12 20 22 4 22 4 12"></polyline>
                               <rect x="2" y="7" width="20" height="5"></rect>
                               <line x1="12" y1="22" x2="12" y2="7"></line>
