@@ -967,4 +967,17 @@ version: 29,
       `UPDATE cash_movements SET created_by = performed_by WHERE created_by IS NULL AND performed_by IS NOT NULL`,
     ],
   },
+  {
+    version: 42,
+    statements: [
+      `ALTER TABLE product_barcodes ADD COLUMN IF NOT EXISTS barcode_type TEXT NOT NULL DEFAULT 'INTERNAL'`,
+      `DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'product_barcodes_barcode_type_check') THEN
+          ALTER TABLE product_barcodes ADD CONSTRAINT product_barcodes_barcode_type_check CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER'));
+        END IF;
+      END $$;`,
+      `ALTER TABLE product_barcodes ALTER COLUMN is_primary DROP NOT NULL`,
+      `ALTER TABLE product_barcodes ALTER COLUMN is_primary SET DEFAULT false`,
+    ],
+  },
 ];
