@@ -285,7 +285,7 @@ export function registerStockTransfers(r: Router) {
        JOIN items i ON i.id = stl.item_id AND i.tenant_id = stl.tenant_id
        WHERE stl.tenant_id = ? AND stl.transfer_id = ?
        ORDER BY stl.created_at ASC`,
-      [row.from_branch, tenantId, transferId],
+      [row.fromBranch ?? row.from_branch, tenantId, transferId],
     );
 
     const lines: StockTransferLine[] = lineRows.map((l) => ({
@@ -319,6 +319,10 @@ export function registerStockTransfers(r: Router) {
       [tenantId, transferId],
     );
 
+    const fromBranch = row.fromBranch ?? row.from_branch;
+    const toBranch = row.toBranch ?? row.to_branch;
+    const transferNumber = row.transferNumber ?? row.transfer_number;
+
     const sourceMoves: StockMove[] = [];
     const destinationMoves: StockMove[] = [];
 
@@ -337,7 +341,7 @@ export function registerStockTransfers(r: Router) {
         refType: m.refType ?? m.ref_type,
         refId: m.refId ?? m.ref_id,
         refLineId: m.refLineId ?? m.ref_line_id,
-        refNumber: row.transfer_number,
+        refNumber: transferNumber,
         batchNo: m.batchNo ?? m.batch_no,
         expiry: m.expiry,
         reason: m.reason,
@@ -345,19 +349,19 @@ export function registerStockTransfers(r: Router) {
         createdAt: m.createdAt ?? m.created_at,
       };
 
-      if (m.location === row.from_branch) {
+      if (m.location === fromBranch) {
         sourceMoves.push(formatted);
-      } else {
+      } else if (m.location === toBranch || Number(m.qtyMilli ?? m.qty_milli) > 0) {
         destinationMoves.push(formatted);
       }
     }
 
-    // Activity log from audit_events
+    // Activity log from audit_log
     const activityLog = await ctx.db.query<any>(
-      `SELECT ae.id, ae.action, ae.user_name, ae.created_at, ae.details
-       FROM audit_events ae
-       WHERE ae.tenant_id = ? AND ae.entity_type = 'stock_transfer' AND ae.entity_id = ?
-       ORDER BY ae.created_at ASC`,
+      `SELECT al.id, al.action, al.user_name, al.created_at, al.detail
+       FROM audit_log al
+       WHERE al.tenant_id = ? AND al.entity = 'stock_transfer' AND al.entity_id = ?
+       ORDER BY al.created_at ASC`,
       [tenantId, transferId],
     );
 
@@ -492,13 +496,13 @@ export function registerStockTransfers(r: Router) {
         }
 
         // Available stock check at fromBranch
-        const stockRow = await q.one<{ stock_milli: number }>(
+        const stockRow = await q.one<{ stockMilli?: number; stock_milli?: number }>(
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS stock_milli
            FROM stock_moves
            WHERE tenant_id = ? AND item_id = ? AND location = ?`,
           [tenantId, itemId, fromBranch],
         );
-        const availableStockMilli = Number(stockRow?.stock_milli ?? 0);
+        const availableStockMilli = Number(stockRow?.stockMilli ?? stockRow?.stock_milli ?? 0);
 
         if (availableStockMilli < qtyMilli) {
           throw bad(
@@ -560,11 +564,15 @@ export function registerStockTransfers(r: Router) {
         throw bad('Cannot dispatch a cancelled or rejected transfer.');
       }
 
+      const fromBranch = st.fromBranch ?? st.from_branch;
+      const toBranch = st.toBranch ?? st.to_branch;
+      const transferNumber = st.transferNumber ?? st.transfer_number;
+
       // Check user permissions for source branch
       if (ctx.user!.role === 'manager') {
         const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-        if (!allowed.includes(st.from_branch)) {
-          throw forbidden(`You do not have dispatch authority for source branch ${st.from_branch}.`);
+        if (!allowed.includes(fromBranch)) {
+          throw forbidden(`You do not have dispatch authority for source branch ${fromBranch}.`);
         }
       }
 
@@ -580,18 +588,23 @@ export function registerStockTransfers(r: Router) {
 
       // 3. Re-verify source branch stock with row-level safety
       for (const line of lines) {
-        const stockRow = await q.one<{ stock_milli: number }>(
+        const lineItemId = line.itemId ?? line.item_id;
+        const lineItemName = line.itemName ?? line.item_name;
+        const lineBatchNo = line.batchNo ?? line.batch_no ?? null;
+        const lineExpiry = line.expiry ?? null;
+
+        const stockRow = await q.one<{ stockMilli?: number; stock_milli?: number }>(
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS stock_milli
            FROM stock_moves
            WHERE tenant_id = ? AND item_id = ? AND location = ?`,
-          [tenantId, line.item_id, st.from_branch],
+          [tenantId, lineItemId, fromBranch],
         );
-        const available = Number(stockRow?.stock_milli ?? 0);
-        const required = Number(line.qty_milli);
+        const available = Number(stockRow?.stockMilli ?? stockRow?.stock_milli ?? 0);
+        const required = Number(line.qtyMilli ?? line.qty_milli);
 
         if (available < required) {
           throw bad(
-            `Cannot dispatch: stock for "${line.item_name}" dropped below transfer quantity at ${st.from_branch}. Available: ${available / 1000}, Required: ${required / 1000}`,
+            `Cannot dispatch: stock for "${lineItemName}" dropped below transfer quantity at ${fromBranch}. Available: ${available / 1000}, Required: ${required / 1000}`,
           );
         }
 
@@ -604,14 +617,14 @@ export function registerStockTransfers(r: Router) {
           [
             moveId,
             tenantId,
-            line.item_id,
-            st.from_branch,
+            lineItemId,
+            fromBranch,
             -required, // Negative movement at source branch
             transferId,
             line.id,
-            line.batch_no || null,
-            line.expiry || null,
-            `Transferred to ${st.to_branch} (${st.transfer_number})`,
+            lineBatchNo,
+            lineExpiry,
+            `Transferred to ${toBranch} (${transferNumber})`,
             ctx.user!.id,
           ],
         );
@@ -633,9 +646,9 @@ export function registerStockTransfers(r: Router) {
         entity: 'stock_transfer',
         entityId: transferId,
         detail: {
-          transferNumber: st.transfer_number,
-          fromBranch: st.from_branch,
-          toBranch: st.to_branch,
+          transferNumber,
+          fromBranch,
+          toBranch,
           dispatchedItems: lines.length,
         },
       });
@@ -643,7 +656,7 @@ export function registerStockTransfers(r: Router) {
       return {
         success: true,
         status: 'in_transit',
-        message: `Transfer ${st.transfer_number} dispatched. Stock successfully deducted from ${st.from_branch} and marked in transit.`,
+        message: `Transfer ${transferNumber} dispatched. Stock successfully deducted from ${fromBranch} and marked in transit.`,
       };
     });
   });
@@ -667,11 +680,15 @@ export function registerStockTransfers(r: Router) {
         throw bad(`Cannot receive transfer in "${st.status}" status. Only in-transit or partially received transfers can be received.`);
       }
 
+      const fromBranch = st.fromBranch ?? st.from_branch;
+      const toBranch = st.toBranch ?? st.to_branch;
+      const transferNumber = st.transferNumber ?? st.transfer_number;
+
       // Check destination branch permission
       if (ctx.user!.role === 'manager') {
         const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-        if (!allowed.includes(st.to_branch)) {
-          throw forbidden(`You do not have receiving authority for destination branch ${st.to_branch}.`);
+        if (!allowed.includes(toBranch)) {
+          throw forbidden(`You do not have receiving authority for destination branch ${toBranch}.`);
         }
       }
 
@@ -701,12 +718,16 @@ export function registerStockTransfers(r: Router) {
       }
 
       for (const line of lines) {
-        const lineDispatchedMilli = Number(line.qty_milli);
-        const previouslyReceivedMilli = Number(line.received_qty_milli || 0);
+        const lineItemId = line.itemId ?? line.item_id;
+        const lineItemName = line.itemName ?? line.item_name;
+        const lineBatchNo = line.batchNo ?? line.batch_no ?? null;
+        const lineExpiry = line.expiry ?? null;
+        const lineDispatchedMilli = Number(line.qtyMilli ?? line.qty_milli);
+        const previouslyReceivedMilli = Number(line.receivedQtyMilli ?? line.received_qty_milli ?? 0);
 
         // If specific line receipt was passed in request, use it; otherwise default to full receipt
         let newReceivedMilli: number;
-        let lineReason = line.discrepancy_reason || null;
+        let lineReason = line.discrepancyReason ?? line.discrepancy_reason ?? null;
 
         if (receiptMap.has(line.id)) {
           const entry = receiptMap.get(line.id)!;
@@ -718,11 +739,11 @@ export function registerStockTransfers(r: Router) {
         }
 
         if (newReceivedMilli < 0) {
-          throw bad(`Received quantity cannot be negative for ${line.item_name}.`);
+          throw bad(`Received quantity cannot be negative for ${lineItemName}.`);
         }
         if (newReceivedMilli > lineDispatchedMilli) {
           throw bad(
-            `Received quantity (${newReceivedMilli / 1000}) cannot exceed dispatched quantity (${lineDispatchedMilli / 1000}) for ${line.item_name}.`,
+            `Received quantity (${newReceivedMilli / 1000}) cannot exceed dispatched quantity (${lineDispatchedMilli / 1000}) for ${lineItemName}.`,
           );
         }
 
@@ -731,7 +752,7 @@ export function registerStockTransfers(r: Router) {
           hasDiscrepancy = true;
           if (!lineReason) {
             throw bad(
-              `Shortage discrepancy detected for "${line.item_name}" (${discrepancyMilli / 1000} ${line.unit} missing). A discrepancy reason is required.`,
+              `Shortage discrepancy detected for "${lineItemName}" (${discrepancyMilli / 1000} ${line.unit} missing). A discrepancy reason is required.`,
             );
           }
         }
@@ -749,14 +770,14 @@ export function registerStockTransfers(r: Router) {
             [
               moveId,
               tenantId,
-              line.item_id,
-              st.to_branch,
+              lineItemId,
+              toBranch,
               deltaToAddMilli, // Positive movement at destination branch
               transferId,
               line.id,
-              line.batch_no || null,
-              line.expiry || null,
-              `Received from ${st.from_branch} (${st.transfer_number})`,
+              lineBatchNo,
+              lineExpiry,
+              `Received from ${fromBranch} (${transferNumber})`,
               ctx.user!.id,
             ],
           );
@@ -790,8 +811,9 @@ export function registerStockTransfers(r: Router) {
         entity: 'stock_transfer',
         entityId: transferId,
         detail: {
-          transferNumber: st.transfer_number,
-          toBranch: st.to_branch,
+          transferNumber,
+          fromBranch,
+          toBranch,
           finalStatus,
           hasDiscrepancy,
         },
@@ -801,8 +823,8 @@ export function registerStockTransfers(r: Router) {
         success: true,
         status: finalStatus,
         message: hasDiscrepancy
-          ? `Transfer ${st.transfer_number} received with shortages recorded. Status updated to Partially Received.`
-          : `Transfer ${st.transfer_number} received in full. Stock added to ${st.to_branch} and status marked Completed.`,
+          ? `Transfer ${transferNumber} received with shortages recorded. Status updated to Partially Received.`
+          : `Transfer ${transferNumber} received in full. Stock added to ${toBranch} and status marked Completed.`,
       };
     });
   });
@@ -827,6 +849,9 @@ export function registerStockTransfers(r: Router) {
         throw bad('Transfer is already cancelled.');
       }
 
+      const fromBranch = st.fromBranch ?? st.from_branch;
+      const transferNumber = st.transferNumber ?? st.transfer_number;
+
       // If it was in transit, restore deducted stock to source branch
       if (st.status === 'in_transit') {
         const lines = await q.query<any>(
@@ -835,6 +860,8 @@ export function registerStockTransfers(r: Router) {
         );
 
         for (const line of lines) {
+          const lineItemId = line.itemId ?? line.item_id;
+          const lineQtyMilli = Number(line.qtyMilli ?? line.qty_milli);
           const moveId = newId('sm');
           await q.exec(
             `INSERT INTO stock_moves (
@@ -843,12 +870,12 @@ export function registerStockTransfers(r: Router) {
             [
               moveId,
               tenantId,
-              line.item_id,
-              st.from_branch,
-              Number(line.qty_milli), // Re-credit source branch
+              lineItemId,
+              fromBranch,
+              lineQtyMilli, // Re-credit source branch
               transferId,
               line.id,
-              `Reversal due to cancellation of ${st.transfer_number}`,
+              `Reversal due to cancellation of ${transferNumber}`,
               ctx.user!.id,
             ],
           );
@@ -869,7 +896,7 @@ export function registerStockTransfers(r: Router) {
         entity: 'stock_transfer',
         entityId: transferId,
         detail: {
-          transferNumber: st.transfer_number,
+          transferNumber,
           previousStatus: st.status,
           reason,
         },
@@ -878,7 +905,7 @@ export function registerStockTransfers(r: Router) {
       return {
         success: true,
         status: 'cancelled',
-        message: `Stock transfer ${st.transfer_number} cancelled successfully.`,
+        message: `Stock transfer ${transferNumber} cancelled successfully.`,
       };
     });
   });
