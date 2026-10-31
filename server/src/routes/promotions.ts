@@ -66,9 +66,12 @@ export function registerPromotions(r: Router) {
 
     // Branch authorization for Store Managers
     if (role === 'manager') {
-      const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
+      const allowed = ctx.user!.allowedLocations?.length
+        ? ctx.user!.allowedLocations
+        : [ctx.user!.assignedLocation || 'MAIN'];
       // Manager can see promotions where branches contains 'ALL' or any of their allowed branches
-      sql += ` AND (branches @> '["ALL"]'::jsonb OR branches ?| array[${allowed.map(() => '?').join(', ')}])`;
+      // Use jsonb_exists_any() function to prevent `?` operator collision with `toPgPlaceholders`
+      sql += ` AND (branches @> '["ALL"]'::jsonb OR jsonb_exists_any(branches, ARRAY[${allowed.map(() => '?').join(', ')}]::text[]))`;
       params.push(...allowed);
     }
 
