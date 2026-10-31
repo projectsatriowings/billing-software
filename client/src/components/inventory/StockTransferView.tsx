@@ -3370,38 +3370,180 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
           DISPATCH CONFIRMATION MODAL
           ========================================================================= */}
       {showDispatchModal && detailedTransfer && (
-        <div className="modal-backdrop" style={{ zIndex: 9999 }}>
-          <div className="modal-card" style={{ maxWidth: '500px', padding: '1.75rem' }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: '#0f172a', fontSize: '1.2rem' }}>
-              Confirm Stock Dispatch
-            </h3>
-            <p style={{ color: '#475569', fontSize: '0.88rem', lineHeight: '1.5', margin: '0 0 1.25rem 0' }}>
-              Are you sure you want to dispatch Transfer{' '}
-              <strong style={{ color: '#0f172a' }}>{detailedTransfer.transferNumber}</strong> from{' '}
-              <strong>{detailedTransfer.fromBranchName}</strong>?
-              <br />
-              <br />
-              <span style={{ color: '#2563eb' }}>
-                Stock will be permanently deducted from {detailedTransfer.fromBranchName} and marked in transit.
-              </span>
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+              position: 'relative',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 10px rgba(99, 102, 241, 0.25)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <TruckIcon size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: 800 }}>
+                    Confirm Stock Dispatch
+                  </h3>
+                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
+                    Transfer #{detailedTransfer.transferNumber}
+                  </div>
+                </div>
+              </div>
+
               <button
                 type="button"
-                className="btn btn-secondary"
+                onClick={() => setShowDispatchModal(false)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+              >
+                <XIcon size={18} />
+              </button>
+            </div>
+
+            {/* Route Summary Box */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '0.85rem 1rem',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                Dispatch Route
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>
+                  {detailedTransfer.fromBranchName || detailedTransfer.fromBranch}
+                </span>
+                <span style={{ color: '#6366f1', fontWeight: 700 }}>➔</span>
+                <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>
+                  {detailedTransfer.toBranchName || detailedTransfer.toBranch}
+                </span>
+              </div>
+            </div>
+
+            {/* Warning Alert */}
+            <div
+              style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '10px',
+                padding: '0.85rem 1rem',
+                fontSize: '0.84rem',
+                color: '#1e40af',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.65rem',
+                lineHeight: '1.45',
+              }}
+            >
+              <AlertTriangleIcon size={18} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Stock Deduction Notice:</strong> Confirming dispatch will immediately deduct{' '}
+                <strong>{detailedLines.reduce((acc, l) => acc + (l.qtyMilli / 1000), 0)} units</strong> from{' '}
+                <strong>{detailedTransfer.fromBranchName}</strong> live inventory ledger and transition the status to{' '}
+                <span style={{ fontWeight: 700, color: '#1d4ed8' }}>In Transit</span>.
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', alignItems: 'center' }}>
+              <button
+                type="button"
                 disabled={submittingDispatch}
                 onClick={() => setShowDispatchModal(false)}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#475569',
+                  padding: '0.6rem 1.25rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
                 disabled={submittingDispatch}
                 onClick={handleConfirmDispatch}
-                style={{ background: '#6366f1' }}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.6rem 1.4rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: submittingDispatch ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                  transition: 'all 0.15s ease',
+                  opacity: submittingDispatch ? 0.7 : 1,
+                }}
               >
-                {submittingDispatch ? 'Dispatching...' : 'Confirm Dispatch'}
+                <TruckIcon size={16} />
+                <span>{submittingDispatch ? 'Dispatching Stock...' : 'Confirm Stock Dispatch'}</span>
               </button>
             </div>
           </div>
