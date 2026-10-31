@@ -2,6 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Gstr2bImportModal } from './Gstr2bImportModal.tsx';
 import { downloadFile, fetchGstOverview, type GstOverviewMetrics } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  DownloadIcon,
+  UploadIcon,
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ZapIcon,
+  FolderArchiveIcon,
+  BookOpenIcon,
+  ArrowRightIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  AlertTriangleIcon,
+  BarChartIcon,
+  PackageIcon,
+  BriefcaseIcon,
+  ScaleIcon,
+  FileTextIcon,
+  SpinnerIcon,
+} from './GstIcons.tsx';
 
 interface GstImportExportViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -68,7 +88,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       statValue: fmtMoney(metrics?.salesTaxableMinor || 0),
       statSub: `Output GST: ${fmtMoney(metrics?.outputGstMinor || 0)}`,
       link: `/api/gst/sales-register/export?period=${encodeURIComponent(period)}`,
-      icon: '📊',
+      icon: <BarChartIcon className="h-5 w-5 text-emerald-600" />,
       filingDeadline: 'File by 11th',
     },
     {
@@ -82,7 +102,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       statValue: fmtMoney(metrics?.purchaseTaxableMinor || 0),
       statSub: `Purchase GST: ${fmtMoney(metrics?.purchaseGstMinor || 0)}`,
       link: `/api/gst/purchase-register/export?period=${encodeURIComponent(period)}`,
-      icon: '📦',
+      icon: <PackageIcon className="h-5 w-5 text-indigo-600" />,
       filingDeadline: 'Reconcile on 14th',
     },
     {
@@ -96,7 +116,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       statValue: fmtMoney(metrics?.expenseTaxableMinor || 0),
       statSub: 'ITC Claimable',
       link: `/api/expenses/export?from=${period}-01&to=${toDate}`,
-      icon: '💼',
+      icon: <BriefcaseIcon className="h-5 w-5 text-blue-600" />,
       filingDeadline: 'Monthly Audit',
     },
     {
@@ -108,9 +128,9 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       format: 'CSV / Excel',
       statLabel: 'Reviewed Eligible ITC',
       statValue: fmtMoney(metrics?.reviewedEligibleItcMinor || 0),
-      statSub: metrics?.unresolvedMismatchesCount ? `⚠️ ${metrics.unresolvedMismatchesCount} to reconcile` : '✓ All Matched',
+      statSub: metrics?.unresolvedMismatchesCount ? `${metrics.unresolvedMismatchesCount} to reconcile` : 'All Matched',
       link: `/api/gst/itc-register/export?period=${encodeURIComponent(period)}`,
-      icon: '⚖️',
+      icon: <ScaleIcon className="h-5 w-5 text-purple-600" />,
       filingDeadline: 'Audit before 20th',
     },
     {
@@ -124,7 +144,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       statValue: fmtMoney(metrics?.estimatedNetGstLiabilityMinor || 0),
       statSub: 'Final Tax Payable',
       link: `/api/gst/gstr3b/export?period=${encodeURIComponent(period)}`,
-      icon: '📑',
+      icon: <FileTextIcon className="h-5 w-5 text-amber-600" />,
       filingDeadline: 'File & Pay by 20th',
     },
   ];
@@ -162,7 +182,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       <div className="gst-header-card">
         <div className="gst-header-left">
           <h2 className="gst-header-title">
-            <span>📥</span> GST Import &amp; Export Hub
+            <span className="inline-flex items-center text-indigo-600"><DownloadIcon className="h-6 w-6" /></span> GST Import &amp; Export Hub
           </h2>
           <p className="gst-header-subtitle">
             Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports for {periodLabel}.
@@ -179,7 +199,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               onClick={() => changeMonth(-1)}
               title="Previous Month"
             >
-              ◀
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
             </button>
             <input
               type="month"
@@ -193,7 +213,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               onClick={() => changeMonth(1)}
               title="Next Month"
             >
-              ▶
+              <ChevronRightIcon className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -203,7 +223,8 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
             className="gst-pill-btn"
             title="Jump to current return month"
           >
-            📅 Current
+            <CalendarIcon className="h-3.5 w-3.5" />
+            <span>Current</span>
           </button>
         </div>
       </div>
@@ -234,7 +255,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
         <div className="gst-import-hero-layout">
           <div className="gst-import-hero-left">
             <div className="gst-import-icon-badge">
-              📥
+              <UploadIcon className="h-6 w-6 text-indigo-600" />
             </div>
             <div>
               <div className="gst-import-hero-title-row">
@@ -252,15 +273,18 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               {/* 3 Step Workflow */}
               <div className="gst-import-steps-row">
                 <span className="gst-import-step-chip">
-                  <span>1️⃣</span> Download 2B from GST Portal
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">1</span>
+                  <span>Download 2B from GST Portal</span>
                 </span>
-                <span className="gst-import-step-arrow">→</span>
+                <span className="gst-import-step-arrow"><ArrowRightIcon className="h-3 w-3 text-slate-400" /></span>
                 <span className="gst-import-step-chip">
-                  <span>2️⃣</span> Upload JSON/CSV Here
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">2</span>
+                  <span>Upload JSON/CSV Here</span>
                 </span>
-                <span className="gst-import-step-arrow">→</span>
+                <span className="gst-import-step-arrow"><ArrowRightIcon className="h-3 w-3 text-slate-400" /></span>
                 <span className="gst-import-step-chip">
-                  <span>3️⃣</span> Auto-Match &amp; Claim ITC
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">3</span>
+                  <span>Auto-Match &amp; Claim ITC</span>
                 </span>
               </div>
             </div>
@@ -272,7 +296,8 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               onClick={() => setIsImportModalOpen(true)}
               className="gst-import-hero-btn"
             >
-              <span>⚡</span> Launch 2B Import Wizard
+              <ZapIcon className="h-4 w-4" />
+              <span>Launch 2B Import Wizard</span>
             </button>
           </div>
         </div>
@@ -292,7 +317,9 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               <span className="gst-kpi-num-badge">01</span>
               <span className="gst-kpi-title">Outward Sales Taxable</span>
             </div>
-            <span className="gst-kpi-icon-pill">📊</span>
+            <span className="gst-kpi-icon-pill">
+              <BarChartIcon className="h-4 w-4 text-emerald-600" />
+            </span>
           </div>
           <div className="gst-kpi-val">
             {loadingMetrics ? '...' : fmtMoney(metrics?.salesTaxableMinor || 0)}
@@ -308,7 +335,9 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               <span className="gst-kpi-num-badge">02</span>
               <span className="gst-kpi-title">Inward Purchases Taxable</span>
             </div>
-            <span className="gst-kpi-icon-pill">📦</span>
+            <span className="gst-kpi-icon-pill">
+              <PackageIcon className="h-4 w-4 text-indigo-600" />
+            </span>
           </div>
           <div className="gst-kpi-val">
             {loadingMetrics ? '...' : fmtMoney(metrics?.purchaseTaxableMinor || 0)}
@@ -324,7 +353,9 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               <span className="gst-kpi-num-badge">03</span>
               <span className="gst-kpi-title">Claimable Expenses Taxable</span>
             </div>
-            <span className="gst-kpi-icon-pill">💼</span>
+            <span className="gst-kpi-icon-pill">
+              <BriefcaseIcon className="h-4 w-4 text-amber-600" />
+            </span>
           </div>
           <div className="gst-kpi-val">
             {loadingMetrics ? '...' : fmtMoney(metrics?.expenseTaxableMinor || 0)}
@@ -340,16 +371,24 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               <span className="gst-kpi-num-badge">04</span>
               <span className="gst-kpi-title">Reviewed Eligible ITC</span>
             </div>
-            <span className="gst-kpi-icon-pill" style={{ background: '#d1fae5', color: '#047857' }}>✅</span>
+            <span className="gst-kpi-icon-pill" style={{ background: '#d1fae5', color: '#047857' }}>
+              <CheckCircleIcon className="h-4 w-4 text-emerald-700" />
+            </span>
           </div>
           <div className="gst-kpi-val">
             {loadingMetrics ? '...' : fmtMoney(metrics?.reviewedEligibleItcMinor || 0)}
           </div>
           <div className="gst-kpi-sub">
             {metrics?.unresolvedMismatchesCount ? (
-              <span style={{ color: '#b45309', fontWeight: 700 }}>⚠️ {metrics.unresolvedMismatchesCount} to reconcile</span>
+              <span className="inline-flex items-center gap-1" style={{ color: '#b45309', fontWeight: 700 }}>
+                <AlertTriangleIcon className="h-3.5 w-3.5" />
+                <span>{metrics.unresolvedMismatchesCount} to reconcile</span>
+              </span>
             ) : (
-              <span style={{ color: '#059669', fontWeight: 700 }}>✓ Fully Reconciled for GSTR-3B</span>
+              <span className="inline-flex items-center gap-1" style={{ color: '#059669', fontWeight: 700 }}>
+                <CheckCircleIcon className="h-3.5 w-3.5" />
+                <span>Fully Reconciled for GSTR-3B</span>
+              </span>
             )}
           </div>
         </div>
@@ -359,7 +398,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       <div className="gst-ca-bundle-banner">
         <div className="gst-ca-bundle-left">
           <div className="gst-ca-bundle-icon">
-            🗂️
+            <FolderArchiveIcon className="h-7 w-7 text-indigo-600" />
           </div>
           <div className="gst-ca-bundle-info">
             <div className="gst-ca-bundle-title-row">
@@ -381,7 +420,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
             disabled={downloadingBundle}
             className="gst-ca-bundle-btn"
           >
-            <span>{downloadingBundle ? '⏳' : '📥'}</span>
+            {downloadingBundle ? <SpinnerIcon className="h-4 w-4 animate-spin text-white" /> : <DownloadIcon className="h-4 w-4 text-white" />}
             <span>{downloadingBundle ? 'Generating 5 Files...' : 'Download Full CA Audit Pack (5 CSVs)'}</span>
           </button>
         </div>
@@ -422,7 +461,10 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
                     <span className="gst-register-stat-val">{reg.statValue}</span>
                   </div>
                   <div className="gst-register-stat-sub">
-                    <span style={{ fontWeight: 700, color: '#475569' }}>⏰ {reg.filingDeadline}</span>
+                    <span style={{ fontWeight: 700, color: '#475569' }} className="inline-flex items-center gap-1">
+                      <ClockIcon className="h-3.5 w-3.5" />
+                      <span>{reg.filingDeadline}</span>
+                    </span>
                     <span style={{ fontWeight: 600, color: '#0f172a' }}>{reg.statSub}</span>
                   </div>
                 </div>
@@ -435,7 +477,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
                   disabled={downloadingIdx !== null}
                   className="gst-register-download-btn"
                 >
-                  <span>{downloadingIdx === idx ? '⏳' : '⬇️'}</span>
+                  {downloadingIdx === idx ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-slate-500" /> : <DownloadIcon className="h-3.5 w-3.5 text-slate-600" />}
                   <span>{downloadingIdx === idx ? 'Exporting...' : `Download ${reg.format}`}</span>
                 </button>
               </div>
@@ -448,7 +490,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
       <div className="gst-journey-card">
         <div className="gst-journey-header">
           <h3 className="gst-journey-title">
-            <span>📚</span> Statutory Filing Calendar &amp; CA Handoff Workflow
+            <span className="inline-flex items-center text-indigo-600 mr-1"><BookOpenIcon className="h-5 w-5" /></span> Statutory Filing Calendar &amp; CA Handoff Workflow
           </h3>
           <p className="gst-journey-subtitle">
             Follow this standard monthly schedule to file on time, avoid late fees (Section 47), and ensure 100% of your vendor input tax credit is safe under Section 16(2)(aa):
@@ -470,7 +512,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               className="gst-journey-action-btn"
             >
               <span>View Sales Register</span>
-              <span>➔</span>
+              <ArrowRightIcon className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -488,7 +530,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               className="gst-journey-action-btn"
             >
               <span>Launch 2B Wizard</span>
-              <span>➔</span>
+              <ArrowRightIcon className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -506,7 +548,7 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
               className="gst-journey-action-btn"
             >
               <span>Open GSTR-3B Worksheet</span>
-              <span>➔</span>
+              <ArrowRightIcon className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

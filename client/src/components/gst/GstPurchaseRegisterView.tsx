@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstPurchaseRegister, downloadFile } from '../../api.ts';
+import { DownloadIcon, SpinnerIcon, AlertTriangleIcon } from './GstIcons.tsx';
 
 interface GstPurchaseRegisterViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -102,7 +103,8 @@ export const GstPurchaseRegisterView: React.FC<GstPurchaseRegisterViewProps> = (
             disabled={exporting}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
           >
-            <span>{exporting ? '⏳' : '📥'}</span> {exporting ? 'Exporting...' : 'Export CSV'}
+            {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <DownloadIcon className="h-4 w-4 text-slate-600" />}
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
         </div>
       </div>
@@ -183,7 +185,10 @@ export const GstPurchaseRegisterView: React.FC<GstPurchaseRegisterViewProps> = (
             Loading inward records...
           </div>
         ) : error ? (
-          <div className="p-6 text-center text-sm text-rose-600">⚠️ {error}</div>
+          <div className="flex items-center justify-center gap-2 p-6 text-center text-sm text-rose-600">
+            <AlertTriangleIcon className="h-4 w-4" />
+            <span>{error}</span>
+          </div>
         ) : filteredItems.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
             <p className="text-base font-semibold">No inward purchases or expenses found for {period}.</p>
