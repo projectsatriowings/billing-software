@@ -1614,6 +1614,34 @@ body {
   flex-wrap: wrap;
 }
 
+/* Top global bar without bottom divider on pages hiding the business info bar */
+.top-global-bar.no-divider {
+  border-bottom: none !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Matching 24px top padding across all modules where business bar is hidden */
+.stage-business-bar-hidden .cat-bento-module-wrapper {
+  padding-top: 24px;
+}
+
+.stage-business-bar-hidden .customer-dir-root {
+  padding-top: 24px;
+}
+
+.stage-business-bar-hidden .supplier-dir-root {
+  padding-top: 24px;
+}
+
+.stage-business-bar-hidden > .card {
+  margin-top: 24px;
+}
+
+.stage-business-bar-hidden > div > .kpi-grid:first-child {
+  padding-top: 24px;
+}
+
 /* Top Global Bar Left Controls */
 .top-global-left {
   display: flex;

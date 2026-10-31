@@ -348,7 +348,7 @@ export function registerBranchUsers(r: Router) {
     if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD');
 
     const sendEmail = Boolean(b.sendEmail && email);
-    const mustChangePassword = Boolean(b.mustChangePassword);
+    const mustChangePassword = b.mustChangePassword !== undefined ? Boolean(b.mustChangePassword) : true;
 
     const counterId = newId('cnt');
     const userId = newId('u');
@@ -767,7 +767,7 @@ export function registerBranchUsers(r: Router) {
 
     const tempPassword = generateStrongPassword();
     const passwordHash = hashPassword(tempPassword);
-    const forceChange = !isCounter; // Cashiers must change on next login
+    const forceChange = true; // Both counters and cashiers must change on next login
 
     await ctx.db.tx(async (q) => {
       await q.exec(

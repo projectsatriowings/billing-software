@@ -26,6 +26,8 @@ export interface AuthUser {
   branchId?: string | null;
   username?: string | null;
   counterId?: string | null;
+  mustChangePassword?: boolean;
+  isChangeToken?: boolean;
 }
 export interface Ctx {
   req: http.IncomingMessage;
@@ -160,6 +162,12 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
           } else ctx.body = {};
         }
         ctx.user = await opts.authenticate(ctx);
+        if (ctx.user?.mustChangePassword) {
+          const isExcluded = url.pathname === '/api/auth/change-password' || url.pathname === '/api/auth/logout';
+          if (!isExcluded) {
+            throw new HttpError(403, 'PASSWORD_CHANGE_REQUIRED', 'Password change required before accessing other resources.');
+          }
+        }
         let result: unknown;
         for (const h of m.route.handlers) result = await h(ctx);
         if (result instanceof FileResponse) {

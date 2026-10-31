@@ -68,6 +68,8 @@ import {
 import { LandingPage } from './components/LandingPage';
 import { RegisterWizard } from './components/RegisterWizard';
 import { LoginPage } from './components/LoginPage';
+import { ChangePasswordView } from './components/auth/ChangePasswordView';
+import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
@@ -146,6 +148,45 @@ import { DiscountsPromotionsView } from './components/promotions/DiscountsPromot
 import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
 import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
+
+// Routes and tabs where the business info bar (green-dot pill) and its dividers are hidden
+export const HIDE_BUSINESS_BAR_ROUTES = [
+  '/products',
+  '/items',
+  '/categories',
+  '/discounts',
+  '/promotions',
+  '/customers',
+  '/suppliers',
+  '/accounts',
+  '/finance',
+  '/invoices',
+  '/purchases',
+  '/payments',
+  '/expenses',
+  '/cashbank',
+  '/payables',
+  '/receivables',
+  '/reports',
+  '/user-management',
+];
+
+export const HIDE_BUSINESS_BAR_TABS = new Set([
+  'items',
+  'categories',
+  'promotions',
+  'customers',
+  'suppliers',
+  'invoices',
+  'purchases',
+  'payments',
+  'expenses',
+  'cashbank',
+  'payables',
+  'receivables',
+  'reports',
+  'user-management',
+]);
 
 export interface ToastItem {
   id: string;
@@ -491,14 +532,29 @@ export function App() {
   useEffect(() => {
     if (isGstTabActive) setIsGstOpen(true);
   }, [isGstTabActive]);
+
+  // Determine if business info bar under top header should be hidden
+  const hideBusinessBar = (() => {
+    try {
+      const currentPath = (window.location.pathname || '').toLowerCase();
+      const currentHash = (window.location.hash || '').replace('#', '').toLowerCase();
+      const isRouteMatch = HIDE_BUSINESS_BAR_ROUTES.some(
+        (r) => currentPath === r || currentPath.startsWith(r + '/') || currentHash === r.replace('/', '')
+      );
+      if (isRouteMatch) return true;
+    } catch {}
+    return HIDE_BUSINESS_BAR_TABS.has(displayTab) || HIDE_BUSINESS_BAR_TABS.has(activeTab);
+  })();
   const [activeShiftNumber, setActiveShiftNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // View routing: 'landing' (Screen 1) | 'login' (Screen 7) | 'register' (Screens 2-6) | 'selector' (Screen 8) | 'dashboard' (Screen 9)
-  const [view, setView] = useState<'landing' | 'login' | 'register' | 'selector' | 'dashboard'>('landing');
+  // View routing: 'landing' | 'login' | 'register' | 'selector' | 'dashboard' | 'change-password' | 'reset-password'
+  const [view, setView] = useState<'landing' | 'login' | 'register' | 'selector' | 'dashboard' | 'change-password' | 'reset-password'>('landing');
   const [regSelectedBusinessType, setRegSelectedBusinessType] = useState<string>('grocery');
+  const [changePasswordData, setChangePasswordData] = useState<{ changeToken: string; tempPassword?: string; identifier?: string } | null>(null);
+  const [resetPasswordToken, setResetPasswordToken] = useState<string>('');
 
-  const navigateTo = (newView: 'landing' | 'login' | 'register' | 'selector' | 'dashboard') => {
+  const navigateTo = (newView: 'landing' | 'login' | 'register' | 'selector' | 'dashboard' | 'change-password' | 'reset-password') => {
     setView(newView);
     if (newView === 'dashboard') {
       setActiveTab('dashboard');
@@ -506,6 +562,38 @@ export function App() {
     window.location.hash = newView;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+    const tokenFromSearch = searchParams.get('token');
+
+    const hash = window.location.hash;
+    let tokenFromHash = '';
+    if (hash.includes('token=')) {
+      const m = hash.match(/token=([a-zA-Z0-9_-]+)/);
+      if (m && m[1]) tokenFromHash = m[1];
+    }
+
+    const resetToken = tokenFromSearch || tokenFromHash;
+
+    if (pathname === '/reset-password' || hash.startsWith('#reset-password')) {
+      if (resetToken) {
+        setResetPasswordToken(resetToken);
+      }
+      setView('reset-password');
+    } else if (pathname === '/change-password' || hash.startsWith('#change-password')) {
+      setView('change-password');
+    }
+
+    const handlePasswordChangeRequired = () => {
+      setView('change-password');
+    };
+    window.addEventListener('password_change_required', handlePasswordChangeRequired);
+    return () => {
+      window.removeEventListener('password_change_required', handlePasswordChangeRequired);
+    };
+  }, []);
 
   // Multi-business state
   const [demoBusinesses, setDemoBusinesses] = useState<DemoBusiness[]>([]);
@@ -4827,11 +4915,59 @@ export function App() {
           navigateTo('dashboard');
           showToast(`Welcome back, ${data.user.name}!`);
         }}
+        onRequirePasswordChange={(params) => {
+          setChangePasswordData(params);
+          setView('change-password');
+        }}
         onNavigateRegister={() => {
           navigateTo('register');
         }}
         onBackToHome={() => {
           navigateTo('landing');
+        }}
+      />
+    );
+  }
+
+  // Forced Change Password View (First sign-in / temporary password reset)
+  if (view === 'change-password') {
+    return (
+      <ChangePasswordView
+        changeToken={changePasswordData?.changeToken}
+        initialCurrentPassword={changePasswordData?.tempPassword}
+        identifier={changePasswordData?.identifier}
+        onSuccess={(data) => {
+          if (data.user) setUser(data.user);
+          if (data.shop) setShop(data.shop);
+          setChangePasswordData(null);
+          showToast('Password updated');
+          loadDemoBusinesses();
+          const targetRole = data.user?.role || data.role;
+          if (targetRole === 'manager') {
+            setActiveTab('dashboard');
+          } else if (targetRole === 'cashier' || targetRole === 'counter') {
+            setActiveTab('pos');
+          } else {
+            setActiveTab('dashboard');
+          }
+          navigateTo('dashboard');
+        }}
+        onCancel={() => {
+          setChangePasswordData(null);
+          navigateTo('login');
+        }}
+      />
+    );
+  }
+
+  // Self-service Reset Password View (via email link with token)
+  if (view === 'reset-password') {
+    return (
+      <ResetPasswordView
+        token={resetPasswordToken}
+        onNavigateLogin={() => {
+          setResetPasswordToken('');
+          navigateTo('login');
         }}
       />
     );
@@ -5929,7 +6065,7 @@ export function App() {
       {/* Main Body */}
       <main className="main-content">
         {/* Top Global Bar Matching Image 2 */}
-        <div className="top-global-bar">
+        <div className={`top-global-bar ${hideBusinessBar ? 'no-divider' : ''}`}>
           <div className="top-global-actions">
             <button
               type="button"
@@ -5966,9 +6102,9 @@ export function App() {
         </div>
 
         {/* View Transition Stage (SPA Bento Transition) */}
-        <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
+        <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
         {/* Other Tab Headers */}
-        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && !(user.role === 'manager' && displayTab === 'shifts') && (
+        {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
