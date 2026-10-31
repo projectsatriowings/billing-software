@@ -1425,7 +1425,7 @@ export function DiscountsPromotionsView({
           categories={categories}
           mode="single-product"
           onConfirm={handleProductSelected}
-          title="Select Product"
+          title="Select product"
         />
       </main>
     );

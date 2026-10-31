@@ -51,6 +51,7 @@ export function StoreSettingsView({
   const [address, setAddress] = useState('');
   const [upiId, setUpiId] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
+  const [ownerEmail, setOwnerEmail] = useState('');
 
   // WhatsApp
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
@@ -171,6 +172,7 @@ export function StoreSettingsView({
       setAddress(shop.address || '');
       setUpiId(shop.upiId || '');
       setInvoicePrefix(shop.invoicePrefix || 'INV');
+      setOwnerEmail(shop.ownerEmail || '');
       setWhatsappEnabled(shop.whatsappEnabled !== false);
       setWhatsappDefaultLang(shop.whatsappDefaultLang || 'en');
       setWhatsappIncludeLink(Boolean(shop.whatsappIncludeLink));
@@ -476,6 +478,23 @@ export function StoreSettingsView({
                 />
                 <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
                   10-digit customer helpline printed on receipts.
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  Owner Email ID (Security &amp; Deletion Alerts)
+                </label>
+                <input
+                  type="email"
+                  className="form-input"
+                  disabled={!isEditable}
+                  placeholder="owner@supermarket.com"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                />
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
+                  Critical notification email where permanent deletion alerts for branches, managers, counters, and cashiers are sent.
                 </span>
               </div>
 

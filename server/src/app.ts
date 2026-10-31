@@ -31,6 +31,8 @@ import { registerWebhooks } from './routes/webhooks.ts';
 import { registerCardTerminals } from './routes/cardTerminals.ts';
 import { registerStockTransfers } from './routes/stockTransfers.ts';
 import { registerPromotions } from './routes/promotions.ts';
+import { registerUserManagement } from './routes/userManagement.ts';
+import { registerBranchUsers } from './routes/branchUsers.ts';
 
 /** Every module adds one `registerXxx(r)` line here. Nothing else in the server needs to change. */
 export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Router {
@@ -64,6 +66,8 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerCardTerminals(r);
   registerStockTransfers(r);
   registerPromotions(r);
+  registerUserManagement(r);
+  registerBranchUsers(r);
   return r;
 }
 
