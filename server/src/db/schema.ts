@@ -25,6 +25,7 @@ export const MIGRATIONS: Migration[] = [
         loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10,
         loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10,
         loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10,
+        owner_email TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE TABLE users (
@@ -1049,6 +1050,84 @@ version: 29,
       )`,
       `CREATE INDEX IF NOT EXISTS stock_transfer_lines_transfer_id ON stock_transfer_lines (tenant_id, transfer_id)`,
       `CREATE INDEX IF NOT EXISTS stock_transfer_lines_item_id ON stock_transfer_lines (tenant_id, item_id)`,
+    ],
+  },
+  {
+    version: 37,
+    statements: [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uq ON users (lower(username)) WHERE username IS NOT NULL`,
+      `CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        login_username TEXT,
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (tenant_id, code)
+      )`,
+      `CREATE INDEX IF NOT EXISTS counters_tenant_branch ON counters (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS counters_tenant_status ON counters (tenant_id, status)`,
+    ],
+  },
+  {
+    version: 38,
+    statements: [
+      `ALTER TABLE counters ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ`,
+      `ALTER TABLE counters ADD COLUMN IF NOT EXISTS created_by TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS counter_id TEXT REFERENCES counters(id) ON DELETE SET NULL`,
+      `CREATE INDEX IF NOT EXISTS users_counter_id_idx ON users (counter_id)`,
+    ],
+  },
+  {
+    version: 39,
+    statements: [
+      `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`,
+      `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('owner','manager','cashier','accountant','counter'))`,
+    ],
+  },
+  {
+    version: 40,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS email_logs (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        to_email TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND')),
+        status TEXT NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED','SENT','FAILED')),
+        error_message TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        sent_at TIMESTAMPTZ,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS email_logs_tenant_user ON email_logs (tenant_id, user_id)`,
+      `CREATE INDEX IF NOT EXISTS email_logs_tenant_status ON email_logs (tenant_id, status)`,
+      `CREATE INDEX IF NOT EXISTS email_logs_to_email ON email_logs (to_email)`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+    ],
+  },
+  {
+    version: 41,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS owner_email TEXT`,
+      `ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_type_check`,
+      `ALTER TABLE email_logs ADD CONSTRAINT email_logs_type_check CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND','DELETION_ALERT'))`,
     ],
   },
 ];

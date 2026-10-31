@@ -23,6 +23,9 @@ export interface AuthUser {
   assignedLocation?: string;
   assignedCounter?: string;
   allowedLocations?: string[];
+  branchId?: string | null;
+  username?: string | null;
+  counterId?: string | null;
 }
 export interface Ctx {
   req: http.IncomingMessage;

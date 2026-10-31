@@ -89,6 +89,10 @@ export interface User {
   assignedCounter?: string;
   allowedLocations?: string[];
   active?: boolean;
+  username?: string | null;
+  status?: string;
+  mustChangePassword?: boolean;
+  branchId?: string | null;
 }
 
 export interface Branch {
@@ -101,6 +105,10 @@ export interface Branch {
   counters: string[];
   managerId?: string | null;
   managerName?: string | null;
+  managerEmail?: string | null;
+  managerUsername?: string | null;
+  countersTotal?: number;
+  countersActive?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -162,6 +170,7 @@ export interface Shop {
   loyaltyPointsPer100?: number;
   loyaltyPointValueMinor?: number;
   loyaltyMinPointsRedeem?: number;
+  ownerEmail?: string | null;
 }
 
 export interface DemoBusiness {
@@ -197,6 +206,7 @@ export interface Item {
   preferredSupplierPhone?: string | null;
   stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
   stockValueMinor?: number | null;
+
   favorite: boolean;
   active?: boolean;
   imageUrl?: string | null;
@@ -243,6 +253,7 @@ export interface Party {
   openPurchasesCount?: number;
   oldestDueDate?: string | null;
   active?: boolean;
+
 }
 
 export interface Category {
@@ -1814,3 +1825,375 @@ export const fetchPromotionReports = (query?: {
   const qStr = params.toString() ? '?' + params.toString() : '';
   return api<PromotionReportsData>('/api/promotions/reports' + qStr);
 };
+
+
+// =========================================================================
+// USER MANAGEMENT MODULE APIS
+// =========================================================================
+
+export interface UserManagementSummary {
+  branches: { total: number; active: number; inactive: number };
+  managers: { total: number; assigned: number; unassigned: number };
+  counters: { total: number; active: number; branches: number };
+  branchesWithoutManager: number;
+}
+
+export interface StoreManager {
+  id: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  phone: string | null;
+  status: 'ACTIVE' | 'INVITED' | 'DISABLED';
+  branchId: string | null;
+  branchName: string | null;
+  branchCode: string | null;
+  branchActive?: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  lastEmailStatus?: 'SENT' | 'FAILED' | 'QUEUED' | null;
+  lastEmailError?: string | null;
+  lastEmailSentAt?: string | null;
+}
+
+export interface CounterItem {
+  id: string;
+  name: string;
+  code: string;
+  loginUsername: string | null;
+  status: 'ACTIVE' | 'DISABLED';
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+    active: boolean;
+    status: string;
+  };
+  manager: { id: string; name: string } | null;
+  createdAt: string;
+  lastEmailStatus?: 'SENT' | 'FAILED' | 'QUEUED' | null;
+  lastEmailError?: string | null;
+  lastEmailSentAt?: string | null;
+}
+
+export interface ManagerInput {
+  name: string;
+  username?: string | null;
+  email?: string | null;
+  password?: string;
+  branchId?: string | null;
+  phone?: string | null;
+  sendEmail?: boolean;
+  mustChangePassword?: boolean;
+}
+
+export const fetchUserManagementSummary = () =>
+  api<UserManagementSummary>('/api/user-management/summary');
+
+export const fetchManagers = (query?: { search?: string; branchId?: string; status?: string }) => {
+  const p = new URLSearchParams();
+  if (query?.search) p.append('search', query.search);
+  if (query?.branchId) p.append('branchId', query.branchId);
+  if (query?.status) p.append('status', query.status);
+  const qStr = p.toString() ? '?' + p.toString() : '';
+  return api<{ managers: StoreManager[] }>('/api/managers' + qStr);
+};
+
+export const checkUsernameAvailability = (username: string, excludeId?: string) => {
+  const p = new URLSearchParams({ username });
+  if (excludeId) p.append('excludeId', excludeId);
+  return api<{ available: boolean; error?: string }>('/api/managers/check-username?' + p.toString());
+};
+
+export const checkEmailAvailability = (email: string, excludeId?: string) => {
+  const p = new URLSearchParams({ email });
+  if (excludeId) p.append('excludeId', excludeId);
+  return api<{ available: boolean; error?: string }>('/api/managers/check-email?' + p.toString());
+};
+
+export const createManager = (data: ManagerInput) =>
+  api<{ ok: boolean; id: string; emailSent?: boolean }>('/api/managers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateManager = (id: string, data: Partial<ManagerInput>) =>
+  api<{ ok: boolean; id: string }>(`/api/managers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const resetManagerPassword = (id: string) =>
+  api<{ ok: boolean; temporaryPassword: string; manager: { id: string; name: string; email: string | null; username: string | null } }>(
+    `/api/managers/${id}/reset-password`,
+    { method: 'POST' },
+  );
+
+export const updateManagerStatus = (id: string, status: 'ACTIVE' | 'DISABLED') =>
+  api<{ ok: boolean; id: string; status: 'ACTIVE' | 'INVITED' | 'DISABLED'; active: boolean }>(
+    `/api/managers/${id}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    },
+  );
+
+export const assignBranchManager = (branchId: string, managerId: string | null) =>
+  api<{ ok: boolean; branchId: string; managerId: string | null }>(`/api/branches/${branchId}/manager`, {
+    method: 'PATCH',
+    body: JSON.stringify({ managerId }),
+  });
+
+export const fetchCounters = (query?: { search?: string; branchId?: string; status?: string }) => {
+  const p = new URLSearchParams();
+  if (query?.search) p.append('search', query.search);
+  if (query?.branchId) p.append('branchId', query.branchId);
+  if (query?.status) p.append('status', query.status);
+  const qStr = p.toString() ? '?' + p.toString() : '';
+  return api<{ counters: CounterItem[] }>('/api/counters' + qStr);
+};
+
+export const updateCounterStatus = (id: string, status: 'ACTIVE' | 'DISABLED') =>
+  api<{ ok: boolean; id: string; status: string }>(`/api/counters/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+
+export const createCounter = (data: { name: string; code: string; branchId: string; loginUsername?: string }) =>
+  api<{ ok: boolean; id: string; name: string; code: string }>(`/api/counters`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateCounter = (id: string, data: { name?: string; code?: string; loginUsername?: string }) =>
+  api<{ ok: boolean; id: string; name: string; code: string }>(`/api/counters/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+// =========================================================================
+// STORE MANAGER - BRANCH USERS APIS (Scoped to session.branchId)
+// =========================================================================
+
+export interface BranchUsersSummary {
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+    active: boolean;
+  };
+  counters: { total: number; active: number; disabled: number };
+  cashiers: { total: number; active: number; invited: number };
+  countersWithoutCashier: number;
+}
+
+export interface BranchCounterItem {
+  id: string;
+  name: string;
+  code: string;
+  loginUsername: string | null;
+  email: string | null;
+  status: 'ACTIVE' | 'DISABLED';
+  lastActiveAt: string | null;
+  cashiers: string[];
+  createdAt: string;
+  lastEmailStatus?: 'SENT' | 'FAILED' | 'QUEUED' | null;
+  lastEmailError?: string | null;
+  lastEmailSentAt?: string | null;
+}
+
+export interface BranchCashierItem {
+  id: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  phone: string | null;
+  defaultCounter: { id: string; name: string; code: string } | null;
+  status: 'ACTIVE' | 'INVITED' | 'DISABLED';
+  lastLoginAt: string | null;
+  createdAt: string;
+  lastEmailStatus?: 'SENT' | 'FAILED' | 'QUEUED' | null;
+  lastEmailError?: string | null;
+  lastEmailSentAt?: string | null;
+}
+
+export interface BranchCounterInput {
+  name: string;
+  code: string;
+  username?: string | null;
+  email?: string | null;
+  password?: string;
+  sendEmail?: boolean;
+  mustChangePassword?: boolean;
+}
+
+export interface BranchCashierInput {
+  name: string;
+  username?: string | null;
+  email?: string | null;
+  password?: string;
+  defaultCounterId?: string | null;
+  phone?: string | null;
+  sendEmail?: boolean;
+  mustChangePassword?: boolean;
+}
+
+export const fetchBranchUsersSummary = (branchId?: string) => {
+  const qStr = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+  return api<BranchUsersSummary>('/api/branch/users/summary' + qStr);
+};
+
+export const fetchBranchCountersNextCode = () =>
+  api<{ code: string; suggestedUsername: string; prefix: string }>('/api/branch/counters/next-code');
+
+export const fetchBranchCounters = (query?: { search?: string; status?: string }) => {
+  const p = new URLSearchParams();
+  if (query?.search) p.append('search', query.search);
+  if (query?.status) p.append('status', query.status);
+  const qStr = p.toString() ? '?' + p.toString() : '';
+  return api<{ counters: BranchCounterItem[] }>('/api/branch/counters' + qStr);
+};
+
+export const createBranchCounter = (data: BranchCounterInput) =>
+  api<{ ok: boolean; id: string; name: string; code: string; emailSent?: boolean }>('/api/branch/counters', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateBranchCounter = (id: string, data: Partial<BranchCounterInput>) =>
+  api<{ ok: boolean; id: string }>(`/api/branch/counters/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const fetchBranchCashiers = (query?: { search?: string; status?: string }) => {
+  const p = new URLSearchParams();
+  if (query?.search) p.append('search', query.search);
+  if (query?.status) p.append('status', query.status);
+  const qStr = p.toString() ? '?' + p.toString() : '';
+  return api<{ cashiers: BranchCashierItem[] }>('/api/branch/cashiers' + qStr);
+};
+
+export const createBranchCashier = (data: BranchCashierInput) =>
+  api<{ ok: boolean; id: string; name: string; emailSent?: boolean }>('/api/branch/cashiers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateBranchCashier = (id: string, data: Partial<BranchCashierInput>) =>
+  api<{ ok: boolean; id: string }>(`/api/branch/cashiers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const resetBranchUserPassword = (id: string) =>
+  api<{ ok: boolean; temporaryPassword: string; user: { id: string; name: string; email: string | null; username: string | null } }>(
+    `/api/branch/users/${id}/reset-password`,
+    { method: 'POST' },
+  );
+
+export const updateBranchUserStatus = (id: string, status: 'ACTIVE' | 'DISABLED') =>
+  api<{ ok: boolean; id: string; status: 'ACTIVE' | 'INVITED' | 'DISABLED'; active: boolean }>(
+    `/api/branch/users/${id}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    },
+  );
+
+export const checkUserUsernameAvailability = (username: string, excludeId?: string) => {
+  const p = new URLSearchParams({ username });
+  if (excludeId) p.append('excludeId', excludeId);
+  return api<{ available: boolean; error?: string }>('/api/users/check-username?' + p.toString());
+};
+
+export const checkUserEmailAvailability = (email: string, excludeId?: string) => {
+  const p = new URLSearchParams({ email });
+  if (excludeId) p.append('excludeId', excludeId);
+  return api<{ available: boolean; error?: string }>('/api/users/check-email?' + p.toString());
+};
+
+
+// ----------------------------------------------------------------------------
+// Mail & Delete Endpoints
+// ----------------------------------------------------------------------------
+
+export interface BranchDeleteImpact {
+  branchName: string;
+  branchCode: string;
+  countersCount: number;
+  counterLoginsCount: number;
+  cashiersCount: number;
+  managerName: string | null;
+}
+
+export interface ManagerDeleteImpact {
+  name: string;
+  branchName: string | null;
+  branchCode: string | null;
+}
+
+export interface CounterDeleteImpact {
+  name: string;
+  code: string;
+  loginUsername: string | null;
+  defaultCashiersCount: number;
+}
+
+export interface CashierDeleteImpact {
+  name: string;
+}
+
+export const testMailConnection = (to: string) =>
+  api<{ ok: boolean; message: string }>('/api/mail/test', {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
+
+export const resendUserCredentials = (id: string) =>
+  api<{ ok: boolean; temporaryPassword?: string; emailQueued?: boolean; toEmail?: string }>(
+    `/api/users/${id}/resend`,
+    { method: 'POST' },
+  );
+
+export const resendBranchUserCredentials = (id: string) =>
+  api<{ ok: boolean; temporaryPassword?: string; emailQueued?: boolean; toEmail?: string }>(
+    `/api/branch/users/${id}/resend`,
+    { method: 'POST' },
+  );
+
+// Delete Impact
+export const fetchBranchDeleteImpact = (id: string) =>
+  api<BranchDeleteImpact>(`/api/branches/${id}/delete-impact`);
+
+export const fetchManagerDeleteImpact = (id: string) =>
+  api<ManagerDeleteImpact>(`/api/managers/${id}/delete-impact`);
+
+export const fetchCounterDeleteImpact = (id: string, isBranchScope = false) =>
+  api<CounterDeleteImpact>(isBranchScope ? `/api/branch/counters/${id}/delete-impact` : `/api/counters/${id}/delete-impact`);
+
+export const fetchCashierDeleteImpact = (id: string, isBranchScope = false) =>
+  api<CashierDeleteImpact>(isBranchScope ? `/api/branch/cashiers/${id}/delete-impact` : `/api/cashiers/${id}/delete-impact`);
+
+// Permanent Deletes
+export const deleteBranch = (id: string) =>
+  api<{ ok: boolean; deleted: string; branchName?: string }>(`/api/branches/${id}`, {
+    method: 'DELETE',
+  });
+
+export const deleteManager = (id: string) =>
+  api<{ ok: boolean; deleted: string; name?: string }>(`/api/managers/${id}`, {
+    method: 'DELETE',
+  });
+
+export const deleteCounter = (id: string, isBranchScope = false) =>
+  api<{ ok: boolean; deleted: string; name?: string }>(
+    isBranchScope ? `/api/branch/counters/${id}` : `/api/counters/${id}`,
+    { method: 'DELETE' },
+  );
+
+export const deleteCashier = (id: string, isBranchScope = false) =>
+  api<{ ok: boolean; deleted: string; name?: string }>(
+    isBranchScope ? `/api/branch/cashiers/${id}` : `/api/cashiers/${id}`,
+    { method: 'DELETE' },
+  );
