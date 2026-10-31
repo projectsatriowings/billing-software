@@ -6334,8 +6334,8 @@ export function App() {
                       )}
 
                       {pointsDiscountMinor > 0 && (
-                        <div className="bento-summary-row discount-row" style={{ background: '#ecfdf5', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
-                          <span className="summary-label" style={{ color: '#047857', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <div className="bento-summary-row discount-row points-redeemed-row">
+                          <span className="summary-label points-label">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="12" cy="8" r="7"></circle>
                               <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
@@ -6348,17 +6348,8 @@ export function App() {
 
                       {/* LOYALTY POINTS EARNED ON BILL */}
                       {shopLoyaltyActive && cart.length > 0 && (
-                        <div
-                          className="bento-summary-row loyalty-earn-row"
-                          style={{
-                            background: 'linear-gradient(135deg, #faf5ff 0%, #fdf4ff 100%)',
-                            padding: '0.35rem 0.65rem',
-                            borderRadius: '6px',
-                            border: '1px solid #f0abfc',
-                            margin: '3px 0',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <div className="bento-summary-row loyalty-earn-row">
+                          <div className="loyalty-label-group">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#86198f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 12 20 22 4 22 4 12"></polyline>
                               <rect x="2" y="7" width="20" height="5"></rect>
@@ -6366,18 +6357,18 @@ export function App() {
                               <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
                               <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
                             </svg>
-                            <span className="summary-label" style={{ color: '#86198f', fontWeight: 700 }}>
+                            <span className="summary-label loyalty-text">
                               Loyalty Points on Bill
                             </span>
-                            <span style={{ fontSize: '0.68rem', color: '#a21caf', fontWeight: 600 }}>
+                            <span className="loyalty-rate-tag">
                               ({shopPointsPer100} pts/₹100)
                             </span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span className="summary-val mono" style={{ color: '#86198f', fontWeight: 800 }}>
+                          <div className="loyalty-val-group">
+                            <span className="summary-val mono loyalty-pts-text">
                               +{pointsToEarnOnBill} pts
                             </span>
-                            <span style={{ fontSize: '0.7rem', color: '#15803d', fontWeight: 700 }}>
+                            <span className="loyalty-val-sub">
                               (≈ {formatRupees(pointsToEarnOnBill * shopPointValMinor)})
                             </span>
                           </div>
