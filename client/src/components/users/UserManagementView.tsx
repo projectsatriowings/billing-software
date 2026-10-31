@@ -2604,6 +2604,10 @@ export const UserManagementView: React.FC = () => {
             isOpen={deleteModal.open}
             onClose={() => setDeleteModal((prev) => ({ ...prev, open: false }))}
             onDeleted={handleDeleted}
+            onError={(err) => {
+              console.error('Delete error:', err);
+              showToast(err.message || `Could not delete ${deleteModal.name}`, true);
+            }}
             onDisableInstead={handleDisableInstead}
           />
         )}

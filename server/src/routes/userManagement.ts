@@ -246,9 +246,9 @@ export function registerUserManagement(r: Router) {
   // 1. SUMMARY METRICS
   // -------------------------------------------------------------------------
   const getSummaryMetrics = async (ctx: Ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     requireSuperAdmin(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureDemoData(ctx.db, tenantId);
 
     // Branches total, active, inactive
     const branches = await ctx.db.query<{ active: boolean; manager_id: string | null }>(
@@ -366,9 +366,9 @@ export function registerUserManagement(r: Router) {
   // 4. GET STORE MANAGERS
   // -------------------------------------------------------------------------
   r.get('/api/managers', async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     requireSuperAdmin(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureDemoData(ctx.db, tenantId);
 
     const search = ctx.query.search ? String(ctx.query.search).trim().toLowerCase() : '';
     const branchId = ctx.query.branchId ? String(ctx.query.branchId).trim() : '';
@@ -829,9 +829,9 @@ export function registerUserManagement(r: Router) {
   // 10. GET ALL COUNTERS (every counter in every branch)
   // -------------------------------------------------------------------------
   r.get('/api/counters', async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     requireSuperAdmin(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureDemoData(ctx.db, tenantId);
 
     const search = ctx.query.search ? String(ctx.query.search).trim().toLowerCase() : '';
     const branchId = ctx.query.branchId ? String(ctx.query.branchId).trim() : '';

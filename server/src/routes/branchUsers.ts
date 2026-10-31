@@ -124,87 +124,14 @@ export function generateStrongPassword(): string {
   return pwd.split('').sort(() => 0.5 - Math.random()).join('');
 }
 
-/**
- * Ensures demo sample data exists for the branch matching Screenshots (Pages 1-4).
- * Specifically for Porur branch:
- * Counter 1 / POR-C01, login @sks_por_c1, status Active, last active today 10:05 AM
- * Cashier 1: Meena Sundar, @meena.s · meena.s@example.com, default Counter 1, Active, last sign-in today 9:58 AM
- * Cashier 2: Ravi Prasad, ravi.p@example.com, default Any counter, Invited, last sign-in Never
- */
-async function ensureBranchDemoData(db: DB, tenantId: string, branch: any) {
-  // Check if counters exist for this branch
-  const cntCount = (await db.one<{ count: number }>(
-    'SELECT count(*)::int as count FROM counters WHERE tenant_id = ? AND branch_id = ?',
-    [tenantId, branch.id],
-  )) || { count: 0 };
-
-  let firstCounterId = '';
-
-  if (cntCount.count === 0) {
-    // Generate code matching branch: e.g. POR-C01 or MAIN-C01
-    const prefix = branch.code.includes('_') ? branch.code.split('_')[1] : branch.code;
-    const code = `${prefix}-C01`;
-    const username = `sks_${prefix.toLowerCase()}_c1`;
-    firstCounterId = newId('cnt');
-
-    await db.exec(
-      `INSERT INTO counters (id, tenant_id, branch_id, name, code, login_username, status, last_active_at, created_at)
-       VALUES (?, ?, ?, 'Counter 1', ?, ?, 'ACTIVE', now() - interval '25 minutes', now() - interval '2 days')
-       ON CONFLICT (tenant_id, code) DO NOTHING`,
-      [firstCounterId, tenantId, branch.id, code, username],
-    );
-
-    // Create matching counter user in users table
-    const hash = hashPassword('Password123!');
-    await db.exec(
-      `INSERT INTO users (id, tenant_id, name, username, email, password_hash, role, status, active, branch_id, counter_id, last_login_at, created_at)
-       VALUES (?, ?, 'Counter 1', ?, null, ?, 'counter', 'ACTIVE', true, ?, ?, now() - interval '25 minutes', now() - interval '2 days')
-       ON CONFLICT DO NOTHING`,
-      [newId('u'), tenantId, username, hash, branch.id, firstCounterId],
-    );
-  } else {
-    const existing = await db.one<any>(
-      'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? ORDER BY code ASC LIMIT 1',
-      [tenantId, branch.id],
-    );
-    firstCounterId = existing?.id || '';
-  }
-
-  // Check if cashiers exist for this branch
-  const cashierCount = (await db.one<{ count: number }>(
-    `SELECT count(*)::int as count FROM users WHERE tenant_id = ? AND branch_id = ? AND role = 'cashier' AND deleted_at IS NULL`,
-    [tenantId, branch.id],
-  )) || { count: 0 };
-
-  if (cashierCount.count === 0) {
-    const hash = hashPassword('Password123!');
-
-    // 1. Meena Sundar (Active, default counter = Counter 1)
-    const uMeenaId = newId('u');
-    await db.exec(
-      `INSERT INTO users (id, tenant_id, name, username, email, phone, password_hash, role, status, active, branch_id, counter_id, must_change_password, last_login_at, created_at)
-       VALUES (?, ?, 'Meena Sundar', 'meena.s', 'meena.s@example.com', '+91 98765 43210', ?, 'cashier', 'ACTIVE', true, ?, ?, false, now() - interval '32 minutes', now() - interval '2 days')`,
-      [uMeenaId, tenantId, hash, branch.id, firstCounterId || null],
-    );
-
-    // 2. Ravi Prasad (Invited, Any counter, Never logged in)
-    const uRaviId = newId('u');
-    await db.exec(
-      `INSERT INTO users (id, tenant_id, name, username, email, phone, password_hash, role, status, active, branch_id, counter_id, must_change_password, last_login_at, created_at)
-       VALUES (?, ?, 'Ravi Prasad', null, 'ravi.p@example.com', null, ?, 'cashier', 'INVITED', true, ?, null, true, null, now() - interval '1 day')`,
-      [uRaviId, tenantId, hash, branch.id],
-    );
-  }
-}
-
 export function registerBranchUsers(r: Router) {
   // -------------------------------------------------------------------------
   // 1. SUMMARY METRICS FOR STORE MANAGER'S BRANCH
   // -------------------------------------------------------------------------
   r.get('/api/branch/users/summary', async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const branch = await requireStoreManagerBranch(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureBranchDemoData(ctx.db, tenantId, branch);
 
     // Counters count in this branch
     const counters = await ctx.db.query<{ id: string; status: string }>(
@@ -291,9 +218,9 @@ export function registerBranchUsers(r: Router) {
   // 3. GET COUNTERS (Scoped to manager's branch)
   // -------------------------------------------------------------------------
   r.get('/api/branch/counters', async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const branch = await requireStoreManagerBranch(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureBranchDemoData(ctx.db, tenantId, branch);
 
     const search = ctx.query.search ? String(ctx.query.search).trim().toLowerCase() : '';
     const status = ctx.query.status ? String(ctx.query.status).trim().toUpperCase() : '';
@@ -573,9 +500,9 @@ export function registerBranchUsers(r: Router) {
   // 6. GET CASHIERS (Scoped to manager's branch)
   // -------------------------------------------------------------------------
   r.get('/api/branch/cashiers', async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const branch = await requireStoreManagerBranch(ctx);
     const tenantId = ctx.user!.tenantId;
-    await ensureBranchDemoData(ctx.db, tenantId, branch);
 
     const search = ctx.query.search ? String(ctx.query.search).trim().toLowerCase() : '';
     const status = ctx.query.status ? String(ctx.query.status).trim().toUpperCase() : '';
@@ -1172,7 +1099,7 @@ export function registerBranchUsers(r: Router) {
       console.warn('[Branch Counter Delete] Failed to enqueue deletion alert email:', err.message);
     }
 
-    return { ok: true, deleted: cnt.id, name: cnt.name };
+    return { success: true, id: cnt.id, ok: true, deleted: cnt.id, name: cnt.name };
   });
 
   // -------------------------------------------------------------------------
@@ -1253,7 +1180,7 @@ export function registerBranchUsers(r: Router) {
       console.warn('[Branch Cashier Delete] Failed to enqueue deletion alert email:', err.message);
     }
 
-    return { ok: true, deleted: csh.id, name: csh.name };
+    return { success: true, id: csh.id, ok: true, deleted: csh.id, name: csh.name };
   });
 
 }

@@ -240,6 +240,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
   const [counters, setCounters] = useState<BranchCounterItem[]>([]);
   const [cashiers, setCashiers] = useState<BranchCashierItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasNoBranch, setHasNoBranch] = useState(false);
 
   // Filters (separate for each tab, cleared on tab switch)
@@ -272,7 +273,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
     setDeleteModal({ open: true, type, id, name, code });
   };
 
-  const handleDeleted = (id: string, name: string) => {
+  const handleDeleted = async (id: string, name: string) => {
     if (deleteModal.type === 'counter') {
       setCounters((prev) => prev.filter((c) => c.id !== id));
       setCashiers((prev) =>
@@ -290,7 +291,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
       );
     }
     showToast(`${name} deleted`);
-    loadData();
+    await loadData();
   };
 
   const handleDisableInstead = async (id: string) => {
@@ -345,12 +346,8 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const branchIdParam = user?.branchId || (user as any)?.branch_id || undefined;
-      if (!branchIdParam) {
-        setHasNoBranch(true);
-        setLoading(false);
-        return;
-      }
       const [sumRes, cntRes, cshRes] = await Promise.all([
         fetchBranchUsersSummary(branchIdParam),
         fetchBranchCounters(),
@@ -365,7 +362,8 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
         setHasNoBranch(true);
       } else {
         console.error('Failed to load branch users data', err);
-        showToast(err.message || 'Failed to load branch data');
+        setLoadError(err.message || 'Failed to load branch data');
+        showToast(err.message || 'Failed to load branch data', true, () => loadData());
       }
     } finally {
       setLoading(false);
@@ -1115,7 +1113,38 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCounters.length === 0 ? (
+                  {loading ? (
+                    [1, 2, 3].map((k) => (
+                      <tr key={`skel-cnt-${k}`}>
+                        <td colSpan={6} style={{ padding: '20px 24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div className="um-skeleton-pulse" style={{ width: 40, height: 40, borderRadius: 10 }} />
+                            <div style={{ flex: 1 }}>
+                              <div className="um-skeleton-pulse" style={{ width: '28%', height: 16, borderRadius: 4, marginBottom: 8 }} />
+                              <div className="um-skeleton-pulse" style={{ width: '16%', height: 12, borderRadius: 4 }} />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : loadError ? (
+                    <tr>
+                      <td colSpan={6}>
+                        <div className="um-empty-state" style={{ padding: '40px 24px' }}>
+                          <h3 className="um-empty-title" style={{ color: '#B42318' }}>Failed to load counters</h3>
+                          <p className="um-empty-sub">{loadError}</p>
+                          <button
+                            type="button"
+                            className="um-btn um-btn-secondary"
+                            onClick={() => loadData()}
+                            style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredCounters.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
                         <div className="um-empty-state">
@@ -1326,7 +1355,38 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCashiers.length === 0 ? (
+                  {loading ? (
+                    [1, 2, 3].map((k) => (
+                      <tr key={`skel-csh-${k}`}>
+                        <td colSpan={5} style={{ padding: '20px 24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div className="um-skeleton-pulse" style={{ width: 40, height: 40, borderRadius: 20 }} />
+                            <div style={{ flex: 1 }}>
+                              <div className="um-skeleton-pulse" style={{ width: '28%', height: 16, borderRadius: 4, marginBottom: 8 }} />
+                              <div className="um-skeleton-pulse" style={{ width: '18%', height: 12, borderRadius: 4 }} />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : loadError ? (
+                    <tr>
+                      <td colSpan={5}>
+                        <div className="um-empty-state" style={{ padding: '40px 24px' }}>
+                          <h3 className="um-empty-title" style={{ color: '#B42318' }}>Failed to load cashiers</h3>
+                          <p className="um-empty-sub">{loadError}</p>
+                          <button
+                            type="button"
+                            className="um-btn um-btn-secondary"
+                            onClick={() => loadData()}
+                            style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredCashiers.length === 0 ? (
                     <tr>
                       <td colSpan={5}>
                         <div className="um-empty-state">
@@ -2037,6 +2097,10 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
             isOpen={deleteModal.open}
             onClose={() => setDeleteModal((prev) => ({ ...prev, open: false }))}
             onDeleted={handleDeleted}
+            onError={(err) => {
+              console.error('Delete error:', err);
+              showToast(err.message || `Could not delete ${deleteModal.name}`, true);
+            }}
             onDisableInstead={handleDisableInstead}
           />
         )}

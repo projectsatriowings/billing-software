@@ -40,6 +40,7 @@ export const branchView = (b: any): Branch => ({
 export function registerBranches(r: Router) {
   // 1. Get branches accessible to the user
   r.get('/api/branches', requireUser, async (ctx) => {
+    ctx.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     const tenantId = ctx.user!.tenantId;
     const role = ctx.user!.role;
 

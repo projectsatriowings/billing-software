@@ -21,6 +21,7 @@ export interface DeleteConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDeleted: (id: string, name: string) => void;
+  onError?: (err: Error) => void;
   onDisableInstead?: (id: string) => void;
 }
 
@@ -33,6 +34,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isOpen,
   onClose,
   onDeleted,
+  onError,
   onDisableInstead,
 }) => {
   const [loadingImpact, setLoadingImpact] = useState<boolean>(true);
@@ -133,6 +135,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not delete item. Please check permissions.');
+      onError?.(err);
     } finally {
       setDeleting(false);
     }
