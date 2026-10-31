@@ -104,7 +104,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     destination: [],
   });
   const [detailedActivityLog, setDetailedActivityLog] = useState<any[]>([]);
-  const [detailsTab, setDetailsTab] = useState<'items' | 'activity'>('items');
+  const [detailsTab, setDetailsTab] = useState<'items' | 'moves' | 'activity'>('items');
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Receiving Modal State
@@ -2108,54 +2108,112 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 borderBottom: '1px solid #f1f5f9',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => setActiveView('list')}
                   style={{
-                    background: '#f8fafc',
+                    background: '#ffffff',
                     border: '1px solid #cbd5e1',
-                    borderRadius: '8px',
-                    padding: '0.4rem 0.75rem',
-                    fontSize: '0.82rem',
+                    borderRadius: '10px',
+                    padding: '0.5rem 0.95rem',
+                    fontSize: '0.84rem',
                     fontWeight: 600,
+                    color: '#334155',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
                     cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.15s ease',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
                 >
-                  ← Back
+                  ← Back to Transfers
                 </button>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '8px',
-                        background: '#e0e7ff',
-                        color: '#4338ca',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '1px solid #c7d2fe',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FileTextIcon size={18} />
-                    </div>
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                      Transfer Details – {detailedTransfer.transferNumber}
-                    </h3>
-                    {renderStatusBadge(detailedTransfer.status)}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <FileTextIcon size={20} />
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '3px' }}>
-                    Route: <strong style={{ color: '#1e293b' }}>{detailedTransfer.fromBranchName}</strong>{' '}
-                    → <strong style={{ color: '#1e293b' }}>{detailedTransfer.toBranchName}</strong>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                      <h2
+                        style={{
+                          fontSize: '1.35rem',
+                          fontWeight: 800,
+                          color: '#0f172a',
+                          margin: 0,
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        Transfer Details
+                      </h2>
+                      <span
+                        style={{
+                          background: '#f1f5f9',
+                          color: '#4338ca',
+                          fontWeight: 700,
+                          fontSize: '0.88rem',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #e0e7ff',
+                        }}
+                      >
+                        {detailedTransfer.transferNumber}
+                      </span>
+                      {renderStatusBadge(detailedTransfer.status)}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Route:</span>
+                      <span
+                        style={{
+                          background: '#f8fafc',
+                          color: '#334155',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        {detailedTransfer.fromBranchName || detailedTransfer.fromBranch}
+                      </span>
+                      <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>➔</span>
+                      <span
+                        style={{
+                          background: '#eff6ff',
+                          color: '#1d4ed8',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          border: '1px solid #bfdbfe',
+                        }}
+                      >
+                        {detailedTransfer.toBranchName || detailedTransfer.toBranch}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={handlePrintTransferNote}
@@ -2163,15 +2221,19 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     background: '#ffffff',
                     border: '1px solid #cbd5e1',
                     color: '#334155',
-                    padding: '0.5rem 0.95rem',
+                    padding: '0.55rem 1rem',
                     borderRadius: '8px',
                     fontSize: '0.84rem',
                     fontWeight: 600,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '0.4rem',
+                    gap: '0.45rem',
                     cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.15s ease',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
                 >
                   <PrinterIcon size={16} /> Print Transfer Note
                 </button>
@@ -2182,16 +2244,16 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     type="button"
                     onClick={() => setShowDispatchModal(true)}
                     style={{
-                      background: '#6366f1',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                       color: '#ffffff',
                       border: 'none',
-                      padding: '0.5rem 1.15rem',
+                      padding: '0.55rem 1.15rem',
                       borderRadius: '8px',
                       fontSize: '0.84rem',
                       fontWeight: 700,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
+                      gap: '0.45rem',
                       cursor: 'pointer',
                       boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
                     }}
@@ -2208,7 +2270,6 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     const isOwner = user?.role === 'owner';
 
                     if (isSourceStaff && !isOwner) {
-                      // Source branch manager/cashier sent the goods: they must wait for destination branch to receive
                       return (
                         <div
                           style={{
@@ -2230,24 +2291,23 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     }
 
                     if (isDestinationStaff) {
-                      // Destination branch manager/cashier who is receiving the stock
                       return (
                         <button
                           type="button"
                           onClick={handleOpenReceiveModal}
                           style={{
-                            background: '#16a34a',
+                            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                             color: '#ffffff',
                             border: 'none',
-                            padding: '0.5rem 1.15rem',
+                            padding: '0.55rem 1.25rem',
                             borderRadius: '8px',
                             fontSize: '0.84rem',
                             fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.4rem',
+                            gap: '0.45rem',
                             cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+                            boxShadow: '0 2px 10px rgba(22, 163, 74, 0.35)',
                           }}
                         >
                           <CheckCircleIcon size={16} /> Receive Stock
@@ -2255,7 +2315,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                       );
                     }
 
-                    // Owner / Super Admin: show status + explicit action for destination branch
+                    // Owner / Super Admin
                     return (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
                         <div
@@ -2278,18 +2338,18 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                           type="button"
                           onClick={handleOpenReceiveModal}
                           style={{
-                            background: '#16a34a',
+                            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                             color: '#ffffff',
                             border: 'none',
-                            padding: '0.5rem 1.15rem',
+                            padding: '0.55rem 1.25rem',
                             borderRadius: '8px',
                             fontSize: '0.84rem',
                             fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.4rem',
+                            gap: '0.45rem',
                             cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+                            boxShadow: '0 2px 10px rgba(22, 163, 74, 0.35)',
                           }}
                         >
                           <CheckCircleIcon size={16} /> Receive at {detailedTransfer.toBranchName}
@@ -2308,7 +2368,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                       background: '#fee2e2',
                       color: '#b91c1c',
                       border: '1px solid #fecaca',
-                      padding: '0.5rem 0.85rem',
+                      padding: '0.55rem 0.95rem',
                       borderRadius: '8px',
                       fontSize: '0.84rem',
                       fontWeight: 600,
@@ -2321,120 +2381,278 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </div>
             </div>
 
-            {/* Meta Pills Row Matching Reference Screen 5 */}
+            {/* 4 Modern Stat Cards */}
             <div
               style={{
-                display: 'flex',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
                 gap: '1rem',
-                flexWrap: 'wrap',
                 marginBottom: '1.5rem',
               }}
             >
+              {/* Card 1: Transfer Date */}
               <div
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '0.65rem 1rem',
+                  borderRadius: '12px',
+                  padding: '1rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.65rem',
-                  flex: '1 1 200px',
+                  gap: '0.85rem',
                 }}
               >
-                <CalendarIcon size={18} style={{ color: '#6366f1' }} />
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: '#e0e7ff',
+                    color: '#4338ca',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <CalendarIcon size={20} />
+                </div>
                 <div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Transfer Date
+                  </div>
+                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.96rem', marginTop: '2px' }}>
                     {detailedTransfer.transferDate}
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#64748b' }}>Transfer Date</div>
                 </div>
               </div>
 
+              {/* Card 2: Requested By */}
               <div
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '0.65rem 1rem',
+                  borderRadius: '12px',
+                  padding: '1rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.65rem',
-                  flex: '1 1 200px',
+                  gap: '0.85rem',
                 }}
               >
-                <UserIcon size={18} style={{ color: '#6366f1' }} />
-                <div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: '#ecfeff',
+                    color: '#0891b2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserIcon size={20} />
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Requested By
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      fontSize: '0.92rem',
+                      marginTop: '2px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={detailedTransfer.requestedByName}
+                  >
                     {detailedTransfer.requestedByName}
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#64748b' }}>Requested By</div>
                 </div>
               </div>
 
+              {/* Card 3: Items Quantity */}
               <div
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '0.65rem 1rem',
+                  borderRadius: '12px',
+                  padding: '1rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.65rem',
-                  flex: '2 1 300px',
+                  gap: '0.85rem',
                 }}
               >
-                <FileTextIcon size={18} style={{ color: '#6366f1' }} />
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: '#ecfdf5',
+                    color: '#059669',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <PackageIcon size={20} />
+                </div>
                 <div>
-                  <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.88rem' }}>
-                    {detailedTransfer.notes || 'Urgent stock requirement for destination branch.'}
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Total Quantity
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#64748b' }}>Notes</div>
+                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.96rem', marginTop: '2px' }}>
+                    {detailedLines.length} {detailedLines.length === 1 ? 'Product' : 'Products'} (
+                    {detailedLines.reduce((acc, l) => acc + (l.qtyMilli / 1000), 0)} units)
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Notes */}
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.85rem',
+                }}
+              >
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: '#fffbeb',
+                    color: '#d97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <FileTextIcon size={20} />
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Notes / Remarks
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color: '#334155',
+                      fontSize: '0.85rem',
+                      marginTop: '2px',
+                      wordBreak: 'break-word',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                    title={detailedTransfer.notes || 'None'}
+                  >
+                    {detailedTransfer.notes || 'No special remarks recorded.'}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Split View: Left (Items / Activity Tabs) & Right (Status Tracker Timeline) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
-              {/* Left Column: Tabs */}
+            {/* Split View: Left (Segmented Tabs & Content) & Right (Connected Timeline Tracker) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(320px, 1fr)', gap: '1.5rem', alignItems: 'start' }}>
+              {/* Left Column */}
               <div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                {/* Segmented Control Tabs */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    background: '#f1f5f9',
+                    padding: '4px',
+                    borderRadius: '10px',
+                    gap: '4px',
+                    marginBottom: '1rem',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => setDetailsTab('items')}
                     style={{
-                      background: detailsTab === 'items' ? '#6366f1' : '#f1f5f9',
-                      color: detailsTab === 'items' ? '#ffffff' : '#475569',
+                      background: detailsTab === 'items' ? '#ffffff' : 'transparent',
+                      color: detailsTab === 'items' ? '#0f172a' : '#64748b',
                       border: 'none',
                       borderRadius: '8px',
-                      padding: '0.45rem 1.15rem',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
+                      padding: '0.45rem 1rem',
+                      fontWeight: detailsTab === 'items' ? 700 : 600,
+                      fontSize: '0.84rem',
                       cursor: 'pointer',
+                      boxShadow: detailsTab === 'items' ? '0 1px 3px rgba(0, 0, 0, 0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
                     }}
                   >
-                    Items
+                    <PackageIcon size={14} />
+                    <span>Products ({detailedLines.length})</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailsTab('moves')}
+                    style={{
+                      background: detailsTab === 'moves' ? '#ffffff' : 'transparent',
+                      color: detailsTab === 'moves' ? '#0f172a' : '#64748b',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0.45rem 1rem',
+                      fontWeight: detailsTab === 'moves' ? 700 : 600,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      boxShadow: detailsTab === 'moves' ? '0 1px 3px rgba(0, 0, 0, 0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    <TruckIcon size={14} />
+                    <span>Stock Moves ({detailedMoves.source.length + detailedMoves.destination.length})</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setDetailsTab('activity')}
                     style={{
-                      background: detailsTab === 'activity' ? '#6366f1' : '#f1f5f9',
-                      color: detailsTab === 'activity' ? '#ffffff' : '#475569',
+                      background: detailsTab === 'activity' ? '#ffffff' : 'transparent',
+                      color: detailsTab === 'activity' ? '#0f172a' : '#64748b',
                       border: 'none',
                       borderRadius: '8px',
-                      padding: '0.45rem 1.15rem',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
+                      padding: '0.45rem 1rem',
+                      fontWeight: detailsTab === 'activity' ? 700 : 600,
+                      fontSize: '0.84rem',
                       cursor: 'pointer',
+                      boxShadow: detailsTab === 'activity' ? '0 1px 3px rgba(0, 0, 0, 0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
                     }}
                   >
-                    Activity Log
+                    <ClockIcon size={14} />
+                    <span>Activity Log ({detailedActivityLog.length})</span>
                   </button>
                 </div>
 
-                {detailsTab === 'items' ? (
-                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                {/* Tab 1: Products */}
+                {detailsTab === 'items' && (
+                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#ffffff' }}>
                     <table
                       className="table"
                       style={{
@@ -2445,71 +2663,200 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     >
                       <thead>
                         <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
-                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0' }}>Product</th>
-                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>
-                            Qty
+                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>Product</th>
+                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700 }}>
+                            Dispatched
                           </th>
-                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0' }}>Unit</th>
-                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0' }}>Status</th>
+                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700 }}>
+                            Received
+                          </th>
+                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>Unit</th>
+                          <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>Status</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {detailedLines.map((l) => (
-                          <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              <div style={{ fontWeight: 600, color: '#1e293b' }}>{l.itemName}</div>
-                              <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                                SKU: {l.itemSku || 'N/A'}
-                              </div>
-                              {l.discrepancyMilli > 0 && (
-                                <div
-                                  style={{
-                                    fontSize: '0.76rem',
-                                    color: '#b45309',
-                                    background: '#fef3c7',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    marginTop: '4px',
-                                  }}
-                                >
-                                  Shortage: {l.discrepancyMilli / 1000} {l.unit} • Reason: {l.discrepancyReason}
+                        {detailedLines.map((l) => {
+                          const isShortage = l.discrepancyMilli > 0;
+                          return (
+                            <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '0.85rem 1rem' }}>
+                                <div style={{ fontWeight: 700, color: '#1e293b' }}>{l.itemName}</div>
+                                <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                                  SKU: {l.itemSku || 'N/A'}
                                 </div>
-                              )}
-                            </td>
-                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700 }}>
-                              {l.qtyMilli / 1000}
-                              {l.receivedQtyMilli > 0 && l.receivedQtyMilli !== l.qtyMilli && (
-                                <span style={{ fontSize: '0.75rem', color: '#16a34a', display: 'block' }}>
-                                  ({l.receivedQtyMilli / 1000} rec)
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>{l.unit}</td>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              {detailedTransfer.status === 'completed' ? (
-                                <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>Received</span>
-                              ) : detailedTransfer.status === 'in_transit' ? (
-                                <span style={{ color: '#2563eb', fontWeight: 600, fontSize: '0.8rem' }}>In Transit</span>
-                              ) : (
-                                <span style={{ color: '#d97706', fontWeight: 600, fontSize: '0.8rem' }}>Pending</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                                {isShortage && (
+                                  <div
+                                    style={{
+                                      fontSize: '0.76rem',
+                                      color: '#b45309',
+                                      background: '#fef3c7',
+                                      border: '1px solid #fde68a',
+                                      padding: '2px 8px',
+                                      borderRadius: '6px',
+                                      marginTop: '5px',
+                                      display: 'inline-block',
+                                    }}
+                                  >
+                                    Shortage: {l.discrepancyMilli / 1000} {l.unit} • Reason: {l.discrepancyReason}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: '#0f172a' }}>
+                                {l.qtyMilli / 1000}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
+                                {detailedTransfer.status === 'completed' || detailedTransfer.status === 'partially_received' ? (
+                                  <span
+                                    style={{
+                                      background: isShortage ? '#fef3c7' : '#dcfce7',
+                                      color: isShortage ? '#b45309' : '#15803d',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      fontWeight: 700,
+                                      fontSize: '0.82rem',
+                                    }}
+                                  >
+                                    {l.receivedQtyMilli / 1000}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{l.unit}</td>
+                              <td style={{ padding: '0.85rem 1rem' }}>
+                                {detailedTransfer.status === 'completed' ? (
+                                  <span style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.78rem' }}>
+                                    ● Received
+                                  </span>
+                                ) : detailedTransfer.status === 'in_transit' ? (
+                                  <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.78rem' }}>
+                                    ● In Transit
+                                  </span>
+                                ) : (
+                                  <span style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.78rem' }}>
+                                    ● Pending
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                ) : (
+                )}
+
+                {/* Tab 2: Stock Moves */}
+                {detailsTab === 'moves' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '12px',
+                        padding: '1.25rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <div style={{ fontWeight: 700, color: '#b91c1c', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>OUTFLOW</span>
+                          Source Branch – {detailedTransfer.fromBranchName}
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Stock Deducted</span>
+                      </div>
+                      <table className="table" style={{ width: '100%', fontSize: '0.84rem' }}>
+                        <thead>
+                          <tr style={{ background: '#fef2f2', color: '#991b1b', textAlign: 'left' }}>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Item</th>
+                            <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Qty Change</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailedMoves.source.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
+                                No source movements recorded yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            detailedMoves.source.map((m) => (
+                              <tr key={m.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>{m.itemName}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 800, color: '#b91c1c' }}>
+                                  -{Math.abs(m.qtyMilli / 1000)}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', color: '#64748b' }}>Transfer Out</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '12px',
+                        padding: '1.25rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <div style={{ fontWeight: 700, color: '#15803d', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>INFLOW</span>
+                          Destination Branch – {detailedTransfer.toBranchName}
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Stock Added</span>
+                      </div>
+                      <table className="table" style={{ width: '100%', fontSize: '0.84rem' }}>
+                        <thead>
+                          <tr style={{ background: '#f0fdf4', color: '#166534', textAlign: 'left' }}>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Item</th>
+                            <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Qty Change</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailedMoves.destination.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
+                                {detailedTransfer.status === 'completed'
+                                  ? 'No destination movements found.'
+                                  : 'Pending receipt confirmation at destination.'}
+                              </td>
+                            </tr>
+                          ) : (
+                            detailedMoves.destination.map((m) => (
+                              <tr key={m.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>{m.itemName}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: 800, color: '#15803d' }}>
+                                  +{Math.abs(m.qtyMilli / 1000)}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', color: '#64748b' }}>Transfer In</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3: Activity Log */}
+                {detailsTab === 'activity' && (
                   <div
                     style={{
                       border: '1px solid #e2e8f0',
-                      borderRadius: '10px',
-                      padding: '1rem',
-                      background: '#f8fafc',
+                      borderRadius: '12px',
+                      padding: '1.25rem',
+                      background: '#ffffff',
                     }}
                   >
                     {detailedActivityLog.length === 0 ? (
-                      <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No activity records found.</div>
+                      <div style={{ color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center', padding: '1.5rem' }}>
+                        No activity records found.
+                      </div>
                     ) : (
                       detailedActivityLog.map((log, idx) => (
                         <div
@@ -2517,18 +2864,33 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                           style={{
                             display: 'flex',
                             gap: '0.75rem',
-                            paddingBottom: '0.75rem',
-                            marginBottom: '0.75rem',
-                            borderBottom: idx < detailedActivityLog.length - 1 ? '1px solid #e2e8f0' : 'none',
+                            paddingBottom: '0.85rem',
+                            marginBottom: '0.85rem',
+                            borderBottom: idx < detailedActivityLog.length - 1 ? '1px solid #f1f5f9' : 'none',
                             fontSize: '0.84rem',
                           }}
                         >
-                          <ClockIcon size={16} style={{ color: '#6366f1', marginTop: '2px' }} />
+                          <div
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '50%',
+                              background: '#eff6ff',
+                              color: '#2563eb',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <ClockIcon size={14} />
+                          </div>
                           <div>
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>
-                              {log.action.replace('stock_transfer.', '').toUpperCase()} by {log.user_name || 'User'}
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>
+                              {log.action.replace('stock_transfer.', '').toUpperCase()} by{' '}
+                              <span style={{ color: '#6366f1' }}>{log.user_name || 'User'}</span>
                             </div>
-                            <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                            <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
                               {new Date(log.created_at).toLocaleString('en-IN')}
                             </div>
                           </div>
@@ -2539,172 +2901,226 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 )}
               </div>
 
-              {/* Right Column: Timeline Tracker Matching Reference Screen 5 */}
+              {/* Right Column: Connected Timeline Tracker */}
               <div
                 style={{
-                  background: '#f8fafc',
+                  background: '#ffffff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
+                  borderRadius: '14px',
                   padding: '1.25rem',
+                  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)',
                 }}
               >
-                <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.92rem', fontWeight: 700, color: '#1e293b' }}>
-                  Current Status
-                </h4>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1.25rem',
+                    paddingBottom: '0.75rem',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}
+                >
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
+                    Status Timeline
+                  </h4>
+                  {renderStatusBadge(detailedTransfer.status)}
+                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative' }}>
+                {/* Timeline with Connected Vertical Line */}
+                <div style={{ position: 'relative', paddingLeft: '0.35rem' }}>
+                  {/* Background vertical line */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '14px',
+                      top: '12px',
+                      bottom: '12px',
+                      width: '2px',
+                      background: '#e2e8f0',
+                      zIndex: 0,
+                    }}
+                  />
+
                   {/* Step 1: Transfer Created */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', position: 'relative', marginBottom: '1.25rem', zIndex: 1 }}>
                     <div
                       style={{
-                        width: '20px',
-                        height: '20px',
+                        width: '24px',
+                        height: '24px',
                         borderRadius: '50%',
                         background: '#16a34a',
                         color: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
                         flexShrink: 0,
+                        boxShadow: '0 2px 4px rgba(22, 163, 74, 0.3)',
                       }}
                     >
                       ✓
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
+                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
                         Transfer Created
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
                         {new Date(detailedTransfer.createdAt).toLocaleString('en-IN')}
                       </div>
                     </div>
                   </div>
 
                   {/* Step 2: In Transit */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: detailedTransfer.dispatchedAt ? '#16a34a' : (detailedTransfer.status === 'in_transit' ? '#2563eb' : '#cbd5e1'),
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {detailedTransfer.dispatchedAt ? '✓' : '●'}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
-                        In Transit
+                  {(() => {
+                    const isDispatched = Boolean(detailedTransfer.dispatchedAt) || ['in_transit', 'completed', 'partially_received'].includes(detailedTransfer.status);
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', position: 'relative', marginBottom: '1.25rem', zIndex: 1 }}>
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: isDispatched ? '#16a34a' : (detailedTransfer.status === 'in_transit' ? '#2563eb' : '#cbd5e1'),
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                            boxShadow: isDispatched ? '0 2px 4px rgba(22, 163, 74, 0.3)' : 'none',
+                          }}
+                        >
+                          {isDispatched ? '✓' : '●'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
+                            Dispatched &amp; In Transit
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                            {detailedTransfer.dispatchedAt
+                              ? `Dispatched ${new Date(detailedTransfer.dispatchedAt).toLocaleString('en-IN')}`
+                              : (isDispatched ? 'Dispatched' : 'Awaiting dispatch at source branch')}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                        {detailedTransfer.dispatchedAt
-                          ? `Dispatched ${new Date(detailedTransfer.dispatchedAt).toLocaleString('en-IN')}`
-                          : 'Awaiting dispatch at source branch'}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Step 3: Received at Target Branch */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: detailedTransfer.receivedAt ? '#16a34a' : '#cbd5e1',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {detailedTransfer.receivedAt ? '✓' : '○'}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
-                        Received at Target Branch
+                  {(() => {
+                    const isReceived = Boolean(detailedTransfer.receivedAt) || ['completed', 'partially_received'].includes(detailedTransfer.status);
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', position: 'relative', marginBottom: '1.25rem', zIndex: 1 }}>
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: isReceived ? '#16a34a' : '#cbd5e1',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                            boxShadow: isReceived ? '0 2px 4px rgba(22, 163, 74, 0.3)' : 'none',
+                          }}
+                        >
+                          {isReceived ? '✓' : '○'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
+                            Received at Destination
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                            {detailedTransfer.receivedAt
+                              ? `Received ${new Date(detailedTransfer.receivedAt).toLocaleString('en-IN')}`
+                              : (isReceived ? 'Received at branch' : `Pending receipt at ${detailedTransfer.toBranchName}`)}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                        {detailedTransfer.receivedAt
-                          ? `Received ${new Date(detailedTransfer.receivedAt).toLocaleString('en-IN')}`
-                          : 'Pending receipt at destination'}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Step 4: Stock Updated */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: detailedTransfer.receivedAt ? '#16a34a' : '#cbd5e1',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {detailedTransfer.receivedAt ? '✓' : '○'}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
-                        Stock Updated
+                  {(() => {
+                    const isStockUpdated = Boolean(detailedTransfer.receivedAt) || ['completed', 'partially_received'].includes(detailedTransfer.status);
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', position: 'relative', marginBottom: '1.25rem', zIndex: 1 }}>
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: isStockUpdated ? '#16a34a' : '#cbd5e1',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                            boxShadow: isStockUpdated ? '0 2px 4px rgba(22, 163, 74, 0.3)' : 'none',
+                          }}
+                        >
+                          {isStockUpdated ? '✓' : '○'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
+                            Inventory Ledger Synchronized
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                            {isStockUpdated
+                              ? `+Stock added at ${detailedTransfer.toBranchName}`
+                              : 'Pending receipt confirmation'}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                        Ledger synchronized
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Step 5: Completed */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div
-                      style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: detailedTransfer.status === 'completed' ? '#16a34a' : '#cbd5e1',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {detailedTransfer.status === 'completed' ? '✓' : '○'}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
-                        Completed
+                  {(() => {
+                    const isCompleted = detailedTransfer.status === 'completed';
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', position: 'relative', zIndex: 1 }}>
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: isCompleted ? '#16a34a' : '#cbd5e1',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                            boxShadow: isCompleted ? '0 2px 4px rgba(22, 163, 74, 0.3)' : 'none',
+                          }}
+                        >
+                          {isCompleted ? '✓' : '○'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
+                            Transfer Completed
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '2px' }}>
+                            {isCompleted
+                              ? 'Transfer cycle finalized successfully'
+                              : detailedTransfer.status === 'partially_received'
+                              ? 'Partially received with recorded shortage'
+                              : 'Awaiting remaining steps'}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                        {detailedTransfer.status === 'completed'
-                          ? 'Transfer cycle finalized'
-                          : detailedTransfer.status === 'partially_received'
-                          ? 'Partially received with shortage'
-                          : 'Pending steps'}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -2996,34 +3412,113 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
           RECEIVE STOCK MODAL (FULL / PARTIAL WITH DISCREPANCY REASONS)
           ========================================================================= */}
       {showReceiveModal && detailedTransfer && (
-        <div className="modal-backdrop" style={{ zIndex: 9999 }}>
-          <div className="modal-card" style={{ maxWidth: '750px', padding: '1.75rem', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.2rem' }}>
-                Receive Stock – {detailedTransfer.transferNumber}
-              </h3>
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '780px',
+              width: '100%',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <CheckCircleIcon size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: 800 }}>
+                    Receive Stock – {detailedTransfer.transferNumber}
+                  </h3>
+                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
+                    Confirm physical arrival of goods into branch warehouse
+                  </div>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowReceiveModal(false)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                }}
               >
-                <XIcon size={20} />
+                <XIcon size={18} />
               </button>
             </div>
 
-            <p style={{ color: '#64748b', fontSize: '0.84rem', margin: '0 0 1.25rem 0' }}>
-              Verify quantities received at <strong>{detailedTransfer.toBranchName}</strong>. If fewer items were received,
-              specify a discrepancy reason for inventory shortage audits.
-            </p>
+            {/* Destination Branch Notice Banner */}
+            <div
+              style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '10px',
+                padding: '0.75rem 1rem',
+                fontSize: '0.84rem',
+                color: '#1e40af',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+              }}
+            >
+              <TruckIcon size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
+              <div>
+                Receiving at destination: <strong style={{ color: '#0f172a' }}>{detailedTransfer.toBranchName || detailedTransfer.toBranch}</strong>.
+                Verified quantities will be credited directly to this branch's inventory ledger.
+              </div>
+            </div>
 
-            <div style={{ overflowX: 'auto', marginBottom: '1.5rem', maxHeight: '350px' }}>
-              <table className="table" style={{ width: '100%', fontSize: '0.85rem' }}>
+            {/* Table of items to receive */}
+            <div style={{ overflowX: 'auto', marginBottom: '1.5rem', maxHeight: '360px', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+              <table className="table" style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
-                    <th style={{ padding: '0.6rem 0.8rem' }}>Product</th>
-                    <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>Dispatched</th>
-                    <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center', width: '130px' }}>Received Qty</th>
-                    <th style={{ padding: '0.6rem 0.8rem' }}>Shortage / Reason</th>
+                  <tr style={{ background: '#f8fafc', textAlign: 'left', color: '#475569' }}>
+                    <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>Product</th>
+                    <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 700 }}>Dispatched</th>
+                    <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center', width: '140px', fontWeight: 700 }}>Received Qty</th>
+                    <th style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>Shortage / Reason</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3032,11 +3527,18 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                     const hasShortage = shortage > 0;
                     return (
                       <tr key={line.lineId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 600 }}>{line.itemName}</td>
-                        <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center', color: '#64748b' }}>
-                          {line.dispatchedQty} {line.unit}
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <div style={{ fontWeight: 700, color: '#1e293b' }}>{line.itemName}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                            Standard transfer item
+                          </div>
                         </td>
-                        <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                          <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.85rem' }}>
+                            {line.dispatchedQty} {line.unit}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                           <input
                             type="number"
                             min="0"
@@ -3050,19 +3552,32 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                                 prev.map((item, i) => (i === idx ? { ...item, receivedQty: val } : item))
                               );
                             }}
-                            style={{ width: '100%', textAlign: 'center', fontWeight: 700 }}
+                            style={{
+                              width: '100%',
+                              textAlign: 'center',
+                              fontWeight: 800,
+                              fontSize: '0.92rem',
+                              height: '38px',
+                              borderRadius: '8px',
+                              border: hasShortage ? '2px solid #f59e0b' : '1px solid #cbd5e1',
+                              boxSizing: 'border-box',
+                            }}
                           />
                         </td>
-                        <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <td style={{ padding: '0.75rem 1rem' }}>
                           {hasShortage ? (
                             <div>
                               <span
                                 style={{
                                   fontSize: '0.74rem',
-                                  color: '#dc2626',
+                                  color: '#b45309',
+                                  background: '#fef3c7',
+                                  border: '1px solid #fde68a',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
                                   fontWeight: 700,
-                                  display: 'block',
-                                  marginBottom: '3px',
+                                  display: 'inline-block',
+                                  marginBottom: '4px',
                                 }}
                               >
                                 Shortage: {shortage} {line.unit}
@@ -3080,12 +3595,33 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                                     )
                                   );
                                 }}
-                                style={{ fontSize: '0.8rem', width: '100%' }}
+                                style={{
+                                  fontSize: '0.8rem',
+                                  width: '100%',
+                                  height: '32px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #cbd5e1',
+                                  boxSizing: 'border-box',
+                                  padding: '0 0.5rem',
+                                }}
                               />
                             </div>
                           ) : (
-                            <span style={{ color: '#16a34a', fontSize: '0.8rem', fontWeight: 600 }}>
-                              ✓ Complete
+                            <span
+                              style={{
+                                color: '#15803d',
+                                background: '#dcfce7',
+                                border: '1px solid #bbf7d0',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              ✓ Full Receipt
                             </span>
                           )}
                         </td>
@@ -3096,12 +3632,23 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', alignItems: 'center' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
                 disabled={submittingReceive}
                 onClick={() => setShowReceiveModal(false)}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#475569',
+                  padding: '0.6rem 1.15rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                }}
               >
                 Cancel
               </button>
@@ -3110,9 +3657,19 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 className="btn btn-primary"
                 disabled={submittingReceive}
                 onClick={handleSubmitReceipt}
-                style={{ background: '#16a34a' }}
+                style={{
+                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.6rem 1.4rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.35)',
+                }}
               >
-                {submittingReceive ? 'Processing Receipt...' : 'Confirm Stock Receipt'}
+                {submittingReceive ? 'Processing Receipt...' : '✓ Confirm Stock Receipt'}
               </button>
             </div>
           </div>
