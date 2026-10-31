@@ -564,6 +564,93 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     }
   };
 
+  const renderCreateStepper = (currentStep: 1 | 2 | 3) => {
+    const steps = [
+      { step: 1, title: 'Transfer Details', subtitle: 'Source & destination' },
+      { step: 2, title: 'Add Items', subtitle: 'Quantities & stock' },
+      { step: 3, title: 'Review & Confirm', subtitle: 'Summary & dispatch' },
+    ];
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '2rem',
+          paddingBottom: '1.25rem',
+          borderBottom: '1px solid #f1f5f9',
+        }}
+      >
+        {steps.map((s, idx) => {
+          const isDone = s.step < currentStep;
+          const isActive = s.step === currentStep;
+          return (
+            <React.Fragment key={s.step}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  cursor: isDone ? 'pointer' : 'default',
+                  opacity: isActive || isDone ? 1 : 0.6,
+                }}
+                onClick={() => {
+                  if (isDone) {
+                    if (s.step === 1) setActiveView('create_step1');
+                    if (s.step === 2) setActiveView('create_step2');
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: isDone ? '#16a34a' : isActive ? '#6366f1' : '#f1f5f9',
+                    color: isDone || isActive ? '#ffffff' : '#64748b',
+                    border: isActive ? '2px solid #818cf8' : isDone ? 'none' : '1px solid #cbd5e1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    flexShrink: 0,
+                    boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
+                  }}
+                >
+                  {isDone ? '✓' : s.step}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: '0.86rem',
+                      fontWeight: isActive ? 700 : 600,
+                      color: isActive ? '#0f172a' : isDone ? '#16a34a' : '#64748b',
+                    }}
+                  >
+                    {s.title}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{s.subtitle}</div>
+                </div>
+              </div>
+
+              {idx < steps.length - 1 && (
+                <div
+                  style={{
+                    flex: 1,
+                    height: '2px',
+                    margin: '0 1rem',
+                    background: isDone ? '#16a34a' : '#e2e8f0',
+                  }}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div
       className="stock-transfer-module"
@@ -588,7 +675,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             padding: '1.75rem',
           }}
         >
-          {/* Header row with Number Badge 1, Title, Subtitle, and Primary CTA Button */}
+          {/* Header row with Module Icon, Title, Subtitle, and Primary Actions */}
           <div
             style={{
               display: 'flex',
@@ -602,25 +689,24 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
               <div
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: '#6366f1',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                   color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '0.95rem',
-                  boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                  flexShrink: 0,
                 }}
               >
-                1
+                <TruckIcon size={22} />
               </div>
               <div>
                 <h2
                   style={{
-                    fontSize: '1.25rem',
+                    fontSize: '1.3rem',
                     fontWeight: 800,
                     color: '#0f172a',
                     margin: 0,
@@ -635,45 +721,79 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleStartCreateTransfer}
-              style={{
-                background: '#6366f1',
-                color: '#ffffff',
-                border: 'none',
-                padding: '0.65rem 1.25rem',
-                borderRadius: '10px',
-                fontWeight: 700,
-                fontSize: '0.88rem',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-                cursor: 'pointer',
-              }}
-            >
-              <span>+</span> Create New Transfer
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                onClick={loadTransfersList}
+                title="Refresh transfer list"
+                style={{
+                  background: '#ffffff',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.6rem 0.9rem',
+                  borderRadius: '10px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#94a3b8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }}
+              >
+                <RefreshCwIcon size={14} className={loadingList ? 'spin' : ''} />
+                <span>Refresh</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleStartCreateTransfer}
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.65rem 1.25rem',
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>+</span> Create New Transfer
+              </button>
+            </div>
           </div>
 
-          {/* Filters Row Matching Reference Image */}
+          {/* Filters Toolbar */}
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '0.85rem',
-              background: '#f8fafc',
-              padding: '1rem',
-              borderRadius: '12px',
-              border: '1px solid #f1f5f9',
-              marginBottom: '1.25rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
               alignItems: 'center',
+              background: '#f8fafc',
+              padding: '0.85rem 1rem',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              marginBottom: '1.25rem',
             }}
           >
             {/* Branch Filter */}
-            <div>
+            <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
               <select
                 className="form-input"
                 value={filterBranch}
@@ -685,9 +805,11 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   background: '#ffffff',
                   borderColor: '#cbd5e1',
                   borderRadius: '8px',
-                  padding: '0.5rem 0.75rem',
+                  padding: '0.45rem 0.75rem',
                   fontSize: '0.85rem',
                   width: '100%',
+                  height: '38px',
+                  boxSizing: 'border-box',
                 }}
               >
                 <option value="ALL">All Branches</option>
@@ -700,7 +822,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             </div>
 
             {/* Status Filter */}
-            <div>
+            <div style={{ flex: '0 1 160px', minWidth: '135px' }}>
               <select
                 className="form-input"
                 value={filterStatus}
@@ -712,9 +834,11 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   background: '#ffffff',
                   borderColor: '#cbd5e1',
                   borderRadius: '8px',
-                  padding: '0.5rem 0.75rem',
+                  padding: '0.45rem 0.75rem',
                   fontSize: '0.85rem',
                   width: '100%',
+                  height: '38px',
+                  boxSizing: 'border-box',
                 }}
               >
                 <option value="all">All Status</option>
@@ -726,11 +850,25 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </select>
             </div>
 
-            {/* Date Range Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            {/* Date Range Filter Capsule */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '0 0.6rem',
+                height: '38px',
+                boxSizing: 'border-box',
+                flex: '0 0 auto',
+                minWidth: '290px',
+              }}
+            >
+              <CalendarIcon size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />
               <input
                 type="date"
-                className="form-input"
                 value={filterFromDate}
                 onChange={(e) => {
                   setFilterFromDate(e.target.value);
@@ -738,18 +876,19 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 }}
                 title="From Date"
                 style={{
-                  background: '#ffffff',
-                  borderColor: '#cbd5e1',
-                  borderRadius: '8px',
-                  padding: '0.45rem 0.6rem',
+                  border: 'none',
+                  outline: 'none',
                   fontSize: '0.82rem',
-                  width: '50%',
+                  color: filterFromDate ? '#1e293b' : '#64748b',
+                  background: 'transparent',
+                  padding: '0',
+                  width: '125px',
+                  cursor: 'pointer',
                 }}
               />
-              <span style={{ color: '#94a3b8' }}>-</span>
+              <span style={{ color: '#94a3b8', fontSize: '0.8rem', padding: '0 2px' }}>–</span>
               <input
                 type="date"
-                className="form-input"
                 value={filterToDate}
                 onChange={(e) => {
                   setFilterToDate(e.target.value);
@@ -757,18 +896,20 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 }}
                 title="To Date"
                 style={{
-                  background: '#ffffff',
-                  borderColor: '#cbd5e1',
-                  borderRadius: '8px',
-                  padding: '0.45rem 0.6rem',
+                  border: 'none',
+                  outline: 'none',
                   fontSize: '0.82rem',
-                  width: '50%',
+                  color: filterToDate ? '#1e293b' : '#64748b',
+                  background: 'transparent',
+                  padding: '0',
+                  width: '125px',
+                  cursor: 'pointer',
                 }}
               />
             </div>
 
-            {/* Search Input */}
-            <div style={{ position: 'relative' }}>
+            {/* Search Input - flexible to take remaining space */}
+            <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '200px' }}>
               <input
                 type="text"
                 className="form-input"
@@ -785,9 +926,11 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   background: '#ffffff',
                   borderColor: '#cbd5e1',
                   borderRadius: '8px',
-                  padding: '0.5rem 0.75rem 0.5rem 2.2rem',
+                  padding: '0.45rem 2rem 0.45rem 2.2rem',
                   fontSize: '0.85rem',
                   width: '100%',
+                  height: '38px',
+                  boxSizing: 'border-box',
                 }}
               />
               <span
@@ -798,11 +941,86 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   transform: 'translateY(-50%)',
                   color: '#94a3b8',
                   pointerEvents: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
               >
                 <SearchIcon size={14} />
               </span>
+              {filterSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterSearch('');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title="Clear search"
+                >
+                  <XIcon size={13} />
+                </button>
+              )}
             </div>
+
+            {/* Clear All Filters Button */}
+            {(filterBranch !== 'ALL' ||
+              filterStatus !== 'all' ||
+              Boolean(filterFromDate) ||
+              Boolean(filterToDate) ||
+              Boolean(filterSearch.trim())) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterBranch('ALL');
+                  setFilterStatus('all');
+                  setFilterFromDate('');
+                  setFilterToDate('');
+                  setFilterSearch('');
+                  setCurrentPage(1);
+                }}
+                style={{
+                  height: '38px',
+                  padding: '0 0.85rem',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fee2e2';
+                  e.currentTarget.style.color = '#b91c1c';
+                  e.currentTarget.style.borderColor = '#fca5a5';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9';
+                  e.currentTarget.style.color = '#475569';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }}
+              >
+                <XIcon size={13} />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
 
           {/* Table Matching Reference Image */}
@@ -1022,7 +1240,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
           }}
         >
           {/* Header Row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
             <button
               type="button"
               onClick={() => setActiveView('list')}
@@ -1040,30 +1258,15 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 cursor: 'pointer',
               }}
             >
-              ← Back
+              ← Back to List
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: '#6366f1',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '0.9rem',
-                }}
-              >
-                2
-              </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Create Stock Transfer – Basic Details
-              </h3>
-            </div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              Create New Stock Transfer
+            </h3>
           </div>
+
+          {/* Stepper Progress */}
+          {renderCreateStepper(1)}
 
           {/* Form Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
@@ -1256,7 +1459,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
           }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <button
                 type="button"
@@ -1274,23 +1477,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               >
                 ← Back
               </button>
-              <div
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '50%',
-                  background: '#6366f1',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '0.9rem',
-                }}
-              >
-                3
-              </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Add Products – Transfer Items
               </h3>
             </div>
@@ -1308,6 +1495,9 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               Source Branch: <strong>{wizardFromBranch}</strong> → Target: <strong>{wizardToBranch}</strong>
             </div>
           </div>
+
+          {/* Stepper Progress */}
+          {renderCreateStepper(2)}
 
           {/* Product Search Input with Barcode Icon */}
           <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
@@ -1695,27 +1885,33 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
           }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
-            <div
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+            <button
+              type="button"
+              onClick={() => setActiveView('create_step2')}
               style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                background: '#6366f1',
-                color: '#ffffff',
-                display: 'flex',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '0.45rem 0.8rem',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                color: '#475569',
+                display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '0.9rem',
+                gap: '4px',
+                cursor: 'pointer',
               }}
             >
-              4
-            </div>
+              ← Back
+            </button>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              Review &amp; Confirm
+              Review &amp; Confirm Transfer
             </h3>
           </div>
+
+          {/* Stepper Progress */}
+          {renderCreateStepper(3)}
 
           {/* Transfer Summary Box */}
           <div
@@ -1932,19 +2128,19 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div
                       style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '50%',
-                        background: '#6366f1',
-                        color: '#ffffff',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        background: '#e0e7ff',
+                        color: '#4338ca',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontWeight: 800,
-                        fontSize: '0.85rem',
+                        border: '1px solid #c7d2fe',
+                        flexShrink: 0,
                       }}
                     >
-                      5
+                      <FileTextIcon size={18} />
                     </div>
                     <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                       Transfer Details – {detailedTransfer.transferNumber}
@@ -2530,25 +2726,25 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
               <div
                 style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: '#6366f1',
-                  color: '#ffffff',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: '#ecfdf5',
+                  color: '#059669',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
+                  border: '1px solid #a7f3d0',
+                  flexShrink: 0,
                 }}
               >
-                6
+                <PackageIcon size={18} />
               </div>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                 Stock Movement – Automatic Records
               </h3>
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: '1.5rem', marginLeft: '36px' }}>
+            <div style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: '1.5rem', marginLeft: '44px' }}>
               For each transfer, stock movements are recorded in both branches.
             </div>
 
