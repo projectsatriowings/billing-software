@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   getStockTransfers,
   getNextStockTransferNumber,
@@ -3369,7 +3370,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
       {/* =========================================================================
           DISPATCH CONFIRMATION MODAL
           ========================================================================= */}
-      {showDispatchModal && detailedTransfer && (
+      {showDispatchModal && detailedTransfer && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -3377,13 +3378,21 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
+            width: '100vw',
+            height: '100vh',
             background: 'rgba(15, 23, 42, 0.65)',
             backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
+            zIndex: 99999,
+            padding: '1.25rem',
+            boxSizing: 'border-box',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !submittingDispatch) {
+              setShowDispatchModal(false);
+            }
           }}
         >
           <div
@@ -3393,10 +3402,12 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               maxWidth: '520px',
               width: '100%',
               padding: '2rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
               border: '1px solid #e2e8f0',
               position: 'relative',
+              boxSizing: 'border-box',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
@@ -3547,13 +3558,14 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* =========================================================================
           RECEIVE STOCK MODAL (FULL / PARTIAL WITH DISCREPANCY REASONS)
           ========================================================================= */}
-      {showReceiveModal && detailedTransfer && (
+      {showReceiveModal && detailedTransfer && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -3561,13 +3573,21 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
+            width: '100vw',
+            height: '100vh',
             background: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1rem',
+            zIndex: 99999,
+            padding: '1.25rem',
+            boxSizing: 'border-box',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !submittingReceive) {
+              setShowReceiveModal(false);
+            }
           }}
         >
           <div
@@ -3577,11 +3597,15 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               maxWidth: '780px',
               width: '100%',
               padding: '2rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0',
               maxHeight: '90vh',
               display: 'flex',
               flexDirection: 'column',
+              boxSizing: 'border-box',
+              position: 'relative',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -3815,7 +3839,8 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
