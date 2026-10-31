@@ -164,7 +164,7 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
   }
   const totalSavingsMinor = t.discountMinor + mrpSavingsMinor;
 
-  // Items table rows: NAME (2 lines), QTY, MRP, PRICE
+  // Items table rows: NAME row + 4 columns (QTY, MRP, STORE PRICE, TOTAL PRICE)
   const itemRows = bill.lines
     .map((l, idx) => {
       const metaParts: string[] = [];
@@ -173,21 +173,23 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
       if (l.batchNo) metaParts.push(`B: ${esc(l.batchNo)}`);
 
       const lineMrp = (l.mrpMinor && l.mrpMinor > 0) ? l.mrpMinor : Math.max(l.priceMinor, Math.ceil((l.priceMinor * 1.15) / 100) * 100);
-      const { line1, line2 } = splitProductIntoTwoLines(l.name, 18);
       const qtyStr = `${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}`;
       const mrpStr = `₹${money(lineMrp)}`;
-      const priceStr = `₹${money(l.totalMinor)}`;
+      const storePriceStr = `₹${money(l.priceMinor)}`;
+      const totalPriceStr = `₹${money(l.totalMinor)}`;
 
       return `
-        <tr class="th-item-tr">
-          <td class="col-name">
-            <div class="name-l1"><span class="th-idx">${idx + 1}.</span> ${esc(line1)}</div>
-            ${line2 ? `<div class="name-l2">${esc(line2)}</div>` : ''}
-            ${metaParts.length ? `<div class="name-meta">${metaParts.join(' · ')}</div>` : ''}
+        <tr class="th-item-title-tr">
+          <td colspan="4" class="col-item-title">
+            <span class="th-idx">${idx + 1}.</span> <b>${esc(l.name)}</b>
+            ${metaParts.length ? `<span class="name-meta">(${metaParts.join(' · ')})</span>` : ''}
           </td>
+        </tr>
+        <tr class="th-item-cols-tr">
           <td class="col-qty">${qtyStr}</td>
           <td class="col-mrp">${mrpStr}</td>
-          <td class="col-price">${priceStr}</td>
+          <td class="col-store">${storePriceStr}</td>
+          <td class="col-total">${totalPriceStr}</td>
         </tr>
       `;
     })
@@ -291,14 +293,17 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
 
   <div class="th-divider"></div>
 
-  <!-- ITEMS TABLE: NAME, QTY, MRP, PRICE -->
+  <!-- ITEMS TABLE: 4 COLUMNS: QTY, MRP, STORE PRICE, TOTAL PRICE -->
   <table class="th-bill-table">
     <thead>
-      <tr>
-        <th class="col-name">NAME</th>
+      <tr class="th-head-name-row">
+        <th colspan="4" class="col-head-name">NAME / ITEM</th>
+      </tr>
+      <tr class="th-head-cols-row">
         <th class="col-qty">QTY</th>
         <th class="col-mrp">MRP</th>
-        <th class="col-price">PRICE</th>
+        <th class="col-store">STORE PRICE</th>
+        <th class="col-total">TOTAL PRICE</th>
       </tr>
     </thead>
     <tbody>
@@ -509,26 +514,26 @@ const CSS = (paper: PrintTemplate['paper']) => {
 .th-cust-card{background:#f8fafc;border:1px dashed #64748b;border-radius:4px;padding:4px 6px;margin:4px 0;font-size:${fs - 0.5}px}
 .th-loyalty-row{color:#000;margin-top:2px}
 
-/* Product Table: NAME, QTY, MRP, PRICE */
+/* Product Table: NAME, QTY, MRP, STORE PRICE, TOTAL PRICE */
 .th-bill-table{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed;font-variant-numeric:tabular-nums}
-.th-bill-table thead th{border-bottom:1px dashed #444;padding:3px 0;font-size:${fs - 1}px;font-weight:800;letter-spacing:0.3px;color:#000}
-.th-bill-table thead th.col-name{text-align:left;width:44%}
-.th-bill-table thead th.col-qty{text-align:center;width:17%}
-.th-bill-table thead th.col-mrp{text-align:right;width:19%}
-.th-bill-table thead th.col-price{text-align:right;width:20%}
+.th-head-name-row th{text-align:left;font-size:${fs - 1.2}px;font-weight:800;color:#334155;border-bottom:1px dotted #94a3b8;padding:2px 0;letter-spacing:0.4px}
+.th-head-cols-row th{border-bottom:1.5px dashed #000;padding:3px 0;font-size:${fs - 1}px;font-weight:800;letter-spacing:0.3px;color:#000}
+.th-bill-table th.col-qty{text-align:left;width:20%}
+.th-bill-table th.col-mrp{text-align:right;width:25%}
+.th-bill-table th.col-store{text-align:right;width:27%}
+.th-bill-table th.col-total{text-align:right;width:28%}
 
-.th-bill-table tbody td{vertical-align:top;padding:4px 0;border-bottom:1px dashed #e2e8f0}
-.th-bill-table tbody tr:last-child td{border-bottom:none}
-
-.th-bill-table td.col-name{text-align:left;font-size:${fs + 0.1}px;font-weight:700;color:#000;line-height:1.25;word-break:break-word}
+.th-item-title-tr td{padding:5px 0 1px 0;font-size:${fs + 0.1}px;font-weight:700;color:#000;line-height:1.25;word-break:break-word}
 .th-idx{font-weight:800;margin-right:2px;color:#000}
-.name-l1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.name-l2{color:#111;padding-left:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.name-meta{font-size:${fs - 2.2}px;color:#555;padding-left:10px;margin-top:1px;font-weight:normal}
+.name-meta{font-size:${fs - 2.2}px;color:#555;font-weight:normal;margin-left:4px}
 
-.th-bill-table td.col-qty{text-align:center;font-size:${fs}px;color:#111;padding-top:4px}
-.th-bill-table td.col-mrp{text-align:right;font-size:${fs}px;color:#444;padding-top:4px}
-.th-bill-table td.col-price{text-align:right;font-size:${fs}px;font-weight:700;color:#000;padding-top:4px}
+.th-item-cols-tr td{padding:0 0 5px 0;border-bottom:1px dashed #cbd5e1;font-size:${fs}px}
+.th-bill-table tbody tr.th-item-cols-tr:last-child td{border-bottom:none}
+
+.th-bill-table td.col-qty{text-align:left;color:#1e293b;font-weight:600}
+.th-bill-table td.col-mrp{text-align:right;color:#64748b}
+.th-bill-table td.col-store{text-align:right;color:#0f172a;font-weight:700}
+.th-bill-table td.col-total{text-align:right;font-weight:800;color:#000}
 
 .th-item-summary{font-size:${fs - 0.8}px;color:#111;margin:3px 0}
 
