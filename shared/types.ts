@@ -41,6 +41,10 @@ export const PERMS = {
   'expenses.void': ['owner', 'manager'],
   'gst.view': ['owner', 'manager', 'accountant'],
   'gst.manage': ['owner', 'accountant'],
+  'promotions.view': ['owner', 'manager'],
+  'promotions.write': ['owner', 'manager'],
+  'promotions.reports': ['owner', 'manager'],
+  'promotions.apply': ['owner', 'manager', 'cashier'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Perm = keyof typeof PERMS;
 export const can = (role: Role | undefined, perm: Perm): boolean => !!role && (PERMS[perm] as readonly Role[]).includes(role);

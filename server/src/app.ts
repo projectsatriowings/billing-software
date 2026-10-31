@@ -30,6 +30,7 @@ import { registerQrPayments } from './routes/qrPayments.ts';
 import { registerWebhooks } from './routes/webhooks.ts';
 import { registerCardTerminals } from './routes/cardTerminals.ts';
 import { registerStockTransfers } from './routes/stockTransfers.ts';
+import { registerPromotions } from './routes/promotions.ts';
 
 /** Every module adds one `registerXxx(r)` line here. Nothing else in the server needs to change. */
 export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Router {
@@ -62,6 +63,7 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerWebhooks(r);
   registerCardTerminals(r);
   registerStockTransfers(r);
+  registerPromotions(r);
   return r;
 }
 

@@ -1674,3 +1674,143 @@ export const cancelStockTransfer = (id: string, reason?: string) =>
       body: JSON.stringify({ reason }),
     }
   );
+
+// ==========================================
+// Discounts & Promotions API
+// ==========================================
+export type {
+  Promotion,
+  PromotionInput,
+  PromotionType,
+  PromotionStatus,
+  PromotionRules,
+  AppliedPromotionDetail,
+  PromotionNudge,
+  PromotionEvalResult,
+  AutoFreeItem,
+  CartItemForEval,
+} from '../../shared/promotions.ts';
+
+import type {
+  Promotion,
+  PromotionInput,
+  PromotionStatus,
+  PromotionEvalResult,
+  CartItemForEval,
+} from '../../shared/promotions.ts';
+
+export interface PromotionSummary {
+  totalPromotions: number;
+  activePromotions: number;
+  scheduledPromotions: number;
+  expiredPromotions: number;
+  draftPromotions: number;
+  pausedPromotions: number;
+  totalDiscountGivenMinor: number;
+  salesGeneratedMinor: number;
+}
+
+export interface PromotionReportsData {
+  overview: {
+    totalDiscountMinor: number;
+    billsCount: number;
+    revenueMinor: number;
+    totalPromotionsCount: number;
+    activePromotionsCount: number;
+  };
+  mostUsedPromotions: Array<{
+    promotionId: string;
+    name: string;
+    type: string;
+    usageCount: number;
+    totalDiscountMinor: number;
+    revenueGeneratedMinor: number;
+  }>;
+  branchPerformance: Array<{
+    branch: string;
+    usageCount: number;
+    totalDiscountMinor: number;
+    totalSalesMinor: number;
+  }>;
+  timeline: Array<{
+    bdate: string;
+    usageCount: number;
+    discountMinor: number;
+    salesMinor: number;
+  }>;
+}
+
+export const fetchPromotions = (query?: {
+  search?: string;
+  type?: string;
+  status?: string;
+  branch?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (query?.search) params.append('search', query.search);
+  if (query?.type && query.type !== 'ALL') params.append('type', query.type);
+  if (query?.status && query.status !== 'all') params.append('status', query.status);
+  if (query?.branch && query.branch !== 'ALL') params.append('branch', query.branch);
+  const qStr = params.toString() ? '?' + params.toString() : '';
+  return api<{ promotions: Promotion[]; summary: PromotionSummary }>('/api/promotions' + qStr);
+};
+
+export const fetchPromotion = (id: string) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}`);
+
+export const createPromotion = (promo: PromotionInput) =>
+  api<{ promotion: Promotion }>('/api/promotions', {
+    method: 'POST',
+    body: JSON.stringify(promo),
+  });
+
+export const updatePromotion = (id: string, promo: Partial<PromotionInput>) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(promo),
+  });
+
+export const duplicatePromotion = (id: string) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+  });
+
+export const updatePromotionStatus = (id: string, status: PromotionStatus) =>
+  api<{ promotion: Promotion }>(`/api/promotions/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+
+export const deletePromotion = (id: string) =>
+  api<{ success: boolean }>(`/api/promotions/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+
+export const evaluatePromotionsApi = (payload: {
+  cart: CartItemForEval[];
+  partyId?: string;
+  customerPhone?: string;
+  branch?: string;
+  counter?: string;
+}) =>
+  api<PromotionEvalResult>('/api/promotions/evaluate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const fetchPromotionReports = (query?: {
+  period?: 'today' | 'week' | 'this_month' | 'custom';
+  startDate?: string;
+  endDate?: string;
+  branch?: string;
+  type?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (query?.period) params.append('period', query.period);
+  if (query?.startDate) params.append('startDate', query.startDate);
+  if (query?.endDate) params.append('endDate', query.endDate);
+  if (query?.branch) params.append('branch', query.branch);
+  if (query?.type) params.append('type', query.type);
+  const qStr = params.toString() ? '?' + params.toString() : '';
+  return api<PromotionReportsData>('/api/promotions/reports' + qStr);
+};
