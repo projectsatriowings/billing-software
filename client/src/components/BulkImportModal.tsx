@@ -43,7 +43,7 @@ import {
   type NatureConfidence,
 } from '../../../shared/bulkImport.ts';
 import { ScanManufacturerBarcodeModal } from './ScanManufacturerBarcodeModal.tsx';
-import { fileToOptimizedDataUrl } from '../imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from '../imageUtils';
 import { type BarcodeTargetItem } from '../../../shared/barcodeScannerUtils.ts';
 
 const PackageBoxIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -312,15 +312,31 @@ export const TEMPLATE_COLUMNS = [
   'GST Rate',
   'Price Inclusive of GST',
   'Opening Stock',
+  'Barcode',
+  'Drive Link / Image URL',
 ];
 
 export const SAMPLE_SUPPLIER_ROWS = [
-  ['Toor Dal 1kg', 'kg', '145.50', '120', '0713', '5%', 'Yes', '50'],
-  ['Basmati Rice 1kg', 'kg', '89', '65', '1006', '5%', 'Yes', '100'],
-  ['Amul Butter 100g', 'pcs', '55', '48', '0401', '12%', 'Yes', '40'],
-  ['Surf Excel 1kg', 'pcs', '200', '165', '3402', '18%', 'Yes', '25'],
-  ['Moong Dal 1kg', 'kg', '110', '95', '0713', '5%', 'Yes', '30'],
+  ['Toor Dal 1kg', 'kg', '145.50', '120', '0713', '5%', 'Yes', '50', '8901030384812', 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs/view'],
+  ['Basmati Rice 1kg', 'kg', '89', '65', '1006', '5%', 'Yes', '100', '8901030384850', ''],
+  ['Amul Butter 100g', 'pcs', '55', '48', '0401', '12%', 'Yes', '40', '8901262010011', ''],
+  ['Surf Excel 1kg', 'pcs', '200', '165', '3402', '18%', 'Yes', '25', '', ''],
+  ['Moong Dal 1kg', 'kg', '110', '95', '0713', '5%', 'Yes', '30', '', ''],
 ];
+
+export function isUrlOrDriveLink(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = String(val).trim().toLowerCase();
+  return (
+    s.startsWith('http://') ||
+    s.startsWith('https://') ||
+    s.includes('drive.google.') ||
+    s.includes('docs.google.') ||
+    s.includes('googleusercontent.com') ||
+    s.includes('dropbox.com') ||
+    isGoogleDriveUrl(val)
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type WizardStep = 'choose' | 'review' | 'confirm' | 'results';
@@ -804,7 +820,30 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     const iInclusive= findCol(['price inclusive of gst', 'price inclusive', 'inclusive', 'incl']);
     const iStock    = findCol(['opening stock', 'current stock', 'stock', 'qty', 'quantity']);
     const iBarcode  = findCol(['barcode', 'ean', 'upc', 'gtin', 'bar code']);
-    const iImage    = findCol(['image url', 'image_url', 'image', 'photo', 'picture', 'img']);
+    const iImage    = findCol([
+      'drive link',
+      'drive_link',
+      'google drive',
+      'google_drive',
+      'gdrive',
+      'drive url',
+      'drive_url',
+      'drive',
+      'image url',
+      'image_url',
+      'image link',
+      'image_link',
+      'product image',
+      'item image',
+      'product photo',
+      'photo link',
+      'photo_link',
+      'thumbnail',
+      'image',
+      'photo',
+      'picture',
+      'img',
+    ]);
 
     const getVal = (parts: string[], idx: number, fallbackIdx: number): string => {
       const targetIdx = idx >= 0 ? idx : fallbackIdx;
@@ -828,8 +867,37 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       const gst      = getVal(parts, iGst, 5);
       const incl     = getVal(parts, iInclusive, 6);
       const stock    = getVal(parts, iStock, 7);
-      const barcodeRaw = getVal(parts, iBarcode, -1);
-      const imageRaw = getVal(parts, iImage, -1);
+      // Extract image URL: check iImage header first, or inspect all row cells for a web/Drive link
+      let imageRaw = getVal(parts, iImage, -1);
+      if (!imageRaw) {
+        for (let colIdx = 0; colIdx < parts.length; colIdx++) {
+          const cellStr = String(parts[colIdx] ?? '').trim();
+          if (isUrlOrDriveLink(cellStr)) {
+            imageRaw = cellStr;
+            break;
+          }
+        }
+      }
+
+      // Extract barcode: only from barcode column (or positional fallback IF NOT a URL and NOT imageRaw)
+      let barcodeRaw = getVal(parts, iBarcode, -1);
+      if (!barcodeRaw && iBarcode < 0 && parts.length >= 9) {
+        const fallbackCol = getVal(parts, -1, 8);
+        if (fallbackCol && !isUrlOrDriveLink(fallbackCol) && fallbackCol !== imageRaw) {
+          barcodeRaw = fallbackCol;
+        }
+      }
+
+      // Safeguard: Barcode must NEVER be a Google Drive link or web URL
+      if (isUrlOrDriveLink(barcodeRaw)) {
+        if (!imageRaw) imageRaw = barcodeRaw;
+        barcodeRaw = '';
+      }
+      if (barcodeRaw === imageRaw) {
+        barcodeRaw = '';
+      }
+
+      const resolvedImage = resolveDriveImageUrl(imageRaw);
 
       const unitMatch = UOM_OPTIONS.find(
         (u) => u.code.toLowerCase() === unitRaw.toLowerCase() || u.label.toLowerCase().includes(unitRaw.toLowerCase())
@@ -889,7 +957,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         productNature: natureInfo.nature,
         natureConfidence: natureInfo.confidence,
         isNatureManuallyEdited: false,
-        imageUrl: imageRaw || matchedItem?.imageUrl || (matchedItem as any)?.image || '',
+        imageUrl: resolvedImage || matchedItem?.imageUrl || (matchedItem as any)?.image || '',
         category,
         categoryId,
         isCategoryManuallyEdited: false,
@@ -1043,10 +1111,18 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         }
         if (field === 'barcode') {
           const strVal = String(val || '').trim();
-          updated.barcode = strVal;
-          updated.isBarcodeAutoGenerated = false;
-          updated.barcodeType = strVal.startsWith('20') && strVal.length === 13 ? 'INTERNAL' : (strVal ? 'MANUFACTURER' : null);
-          updated.barcodeError = undefined;
+          if (isUrlOrDriveLink(strVal)) {
+            // Detected image/drive link in barcode input: save to imageUrl, not barcode!
+            updated.imageUrl = resolveDriveImageUrl(strVal);
+            updated.barcode = '';
+            updated.barcodeType = null;
+            updated.isBarcodeAutoGenerated = false;
+          } else {
+            updated.barcode = strVal;
+            updated.isBarcodeAutoGenerated = false;
+            updated.barcodeType = strVal.startsWith('20') && strVal.length === 13 ? 'INTERNAL' : (strVal ? 'MANUFACTURER' : null);
+            updated.barcodeError = undefined;
+          }
         }
         // If product name changed, re-evaluate match, SKU, category, and product nature
         if (field === 'name' && val !== r.name) {
@@ -1312,14 +1388,16 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
 
   const handleGenerateBarcodes = useCallback(() => {
     const seenImportBarcodes = new Set<string>();
-    // Pre-populate with existing rows that already have barcodes
+    // Pre-populate with existing rows that already have valid non-URL barcodes
     for (const r of rawRows) {
-      if (r.barcode && r.barcode.trim()) {
+      if (r.barcode && r.barcode.trim() && !isUrlOrDriveLink(r.barcode)) {
         seenImportBarcodes.add(r.barcode.trim());
       }
       if (r.additionalBarcodes) {
         for (const ab of r.additionalBarcodes) {
-          if (ab.barcode && ab.barcode.trim()) seenImportBarcodes.add(ab.barcode.trim());
+          if (ab.barcode && ab.barcode.trim() && !isUrlOrDriveLink(ab.barcode)) {
+            seenImportBarcodes.add(ab.barcode.trim());
+          }
         }
       }
     }
@@ -1327,10 +1405,25 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     setRawRows((prev) => {
       let counter = 1;
       return prev.map((r) => {
-        // Skip restock products, rows that already have a valid barcode, or manufacturer barcodes
-        const isMfr = r.barcodeType === 'MANUFACTURER' || r.scannedInSession || Boolean(r.matchedItem && !r.isBarcodeAutoGenerated);
-        if (isMfr || r.matchedItem || (r.barcode && r.barcode.trim())) {
-          return r;
+        let currentBarcode = (r.barcode || '').trim();
+        let currentImageUrl = r.imageUrl || '';
+
+        // If the row currently has a drive URL or web link in barcode, move it to imageUrl and clear barcode!
+        if (isUrlOrDriveLink(currentBarcode)) {
+          if (!currentImageUrl) {
+            currentImageUrl = resolveDriveImageUrl(currentBarcode);
+          }
+          currentBarcode = '';
+        }
+
+        // Skip restock products with existing valid barcodes, or manufacturer barcodes
+        const isMfr = (r.barcodeType === 'MANUFACTURER' && currentBarcode) || r.scannedInSession || Boolean(r.matchedItem && !r.isBarcodeAutoGenerated && currentBarcode);
+        if (isMfr || (r.matchedItem && currentBarcode) || currentBarcode) {
+          return {
+            ...r,
+            barcode: currentBarcode,
+            imageUrl: currentImageUrl,
+          };
         }
         // Exclude unresolved duplicate or ambiguous catalog matches until resolved
         if (r.candidates && r.candidates.length > 1 && !r.resolution) {
@@ -1510,6 +1603,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       r.gstRate,
       r.taxInclusive ? 'Yes' : 'No',
       r.openingStock,
+      r.barcode || '',
+      r.imageUrl || '',
       r.status,
       r.errors.map((e) => e.message).join(' | '),
     ]);
@@ -4129,22 +4224,33 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                 )}
               </div>
 
-              {/* Paste URL Input */}
+              {/* Paste Google Drive / Web URL Input */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#64748b', marginBottom: '0.3rem' }}>
-                  Or paste web image link:
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.76rem', fontWeight: 700, color: '#334155' }}>
+                    Google Drive Link or Web Image URL:
+                  </label>
+                  {isGoogleDriveUrl(tempRowImageUrl) && (
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                      Google Drive Linked
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
-                  placeholder="https://example.com/product-image.jpg"
+                  placeholder="Paste Google Drive share link (drive.google.com/...) or image URL"
                   value={tempRowImageUrl.startsWith('data:') ? '' : tempRowImageUrl}
-                  onChange={(e) => setTempRowImageUrl(e.target.value.trim())}
+                  onChange={(e) => setTempRowImageUrl(resolveDriveImageUrl(e.target.value))}
                   style={{
                     ...cellInputStyle,
                     fontSize: '0.8rem',
                     padding: '0.45rem 0.65rem',
                   }}
                 />
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem' }}>
+                  Paste any Google Drive share link (ensure link sharing is set to &quot;Anyone with the link can view&quot;).
+                </div>
               </div>
             </div>
 
