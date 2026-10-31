@@ -6038,7 +6038,12 @@ export function App() {
                   <StoreManagerDashboard
                     user={user}
                     shop={shop}
-                    onNavigate={setActiveTab}
+                    onNavigate={(tab) => {
+                      if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                        setShowInventoryDropdown(true);
+                      }
+                      setActiveTab(tab as any);
+                    }}
                   />
                 )}
                 {user?.role === 'cashier' && (

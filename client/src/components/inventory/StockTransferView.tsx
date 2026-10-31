@@ -239,6 +239,39 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     }
   };
 
+  // Direct receive action from list
+  const handleDirectReceive = async (id: string) => {
+    setSelectedTransferId(id);
+    setActiveView('details');
+    setDetailsTab('items');
+    try {
+      setLoadingDetails(true);
+      const res = await getStockTransfer(id);
+      setDetailedTransfer(res.transfer);
+      setDetailedLines(res.lines || []);
+      setDetailedMoves(res.stockMoves || { source: [], destination: [] });
+      setDetailedActivityLog(res.activityLog || []);
+
+      if (res.lines && res.lines.length > 0) {
+        setReceiveLines(
+          res.lines.map((l: any) => ({
+            lineId: l.id,
+            itemName: l.itemName || 'Product',
+            dispatchedQty: l.qtyMilli / 1000,
+            receivedQty: l.receivedQtyMilli > 0 ? l.receivedQtyMilli / 1000 : l.qtyMilli / 1000,
+            unit: l.unit || 'pcs',
+            discrepancyReason: l.discrepancyReason || '',
+          }))
+        );
+        setShowReceiveModal(true);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to open transfer for receiving', 'error');
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
   // Screen 2: Proceed to Add Products
   const handleStep1Next = () => {
     if (!wizardFromBranch) {
@@ -779,6 +812,88 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             </div>
           </div>
 
+          {/* Incoming Shipments Alert Banner (visible when transfers in transit are arriving at user's branch) */}
+          {(() => {
+            const incomingInTransit = transfers.filter(
+              (t) =>
+                t.status === 'in_transit' &&
+                (user.role === 'owner' ||
+                  user.assignedLocation === t.toBranch ||
+                  Boolean(user.allowedLocations?.includes(t.toBranch)))
+            );
+
+            if (incomingInTransit.length === 0) return null;
+
+            return (
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: '12px',
+                  padding: '0.9rem 1.25rem',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  flexWrap: 'wrap',
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.1)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: '#16a34a',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                    }}
+                  >
+                    <TruckIcon size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem' }}>
+                      {incomingInTransit.length} Incoming Shipment{incomingInTransit.length > 1 ? 's' : ''} in Transit Ready for Receiving
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
+                      Transfers dispatched to your branch. Inspect the delivered items and click <strong>Receive</strong> to credit them to your live inventory.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterStatus('in_transit');
+                    }}
+                    style={{
+                      background: '#16a34a',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.45rem 1rem',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    View In-Transit ({incomingInTransit.length}) ➔
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Filters Toolbar */}
           <div
             style={{
@@ -1119,7 +1234,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                         {trf.requestedByName || 'Staff'}
                       </td>
                       <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
                           <button
                             type="button"
                             onClick={() => handleViewTransferDetails(trf.id)}
@@ -1136,6 +1251,33 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                           >
                             View
                           </button>
+
+                          {/* Direct Receive button for incoming in-transit transfers */}
+                          {trf.status === 'in_transit' &&
+                            (user.role === 'owner' ||
+                              user.assignedLocation === trf.toBranch ||
+                              Boolean(user.allowedLocations?.includes(trf.toBranch))) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDirectReceive(trf.id)}
+                              style={{
+                                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <CheckCircleIcon size={13} /> Receive
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2266,8 +2408,12 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 {/* Receive Button (allowed when in_transit or partially_received) */}
                 {['in_transit', 'partially_received'].includes(detailedTransfer.status) && (
                   (() => {
-                    const isDestinationStaff = user?.assignedLocation === detailedTransfer.toBranch;
-                    const isSourceStaff = user?.assignedLocation === detailedTransfer.fromBranch;
+                    const isDestinationStaff =
+                      user?.assignedLocation === detailedTransfer.toBranch ||
+                      Boolean(user?.allowedLocations?.includes(detailedTransfer.toBranch));
+                    const isSourceStaff =
+                      user?.assignedLocation === detailedTransfer.fromBranch &&
+                      !Boolean(user?.allowedLocations?.includes(detailedTransfer.toBranch));
                     const isOwner = user?.role === 'owner';
 
                     if (isSourceStaff && !isOwner) {
