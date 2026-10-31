@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   api,
   setToken,
@@ -114,7 +115,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
-import { fileToOptimizedDataUrl } from './imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -2951,8 +2952,8 @@ export function App() {
 
   const triggerProceedPayment = () => {
     if (cart.length === 0) {
-      showToast('🛒 Cart is empty. Add products first (Press ← to search)', 'warning');
-      focusProductSearch();
+      showToast('Cart is empty. Add products or click Find Products (F2)', 'warning');
+      focusBarcodeScanner();
       return;
     }
     if (isCheckingOut) return;
@@ -3126,13 +3127,13 @@ export function App() {
 
         if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
@@ -3166,7 +3167,7 @@ export function App() {
               if (cart.length > 0) {
                 focusProceedPayment();
               } else {
-                focusProductSearch();
+                focusBarcodeScanner();
               }
             } else {
               api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`).then((res) => {
@@ -3224,7 +3225,7 @@ export function App() {
 
         if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
@@ -3237,7 +3238,7 @@ export function App() {
           if (cart.length > 0) {
             triggerProceedPayment();
           } else {
-            focusProductSearch();
+            focusBarcodeScanner();
           }
           return;
         }
@@ -3281,7 +3282,7 @@ export function App() {
       if (!isInputActive) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
         if (e.key === 'ArrowRight') {
@@ -3300,7 +3301,7 @@ export function App() {
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
         if (e.key === 'Enter') {
@@ -3308,7 +3309,7 @@ export function App() {
           if (cart.length > 0) {
             triggerProceedPayment();
           } else {
-            focusProductSearch();
+            focusBarcodeScanner();
           }
           return;
         }
@@ -7888,7 +7889,7 @@ export function App() {
             )}
 
             {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
-            {showProductCatalogDrawer && (
+            {showProductCatalogDrawer && createPortal(
               <div className="bento-catalog-drawer-overlay" onClick={() => setShowProductCatalogDrawer(false)}>
                 <div className="bento-catalog-drawer" onClick={(e) => e.stopPropagation()}>
                   {/* Drawer Header */}
@@ -7927,7 +7928,10 @@ export function App() {
                         onClick={() => setShowProductCatalogDrawer(false)}
                         title="Close (Esc)"
                       >
-                        ✕
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -7967,10 +7971,13 @@ export function App() {
                           setSearchQuery('');
                           catalogSearchInputRef.current?.focus();
                         }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', padding: '0 4px' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', padding: '0 4px' }}
                         title="Clear search"
                       >
-                        ✕
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
                       </button>
                     )}
                   </div>
@@ -8081,23 +8088,61 @@ export function App() {
                               )}
                             </div>
 
-                            <div className="bento-tile-title" title={item.name}>
-                              {displayName}
-                            </div>
-
-                            <div className="bento-tile-pricing">
-                              <div className="pricing-store-row">
-                                <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
-                                {mrp > storePrice && (
-                                  <span className="mrp-strikethrough mono">₹{(mrp / 100).toFixed(0)}</span>
+                            {/* Product Image & Title Flex Row */}
+                            <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', margin: '0.2rem 0' }}>
+                              <div
+                                style={{
+                                  width: '54px',
+                                  height: '54px',
+                                  borderRadius: '10px',
+                                  border: '1px solid #e2e8f0',
+                                  background: '#f8fafc',
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  padding: '2px',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                                }}
+                              >
+                                {(item.imageUrl || (item as any).image || item.custom?.image) ? (
+                                  <img
+                                    src={item.imageUrl || (item as any).image || item.custom?.image}
+                                    alt={displayName}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src =
+                                        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                                    }}
+                                  />
+                                ) : (
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
                                 )}
                               </div>
-                              {savings > 0 && (
-                                <span className="pricing-save-badge">
-                                  Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
-                                </span>
-                              )}
+
+                              <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div className="bento-tile-title" title={item.name} style={{ margin: 0 }}>
+                                  {displayName}
+                                </div>
+                                <div className="pricing-store-row" style={{ marginTop: '1px' }}>
+                                  <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
+                                  {mrp > storePrice && (
+                                    <span className="mrp-strikethrough mono">₹{(mrp / 100).toFixed(0)}</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
+
+                            {savings > 0 && (
+                              <span className="pricing-save-badge">
+                                Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
+                              </span>
+                            )}
 
                             <div className="bento-tile-footer">
                               <span className="bento-tile-sku mono">
@@ -8175,7 +8220,7 @@ export function App() {
                   </div>
                 </div>
               </div>
-            )}
+            , document.body)}
 
           </div>
         )}
@@ -12827,7 +12872,8 @@ export function App() {
                           alt="Product Preview"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            (e.currentTarget as HTMLImageElement).src =
+                              'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23dc2626" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
                           }}
                         />
                       ) : (
@@ -12860,7 +12906,7 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Image Controls */}
+                    {/* Image Controls: Option 1 - Upload from Computer */}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <label
                         style={{
@@ -12868,9 +12914,9 @@ export function App() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '0.35rem',
-                          padding: '0.38rem 0.65rem',
-                          borderRadius: '7px',
+                          gap: '0.4rem',
+                          padding: '0.42rem 0.65rem',
+                          borderRadius: '8px',
                           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                           color: '#ffffff',
                           fontSize: '0.78rem',
@@ -12884,7 +12930,7 @@ export function App() {
                           <polyline points="17 8 12 3 7 8" />
                           <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
-                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload from Computer'}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -12909,8 +12955,8 @@ export function App() {
                             fontSize: '0.75rem',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            padding: '0.38rem 0.65rem',
-                            borderRadius: '7px',
+                            padding: '0.42rem 0.65rem',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '3px',
@@ -12926,20 +12972,39 @@ export function App() {
                       )}
                     </div>
 
-                    <div>
+                    {/* Image Controls: Option 2 - Google Drive Link or Web Image URL */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155' }}>
+                          Or Google Drive / Image Link:
+                        </label>
+                        {isGoogleDriveUrl(itemFormImageUrl) && (
+                          <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                            Google Drive Linked
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Or paste web image link..."
+                        placeholder="Paste Google Drive link or web image URL..."
                         value={itemFormImageUrl.startsWith('data:') ? '' : itemFormImageUrl}
-                        onChange={(e) => setItemFormImageUrl(e.target.value.trim())}
+                        onChange={(e) => {
+                          const resolved = resolveDriveImageUrl(e.target.value);
+                          setItemFormImageUrl(resolved);
+                        }}
                         style={{
                           width: '100%',
-                          padding: '0.3rem 0.55rem',
+                          padding: '0.35rem 0.55rem',
                           fontSize: '0.74rem',
-                          height: '28px',
+                          height: '30px',
+                          boxSizing: 'border-box',
                         }}
                       />
+                      <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                        Paste any Google Drive share link (ensure link sharing is set to &quot;Anyone with the link can view&quot;).
+                      </div>
                     </div>
                   </div>
 
@@ -15860,7 +15925,7 @@ export function App() {
             if (e.key === 'Enter') {
               e.preventDefault();
               handleStartNewBill();
-              focusProductSearch();
+              focusBarcodeScanner();
             }
           }}
           tabIndex={-1}
