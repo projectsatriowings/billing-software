@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { importGstr2b } from '../../api.ts';
+import { XIcon, CheckCircleIcon, AlertTriangleIcon } from './GstIcons.tsx';
 
 interface Gstr2bImportModalProps {
   isOpen: boolean;
@@ -164,15 +165,15 @@ export const Gstr2bImportModal: React.FC<Gstr2bImportModalProps> = ({
             onClick={onClose}
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            ✕
+            <XIcon className="h-5 w-5" />
           </button>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {importResult ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-800/40 dark:bg-emerald-950/30">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-400">
-                ✓
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/60">
+                <CheckCircleIcon className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="mt-3 text-lg font-bold text-emerald-900 dark:text-emerald-200">Reconciliation Complete</h3>
               <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
@@ -252,8 +253,9 @@ export const Gstr2bImportModal: React.FC<Gstr2bImportModalProps> = ({
               </div>
 
               {parseError && (
-                <div className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                  ⚠️ {parseError}
+                <div className="flex items-center gap-1.5 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                  <AlertTriangleIcon className="h-4 w-4 shrink-0" />
+                  <span>{parseError}</span>
                 </div>
               )}
 

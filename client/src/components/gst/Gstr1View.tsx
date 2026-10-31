@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstSalesRegister, downloadFile } from '../../api.ts';
+import { DownloadIcon, SpinnerIcon, AlertTriangleIcon } from './GstIcons.tsx';
 
 interface Gstr1ViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -82,17 +83,19 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
             disabled={exporting}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
           >
-            <span>{exporting ? '⏳' : '📥'}</span> {exporting ? 'Exporting...' : 'Download GSTR-1 CSV'}
+            <span className="inline-flex items-center">{exporting ? <SpinnerIcon size={15} /> : <DownloadIcon size={15} />}</span> {exporting ? 'Exporting...' : 'Download GSTR-1 CSV'}
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-sm text-slate-500">
-          Loading GSTR-1 worksheets...
+        <div className="flex h-48 items-center justify-center gap-2 text-sm text-slate-500">
+          <SpinnerIcon size={18} /> Loading GSTR-1 worksheets...
         </div>
       ) : error ? (
-        <div className="p-6 text-center text-sm text-rose-600">⚠️ {error}</div>
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-700">
+          <AlertTriangleIcon size={16} /> <span>{error}</span>
+        </div>
       ) : (
         <div className="space-y-6">
           {/* Section 4: B2B Invoices */}
