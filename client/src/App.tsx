@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   api,
   setToken,
@@ -71,9 +72,25 @@ import { BusinessSelector } from './components/BusinessSelector';
 import { StrictIsolationBanner } from './components/StrictIsolationBanner';
 import { InventoryDashboard } from './components/inventory/InventoryDashboard';
 import { ProductMovementAnalysisView } from './components/inventory/ProductMovementAnalysisView';
+import { StockTransferView } from './components/inventory/StockTransferView';
 import type { Branch } from '../../shared/types.ts';
 import { TerminalManagementTab } from './components/terminal/TerminalManagementTab';
 import { PosCardCheckoutPanel } from './components/terminal/PosCardCheckoutPanel';
+import {
+  CreditCardIcon,
+  BanknoteIcon,
+  QrCodeIcon,
+  LandmarkIcon,
+  BookUserIcon,
+  TerminalIcon,
+  ZapIcon,
+  PaytmIcon,
+  PhonePeIcon,
+  WhatsAppIcon,
+  AlertTriangleIcon,
+  SettingsIcon,
+  StoreIcon,
+} from './components/terminal/PaymentIcons.tsx';
 import {
   TagIcon,
   PackageIcon,
@@ -98,7 +115,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
-import { fileToOptimizedDataUrl } from './imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -380,12 +397,12 @@ export const buildWhatsAppMessage = (opts: {
 // Business Type Helper Functions
 export const getBusinessIcon = (type?: string) => {
   switch (type) {
-    case 'pharmacy': return '💊';
-    case 'restaurant': return '🍽️';
-    case 'wholesale': return '📦';
-    case 'service': return '💼';
-    case 'retail': return '🛒';
-    default: return '🏢';
+    case 'pharmacy': return '';
+    case 'restaurant': return '';
+    case 'wholesale': return '';
+    case 'service': return '';
+    case 'retail': return '';
+    default: return '';
   }
 };
 
@@ -410,6 +427,7 @@ export function App() {
     | 'items'
     | 'categories'
     | 'inventory'
+    | 'stock-transfer'
     | 'product-movement'
     | 'sales-analysis'
     | 'purchases'
@@ -522,7 +540,7 @@ export function App() {
   };
 
   const isInventorySubmenuVisible =
-    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement';
+    isInventoryHovered || showInventoryDropdown || activeTab === 'product-movement' || activeTab === 'stock-transfer';
 
   // Close inventory dropdown on outside click
   useEffect(() => {
@@ -545,7 +563,7 @@ export function App() {
 
   // Close submenu when navigating away to unrelated modules
   useEffect(() => {
-    if (activeTab !== 'inventory' && activeTab !== 'product-movement') {
+    if (activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer') {
       setShowInventoryDropdown(false);
       setIsInventoryHovered(false);
     }
@@ -682,6 +700,9 @@ export function App() {
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const isSidebarVisuallyExpanded = !isSidebarCollapsed || isSidebarHovered;
+  const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
   const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
   const [customItemForm, setCustomItemForm] = useState({ name: 'Custom Charge', price: '50', taxRateBp: 1800 });
@@ -706,7 +727,13 @@ export function App() {
 
   useEffect(() => {
     if (activeTab === 'pos') {
-      setIsSidebarCollapsed(true);
+      if (!isSidebarCollapsed) {
+        setIsSidebarCollapsed(true);
+        setAutoCollapsedForPos(true);
+      }
+    } else if (autoCollapsedForPos && typeof window !== 'undefined' && window.innerWidth >= 1200) {
+      setIsSidebarCollapsed(false);
+      setAutoCollapsedForPos(false);
     }
   }, [activeTab]);
 
@@ -1196,6 +1223,10 @@ export function App() {
       const hash = window.location.hash.replace('#', '');
       if (['landing', 'login', 'register', 'selector', 'dashboard'].includes(hash)) {
         setView(hash as any);
+      } else if (hash === 'stock-transfer') {
+        setView('dashboard');
+        setActiveTab('stock-transfer');
+        setShowInventoryDropdown(true);
       } else if (hash === 'product-analysis' || hash === 'product-movement') {
         setView('dashboard');
         setActiveTab('product-movement');
@@ -1229,13 +1260,21 @@ export function App() {
         loadMyBusinesses();
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
+        const isStockTransferRoute =
+          currentHash === 'stock-transfer' ||
+          tabParam === 'stock-transfer' ||
+          window.location.pathname === '/stock-transfer';
         const isProductAnalysisRoute =
           ['product-analysis', 'product-movement'].includes(currentHash) ||
           ['product-analysis', 'product-movement'].includes(tabParam || '') ||
           window.location.pathname === '/product-analysis' ||
           window.location.pathname === '/product-movement';
 
-        if (isProductAnalysisRoute) {
+        if (isStockTransferRoute) {
+          setView('dashboard');
+          setActiveTab('stock-transfer');
+          setShowInventoryDropdown(true);
+        } else if (isProductAnalysisRoute) {
           setView('dashboard');
           setActiveTab('product-movement');
           setShowInventoryDropdown(true);
@@ -2988,8 +3027,8 @@ export function App() {
 
   const triggerProceedPayment = () => {
     if (cart.length === 0) {
-      showToast('🛒 Cart is empty. Add products first (Press ← to search)', 'warning');
-      focusProductSearch();
+      showToast('Cart is empty. Add products or click Find Products (F2)', 'warning');
+      focusBarcodeScanner();
       return;
     }
     if (isCheckingOut) return;
@@ -3163,13 +3202,13 @@ export function App() {
 
         if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
@@ -3203,7 +3242,7 @@ export function App() {
               if (cart.length > 0) {
                 focusProceedPayment();
               } else {
-                focusProductSearch();
+                focusBarcodeScanner();
               }
             } else {
               api<{ party: Party | null }>(`/api/parties/by-phone/${encodeURIComponent(d)}`).then((res) => {
@@ -3261,7 +3300,7 @@ export function App() {
 
         if (e.key === 'ArrowLeft' && selStart === 0 && selEnd === 0) {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
 
@@ -3274,7 +3313,7 @@ export function App() {
           if (cart.length > 0) {
             triggerProceedPayment();
           } else {
-            focusProductSearch();
+            focusBarcodeScanner();
           }
           return;
         }
@@ -3318,7 +3357,7 @@ export function App() {
       if (!isInputActive) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
         if (e.key === 'ArrowRight') {
@@ -3337,7 +3376,7 @@ export function App() {
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          focusProductSearch();
+          focusBarcodeScanner();
           return;
         }
         if (e.key === 'Enter') {
@@ -3345,7 +3384,7 @@ export function App() {
           if (cart.length > 0) {
             triggerProceedPayment();
           } else {
-            focusProductSearch();
+            focusBarcodeScanner();
           }
           return;
         }
@@ -4930,7 +4969,15 @@ export function App() {
       )}
 
       {/* Left Sidebar Navigation */}
-      <aside className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''}`}>
+      <aside
+        className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''} ${isSidebarCollapsed && isSidebarHovered ? 'hover-expanded' : ''}`}
+        onMouseEnter={() => {
+          if (isSidebarCollapsed) setIsSidebarHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsSidebarHovered(false);
+        }}
+      >
         <div className="sidebar-top">
           {/* Header row with Brand & Collapse/Expand Toggle */}
           <div className="sidebar-header-row">
@@ -4957,13 +5004,15 @@ export function App() {
               className="sidebar-collapse-toggle"
               onClick={(e) => {
                 e.stopPropagation();
+                setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
+                setIsSidebarHovered(false);
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
               aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
+                <polyline points={!isSidebarVisuallyExpanded ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
               </svg>
             </button>
           </div>
@@ -4999,7 +5048,7 @@ export function App() {
               </div>
             </button>
 
-            {!isSidebarCollapsed && showBusinessDropdown && (
+            {isSidebarVisuallyExpanded && showBusinessDropdown && (
               <>
                 <div
                   className="dropdown-backdrop"
@@ -5178,7 +5227,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">My Cashier Shift</span>
-                {activeShiftNumber ? (
+                {isSidebarVisuallyExpanded && activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
                   </span>
@@ -5204,7 +5253,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                <span className="nav-count-badge">{items.length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{items.length}</span>}
               </button>
             )}
 
@@ -5223,7 +5272,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                <span className="nav-count-badge">{categoriesList.length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{categoriesList.length}</span>}
               </button>
             )}
 
@@ -5238,8 +5287,8 @@ export function App() {
                 <button
                   type="button"
                   className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${
-                    activeTab === 'product-movement' ? 'has-active-child' : ''
-                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' ? 'open-highlight' : ''}`}
+                    activeTab === 'product-movement' || activeTab === 'stock-transfer' ? 'has-active-child' : ''
+                  } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer' ? 'open-highlight' : ''}`}
                   onClick={handleInventoryClick}
                   aria-haspopup="true"
                   aria-expanded={isInventorySubmenuVisible}
@@ -5254,7 +5303,7 @@ export function App() {
                   </span>
                   <span className="nav-text">Inventory Hub</span>
                   <div className="nav-trailing">
-                    {totalStockAlerts > 0 && (
+                    {isSidebarVisuallyExpanded && totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
                         title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
@@ -5275,12 +5324,57 @@ export function App() {
                     <button
                       type="button"
                       role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'stock-transfer' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('stock-transfer');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Transfer"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="17 1 21 5 17 9" />
+                          <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                          <polyline points="7 23 3 19 7 15" />
+                          <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Transfer</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`sidebar-submenu-item ${activeTab === 'inventory' ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveTab('inventory');
+                        setShowInventoryDropdown(true);
+                      }}
+                      title="Stock Adjustment"
+                    >
+                      <span className="submenu-icon" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="4" y1="21" x2="4" y2="14" />
+                          <line x1="4" y1="10" x2="4" y2="3" />
+                          <line x1="12" y1="21" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12" y2="3" />
+                          <line x1="20" y1="21" x2="20" y2="16" />
+                          <line x1="20" y1="12" x2="20" y2="3" />
+                          <line x1="1" y1="14" x2="7" y2="14" />
+                          <line x1="9" y1="8" x2="15" y2="8" />
+                          <line x1="17" y1="16" x2="23" y2="16" />
+                        </svg>
+                      </span>
+                      <span className="submenu-text">Stock Adjustment</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className={`sidebar-submenu-item ${activeTab === 'product-movement' ? 'active' : ''}`}
                       onClick={() => {
                         setActiveTab('product-movement');
                         setShowInventoryDropdown(true);
                       }}
-                      title="Product Analysis"
+                      title="Stock Report"
                     >
                       <span className="submenu-icon" aria-hidden="true">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -5288,7 +5382,7 @@ export function App() {
                           <polyline points="17 6 23 6 23 12" />
                         </svg>
                       </span>
-                      <span className="submenu-text">Product Analysis</span>
+                      <span className="submenu-text">Stock Report</span>
                     </button>
                   </div>
                 )}
@@ -5312,7 +5406,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
-                <span className="nav-badge-new">NEW</span>
+                {isSidebarVisuallyExpanded && <span className="nav-badge-new">NEW</span>}
               </button>
             )}
 
@@ -5374,7 +5468,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
               </button>
             )}
 
@@ -5395,7 +5489,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
               </button>
             )}
 
@@ -5457,7 +5551,7 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
-                        <span className="nav-count-badge">{purchases.length}</span>
+                        {isSidebarVisuallyExpanded && <span className="nav-count-badge">{purchases.length}</span>}
                       </button>
                     )}
 
@@ -5791,7 +5885,7 @@ export function App() {
         {/* View Transition Stage (SPA Bento Transition) */}
         <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'}`}>
         {/* Other Tab Headers */}
-        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && !(user.role === 'manager' && displayTab === 'shifts') && (
+        {displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && !(user.role === 'manager' && displayTab === 'shifts') && (
           <header className="content-top-header">
             <div className="content-header-left">
               <h1 className="content-page-title">
@@ -7962,7 +8056,7 @@ export function App() {
             )}
 
             {/* ================= PRODUCT CATALOG FLYOUT DRAWER (NON-BARCODED & SEARCHABLE ITEMS) ================= */}
-            {showProductCatalogDrawer && (
+            {showProductCatalogDrawer && createPortal(
               <div className="bento-catalog-drawer-overlay" onClick={() => setShowProductCatalogDrawer(false)}>
                 <div className="bento-catalog-drawer" onClick={(e) => e.stopPropagation()}>
                   {/* Drawer Header */}
@@ -8001,7 +8095,10 @@ export function App() {
                         onClick={() => setShowProductCatalogDrawer(false)}
                         title="Close (Esc)"
                       >
-                        ✕
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -8041,10 +8138,13 @@ export function App() {
                           setSearchQuery('');
                           catalogSearchInputRef.current?.focus();
                         }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', padding: '0 4px' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', padding: '0 4px' }}
                         title="Clear search"
                       >
-                        ✕
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
                       </button>
                     )}
                   </div>
@@ -8155,23 +8255,61 @@ export function App() {
                               )}
                             </div>
 
-                            <div className="bento-tile-title" title={item.name}>
-                              {displayName}
-                            </div>
-
-                            <div className="bento-tile-pricing">
-                              <div className="pricing-store-row">
-                                <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
-                                {mrp > storePrice && (
-                                  <span className="mrp-strikethrough mono">₹{(mrp / 100).toFixed(0)}</span>
+                            {/* Product Image & Title Flex Row */}
+                            <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', margin: '0.2rem 0' }}>
+                              <div
+                                style={{
+                                  width: '54px',
+                                  height: '54px',
+                                  borderRadius: '10px',
+                                  border: '1px solid #e2e8f0',
+                                  background: '#f8fafc',
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  padding: '2px',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                                }}
+                              >
+                                {(item.imageUrl || (item as any).image || item.custom?.image) ? (
+                                  <img
+                                    src={item.imageUrl || (item as any).image || item.custom?.image}
+                                    alt={displayName}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src =
+                                        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                                    }}
+                                  />
+                                ) : (
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
                                 )}
                               </div>
-                              {savings > 0 && (
-                                <span className="pricing-save-badge">
-                                  Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
-                                </span>
-                              )}
+
+                              <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div className="bento-tile-title" title={item.name} style={{ margin: 0 }}>
+                                  {displayName}
+                                </div>
+                                <div className="pricing-store-row" style={{ marginTop: '1px' }}>
+                                  <span className="pricing-store-val mono">{formatRupees(storePrice)}</span>
+                                  {mrp > storePrice && (
+                                    <span className="mrp-strikethrough mono">₹{(mrp / 100).toFixed(0)}</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
+
+                            {savings > 0 && (
+                              <span className="pricing-save-badge">
+                                Save {formatRupees(savings)} {discountPercent > 0 && `(${discountPercent}%)`}
+                              </span>
+                            )}
 
                             <div className="bento-tile-footer">
                               <span className="bento-tile-sku mono">
@@ -8249,7 +8387,7 @@ export function App() {
                   </div>
                 </div>
               </div>
-            )}
+            , document.body)}
 
           </div>
         )}
@@ -9606,6 +9744,20 @@ export function App() {
           />
         )}
 
+        {/* TAB: STOCK TRANSFER (BRANCH TO BRANCH) */}
+        {displayTab === 'stock-transfer' && user && (
+          <StockTransferView
+            user={user}
+            onNavigateToTab={(tab) => {
+              if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                setShowInventoryDropdown(true);
+              }
+              setActiveTab(tab as any);
+            }}
+            showToast={showToast}
+          />
+        )}
+
         {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
         {displayTab === 'product-movement' && (
           <ProductMovementAnalysisView
@@ -10444,7 +10596,22 @@ export function App() {
             {/* Section 1: Business Profile Editor */}
             <div className="card settings-section">
               <div className="card-title">
-                <span>⚙️ Active Store Configuration & Profile</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'var(--primary-light, #ede9fe)',
+                    color: 'var(--primary, #6366f1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(99, 102, 241, 0.15)'
+                  }}>
+                    <SettingsIcon size={18} />
+                  </span>
+                  <span>Active Store Configuration & Profile</span>
+                </span>
                 <span className={`biz-badge biz-${shop?.businessType}`}>
                   Current: {getBusinessLabel(shop?.businessType)}
                 </span>
@@ -10475,12 +10642,12 @@ export function App() {
                       value={settingsType}
                       onChange={(e) => setSettingsType(e.target.value)}
                     >
-                      <option value="retail">🛒 Retail / Kirana / Supermarket</option>
-                      <option value="pharmacy">💊 Pharmacy & Healthcare</option>
-                      <option value="restaurant">🍽️ Restaurant / Cafe / Bakery</option>
-                      <option value="wholesale">📦 Wholesale & Distribution</option>
-                      <option value="service">💼 Professional & Technical Services</option>
-                      <option value="general">🏢 General Business</option>
+                      <option value="retail">Retail / Kirana / Supermarket</option>
+                      <option value="pharmacy">Pharmacy & Healthcare</option>
+                      <option value="restaurant">Restaurant / Cafe / Bakery</option>
+                      <option value="wholesale">Wholesale & Distribution</option>
+                      <option value="service">Professional & Technical Services</option>
+                      <option value="general">General Business</option>
                     </select>
                   </div>
                   <div className="form-group">
@@ -10543,8 +10710,8 @@ export function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
-                      💳
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(109, 74, 255, 0.15)' }}>
+                      <CreditCardIcon size={20} />
                     </div>
                     <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.01em' }}>
                       Payments & Integrations
@@ -10605,13 +10772,13 @@ export function App() {
                 scrollbarWidth: 'none'
               }}>
                 {[
-                  { id: 'methods', label: 'Payment Methods', icon: '💳' },
-                  { id: 'razorpay', label: 'Razorpay', icon: '⚡' },
-                  { id: 'paytm', label: 'Paytm Gateway', icon: '🅿️' },
-                  { id: 'phonepe', label: 'PhonePe Gateway', icon: '🟣' },
-                  { id: 'qr', label: 'UPI QR', icon: '📱' },
-                  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
-                  { id: 'terminal', label: 'Card Terminal', icon: '📠' },
+                  { id: 'methods', label: 'Payment Methods', icon: <CreditCardIcon size={16} /> },
+                  { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={16} /> },
+                  { id: 'paytm', label: 'Paytm Gateway', icon: <PaytmIcon size={16} /> },
+                  { id: 'phonepe', label: 'PhonePe Gateway', icon: <PhonePeIcon size={16} /> },
+                  { id: 'qr', label: 'UPI QR', icon: <QrCodeIcon size={16} /> },
+                  { id: 'bank', label: 'Bank Transfer', icon: <LandmarkIcon size={16} /> },
+                  { id: 'terminal', label: 'Card Terminal', icon: <TerminalIcon size={16} /> },
                 ].map((tab) => {
                   const isActive = paySettingsSubTab === tab.id;
                   return (
@@ -10667,11 +10834,11 @@ export function App() {
 ... [truncated for diff preview]
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {[
-                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: '💵' },
-                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: '📱' },
-                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: '💳' },
-                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: '🏦' },
-                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: '👤' },
+                        { id: 'cash', label: 'Cash', desc: 'Physical currency & change drawer tracking', icon: <BanknoteIcon size={20} />, color: '#16a34a', bg: '#f0fdf4' },
+                        { id: 'upi', label: 'UPI / QR', desc: 'Scan & Pay via Google Pay, PhonePe, Paytm, BHIM', icon: <QrCodeIcon size={20} />, color: '#2563eb', bg: '#eff6ff' },
+                        { id: 'card', label: 'Debit / Credit Card', desc: 'Swipe / Tap terminal card processing', icon: <CreditCardIcon size={20} />, color: '#6366f1', bg: '#f5f3ff' },
+                        { id: 'bank', label: 'Bank Transfer', desc: 'Direct NEFT, RTGS, IMPS & Net Banking to shop account', icon: <LandmarkIcon size={20} />, color: '#0d9488', bg: '#f0fdfa' },
+                        { id: 'credit', label: 'Customer Credit / Udhaar', desc: 'Account ledger credit billing & customer dues', icon: <BookUserIcon size={20} />, color: '#9333ea', bg: '#faf5ff' },
                       ].map((item) => {
                         const isChecked = item.id === 'bank' ? payBankEnabled : payMethodsEnabled.includes(item.id);
                         return (
@@ -10694,11 +10861,13 @@ export function App() {
                                 width: '42px',
                                 height: '42px',
                                 borderRadius: '10px',
-                                background: isChecked ? 'var(--primary-light)' : '#f8fafc',
+                                background: isChecked ? item.bg : '#f8fafc',
+                                color: isChecked ? item.color : '#64748b',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: '1.25rem',
+                                flexShrink: 0,
+                                border: `1px solid ${isChecked ? item.color + '33' : '#e2e8f0'}`,
                               }}>
                                 {item.icon}
                               </div>
@@ -11538,8 +11707,8 @@ export function App() {
                               transition: 'all 0.15s ease',
                             }}
                           >
-                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)' }}>
-                              📱 Static QR
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: payQrType === 'static' ? 'var(--primary)' : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <QrCodeIcon size={16} /> Static QR
                             </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                               Shop VPA with manual cashier verification
@@ -11555,9 +11724,9 @@ export function App() {
                           </label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem' }}>
                             {[
-                              { id: 'razorpay', label: 'Razorpay', icon: '⚡', active: posPaymentConfig?.rzpEnabled },
-                              { id: 'paytm', label: 'Paytm', icon: '🅿️', active: posPaymentConfig?.paytmEnabled },
-                              { id: 'phonepe', label: 'PhonePe', icon: '🟣', active: posPaymentConfig?.phonepeEnabled },
+                              { id: 'razorpay', label: 'Razorpay', icon: <ZapIcon size={14} />, active: posPaymentConfig?.rzpEnabled },
+                              { id: 'paytm', label: 'Paytm', icon: <PaytmIcon size={14} />, active: posPaymentConfig?.paytmEnabled },
+                              { id: 'phonepe', label: 'PhonePe', icon: <PhonePeIcon size={14} />, active: posPaymentConfig?.phonepeEnabled },
                             ].map((prov) => {
                               const isSel = payProvider === prov.id;
                               return (
@@ -11582,7 +11751,7 @@ export function App() {
                                     transition: 'all 0.15s ease',
                                   }}
                                 >
-                                  <span>{prov.icon} {prov.label}</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{prov.icon}<span>{prov.label}</span></span>
                                   <span style={{ fontSize: '0.7rem', color: prov.active ? '#059669' : '#94a3b8', fontWeight: 600 }}>
                                     {prov.active ? '●' : '○'}
                                   </span>
@@ -11641,7 +11810,7 @@ export function App() {
 
                       {/* Manual verification safety note */}
                       <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '0.85rem 1rem', borderRadius: '10px', fontSize: '0.8rem', color: '#92400e', lineHeight: 1.45 }}>
-                        <strong>⚠️ Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
+                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={14} style={{ color: '#d97706' }} /> Manual Verification Note:</strong> When using Static QR, cashier must verify payment received in bank/UPI app. System will never mark invoice Paid based solely on a customer screenshot.
                       </div>
 
                       <button
@@ -11862,7 +12031,9 @@ export function App() {
                     top: '1rem',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '1.4rem' }}>🏦</span>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <LandmarkIcon size={20} />
+                      </div>
                       <div>
                         <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)' }}>
                           Customer Payment Slip Preview
@@ -11922,8 +12093,11 @@ export function App() {
 
             {/* WhatsApp Bill Sharing Settings Card (Section 9.1) */}
             <div className="card settings-section">
-              <div className="card-title">
-                <span>📲 WhatsApp Bill Sharing</span>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ color: '#16a34a', display: 'inline-flex', alignItems: 'center' }}>
+                  <WhatsAppIcon size={20} />
+                </span>
+                <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)' }}>WhatsApp Bill Sharing</span>
                 <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                   Configure click-to-chat WhatsApp receipts for POS checkout and invoice resends
                 </span>
@@ -12879,7 +13053,8 @@ export function App() {
                           alt="Product Preview"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            (e.currentTarget as HTMLImageElement).src =
+                              'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23dc2626" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
                           }}
                         />
                       ) : (
@@ -12912,7 +13087,7 @@ export function App() {
                       )}
                     </div>
 
-                    {/* Image Controls */}
+                    {/* Image Controls: Option 1 - Upload from Computer */}
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <label
                         style={{
@@ -12920,9 +13095,9 @@ export function App() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '0.35rem',
-                          padding: '0.38rem 0.65rem',
-                          borderRadius: '7px',
+                          gap: '0.4rem',
+                          padding: '0.42rem 0.65rem',
+                          borderRadius: '8px',
                           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                           color: '#ffffff',
                           fontSize: '0.78rem',
@@ -12936,7 +13111,7 @@ export function App() {
                           <polyline points="17 8 12 3 7 8" />
                           <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
-                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                        <span>{itemFormImageUrl ? 'Change Photo' : 'Upload from Computer'}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -12961,8 +13136,8 @@ export function App() {
                             fontSize: '0.75rem',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            padding: '0.38rem 0.65rem',
-                            borderRadius: '7px',
+                            padding: '0.42rem 0.65rem',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '3px',
@@ -12978,20 +13153,39 @@ export function App() {
                       )}
                     </div>
 
-                    <div>
+                    {/* Image Controls: Option 2 - Google Drive Link or Web Image URL */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155' }}>
+                          Or Google Drive / Image Link:
+                        </label>
+                        {isGoogleDriveUrl(itemFormImageUrl) && (
+                          <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                            Google Drive Linked
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Or paste web image link..."
+                        placeholder="Paste Google Drive link or web image URL..."
                         value={itemFormImageUrl.startsWith('data:') ? '' : itemFormImageUrl}
-                        onChange={(e) => setItemFormImageUrl(e.target.value.trim())}
+                        onChange={(e) => {
+                          const resolved = resolveDriveImageUrl(e.target.value);
+                          setItemFormImageUrl(resolved);
+                        }}
                         style={{
                           width: '100%',
-                          padding: '0.3rem 0.55rem',
+                          padding: '0.35rem 0.55rem',
                           fontSize: '0.74rem',
-                          height: '28px',
+                          height: '30px',
+                          boxSizing: 'border-box',
                         }}
                       />
+                      <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                        Paste any Google Drive share link (ensure link sharing is set to &quot;Anyone with the link can view&quot;).
+                      </div>
                     </div>
                   </div>
 
@@ -15912,7 +16106,7 @@ export function App() {
             if (e.key === 'Enter') {
               e.preventDefault();
               handleStartNewBill();
-              focusProductSearch();
+              focusBarcodeScanner();
             }
           }}
           tabIndex={-1}

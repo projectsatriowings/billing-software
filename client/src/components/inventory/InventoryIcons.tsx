@@ -1174,3 +1174,77 @@ export const CreditCardIcon: React.FC<IconProps> = ({ size = 18, className = '',
     <line x1="2" x2="22" y1="10" y2="10" />
   </svg>
 );
+
+export const ArrowLeftIcon: React.FC<IconProps> = ({ size = 16, className = '', ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+
+export const FilterIcon: React.FC<IconProps> = ({ size = 16, className = '', ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
+export const TruckIcon: React.FC<IconProps> = ({ size = 18, className = '', ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <rect x="1" y="3" width="15" height="13" rx="1" />
+    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+    <circle cx="5.5" cy="18.5" r="2.5" />
+    <circle cx="18.5" cy="18.5" r="2.5" />
+  </svg>
+);
+
+export const PrinterIcon: React.FC<IconProps> = ({ size = 16, className = '', ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <polyline points="6 9 6 2 18 2 18 9" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="8" />
+  </svg>
+);
