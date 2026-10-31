@@ -1007,7 +1007,7 @@ version: 29,
     ],
   },
   {
-    version: 36,
+    version: 38,
     statements: [
       `CREATE TABLE IF NOT EXISTS stock_transfers (
         id TEXT PRIMARY KEY,
