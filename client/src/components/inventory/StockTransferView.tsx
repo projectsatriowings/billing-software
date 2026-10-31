@@ -2006,26 +2006,101 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
 
                 {/* Receive Button (allowed when in_transit or partially_received) */}
                 {['in_transit', 'partially_received'].includes(detailedTransfer.status) && (
-                  <button
-                    type="button"
-                    onClick={handleOpenReceiveModal}
-                    style={{
-                      background: '#16a34a',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '0.5rem 1.15rem',
-                      borderRadius: '8px',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
-                    }}
-                  >
-                    <CheckCircleIcon size={16} /> Receive Stock
-                  </button>
+                  (() => {
+                    const isDestinationStaff = user?.assignedLocation === detailedTransfer.toBranch;
+                    const isSourceStaff = user?.assignedLocation === detailedTransfer.fromBranch;
+                    const isOwner = user?.role === 'owner';
+
+                    if (isSourceStaff && !isOwner) {
+                      // Source branch manager/cashier sent the goods: they must wait for destination branch to receive
+                      return (
+                        <div
+                          style={{
+                            padding: '0.5rem 0.95rem',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                            color: '#1e40af',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                          }}
+                        >
+                          <TruckIcon size={16} /> In Transit – Awaiting receipt by {detailedTransfer.toBranchName}
+                        </div>
+                      );
+                    }
+
+                    if (isDestinationStaff) {
+                      // Destination branch manager/cashier who is receiving the stock
+                      return (
+                        <button
+                          type="button"
+                          onClick={handleOpenReceiveModal}
+                          style={{
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '0.5rem 1.15rem',
+                            borderRadius: '8px',
+                            fontSize: '0.84rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+                          }}
+                        >
+                          <CheckCircleIcon size={16} /> Receive Stock
+                        </button>
+                      );
+                    }
+
+                    // Owner / Super Admin: show status + explicit action for destination branch
+                    return (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div
+                          style={{
+                            padding: '0.45rem 0.85rem',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            color: '#1e40af',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                          }}
+                        >
+                          <TruckIcon size={16} /> In Transit to {detailedTransfer.toBranchName}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenReceiveModal}
+                          style={{
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '0.5rem 1.15rem',
+                            borderRadius: '8px',
+                            fontSize: '0.84rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+                          }}
+                        >
+                          <CheckCircleIcon size={16} /> Receive at {detailedTransfer.toBranchName}
+                        </button>
+                      </div>
+                    );
+                  })()
                 )}
 
                 {/* Cancel Button */}
@@ -2544,7 +2619,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                                 color: '#b91c1c',
                               }}
                             >
-                              {m.qtyMilli / 1000}
+                              -{Math.abs(m.qtyMilli / 1000)}
                             </td>
                             <td style={{ padding: '0.6rem 0.8rem', color: '#475569' }}>
                               Transfer Out
@@ -2639,7 +2714,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                                 color: '#16a34a',
                               }}
                             >
-                              +{m.qtyMilli / 1000}
+                              +{Math.abs(m.qtyMilli / 1000)}
                             </td>
                             <td style={{ padding: '0.6rem 0.8rem', color: '#475569' }}>
                               Transfer In

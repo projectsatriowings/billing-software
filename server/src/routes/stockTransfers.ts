@@ -285,7 +285,7 @@ export function registerStockTransfers(r: Router) {
        JOIN items i ON i.id = stl.item_id AND i.tenant_id = stl.tenant_id
        WHERE stl.tenant_id = ? AND stl.transfer_id = ?
        ORDER BY stl.created_at ASC`,
-      [row.from_branch, tenantId, transferId],
+      [row.fromBranch ?? row.from_branch, tenantId, transferId],
     );
 
     const lines: StockTransferLine[] = lineRows.map((l) => ({
@@ -319,6 +319,10 @@ export function registerStockTransfers(r: Router) {
       [tenantId, transferId],
     );
 
+    const fromBranch = row.fromBranch ?? row.from_branch;
+    const toBranch = row.toBranch ?? row.to_branch;
+    const transferNumber = row.transferNumber ?? row.transfer_number;
+
     const sourceMoves: StockMove[] = [];
     const destinationMoves: StockMove[] = [];
 
@@ -337,7 +341,7 @@ export function registerStockTransfers(r: Router) {
         refType: m.refType ?? m.ref_type,
         refId: m.refId ?? m.ref_id,
         refLineId: m.refLineId ?? m.ref_line_id,
-        refNumber: row.transfer_number,
+        refNumber: transferNumber,
         batchNo: m.batchNo ?? m.batch_no,
         expiry: m.expiry,
         reason: m.reason,
@@ -345,9 +349,9 @@ export function registerStockTransfers(r: Router) {
         createdAt: m.createdAt ?? m.created_at,
       };
 
-      if (m.location === row.from_branch) {
+      if (m.location === fromBranch) {
         sourceMoves.push(formatted);
-      } else {
+      } else if (m.location === toBranch || Number(m.qtyMilli ?? m.qty_milli) > 0) {
         destinationMoves.push(formatted);
       }
     }
