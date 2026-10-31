@@ -1,14 +1,17 @@
-import { Router } from './http.ts';
-import { registerMeta } from './routes/meta.ts';
+import type http from 'node:http';
+import type { DB } from './db/index.ts';
+import { makeAuthenticator } from './auth.ts';
+import { createHandler, Router } from './http.ts';
 import { registerAuth } from './routes/auth.ts';
+import { registerMeta } from './routes/meta.ts';
 import { registerShop } from './routes/shop.ts';
 import { registerUsers } from './routes/users.ts';
 import { registerItems } from './routes/items.ts';
 import { registerItemsBulk } from './routes/itemsBulk.ts';
 import { registerCategories } from './routes/categories.ts';
 import { registerParties } from './routes/parties.ts';
-import { registerCreditNotes } from './routes/creditNotes.ts';
 import { registerInvoices } from './routes/invoices.ts';
+import { registerCreditNotes } from './routes/creditNotes.ts';
 import { registerPurchases } from './routes/purchases.ts';
 import { registerReports } from './routes/reports.ts';
 import { registerPayments } from './routes/payments.ts';
@@ -68,4 +71,11 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerBranchUsers(r);
   registerDriveProxy(r);
   return r;
+}
+
+const SEVEN_DAYS = 60 * 60 * 24 * 7;
+
+export function createApp(db: DB, opts: { secret: string; ttlSeconds?: number; staticDir?: string; log?: boolean }): http.RequestListener {
+  const router = buildRouter({ secret: opts.secret, ttlSeconds: opts.ttlSeconds ?? SEVEN_DAYS });
+  return createHandler({ db, router, authenticate: makeAuthenticator(opts.secret), staticDir: opts.staticDir, log: opts.log });
 }

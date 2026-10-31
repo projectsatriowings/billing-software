@@ -340,6 +340,7 @@ export function registerInventory(r: Router) {
           name: r.name,
           sku: r.sku ?? null,
           barcode: r.barcode ?? null,
+          imageUrl: r.imageUrl ?? r.image_url ?? null,
           hsn: r.hsn ?? null,
           unit: r.unit,
           category: r.category ?? null,
