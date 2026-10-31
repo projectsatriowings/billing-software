@@ -138,15 +138,15 @@ export async function computeShiftFinancials(
       cm.id,
       cm.tenant_id,
       cm.shift_id,
-      cm.movement_type,
+      COALESCE(cm.movement_type, cm.type, 'cash_in') AS movement_type,
       cm.amount_minor,
       cm.reason,
       cm.notes,
-      cm.created_by,
+      COALESCE(cm.created_by, cm.performed_by) AS created_by,
       u.name AS created_by_name,
       cm.created_at
      FROM cash_movements cm
-     LEFT JOIN users u ON u.id = cm.created_by
+     LEFT JOIN users u ON u.id = COALESCE(cm.created_by, cm.performed_by)
      WHERE cm.tenant_id = ? AND cm.shift_id = ?
      ORDER BY cm.created_at ASC`,
     [tenantId, shiftId],
@@ -257,9 +257,15 @@ export function registerShifts(r: Router) {
     const userId = ctx.user!.id;
 
     const openingCashMinor = V.int(b.openingCashMinor ?? 0, 'Opening cash float (paise)', { min: 0 });
-    const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
-    const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
+    let location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
+    let counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
     const notes = V.optStr(b.notes, 'Opening notes', 500);
+
+    // If client mistakenly sends a counter identifier as location (e.g. "COUNTER-2"), normalize location back to user's branch
+    if (/^counter[_\-\s]*\d+$/i.test(location) || /^express$/i.test(location)) {
+      counter = location.replace(/\s+/g, '-').toUpperCase();
+      location = ctx.user!.assignedLocation || 'MAIN';
+    }
 
     return ctx.db.tx(async (q) => {
       // 1. Enforce one active shift per cashier: check if cashier already has an active shift
@@ -349,8 +355,8 @@ export function registerShifts(r: Router) {
     const params: any[] = [tenantId, userId];
 
     if (counterParam) {
-      sql += ' AND (s.location = ? OR s.location = ?)';
-      params.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+      sql += ' AND (s.counter = ? OR s.counter = ? OR s.location = ? OR s.location = ?)';
+      params.push(counterParam, counterParam.replace(/\s+/g, '-').toUpperCase(), counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
     }
     sql += ' ORDER BY s.opened_at DESC LIMIT 1';
 
@@ -364,8 +370,8 @@ export function registerShifts(r: Router) {
          WHERE s.tenant_id = ? AND s.status = 'open'`;
       const fallbackParams: any[] = [tenantId];
       if (counterParam) {
-        fallbackSql += ' AND (s.location = ? OR s.location = ?)';
-        fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+        fallbackSql += ' AND (s.counter = ? OR s.counter = ? OR s.location = ? OR s.location = ?)';
+        fallbackParams.push(counterParam, counterParam.replace(/\s+/g, '-').toUpperCase(), counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
       }
       fallbackSql += ' ORDER BY s.opened_at DESC LIMIT 1';
 

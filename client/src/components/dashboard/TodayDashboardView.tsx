@@ -1787,7 +1787,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           userName={user.name}
           userRole={user.role}
           defaultLocation={selectedBranchCode}
-          defaultCounter="COUNTER-1"
+          defaultCounter={user.assignedCounter || "COUNTER-1"}
+          branches={data?.branches}
         />
       )}
 

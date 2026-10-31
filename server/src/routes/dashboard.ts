@@ -177,7 +177,8 @@ export function registerDashboard(r: Router) {
         (b) => b.id === requestedBranchParam || b.code.toUpperCase() === requestedBranchParam.toUpperCase()
       );
       if (!match) {
-        if (isCashier || isManager) {
+        const isCounterParam = /^counter[_-\s]*\d+$/i.test(requestedBranchParam) || /^express$/i.test(requestedBranchParam);
+        if (!isCounterParam && (isCashier || isManager)) {
           throw bad('Unauthorized branch access.', 'FORBIDDEN');
         }
       } else {

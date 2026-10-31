@@ -957,4 +957,14 @@ version: 29,
       `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS note TEXT`,
     ],
   },
+  {
+    version: 36,
+    statements: [
+      `ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS movement_type TEXT`,
+      `UPDATE cash_movements SET movement_type = type WHERE movement_type IS NULL AND type IS NOT NULL`,
+      `ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS notes TEXT`,
+      `ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS created_by TEXT`,
+      `UPDATE cash_movements SET created_by = performed_by WHERE created_by IS NULL AND performed_by IS NOT NULL`,
+    ],
+  },
 ];
