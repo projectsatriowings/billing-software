@@ -99,7 +99,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
-import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from './imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -8008,11 +8008,9 @@ export function App() {
                                   <img
                                     src={item.imageUrl || (item as any).image || item.custom?.image}
                                     alt={displayName}
+                                    referrerPolicy="no-referrer"
                                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLImageElement).src =
-                                        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, item.imageUrl || (item as any).image || item.custom?.image)}
                                   />
                                 ) : (
                                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -8375,6 +8373,7 @@ export function App() {
                                   <img
                                     src={i.imageUrl || (i as any).image}
                                     alt={i.name}
+                                    referrerPolicy="no-referrer"
                                     className="product-thumb-img"
                                     style={{
                                       width: '100%',
@@ -8382,11 +8381,7 @@ export function App() {
                                       objectFit: 'cover',
                                       display: 'block',
                                     }}
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                      if (placeholder) placeholder.style.display = 'flex';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, i.imageUrl || (i as any).image)}
                                   />
                                   <div
                                     className="product-thumb-placeholder"
@@ -12732,11 +12727,9 @@ export function App() {
                         <img
                           src={itemFormImageUrl}
                           alt="Product Preview"
+                          referrerPolicy="no-referrer"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src =
-                              'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23dc2626" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
-                          }}
+                          onError={(e) => handleProductImageError(e, itemFormImageUrl)}
                         />
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>

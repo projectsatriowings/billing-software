@@ -1,3 +1,5 @@
+import React from 'react';
+
 /**
  * Lightweight client-side image compression, Data URL, and Google Drive URL resolver utilities.
  * Ensures fast image loading, lightweight database storage, and seamless Google Drive image embedding.
@@ -55,14 +57,19 @@ export async function fileToOptimizedDataUrl(file: File, maxDim = 600, quality =
  * Extracts Google Drive file ID from various Drive URL formats.
  * Supports:
  * - https://drive.google.com/file/d/<FILE_ID>/view?usp=sharing
+ * - https://drive.google.com/file/u/0/d/<FILE_ID>/view (multi-account)
+ * - https://drive.google.com/file/u/1/d/<FILE_ID>/view
  * - https://drive.google.com/file/d/<FILE_ID>/view
  * - https://drive.google.com/file/d/<FILE_ID>/edit
  * - https://drive.google.com/open?id=<FILE_ID>
  * - https://drive.google.com/uc?id=<FILE_ID>
  * - https://drive.google.com/thumbnail?id=<FILE_ID>
  * - https://docs.google.com/file/d/<FILE_ID>/...
+ * - https://docs.google.com/file/u/0/d/<FILE_ID>/...
  * - https://docs.google.com/uc?id=<FILE_ID>
  * - Direct CDN URLs: https://lh3.googleusercontent.com/d/<FILE_ID>
+ * - Folder URLs: https://drive.google.com/drive/folders/<FILE_ID>
+ * - Raw Google Drive IDs: 25-45 characters alphanumeric
  */
 export function extractGoogleDriveFileId(input: string | null | undefined): string | null {
   if (!input) return null;
@@ -77,13 +84,13 @@ export function extractGoogleDriveFileId(input: string | null | undefined): stri
   }
 
   const drivePatterns = [
-    /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i,
-    /drive\.google\.com\/open\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i,
-    /drive\.google\.com\/uc\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i,
-    /drive\.google\.com\/thumbnail\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i,
-    /docs\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i,
+    /drive\.google\.com\/file(?:\/u\/\d+)?\/d\/([a-zA-Z0-9_-]+)/i,
+    /docs\.google\.com\/file(?:\/u\/\d+)?\/d\/([a-zA-Z0-9_-]+)/i,
+    /[?&]id=([a-zA-Z0-9_-]{20,})/i,
+    /drive\.google\.com\/(?:open|uc|thumbnail)\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i,
     /docs\.google\.com\/uc\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i,
-    /lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/i,
+    /lh\d*\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/i,
+    /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([a-zA-Z0-9_-]+)/i,
   ];
 
   for (const pattern of drivePatterns) {
@@ -91,6 +98,11 @@ export function extractGoogleDriveFileId(input: string | null | undefined): stri
     if (match && match[1]) {
       return match[1];
     }
+  }
+
+  // Bare Google Drive ID (standard drive IDs are 25-45 characters alphanumeric with - or _)
+  if (/^[a-zA-Z0-9_-]{25,45}$/.test(str)) {
+    return str;
   }
 
   return null;
@@ -138,4 +150,39 @@ export function resolveDriveImageUrl(input: string | null | undefined): string {
  */
 export function isGoogleDriveUrl(input: string | null | undefined): boolean {
   return extractGoogleDriveFileId(input) !== null;
+}
+
+export const FALLBACK_PLACEHOLDER_SVG =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+
+/**
+ * Self-healing image error handler for Google Drive and external product images.
+ * If a Google Drive CDN URL fails (e.g. rate limit, 403 or referrer restriction),
+ * it cycles through official fallback endpoints and the local backend proxy before showing the placeholder.
+ */
+export function handleProductImageError(
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  originalUrl?: string | null
+): void {
+  const img = e.currentTarget;
+  const currentSrc = img.src || '';
+  const fileId = extractGoogleDriveFileId(originalUrl || currentSrc);
+
+  if (fileId) {
+    const step = parseInt(img.dataset.fallbackStep || '0', 10);
+    const fallbacks = [
+      `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`,
+      `/api/drive-proxy/${fileId}`,
+      `https://drive.google.com/uc?export=view&id=${fileId}`,
+    ];
+
+    if (step < fallbacks.length) {
+      img.dataset.fallbackStep = String(step + 1);
+      img.src = fallbacks[step];
+      return;
+    }
+  }
+
+  // If not Google Drive or all fallbacks exhausted, show clean SVG placeholder
+  img.src = FALLBACK_PLACEHOLDER_SVG;
 }
