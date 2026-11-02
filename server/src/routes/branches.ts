@@ -606,7 +606,6 @@ r.delete('/api/branches/:id', requirePerm('settings'), async (ctx) => {
     await q.exec('UPDATE purchases SET branch_id = NULL WHERE branch_id = ?', [branch.id]);
     await q.exec('UPDATE expenses SET branch_id = NULL WHERE branch_id = ?', [branch.id]);
     await q.exec('UPDATE items SET branch_id = NULL WHERE branch_id = ?', [branch.id]);
-    await q.exec('DELETE FROM branch_inventory WHERE branch_id = ? AND tenant_id = ?', [branch.id, tenantId]);
 
     // 8. Delete the branch
     await q.exec('DELETE FROM branches WHERE id = ? AND tenant_id = ?', [branch.id, tenantId]);

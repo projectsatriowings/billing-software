@@ -1603,7 +1603,28 @@ export function App() {
   const loadItems = async () => {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
-      setItems(res.items);
+      // Deduplicate products by SKU, barcode, or ID to prevent duplicate rows in product catalogue,
+      // while consolidating multi-branch live ledger stock on the canonical product entry
+      const raw = res.items || [];
+      const deduplicated: Item[] = [];
+      const seen = new Map<string, Item>();
+      for (const item of raw) {
+        const skuKey = item.sku?.trim().toUpperCase();
+        const barcodeKey = item.barcode?.trim();
+        const key = skuKey ? `sku:${skuKey}` : barcodeKey ? `bc:${barcodeKey}` : `id:${item.id}`;
+        const existing = seen.get(key);
+        if (existing) {
+          existing.currentStockMilli = (existing.currentStockMilli || 0) + (item.currentStockMilli || 0);
+        } else {
+          const itemCopy = { ...item };
+          seen.set(key, itemCopy);
+          if (skuKey) seen.set(`sku:${skuKey}`, itemCopy);
+          if (barcodeKey) seen.set(`bc:${barcodeKey}`, itemCopy);
+          seen.set(`id:${item.id}`, itemCopy);
+          deduplicated.push(itemCopy);
+        }
+      }
+      setItems(deduplicated);
     } catch (err) {
       console.error('Failed to load items', err);
     }
