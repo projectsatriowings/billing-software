@@ -44,20 +44,25 @@ export function registerBranches(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const role = ctx.user!.role;
 
+    const isSuperAdmin = role === 'owner' || String(role).toUpperCase() === 'SUPER_ADMIN';
+
     // Super Admin / Owner: All company branches
-    // Store Manager: Branches assigned in allowedLocations
-    // Cashier: Assigned branch only
+    // Other roles: ONLY [their own branch]
     let whereClause = 'WHERE b.tenant_id = ?';
     const params: unknown[] = [tenantId];
 
-    if (role === 'manager') {
-      const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-      whereClause += ` AND b.code IN (${allowed.map(() => '?').join(', ')})`;
-      params.push(...allowed);
-    } else if (role === 'cashier') {
-      const assigned = ctx.user!.assignedLocation || 'MAIN';
-      whereClause += ' AND b.code = ?';
-      params.push(assigned);
+    if (!isSuperAdmin) {
+      if (ctx.query.for === 'transfer_destinations') {
+        // Active destination branches for stock transfers
+        whereClause += ' AND b.active = TRUE';
+      } else {
+        const userBranchId = ctx.user!.branchId;
+        if (!userBranchId) {
+          throw bad("Your account isn't linked to a branch. Contact your admin.", 'NO_BRANCH');
+        }
+        whereClause += ' AND (b.id = ? OR b.code = ?)';
+        params.push(userBranchId, userBranchId);
+      }
     }
 
     const rows = await ctx.db.query<any>(
@@ -363,10 +368,12 @@ r.get('/api/branches/:id/summary', requirePerm('branches'), async (ctx) => {
   const branch = await ctx.db.one<any>('SELECT * FROM branches WHERE id = ? AND tenant_id = ?', [branchId, tenantId]);
   if (!branch) throw notFound('Branch');
 
-  // Permission check for manager
-  if (ctx.user!.role === 'manager') {
-    const allowed = new Set(ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN']);
-    if (!allowed.has(branch.code)) throw bad('Unauthorized branch access.', 'FORBIDDEN');
+  // Permission check for non-super-admin: strictly scoped to assigned branch (returns 404 on others)
+  const isSuperAdmin = ctx.user!.role === 'owner' || String(ctx.user!.role).toUpperCase() === 'SUPER_ADMIN';
+  if (!isSuperAdmin) {
+    if (branch.id !== ctx.user!.branchId && branch.code !== ctx.user!.assignedLocation) {
+      throw notFound('Branch');
+    }
   }
 
   const loc = branch.code;

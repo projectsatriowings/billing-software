@@ -1,4 +1,5 @@
 import { requirePerm } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, conflict, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
@@ -201,6 +202,9 @@ export function registerItemsBulk(r: Router) {
   r.post('/api/items/bulk-import', requirePerm('items.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = (typeof b.branchId === 'string' && b.branchId.trim()) ? b.branchId.trim() : scope.branchId;
+    if (!branchId) throw bad('Branch is required for bulk product import', 'BRANCH_REQUIRED');
 
     if (!Array.isArray(b.rows)) throw bad('rows must be an array', 'VALIDATION', { field: 'rows' });
     if (b.rows.length === 0) throw bad('rows array is empty', 'VALIDATION', { field: 'rows' });
@@ -526,9 +530,9 @@ export function registerItemsBulk(r: Router) {
           // If incoming stock > 0, record inventory stock-in movement
           if ((row.openingQtyMilli ?? 0) > 0) {
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, 'purchase', 'import', ?, ?, 'Bulk import restock shipment', ?)`,
-              [newId('sm'), tenantId, itemId, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'purchase', 'import', ?, ?, 'Bulk import restock shipment', ?)`,
+              [newId('sm'), tenantId, branchId, itemId, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
             );
           }
 
@@ -699,12 +703,12 @@ export function registerItemsBulk(r: Router) {
           // Insert item
           await q.exec(
             `INSERT INTO items (
-              id, tenant_id, name, sku, barcode, hsn, unit, category,
+              id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
               reorder_milli, min_stock_milli, favorite, custom, active, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
             [
-              id, tenantId, row.name, finalSku, finalBarcode, row.hsn || null,
+              id, tenantId, branchId, row.name, finalSku, finalBarcode, row.hsn || null,
               row.unit || 'pcs', row.category || null,
               row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true,
                           row.imageUrl || null,
@@ -714,10 +718,10 @@ export function registerItemsBulk(r: Router) {
           // Insert into product_barcodes table (if barcode mapping fails, rolls back item creation)
           if (finalBarcode) {
             await q.exec(
-              `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT (tenant_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
-              [newId('bc'), tenantId, id, finalBarcode, barcodeType],
+              `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT (tenant_id, branch_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
+              [newId('bc'), tenantId, branchId, id, finalBarcode, barcodeType],
             );
             barcodesSaved++;
           }
@@ -728,10 +732,10 @@ export function registerItemsBulk(r: Router) {
               if (abTrim && abTrim !== finalBarcode) {
                 const abType = ab.barcodeType || (abTrim.startsWith('20') && abTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
                 await q.exec(
-                  `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT (tenant_id, barcode) DO NOTHING`,
-                  [newId('bc'), tenantId, id, abTrim, abType],
+                  `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT (tenant_id, branch_id, barcode) DO NOTHING`,
+                  [newId('bc'), tenantId, branchId, id, abTrim, abType],
                 );
                 barcodesSaved++;
                 seenImportBarcodes.add(abTrim);
@@ -742,9 +746,9 @@ export function registerItemsBulk(r: Router) {
           // Record opening stock if provided
           if ((row.openingQtyMilli ?? 0) > 0) {
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, 'opening', 'import', ?, ?, 'Bulk import opening stock', ?)`,
-              [newId('sm'), tenantId, id, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'opening', 'import', ?, ?, 'Bulk import opening stock', ?)`,
+              [newId('sm'), tenantId, branchId, id, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
             );
           }
 

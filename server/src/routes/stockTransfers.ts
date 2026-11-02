@@ -451,12 +451,14 @@ export function registerStockTransfers(r: Router) {
     // Execute creation in a transaction
     return await ctx.db.tx(async (q) => {
       // 1. Atomically generate sequence transfer number: TRF-0001
+      const fromBrRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
+      const fromBranchId = fromBrRow?.id || fromBranch;
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, 'TRF', 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+        `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+         VALUES (?, ?, 'TRF', 2)
+         ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
          RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId],
+        [tenantId, fromBranchId],
       );
       const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
       const transferNumber = `TRF-${String(seqNo).padStart(4, '0')}`;
@@ -610,13 +612,16 @@ export function registerStockTransfers(r: Router) {
 
         // Append negative stock movement at source branch
         const moveId = newId('sm');
+        const fbRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
+        const fromBranchId = fbRow?.id || fromBranch;
         await q.exec(
           `INSERT INTO stock_moves (
-            id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
-          ) VALUES (?, ?, ?, ?, ?, 'transfer', 'stock_transfer', ?, ?, ?, ?, 'Stock transfer dispatch out', ?, ?, now())`,
+            id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'stock_transfer', ?, ?, ?, ?, 'Stock transfer dispatch out', ?, ?, now())`,
           [
             moveId,
             tenantId,
+            fromBranchId,
             lineItemId,
             fromBranch,
             -required, // Negative movement at source branch
@@ -763,13 +768,16 @@ export function registerStockTransfers(r: Router) {
         if (deltaToAddMilli > 0) {
           // Append positive stock movement at destination branch
           const moveId = newId('sm');
+          const tbRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, toBranch, toBranch]);
+          const toBranchId = tbRow?.id || toBranch;
           await q.exec(
             `INSERT INTO stock_moves (
-              id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, 'transfer', 'stock_transfer', ?, ?, ?, ?, 'Stock transfer received in', ?, ?, now())`,
+              id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'stock_transfer', ?, ?, ?, ?, 'Stock transfer received in', ?, ?, now())`,
             [
               moveId,
               tenantId,
+              toBranchId,
               lineItemId,
               toBranch,
               deltaToAddMilli, // Positive movement at destination branch
@@ -863,13 +871,16 @@ export function registerStockTransfers(r: Router) {
           const lineItemId = line.itemId ?? line.item_id;
           const lineQtyMilli = Number(line.qtyMilli ?? line.qty_milli);
           const moveId = newId('sm');
+          const fbRowRev = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
+          const fromBranchIdRev = fbRowRev?.id || fromBranch;
           await q.exec(
             `INSERT INTO stock_moves (
-              id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, reason, notes, user_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, 'transfer', 'stock_transfer_reversal', ?, ?, 'Stock transfer cancellation reversal', ?, ?, now())`,
+              id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, reason, notes, user_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'transfer', 'stock_transfer_reversal', ?, ?, 'Stock transfer cancellation reversal', ?, ?, now())`,
             [
               moveId,
               tenantId,
+              fromBranchIdRev,
               lineItemId,
               fromBranch,
               lineQtyMilli, // Re-credit source branch

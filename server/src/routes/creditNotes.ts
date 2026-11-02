@@ -458,12 +458,13 @@ export function registerCreditNotes(r: Router) {
       settlementResult = settlement;
 
       // 7. Number series for Credit Note (CN-1001)
+      const cnBranchId = origInv.branch_id || origInv.branchId;
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, 'CN', 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+        `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+         VALUES (?, ?, 'CN', 2)
+         ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
          RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId],
+        [tenantId, cnBranchId],
       );
       const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
       assignedNumber = `CN-${1000 + seqNo}`;
@@ -479,14 +480,14 @@ export function registerCreditNotes(r: Router) {
 
       await q.exec(
         `INSERT INTO invoices (
-          id, tenant_id, client_id, number, kind, status, bdate, party_id,
+          id, tenant_id, branch_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, party_name, party_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor, paid_minor, balance_minor,
           advance_amount_minor, refund_amount_minor, refund_mode, refund_reference,
           rule_version, calc, share_token, idempotency_key, note, linked_invoice_id, created_by, created_at
         ) VALUES (
-          ?, ?, ?, ?, 'credit_note', 'posted', ?, ?,
+          ?, ?, ?, ?, ?, 'credit_note', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, 0, ?, ?, ?, ?,
           ?, ?, ?, 0, 0,
@@ -496,6 +497,7 @@ export function registerCreditNotes(r: Router) {
         [
           cnId,
           tenantId,
+          cnBranchId,
           newId('cid'),
           assignedNumber,
           todayStr,
@@ -534,14 +536,15 @@ export function registerCreditNotes(r: Router) {
 
         await q.exec(
           `INSERT INTO invoice_lines (
-            id, tenant_id, invoice_id, pos, item_id, name, hsn, unit,
+            id, tenant_id, branch_id, invoice_id, pos, item_id, name, hsn, unit,
             qty_milli, price_minor, discount_minor, tax_rate_bp, inclusive,
             taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor,
             reason, restock, orig_line_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             lineId,
             tenantId,
+            cnBranchId,
             cnId,
             i + 1,
             cl.itemId || null,
@@ -567,11 +570,12 @@ export function registerCreditNotes(r: Router) {
         if (cl.restock && cl.itemId) {
           await q.exec(
             `INSERT INTO stock_moves (
-              id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id, reason, created_at
-            ) VALUES (?, ?, ?, 'MAIN', ?, 'return', 'credit_note', ?, ?, ?, NOW())`,
+              id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id, reason, created_at
+            ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'return', 'credit_note', ?, ?, ?, NOW())`,
             [
               newId('sm'),
               tenantId,
+              cnBranchId,
               cl.itemId,
               cl.returnQtyMilli, // positive stock return
               cnId,
@@ -1092,11 +1096,12 @@ export function registerCreditNotes(r: Router) {
         const itemId = l.itemId ?? l.item_id;
         await q.exec(
           `INSERT INTO stock_moves (
-            id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id, reason, created_at
-          ) VALUES (?, ?, ?, 'MAIN', ?, 'adjust', 'credit_note_void', ?, ?, ?, NOW())`,
+            id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id, reason, created_at
+          ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'adjust', 'credit_note_void', ?, ?, ?, NOW())`,
           [
             newId('sm'),
             tenantId,
+            cn.branchId ?? cn.branch_id,
             itemId,
             -qtyMilli, // Negative move to take restocked quantity back out
             cn.id,

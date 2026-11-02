@@ -1501,6 +1501,16 @@ export function App() {
   // Fetch data when shop changes
   useEffect(() => {
     if (!user || !shop) return;
+    const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+    if (!isSuperAdmin) {
+      const enforcedBranch = user.branchId || (user as any).branch_id || user.assignedLocation;
+      if (enforcedBranch) {
+        localStorage.setItem('sa_selected_branch', enforcedBranch);
+        localStorage.setItem('selected_branch', enforcedBranch);
+        sessionStorage.setItem('sa_selected_branch', enforcedBranch);
+        sessionStorage.setItem('selected_branch', enforcedBranch);
+      }
+    }
     if (!can(user.role as any, 'purchases') && activeTab === 'purchases') {
       setActiveTab('pos');
     }
@@ -2083,6 +2093,15 @@ export function App() {
       setToken(res.token);
       setUser(res.user);
       setShop(res.shop);
+      const isUserSuperAdmin = res.user.role === 'owner' || String(res.user.role).toUpperCase() === 'SUPER_ADMIN';
+      if (!isUserSuperAdmin) {
+        try {
+          localStorage.removeItem('sa_selected_branch');
+          localStorage.removeItem('selected_branch');
+          sessionStorage.removeItem('sa_selected_branch');
+          sessionStorage.removeItem('selected_branch');
+        } catch {}
+      }
       loadMyBusinesses();
     } catch (err: any) {
       setAuthError(err.message || 'Login failed');
@@ -2095,6 +2114,12 @@ export function App() {
       await api('/api/auth/logout', { method: 'POST' });
     } catch { /* ignore */ }
     clearToken();
+    try {
+      localStorage.removeItem('sa_selected_branch');
+      localStorage.removeItem('selected_branch');
+      sessionStorage.removeItem('sa_selected_branch');
+      sessionStorage.removeItem('selected_branch');
+    } catch {}
     setUser(null);
     setShop(null);
     navigateTo('landing');
@@ -3146,6 +3171,7 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
+          location: user?.assignedLocation || undefined,
           billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
           appliedPromotions: promoEvalResult?.appliedPromotions || [],
           promotionDiscountMinor: promoDiscountMinor,
@@ -6259,61 +6285,65 @@ export function App() {
           )}
 
           {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-          {displayTab === 'dashboard' && user && (
+          {displayTab === 'dashboard' && user && (() => {
+            const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+            return (
             <div className="dashboard-tab-wrapper">
-              <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
-                <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: '7px',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
-                      color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
-                      boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onClick={() => {
-                      setDashboardViewMode('today');
-                      setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
-                    }}
-                  >
-                    <BarChart3Icon size={15} />
-                    <span>Today's Live Overview</span>
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: '7px',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
-                      color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
-                      boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onClick={() => setDashboardViewMode('management')}
-                  >
-                    <Building2Icon size={15} />
-                    <span>{user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}</span>
-                  </button>
+              {isSuperAdminUser && (
+                <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+                  <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                        color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                        boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onClick={() => {
+                        setDashboardViewMode('today');
+                        setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                      }}
+                    >
+                      <BarChart3Icon size={15} />
+                      <span>Today's Live Overview</span>
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                        color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                        boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onClick={() => setDashboardViewMode('management')}
+                    >
+                      <Building2Icon size={15} />
+                      <span>Company Multi-Branch View</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {dashboardViewMode === 'today' ? (
+              {!isSuperAdminUser || dashboardViewMode === 'today' ? (
                 <TodayDashboardView
                   user={user}
                   shop={shop}
@@ -6330,6 +6360,7 @@ export function App() {
                     setShowItemModal(true);
                   }}
                   showToast={showToast}
+                  onManageBranches={() => setActiveTab('user-management')}
                 />
               ) : (
                 <div className="role-dashboards-view">
@@ -6374,7 +6405,8 @@ export function App() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 1: BENTO POS BILLING TERMINAL */}
           {displayTab === 'pos' && (

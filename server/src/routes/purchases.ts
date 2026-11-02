@@ -1,4 +1,5 @@
 import { requirePerm } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, conflict, notFound, forbidden, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
@@ -27,6 +28,7 @@ function formatPurchase(r: any, lines: any[] = [], payments: any[] = []) {
   return {
     id: r.id,
     tenantId: r.tenantId ?? r.tenant_id,
+    branchId: r.branchId ?? r.branch_id,
     purchaseNumber: r.purchaseNumber ?? r.purchase_number ?? ('PUR-' + r.id.slice(-4)),
     supplierId: r.supplierId ?? r.supplier_id,
     supplierName: r.supplierName ?? r.supplier_name ?? null,
@@ -104,6 +106,7 @@ export function registerPurchases(r: Router) {
   // Excluded for Cashier role!
   r.get('/api/purchases', requirePerm('purchases'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const status = ctx.query.status;
     const supplierId = ctx.query.supplierId;
     const from = ctx.query.from;
@@ -207,6 +210,9 @@ export function registerPurchases(r: Router) {
     try {
       const b = ctx.body ?? {};
       const tenantId = ctx.user!.tenantId;
+      const scope = await resolveBranchScope(ctx);
+      const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+      if (!branchId) throw bad('Branch is required for purchases', 'BRANCH_REQUIRED');
 
     // Idempotency check
     const idempotencyKey = V.optStr(b.idempotencyKey, 'Idempotency key', 100);
@@ -380,17 +386,18 @@ export function registerPurchases(r: Router) {
       // Insert purchase master
       await q.exec(
         `INSERT INTO purchases (
-          id, tenant_id, supplier_id, purchase_number, bill_no, supplier_invoice_number,
+          id, tenant_id, branch_id, supplier_id, purchase_number, bill_no, supplier_invoice_number,
           supplier_invoice_date, purchase_date, bdate, status,
           subtotal_minor, discount_minor, taxable_minor, tax_minor,
           cgst_minor, sgst_minor, igst_minor, itc_minor,
           other_charges_label, other_charges_minor, other_charges_gst_minor, other_charges_gst_bp,
           round_off_minor, total_minor, paid_minor, balance_minor,
           payment_method, note, created_by, idempotency_key, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
         [
           purchaseId,
           tenantId,
+          branchId,
           supplierId,
           savedPurchaseNumber,
           supplierInvoiceNumber,
@@ -429,15 +436,16 @@ export function registerPurchases(r: Router) {
 
         await q.exec(
           `INSERT INTO purchase_lines (
-            id, tenant_id, purchase_id, item_id, name, hsn, unit,
+            id, tenant_id, branch_id, purchase_id, item_id, name, hsn, unit,
             qty_milli, billed_qty_milli, received_qty_milli,
             cost_minor, discount_minor, tax_rate_bp,
             taxable_minor, tax_minor, cgst_minor, sgst_minor, igst_minor, total_minor,
             batch_no, expiry
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             lineId,
             tenantId,
+            branchId,
             purchaseId,
             item.itemId,
             item.name,
@@ -464,12 +472,13 @@ export function registerPurchases(r: Router) {
         if (item.receivedQtyMilli > 0) {
           await q.exec(
             `INSERT INTO stock_moves (
-              id, tenant_id, item_id, location, qty_milli, kind,
+              id, tenant_id, branch_id, item_id, location, qty_milli, kind,
               ref_type, ref_id, ref_line_id, batch_no, expiry, unit_cost_minor, user_id
-            ) VALUES (?, ?, ?, 'MAIN', ?, 'purchase', 'purchase', ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'purchase', 'purchase', ?, ?, ?, ?, ?, ?)`,
             [
               newId('sm'),
               tenantId,
+              branchId,
               item.itemId,
               item.receivedQtyMilli,
               purchaseId,
@@ -795,12 +804,13 @@ export function registerPurchases(r: Router) {
         if (receivedMilli > 0) {
           await q.exec(
             `INSERT INTO stock_moves (
-              id, tenant_id, item_id, location, qty_milli, kind,
+              id, tenant_id, branch_id, item_id, location, qty_milli, kind,
               ref_type, ref_id, ref_line_id, batch_no, expiry, unit_cost_minor, user_id, reason
-            ) VALUES (?, ?, ?, 'MAIN', ?, 'adjust', 'purchase', ?, ?, ?, ?, ?, ?, 'purchase_void')`,
+            ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'adjust', 'purchase', ?, ?, ?, ?, ?, ?, 'purchase_void')`,
             [
               newId('sm'),
               tenantId,
+              purchase.branchId ?? purchase.branch_id,
               l.itemId ?? l.item_id,
               -receivedMilli,
               purchase.id,
