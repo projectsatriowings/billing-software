@@ -1,3 +1,4 @@
+import { handleProductImageError } from '../../imageUtils';
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights, Category } from '../../api.ts';
 import {
@@ -84,7 +85,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<string>('name_asc');
   const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(8);
+  const [pageSize, setPageSize] = useState<number>(15);
 
   // Modals state
   const [adjustmentTargetItem, setAdjustmentTargetItem] = useState<Item | null>(null);
@@ -143,7 +144,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     } finally {
       setItemsLoading(false);
     }
-  }, [searchQuery, categoryFilter, statusFilter, sortField, page]);
+  }, [searchQuery, categoryFilter, statusFilter, sortField, page, pageSize]);
 
   useEffect(() => {
     loadDashboardStats();
@@ -157,6 +158,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       loadInsights();
     }
   }, [activeSubTab, loadTableItems, loadInsights]);
+
+  // When products are added, imported, or updated in the catalog, refresh stats and table
+  useEffect(() => {
+    loadDashboardStats();
+    if (activeSubTab === 'overview') {
+      loadTableItems();
+    }
+  }, [items?.length, loadDashboardStats, loadTableItems, activeSubTab]);
 
   const handleRefreshAll = () => {
     loadDashboardStats();
@@ -779,12 +788,9 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                   <img
                                     src={imgUrl}
                                     alt={item.name}
+                                    referrerPolicy="no-referrer"
                                     className="product-thumb-img"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                      if (placeholder) placeholder.style.display = 'inline-flex';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, imgUrl)}
                                   />
                                 ) : null}
                                 <div
@@ -962,11 +968,11 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   }}
                   style={{ padding: '0.12rem 0.35rem', fontSize: '0.74rem', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-card)' }}
                 >
-                  <option value={6}>6</option>
                   <option value={8}>8</option>
                   <option value={10}>10</option>
                   <option value={15}>15</option>
                   <option value={20}>20</option>
+                  <option value={50}>50</option>
                 </select>
               </span>
             </div>
@@ -1079,12 +1085,9 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                   <img
                                     src={imgUrl}
                                     alt={r.name}
+                                    referrerPolicy="no-referrer"
                                     className="product-thumb-img"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                      if (placeholder) placeholder.style.display = 'inline-flex';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, imgUrl)}
                                   />
                                 ) : null}
                                 <div

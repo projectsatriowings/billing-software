@@ -719,7 +719,8 @@ export function registerItemsBulk(r: Router) {
           if (finalBarcode) {
             await q.exec(
               `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT (tenant_id, branch_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
               [newId('bc'), tenantId, branchId, id, finalBarcode, barcodeType],
             );
             barcodesSaved++;
@@ -756,11 +757,12 @@ export function registerItemsBulk(r: Router) {
           created++;
         } catch (err: any) {
           await q.exec('ROLLBACK TO SAVEPOINT sp_bulk_row');
+          console.error(`[bulk-import] Insertion failed for row ${row._rowIndex} (${row.name}):`, err?.message || err);
           results.push({
             rowIndex: row._rowIndex,
             status: 'skipped',
             name: row.name,
-            reason: err?.message?.includes('product_barcodes') || err?.code === '23505'
+            reason: err?.code === '23505'
               ? 'Product code or barcode conflict occurred during insertion'
               : (err?.message || 'Insertion failed'),
           });

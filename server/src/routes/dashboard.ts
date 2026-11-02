@@ -224,6 +224,17 @@ export function registerDashboard(r: Router) {
       }
     } else {
       // Non-super-admin: strictly restricted to their assigned branch
+      if (requestedBranchParam) {
+        const match = branchRows.find(
+          (b: any) => b.id === requestedBranchParam || b.code.toUpperCase() === requestedBranchParam.toUpperCase()
+        );
+        if (!match) {
+          const isCounterParam = /^counter[_-\s]*\d+$/i.test(requestedBranchParam) || /^express$/i.test(requestedBranchParam);
+          if (!isCounterParam && (isCashier || isManager)) {
+            throw bad('Unauthorized branch access.', 'FORBIDDEN');
+          }
+        }
+      }
       activeBranch = branchRows[0];
     }
 

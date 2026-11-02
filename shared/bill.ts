@@ -164,7 +164,7 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
   }
   const totalSavingsMinor = t.discountMinor + mrpSavingsMinor;
 
-  // Items table rows: NAME (2 lines), QTY, MRP, PRICE
+  // Items table rows: NAME (2 lines), QTY, MRP, STORE PRICE, TOTAL PRICE
   const itemRows = bill.lines
     .map((l, idx) => {
       const metaParts: string[] = [];
@@ -173,10 +173,11 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
       if (l.batchNo) metaParts.push(`B: ${esc(l.batchNo)}`);
 
       const lineMrp = (l.mrpMinor && l.mrpMinor > 0) ? l.mrpMinor : Math.max(l.priceMinor, Math.ceil((l.priceMinor * 1.15) / 100) * 100);
-      const { line1, line2 } = splitProductIntoTwoLines(l.name, 18);
+      const { line1, line2 } = splitProductIntoTwoLines(l.name, 15);
       const qtyStr = `${fmtQty(l.qtyMilli)}${tpl.showUnit && l.unit ? ' ' + esc(l.unit) : ''}`;
       const mrpStr = `₹${money(lineMrp)}`;
-      const priceStr = `₹${money(l.totalMinor)}`;
+      const storePriceStr = `₹${money(l.priceMinor)}`;
+      const totalPriceStr = `₹${money(l.totalMinor)}`;
 
       return `
         <tr class="th-item-tr">
@@ -187,7 +188,8 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
           </td>
           <td class="col-qty">${qtyStr}</td>
           <td class="col-mrp">${mrpStr}</td>
-          <td class="col-price">${priceStr}</td>
+          <td class="col-store">${storePriceStr}</td>
+          <td class="col-total">${totalPriceStr}</td>
         </tr>
       `;
     })
@@ -291,14 +293,15 @@ function thermalCopy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, 
 
   <div class="th-divider"></div>
 
-  <!-- ITEMS TABLE: NAME, QTY, MRP, PRICE -->
+  <!-- ITEMS TABLE: NAME, QTY, MRP, STORE PRICE, TOTAL PRICE -->
   <table class="th-bill-table">
     <thead>
       <tr>
         <th class="col-name">NAME</th>
         <th class="col-qty">QTY</th>
         <th class="col-mrp">MRP</th>
-        <th class="col-price">PRICE</th>
+        <th class="col-store">STORE PRICE</th>
+        <th class="col-total">TOTAL PRICE</th>
       </tr>
     </thead>
     <tbody>
@@ -509,15 +512,16 @@ const CSS = (paper: PrintTemplate['paper']) => {
 .th-cust-card{background:#f8fafc;border:1px dashed #64748b;border-radius:4px;padding:4px 6px;margin:4px 0;font-size:${fs - 0.5}px}
 .th-loyalty-row{color:#000;margin-top:2px}
 
-/* Product Table: NAME, QTY, MRP, PRICE */
+/* Product Table: NAME, QTY, MRP, STORE PRICE, TOTAL PRICE */
 .th-bill-table{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed;font-variant-numeric:tabular-nums}
-.th-bill-table thead th{border-bottom:1px dashed #444;padding:3px 0;font-size:${fs - 1}px;font-weight:800;letter-spacing:0.3px;color:#000}
-.th-bill-table thead th.col-name{text-align:left;width:44%}
-.th-bill-table thead th.col-qty{text-align:center;width:17%}
-.th-bill-table thead th.col-mrp{text-align:right;width:19%}
-.th-bill-table thead th.col-price{text-align:right;width:20%}
+.th-bill-table thead th{border-bottom:1px dashed #444;padding:3px 1px;font-size:${fs - 1.8}px;font-weight:800;letter-spacing:0.1px;color:#000;line-height:1.15}
+.th-bill-table thead th.col-name{text-align:left;width:34%}
+.th-bill-table thead th.col-qty{text-align:center;width:13%}
+.th-bill-table thead th.col-mrp{text-align:right;width:17%}
+.th-bill-table thead th.col-store{text-align:right;width:18%}
+.th-bill-table thead th.col-total{text-align:right;width:18%}
 
-.th-bill-table tbody td{vertical-align:top;padding:4px 0;border-bottom:1px dashed #e2e8f0}
+.th-bill-table tbody td{vertical-align:top;padding:4px 1px;border-bottom:1px dashed #e2e8f0}
 .th-bill-table tbody tr:last-child td{border-bottom:none}
 
 .th-bill-table td.col-name{text-align:left;font-size:${fs + 0.1}px;font-weight:700;color:#000;line-height:1.25;word-break:break-word}
@@ -528,7 +532,8 @@ const CSS = (paper: PrintTemplate['paper']) => {
 
 .th-bill-table td.col-qty{text-align:center;font-size:${fs}px;color:#111;padding-top:4px}
 .th-bill-table td.col-mrp{text-align:right;font-size:${fs}px;color:#444;padding-top:4px}
-.th-bill-table td.col-price{text-align:right;font-size:${fs}px;font-weight:700;color:#000;padding-top:4px}
+.th-bill-table td.col-store{text-align:right;font-size:${fs}px;color:#111;font-weight:600;padding-top:4px}
+.th-bill-table td.col-total{text-align:right;font-size:${fs}px;font-weight:700;color:#000;padding-top:4px}
 
 .th-item-summary{font-size:${fs - 0.8}px;color:#111;margin:3px 0}
 
