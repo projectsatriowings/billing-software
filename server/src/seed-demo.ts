@@ -40,6 +40,7 @@ interface BusinessSeed {
     taxBp: number;
     stock: number;
     custom?: Record<string, any>;
+    imageUrl?: string;
   }[];
   sampleInvoice: {
     number: string;
@@ -362,14 +363,15 @@ async function seed() {
       // 4. Items & Inventory
       for (const item of b.items) {
         await q.exec(
-          `INSERT INTO items (id, tenant_id, name, sku, barcode, hsn, unit, category, price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock, custom, active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, true, ?::jsonb, true)
+          `INSERT INTO items (id, tenant_id, name, sku, barcode, hsn, unit, category, price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock, custom, active, image_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, true, ?::jsonb, true, ?)
            ON CONFLICT (id) DO UPDATE SET 
               price_minor = EXCLUDED.price_minor,
               cost_minor = EXCLUDED.cost_minor,
               custom = EXCLUDED.custom,
-              category = EXCLUDED.category`,
-          [item.id, b.tenantId, item.name, item.sku || null, item.barcode || null, item.hsn || null, item.unit, item.category, item.price, item.cost, item.taxBp, j(item.custom || {})],
+              category = EXCLUDED.category,
+              image_url = COALESCE(items.image_url, EXCLUDED.image_url)`,
+          [item.id, b.tenantId, item.name, item.sku || null, item.barcode || null, item.hsn || null, item.unit, item.category, item.price, item.cost, item.taxBp, j(item.custom || {}), item.imageUrl || null],
         );
 
         // Opening stock
