@@ -113,6 +113,7 @@ import {
   ArrowRightIcon,
   BarChart3Icon,
   Building2Icon,
+  SparklesIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -581,6 +582,14 @@ export function App() {
       if (isRouteMatch) return true;
     } catch { }
     return HIDE_BUSINESS_BAR_TABS.has(displayTab) || HIDE_BUSINESS_BAR_TABS.has(activeTab);
+  })();
+
+  const userFirstName = user?.name ? user.name.split(' ')[0] : 'User';
+  const dashboardGreeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   })();
 
   // Header title for the 6 specific modules
@@ -6160,6 +6169,19 @@ export function App() {
             <div className="top-header-title-spacer" />
           )}
           <div className="top-global-actions">
+            {displayTab === 'dashboard' && user && (
+              <div className="top-dash-greeting-group">
+                <div className="top-dash-greeting-title">
+                  <span>{dashboardGreeting}, {userFirstName}</span>
+                  <SparklesIcon size={18} style={{ color: '#6366f1', verticalAlign: 'middle' }} />
+                </div>
+                <div className="top-dash-greeting-sub">
+                  <span>{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
+                  <span className="dot-sep">·</span>
+                  <span className="mono">GSTIN {shop?.gstin || '33AAAAA0000A1Z5'}</span>
+                </div>
+              </div>
+            )}
             <button
               type="button"
               className="top-notification-btn"
