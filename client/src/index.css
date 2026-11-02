@@ -27457,6 +27457,17 @@ select.expense-input-control {
   margin-top: 0.5rem;
 }
 
+.today-bottom-grid.has-single-card,
+.today-bottom-grid:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
+
+.today-bottom-grid.has-single-card .counters-rows-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
 /* 3D Bento Card Base Elevation & Specular Rim */
 .today-section-card.bento-card-3d {
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f6f8fc 100%);

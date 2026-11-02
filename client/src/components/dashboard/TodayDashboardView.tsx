@@ -1522,10 +1522,13 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         </div>
       </section>
 
-      {/* 4. BOTTOM SECTION (THREE CARDS: Top Sellers, Stock Alerts, Cash Drawer) */}
-      <section className="today-bottom-grid">
-        {/* CARD 1: TOP SELLERS TODAY */}
-        <div className="today-section-card bento-card-3d bento-card-top-sellers">
+      {/* 4. BOTTOM SECTION (Top Sellers, Stock Alerts, Cash Drawer) */}
+      <section className={`today-bottom-grid ${isSuperAdmin ? 'has-single-card' : ''}`}>
+        {/* CARDS 1 & 2: TOP SELLERS & STOCK ATTENTION (Hidden for Super Admin, Visible for Store Manager & other roles) */}
+        {!isSuperAdmin && (
+          <>
+            {/* CARD 1: TOP SELLERS TODAY */}
+            <div className="today-section-card bento-card-3d bento-card-top-sellers">
           <div className="section-card-header">
             <div className="section-title-group">
               <div className="section-title-icon-box sellers-icon-box">
@@ -1669,6 +1672,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             )}
           </div>
         </div>
+          </>
+        )}
 
         {/* CARD 3: COUNTERS TODAY */}
         <div className="today-section-card bento-card-3d bento-card-counters counters-today-card">
