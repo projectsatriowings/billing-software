@@ -305,8 +305,9 @@ export function registerDashboard(r: Router) {
          WHERE i.tenant_id = ?
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
-           AND i.kind IN ('sale', 'credit_note')`,
-        [tenantId, todayYMD, tz, todayYMD],
+           AND i.kind IN ('sale', 'credit_note')
+           AND i.location IN (${branchLocPlaceholders})`,
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 2. Comparison sales (yesterday)
@@ -320,8 +321,9 @@ export function registerDashboard(r: Router) {
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
            AND i.kind IN ('sale', 'credit_note')
-           AND i.created_at <= ?`,
-        [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString()],
+           AND i.created_at <= ?
+           AND i.location IN (${branchLocPlaceholders})`,
+        [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString(), ...branchLocations],
       ),
 
       // 3. COGS (if owner or manager)
@@ -342,8 +344,9 @@ export function registerDashboard(r: Router) {
              WHERE i.tenant_id = ?
                AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
                AND i.status = 'posted'
-               AND i.kind IN ('sale', 'credit_note')`,
-            [tenantId, todayYMD, tz, todayYMD],
+               AND i.kind IN ('sale', 'credit_note')
+               AND i.location IN (${branchLocPlaceholders})`,
+            [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
           )
         : Promise.resolve(null),
 
@@ -363,8 +366,9 @@ export function registerDashboard(r: Router) {
          WHERE i.tenant_id = ?
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
-           AND i.kind = 'sale'`,
-        [tenantId, todayYMD, tz, todayYMD],
+           AND i.kind = 'sale'
+           AND i.location IN (${branchLocPlaceholders})`,
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 5. Today hourly breakdown
@@ -380,6 +384,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            AND i.location IN (${branchLocPlaceholders})
         ),
         hourly_invoices AS (
           SELECT
@@ -406,6 +411,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            AND i.location IN (${branchLocPlaceholders})
           GROUP BY hr
         )
         SELECT
@@ -416,7 +422,7 @@ export function registerDashboard(r: Router) {
         FROM hourly_invoices hi
         LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
         ORDER BY hi.hr ASC`,
-        [tz, tenantId, todayYMD, tz, todayYMD, tz, tenantId, todayYMD, tz, todayYMD],
+        [tz, tenantId, todayYMD, tz, todayYMD, ...branchLocations, tz, tenantId, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 6. Comparison hourly breakdown (yesterday)
@@ -432,6 +438,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            AND i.location IN (${branchLocPlaceholders})
         ),
         hourly_invoices AS (
           SELECT
@@ -458,6 +465,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            AND i.location IN (${branchLocPlaceholders})
           GROUP BY hr
         )
         SELECT
@@ -468,7 +476,7 @@ export function registerDashboard(r: Router) {
         FROM hourly_invoices hi
         LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
         ORDER BY hi.hr ASC`,
-        [tz, tenantId, compDateYMD, tz, compDateYMD, tz, tenantId, compDateYMD, tz, compDateYMD],
+        [tz, tenantId, compDateYMD, tz, compDateYMD, ...branchLocations, tz, tenantId, compDateYMD, tz, compDateYMD, ...branchLocations],
       ),
 
       // 7. Payment modes breakdown
@@ -482,12 +490,12 @@ export function registerDashboard(r: Router) {
            AND (p.status IS NULL OR p.status = 'posted')
            AND COALESCE(p.kind, 'receipt') = 'receipt'
            AND (
-             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date) AND i.status = 'posted' AND i.kind = 'sale')
+             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date) AND i.status = 'posted' AND i.kind = 'sale' AND i.location IN (${branchLocPlaceholders}))
              OR
-             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
+             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date) AND p.location IN (${branchLocPlaceholders}))
            )
          GROUP BY LOWER(COALESCE(p.mode, p.method, 'cash'))`,
-        [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 8. Refunds breakdown
@@ -501,8 +509,9 @@ export function registerDashboard(r: Router) {
            AND kind = 'credit_note'
            AND status = 'posted'
            AND refund_amount_minor > 0
+           AND location IN (${branchLocPlaceholders})
          GROUP BY LOWER(COALESCE(refund_mode, 'cash'))`,
-        [tenantId, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 9. Top 5 sellers
@@ -532,11 +541,12 @@ export function registerDashboard(r: Router) {
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
            AND i.kind IN ('sale', 'credit_note')
+           AND i.location IN (${branchLocPlaceholders})
          GROUP BY COALESCE(it.id, il.item_id), COALESCE(it.name, il.name, 'Item'), COALESCE(it.unit, il.unit, 'pcs')
          HAVING SUM(CASE WHEN i.kind = 'sale' THEN il.total_minor WHEN i.kind = 'credit_note' THEN -il.total_minor ELSE 0 END) > 0
          ORDER BY sales_minor DESC
          LIMIT 5`,
-        [tenantId, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
       ),
 
       // 10. Stock attention (optimized CTE aggregation instead of correlated subquery per row)

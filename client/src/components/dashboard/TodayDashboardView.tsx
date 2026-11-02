@@ -876,23 +876,40 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
 
           {data?.branches && data.branches.length > 1 && (
             <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">Branch:</span>
-              <div className="branch-selector-pills">
-                {data.branches.map((b) => {
-                  const isActive = (selectedBranchCode || '').toUpperCase() === (b.code || '').toUpperCase();
-                  return (
-                    <button
-                      key={b.id || b.code}
-                      type="button"
-                      className={`dashboard-branch-pill ${isActive ? 'active' : ''}`}
-                      onClick={() => handleBranchChange(b.code)}
-                      title={`Switch to ${b.name || b.code}`}
-                    >
-                      <Building2Icon size={13} className="branch-icon" style={{ marginRight: "4px" }} />
-                      <span>{b.name || b.code}</span>
-                    </button>
-                  );
-                })}
+              <span className="branch-selector-label">BRANCH:</span>
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <Building2Icon size={13} style={{ position: 'absolute', left: '10px', pointerEvents: 'none', color: '#6366f1', zIndex: 1 }} />
+                <select
+                  value={selectedBranchCode || ''}
+                  onChange={(e) => handleBranchChange(e.target.value)}
+                  className="dashboard-branch-dropdown"
+                  style={{
+                    paddingLeft: '28px',
+                    paddingRight: '28px',
+                    paddingTop: '5px',
+                    paddingBottom: '5px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: '1.5px solid #c7d2fe',
+                    background: '#eef2ff',
+                    color: '#3730a3',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    minWidth: '180px',
+                    boxShadow: '0 1px 4px rgba(99,102,241,0.12)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {data.branches.map((b) => (
+                    <option key={b.id || b.code} value={b.code}>
+                      {b.name || b.code}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ position: 'absolute', right: '10px', pointerEvents: 'none', fontSize: '0.6rem', color: '#6366f1' }}>▼</span>
               </div>
             </div>
           )}

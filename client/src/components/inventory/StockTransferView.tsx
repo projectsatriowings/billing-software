@@ -114,6 +114,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     {
       lineId: string;
       itemName: string;
+
       dispatchedQty: number;
       receivedQty: number;
       unit: string;
@@ -1096,47 +1097,47 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               Boolean(filterFromDate) ||
               Boolean(filterToDate) ||
               Boolean(filterSearch.trim())) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterBranch('ALL');
-                  setFilterStatus('all');
-                  setFilterFromDate('');
-                  setFilterToDate('');
-                  setFilterSearch('');
-                  setCurrentPage(1);
-                }}
-                style={{
-                  height: '38px',
-                  padding: '0 0.85rem',
-                  background: '#f1f5f9',
-                  color: '#475569',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#fee2e2';
-                  e.currentTarget.style.color = '#b91c1c';
-                  e.currentTarget.style.borderColor = '#fca5a5';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f1f5f9';
-                  e.currentTarget.style.color = '#475569';
-                  e.currentTarget.style.borderColor = '#cbd5e1';
-                }}
-              >
-                <XIcon size={13} />
-                <span>Reset</span>
-              </button>
-            )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterBranch('ALL');
+                    setFilterStatus('all');
+                    setFilterFromDate('');
+                    setFilterToDate('');
+                    setFilterSearch('');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    height: '38px',
+                    padding: '0 0.85rem',
+                    background: '#f1f5f9',
+                    color: '#475569',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#fee2e2';
+                    e.currentTarget.style.color = '#b91c1c';
+                    e.currentTarget.style.borderColor = '#fca5a5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#f1f5f9';
+                    e.currentTarget.style.color = '#475569';
+                    e.currentTarget.style.borderColor = '#cbd5e1';
+                  }}
+                >
+                  <XIcon size={13} />
+                  <span>Reset</span>
+                </button>
+              )}
           </div>
 
           {/* Table Matching Reference Image */}
@@ -1257,27 +1258,27 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                             (user.role === 'owner' ||
                               user.assignedLocation === trf.toBranch ||
                               Boolean(user.allowedLocations?.includes(trf.toBranch))) && (
-                            <button
-                              type="button"
-                              onClick={() => handleDirectReceive(trf.id)}
-                              style={{
-                                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                                color: '#ffffff',
-                                border: 'none',
-                                padding: '0.35rem 0.75rem',
-                                borderRadius: '6px',
-                                fontSize: '0.8rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                              }}
-                            >
-                              <CheckCircleIcon size={13} /> Receive
-                            </button>
-                          )}
+                              <button
+                                type="button"
+                                onClick={() => handleDirectReceive(trf.id)}
+                                style={{
+                                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  padding: '0.35rem 0.75rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                <CheckCircleIcon size={13} /> Receive
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -3261,8 +3262,8 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                             {isCompleted
                               ? 'Transfer cycle finalized successfully'
                               : detailedTransfer.status === 'partially_received'
-                              ? 'Partially received with recorded shortage'
-                              : 'Awaiting remaining steps'}
+                                ? 'Partially received with recorded shortage'
+                                : 'Awaiting remaining steps'}
                           </div>
                         </div>
                       </div>

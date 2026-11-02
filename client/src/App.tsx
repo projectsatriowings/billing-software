@@ -672,6 +672,7 @@ export function App() {
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
   const [isInventoryHovered, setIsInventoryHovered] = useState(false);
+  const [inventoryInitialTab, setInventoryInitialTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>('overview');
   const inventoryHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inventoryDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -6149,7 +6150,12 @@ export function App() {
                   ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock) — Click to review`
                   : 'No inventory alerts'
               }
-              onClick={() => setActiveTab('inventory')}
+              onClick={() => {
+                setActiveTab('inventory');
+                setShowInventoryDropdown(true);
+                // Navigate to replenishment tab if there are stock alerts, otherwise overview
+                setInventoryInitialTab(totalStockAlerts > 0 ? 'replenish' : 'overview');
+              }}
             >
               <span className="notif-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -10027,6 +10033,7 @@ export function App() {
               userRole={user?.role as any}
               businessType={shop?.businessType}
               allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
+              initialTab={inventoryInitialTab}
               onNavigateToCategories={() => setActiveTab('categories')}
               onNavigateToProductAnalysis={() => {
                 setActiveTab('product-movement');

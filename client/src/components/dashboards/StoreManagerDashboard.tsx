@@ -414,29 +414,57 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
         {/* Branch Selector (if manager has multiple branches assigned) */}
         {branches.length > 1 && (
           <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Switch Branch:</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {branches.map((b) => (
-                <button
-                  key={b.code}
-                  type="button"
-                  onClick={() => handleBranchChange(b.code)}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: 'none',
-                    background: selectedBranchCode === b.code ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                    color: '#ffffff',
-                    boxShadow: selectedBranchCode === b.code ? '0 2px 8px rgba(59, 130, 246, 0.4)' : 'none',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {b.name} ({b.code})
-                </button>
-              ))}
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Branch:</span>
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{
+                position: 'absolute',
+                left: '10px',
+                pointerEvents: 'none',
+                fontSize: '0.8rem',
+                color: '#93c5fd',
+                zIndex: 1,
+              }}>🏢</span>
+              <select
+                value={selectedBranchCode}
+                onChange={(e) => handleBranchChange(e.target.value)}
+                style={{
+                  paddingLeft: '30px',
+                  paddingRight: '32px',
+                  paddingTop: '6px',
+                  paddingBottom: '6px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: '1px solid rgba(99, 179, 237, 0.5)',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#ffffff',
+                  backdropFilter: 'blur(8px)',
+                  outline: 'none',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  minWidth: '200px',
+                  boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {branches.map((b) => (
+                  <option
+                    key={b.code}
+                    value={b.code}
+                    style={{ background: '#1e3a8a', color: '#ffffff', fontWeight: 700 }}
+                  >
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+              <span style={{
+                position: 'absolute',
+                right: '10px',
+                pointerEvents: 'none',
+                fontSize: '0.65rem',
+                color: '#93c5fd',
+              }}>▼</span>
             </div>
           </div>
         )}
