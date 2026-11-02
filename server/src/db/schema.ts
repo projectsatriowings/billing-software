@@ -1238,4 +1238,11 @@ version: 29,
          AND lower(u.role) IN ('manager', 'store_manager')`,
     ],
   },
+  {
+    version: 46,
+    statements: [
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_name TEXT`,
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_data TEXT`,
+    ],
+  },
 ];

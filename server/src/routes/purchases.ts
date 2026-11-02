@@ -58,6 +58,8 @@ function formatPurchase(r: any, lines: any[] = [], payments: any[] = []) {
     balanceMinor,
     paymentMethod: r.paymentMethod ?? r.payment_method ?? null,
     note: r.note ?? null,
+    attachmentName: r.attachmentName ?? r.attachment_name ?? null,
+    attachmentData: r.attachmentData ?? r.attachment_data ?? null,
     voidReason: r.voidReason ?? r.void_reason ?? null,
     voidedBy: r.voidedBy ?? r.voided_by ?? null,
     voidedAt: r.voidedAt ?? r.voided_at ?? null,
@@ -237,6 +239,8 @@ export function registerPurchases(r: Router) {
     const otherChargesLabel = V.optStr(b.otherChargesLabel, 'Other charges label', 100);
     const otherChargesMinor = V.int(b.otherChargesMinor ?? 0, 'Other charges amount', { min: 0 });
     const otherChargesGstBp = V.int(b.otherChargesGstBp ?? 0, 'Other charges GST rate', { min: 0, max: 10000 });
+    const attachmentName = V.optStr(b.attachmentName, 'Attachment Name', 255);
+    const attachmentData = typeof b.attachmentData === 'string' ? b.attachmentData : null;
 
     // Date validations
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -386,8 +390,8 @@ export function registerPurchases(r: Router) {
           cgst_minor, sgst_minor, igst_minor, itc_minor,
           other_charges_label, other_charges_minor, other_charges_gst_minor, other_charges_gst_bp,
           round_off_minor, total_minor, paid_minor, balance_minor,
-          payment_method, note, created_by, idempotency_key, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+          payment_method, note, attachment_name, attachment_data, created_by, idempotency_key, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
         [
           purchaseId,
           tenantId,
@@ -416,6 +420,8 @@ export function registerPurchases(r: Router) {
           balanceMinor,
           paidMinor > 0 ? paymentMethod : null,
           note,
+          attachmentName || null,
+          attachmentData || null,
           ctx.user!.id,
           idempotencyKey || null,
         ],

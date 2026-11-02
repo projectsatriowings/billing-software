@@ -1226,6 +1226,8 @@ export function App() {
   const [purOtherChargesRupees, setPurOtherChargesRupees] = useState('0');
   const [purOtherChargesGstBp, setPurOtherChargesGstBp] = useState(0);
   const [purNote, setPurNote] = useState('');
+  const [purAttachmentName, setPurAttachmentName] = useState('');
+  const [purAttachmentData, setPurAttachmentData] = useState('');
   const [purLines, setPurLines] = useState<Array<{
     itemId: string;
     name: string;
@@ -1690,7 +1692,7 @@ export function App() {
     }
   };
 
-  const openNewPurchaseModal = (preselectedSupplierId?: string) => {
+  const openNewPurchaseModal = (preselectedSupplierId?: string, initialLines?: any[]) => {
     const suppliers = parties.filter((p) => p.type === 'supplier');
     setPurSupplierId(preselectedSupplierId || suppliers[0]?.id || '');
     setPurSupplierInvoiceNumber('');
@@ -1703,7 +1705,11 @@ export function App() {
     setPurOtherChargesRupees('0');
     setPurOtherChargesGstBp(0);
     setPurNote('');
-    if (items.length > 0) {
+    setPurAttachmentName('');
+    setPurAttachmentData('');
+    if (initialLines && initialLines.length > 0) {
+      setPurLines(initialLines);
+    } else if (items.length > 0) {
       const firstItem = items[0];
       setPurLines([{
         itemId: firstItem.id,
@@ -1725,8 +1731,157 @@ export function App() {
     setShowPurchaseModal(true);
   };
 
-  const openNewPurchaseModalForSupplier = (supplierId: string) => {
+  const openNewPurchaseModalForSupplier = (supplierId?: string) => {
     openNewPurchaseModal(supplierId);
+  };
+
+  const handleBillFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size exceeds 5MB limit. Please upload a smaller photo or compressed PDF.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPurAttachmentName(file.name);
+      setPurAttachmentData(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRepeatPreviousPurchase = (prevPur: Purchase) => {
+    if (!prevPur.lines || prevPur.lines.length === 0) {
+      alert('Selected purchase has no line items.');
+      return;
+    }
+    const cloned = prevPur.lines.map((l) => {
+      const matched = items.find((it) => it.id === l.itemId);
+      return {
+        itemId: l.itemId,
+        name: l.name,
+        unit: l.unit || matched?.unit || 'pcs',
+        receivedQty: ((l.receivedQtyMilli || l.qtyMilli || 1000) / 1000),
+        billedQty: ((l.billedQtyMilli || l.receivedQtyMilli || l.qtyMilli || 1000) / 1000),
+        costRupees: (l.costMinor || 0) / 100,
+        taxRateBp: l.taxRateBp ?? matched?.taxRateBp ?? 0,
+        discountRupees: (l.discountMinor || 0) / 100,
+        batchNo: '',
+        expiry: '',
+        trackBatch: Boolean((matched as any)?.trackBatch ?? (matched as any)?.track_batch ?? (matched as any)?.hasBatches),
+        sellingPriceMinor: matched?.priceMinor,
+      };
+    });
+    setPurLines(cloned);
+    if (prevPur.supplierId) {
+      setPurSupplierId(prevPur.supplierId);
+    }
+    showToast(`Loaded ${cloned.length} items from previous purchase #${prevPur.supplierInvoiceNumber || prevPur.billNo || prevPur.purchaseNumber}`);
+  };
+
+  const handleLoadLowStockForSupplier = () => {
+    if (!purSupplierId) {
+      alert('Please choose a supplier first.');
+      return;
+    }
+    const outItems = items.filter((it) => {
+      const isVendorMatch = it.preferredSupplierId === purSupplierId;
+      const isDepleted = (it.currentStockMilli ?? 0) <= 0;
+      const isBelowMin = (it.minStockMilli || 0) > 0 && (it.currentStockMilli ?? 0) <= (it.minStockMilli || 0);
+      return isVendorMatch || isDepleted || isBelowMin;
+    });
+    if (outItems.length === 0) {
+      alert('No out-of-stock or low-stock items found in your catalog for this supplier.');
+      return;
+    }
+    const loaded = outItems.map((it) => ({
+      itemId: it.id,
+      name: it.name,
+      unit: it.unit || 'pcs',
+      receivedQty: Math.max(1, Math.round(((it.reorderLevelMilli || 10000) / 1000))),
+      billedQty: Math.max(1, Math.round(((it.reorderLevelMilli || 10000) / 1000))),
+      costRupees: (it.costMinor || it.priceMinor || 0) / 100,
+      taxRateBp: it.taxRateBp || 0,
+      discountRupees: 0,
+      batchNo: '',
+      expiry: '',
+      trackBatch: Boolean((it as any).trackBatch ?? (it as any).track_batch ?? (it as any).hasBatches),
+      sellingPriceMinor: it.priceMinor,
+    }));
+    setPurLines(loaded);
+    showToast(`Loaded ${loaded.length} reorder / out-of-stock items`);
+  };
+
+  const handleImportPurchaseCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const rows = text.split(/\r?\n/).filter((r) => r.trim().length > 0);
+        if (rows.length < 2) {
+          alert('CSV file must have a header row and at least 1 product row.');
+          return;
+        }
+        const parsedLines: any[] = [];
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+          if (cols.length < 2) continue;
+          const [key, qtyStr, rateStr, taxStr] = cols;
+          if (!key) continue;
+          const matched = items.find(
+            (it) =>
+              it.barcode === key ||
+              ((it as any).barcodes && (it as any).barcodes.includes(key)) ||
+              it.name.toLowerCase() === key.toLowerCase() ||
+              it.id === key
+          );
+          const qty = parseFloat(qtyStr) || 1;
+          const costRupees = rateStr ? parseFloat(rateStr) || 0 : ((matched?.costMinor || matched?.priceMinor || 0) / 100);
+          const taxRateBp = taxStr ? Math.round(parseFloat(taxStr) * 100) : (matched?.taxRateBp || 0);
+          if (matched) {
+            parsedLines.push({
+              itemId: matched.id,
+              name: matched.name,
+              unit: matched.unit || 'pcs',
+              receivedQty: qty,
+              billedQty: qty,
+              costRupees,
+              taxRateBp,
+              discountRupees: 0,
+              batchNo: '',
+              expiry: '',
+              trackBatch: Boolean((matched as any).trackBatch ?? (matched as any).track_batch ?? (matched as any).hasBatches),
+              sellingPriceMinor: matched.priceMinor,
+            });
+          }
+        }
+        if (parsedLines.length > 0) {
+          setPurLines(parsedLines);
+          showToast(`Successfully imported ${parsedLines.length} items from CSV`);
+        } else {
+          alert('No items in the CSV matched your catalog. Make sure the first column matches product barcode or exact name.');
+        }
+      } catch (err: any) {
+        alert('Failed to parse CSV: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleDownloadPurchaseCsvTemplate = () => {
+    const header = 'Product Name or Barcode,Quantity,Cost Rate (₹),GST Rate (%)\n';
+    const sample = items.slice(0, 3).map((it) => `"${it.name}",10,${(it.costMinor || it.priceMinor || 0) / 100},${(it.taxRateBp || 0) / 100}`).join('\n');
+    const blob = new Blob([header + sample], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'purchase_items_template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleAddPurLine = () => {
@@ -1819,6 +1974,8 @@ export function App() {
         otherChargesMinor,
         otherChargesGstBp: purOtherChargesGstBp,
         note: purNote.trim() || undefined,
+        attachmentName: purAttachmentName.trim() || undefined,
+        attachmentData: purAttachmentData || undefined,
         lines: purLines.map((l) => ({
           itemId: l.itemId,
           receivedQtyMilli: Math.max(1, Math.round(l.receivedQty * 1000)),
@@ -10420,6 +10577,7 @@ export function App() {
               onPaySupplier={(s) => handleOpenPaySupplier(s)}
               onOpenLedger={(sId) => handleOpenSupplierLedger(sId)}
               onNewPurchase={(sId) => openNewPurchaseModalForSupplier(sId)}
+              onRepeatPurchase={(pur) => handleRepeatPreviousPurchase(pur)}
               onToggleActive={(s) => handleTogglePartyActive(s)}
               onRefresh={() => {
                 loadParties();
@@ -15160,6 +15318,130 @@ export function App() {
                       />
                     </div>
                   </div>
+
+                  {/* Supplier Bill Document Attachment Zone */}
+                  <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #cbd5e1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: purAttachmentData ? '#ecfdf5' : '#eff6ff', color: purAttachmentData ? '#059669' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                        {purAttachmentData ? '✓' : '📎'}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#1e293b' }}>
+                          {purAttachmentData ? 'Supplier Bill Attached' : 'Attach Supplier Bill (Photo / PDF)'}
+                        </div>
+                        <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
+                          {purAttachmentName ? `${purAttachmentName}` : 'Upload physical invoice photo or PDF for audit proof (Max 5MB)'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {purAttachmentData ? (
+                        <>
+                          {purAttachmentData.startsWith('data:image') && (
+                            <img
+                              src={purAttachmentData}
+                              alt="Bill Preview"
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                            />
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: '#fca5a5' }}
+                            onClick={() => {
+                              setPurAttachmentName('');
+                              setPurAttachmentData('');
+                            }}
+                          >
+                            ✕ Remove File
+                          </button>
+                        </>
+                      ) : (
+                        <label
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: '#ffffff', borderColor: '#2563eb', color: '#2563eb', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
+                        >
+                          <span>📷 Upload Bill File / Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            style={{ display: 'none' }}
+                            onChange={handleBillFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fast Reorder & Bulk Tools */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.65rem 0.95rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1.1rem' }}>⚡</span>
+                    <div>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', display: 'block' }}>
+                        Quick Reorder & Bulk Inward:
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#15803d' }}>
+                        Skip entering products one-by-one when restocked from this supplier
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Copy Last Bill */}
+                    {(() => {
+                      const supplierPastPurchases = purchases.filter((p) => p.supplierId === purSupplierId && p.status !== 'voided');
+                      if (supplierPastPurchases.length === 0) return null;
+                      const lastPurchase = supplierPastPurchases[0];
+                      return (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#16a34a', color: '#166534', fontWeight: 600 }}
+                          onClick={() => handleRepeatPreviousPurchase(lastPurchase)}
+                          title={`Load all products from last invoice #${lastPurchase.supplierInvoiceNumber || lastPurchase.billNo || lastPurchase.purchaseNumber}`}
+                        >
+                          🔄 Copy Last Bill Items
+                        </button>
+                      );
+                    })()}
+
+                    {/* Load Out-of-Stock / Reorder Items */}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#0284c7', color: '#0369a1', fontWeight: 600 }}
+                      onClick={handleLoadLowStockForSupplier}
+                      title="Automatically load all products with 0 stock or below minimum stock"
+                    >
+                      📦 Load Finished / Low Stock Items
+                    </button>
+
+                    {/* Import CSV */}
+                    <label
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#9333ea', color: '#7e22ce', fontWeight: 600, cursor: 'pointer', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                      title="Upload items list from Excel / CSV"
+                    >
+                      📥 Import CSV
+                      <input
+                        type="file"
+                        accept=".csv,.txt"
+                        style={{ display: 'none' }}
+                        onChange={handleImportPurchaseCsv}
+                      />
+                    </label>
+
+                    {/* CSV Template */}
+                    <button
+                      type="button"
+                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.74rem', textDecoration: 'underline', cursor: 'pointer', padding: '0 4px' }}
+                      onClick={handleDownloadPurchaseCsvTemplate}
+                      title="Download sample CSV template"
+                    >
+                      CSV Template
+                    </button>
+                  </div>
                 </div>
 
                 {/* Lines Table Zone */}
@@ -15718,6 +16000,49 @@ export function App() {
                   </div>
                 </div>
 
+                {/* Attached Supplier Bill Document */}
+                {pur.attachmentData && (
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <span style={{ fontSize: '1.3rem' }}>📎</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
+                          Physical Supplier Bill Attached
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                          {pur.attachmentName || 'supplier_invoice'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {pur.attachmentData.startsWith('data:image') && (
+                        <a
+                          href={pur.attachmentData}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <img
+                            src={pur.attachmentData}
+                            alt="Preview"
+                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #93c5fd' }}
+                          />
+                        </a>
+                      )}
+                      <a
+                        href={pur.attachmentData}
+                        download={pur.attachmentName || `supplier_bill_${pur.supplierInvoiceNumber || pur.purchaseNumber}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: '#ffffff', color: '#1d4ed8', borderColor: '#93c5fd', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
+                      >
+                        <span>📥 Download / View Bill</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
                 {/* Lines Table */}
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
                   <table className="data-table" style={{ margin: 0 }}>
@@ -15860,6 +16185,20 @@ export function App() {
 
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ background: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe', fontWeight: 600 }}
+                    onClick={() => {
+                      const prev = pur;
+                      setSelectedPurchaseDetails(null);
+                      handleRepeatPreviousPurchase(prev);
+                      setShowPurchaseModal(true);
+                    }}
+                    title="Load all items from this bill into a new purchase"
+                  >
+                    🔄 Reorder / Repeat Bill
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary"

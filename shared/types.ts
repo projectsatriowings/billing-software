@@ -307,6 +307,8 @@ export interface Purchase {
   balanceMinor: number;
   paymentMethod?: string;
   note?: string;
+  attachmentName?: string | null;
+  attachmentData?: string | null;
   voidReason?: string;
   voidedBy?: string;
   voidedAt?: string;
