@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { PERMS, type Perm, type Role } from '../../../shared/types.ts';
 import { audit } from '../audit.ts';
 import { requireUser } from '../auth.ts';
-import { bad, conflict, HttpError, rateLimit, unauthorized, V, type Router } from '../http.ts';
+import { bad, conflict, HttpError, rateLimit, clearRateLimit, unauthorized, V, type Router } from '../http.ts';
 import {
   burnPasswordTime,
   generateTemporaryPassword,

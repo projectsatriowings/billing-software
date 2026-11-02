@@ -43,7 +43,7 @@ import {
   type NatureConfidence,
 } from '../../../shared/bulkImport.ts';
 import { ScanManufacturerBarcodeModal } from './ScanManufacturerBarcodeModal.tsx';
-import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from '../imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from '../imageUtils';
 import { type BarcodeTargetItem } from '../../../shared/barcodeScannerUtils.ts';
 
 const PackageBoxIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -2737,10 +2737,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                     <img
                                       src={row.imageUrl}
                                       alt={row.name}
+                                      referrerPolicy="no-referrer"
                                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                      onError={(e) => {
-                                        (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
-                                      }}
+                                      onError={(e) => handleProductImageError(e, row.imageUrl)}
                                     />
                                   </div>
                                 ) : (
@@ -4122,10 +4121,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                   <img
                     src={tempRowImageUrl}
                     alt={editingImageRow.name}
+                    referrerPolicy="no-referrer"
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                    }}
+                    onError={(e) => handleProductImageError(e, tempRowImageUrl)}
                   />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>

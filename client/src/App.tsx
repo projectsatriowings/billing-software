@@ -119,7 +119,7 @@ import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
-import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl } from './imageUtils';
+import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -859,8 +859,7 @@ export function App() {
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  const isSidebarVisuallyExpanded = !isSidebarCollapsed || isSidebarHovered;
+
   const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
   const [selectedCartIndex, setSelectedCartIndex] = useState<number>(0);
@@ -1505,6 +1504,16 @@ export function App() {
   // Fetch data when shop changes
   useEffect(() => {
     if (!user || !shop) return;
+    const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+    if (!isSuperAdmin) {
+      const enforcedBranch = user.branchId || (user as any).branch_id || user.assignedLocation;
+      if (enforcedBranch) {
+        localStorage.setItem('sa_selected_branch', enforcedBranch);
+        localStorage.setItem('selected_branch', enforcedBranch);
+        sessionStorage.setItem('sa_selected_branch', enforcedBranch);
+        sessionStorage.setItem('selected_branch', enforcedBranch);
+      }
+    }
     if (!can(user.role as any, 'purchases') && activeTab === 'purchases') {
       setActiveTab('pos');
     }
@@ -2221,6 +2230,15 @@ export function App() {
       setToken(res.token);
       setUser(res.user);
       setShop(res.shop);
+      const isUserSuperAdmin = res.user.role === 'owner' || String(res.user.role).toUpperCase() === 'SUPER_ADMIN';
+      if (!isUserSuperAdmin) {
+        try {
+          localStorage.removeItem('sa_selected_branch');
+          localStorage.removeItem('selected_branch');
+          sessionStorage.removeItem('sa_selected_branch');
+          sessionStorage.removeItem('selected_branch');
+        } catch {}
+      }
       loadMyBusinesses();
     } catch (err: any) {
       setAuthError(err.message || 'Login failed');
@@ -2233,6 +2251,12 @@ export function App() {
       await api('/api/auth/logout', { method: 'POST' });
     } catch { /* ignore */ }
     clearToken();
+    try {
+      localStorage.removeItem('sa_selected_branch');
+      localStorage.removeItem('selected_branch');
+      sessionStorage.removeItem('sa_selected_branch');
+      sessionStorage.removeItem('selected_branch');
+    } catch {}
     setUser(null);
     setShop(null);
     navigateTo('landing');
@@ -3284,6 +3308,7 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
+          location: user?.assignedLocation || undefined,
           billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
           appliedPromotions: promoEvalResult?.appliedPromotions || [],
           promotionDiscountMinor: promoDiscountMinor,
@@ -5372,13 +5397,7 @@ export function App() {
 
       {/* Left Sidebar Navigation */}
       <aside
-        className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''} ${isSidebarCollapsed && isSidebarHovered ? 'hover-expanded' : ''}`}
-        onMouseEnter={() => {
-          if (isSidebarCollapsed) setIsSidebarHovered(true);
-        }}
-        onMouseLeave={() => {
-          setIsSidebarHovered(false);
-        }}
+        className={`app-sidebar ${isSidebarCollapsed ? 'icon-only' : ''}`}
       >
         <div className="sidebar-top">
           {/* Header row with Brand & Collapse/Expand Toggle */}
@@ -5408,13 +5427,13 @@ export function App() {
                 e.stopPropagation();
                 setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
-                setIsSidebarHovered(false);
+                
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
               aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={!isSidebarVisuallyExpanded ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
+                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
               </svg>
             </button>
           </div>
@@ -5450,7 +5469,7 @@ export function App() {
               </div>
             </button>
 
-            {isSidebarVisuallyExpanded && showBusinessDropdown && (
+            {showBusinessDropdown && (
               <>
                 <div
                   className="dropdown-backdrop"
@@ -5629,7 +5648,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">My Cashier Shift</span>
-                {isSidebarVisuallyExpanded && activeShiftNumber ? (
+                {activeShiftNumber ? (
                   <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
                     ● {activeShiftNumber}
                   </span>
@@ -5655,7 +5674,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{items.length}</span>}
+                <span className="nav-count-badge">{items.length}</span>
               </button>
             )}
 
@@ -5674,7 +5693,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{categoriesList.length}</span>}
+                <span className="nav-count-badge">{categoriesList.length}</span>
               </button>
             )}
 
@@ -5704,7 +5723,7 @@ export function App() {
                   </span>
                   <span className="nav-text">Inventory Hub</span>
                   <div className="nav-trailing">
-                    {isSidebarVisuallyExpanded && totalStockAlerts > 0 && (
+                    {totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
                         title={`${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock`}
@@ -5807,7 +5826,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
-                {isSidebarVisuallyExpanded && <span className="nav-badge-new">NEW</span>}
+                <span className="nav-badge-new">NEW</span>
               </button>
             )}
 
@@ -5869,7 +5888,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>}
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
               </button>
             )}
 
@@ -5890,7 +5909,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                {isSidebarVisuallyExpanded && <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>}
+                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
               </button>
             )}
 
@@ -5952,7 +5971,7 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Purchases &amp; Inward</span>
-                        {isSidebarVisuallyExpanded && <span className="nav-count-badge">{purchases.length}</span>}
+                        <span className="nav-count-badge">{purchases.length}</span>
                       </button>
                     )}
 
@@ -6408,61 +6427,65 @@ export function App() {
           )}
 
           {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-          {displayTab === 'dashboard' && user && (
+          {displayTab === 'dashboard' && user && (() => {
+            const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+            return (
             <div className="dashboard-tab-wrapper">
-              <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
-                <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: '7px',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
-                      color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
-                      boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onClick={() => {
-                      setDashboardViewMode('today');
-                      setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
-                    }}
-                  >
-                    <BarChart3Icon size={15} />
-                    <span>Today's Live Overview</span>
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 14px',
-                      borderRadius: '7px',
-                      border: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
-                      color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
-                      boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onClick={() => setDashboardViewMode('management')}
-                  >
-                    <Building2Icon size={15} />
-                    <span>{user.role === 'owner' ? 'Company Multi-Branch View' : user.role === 'manager' ? 'Store Operations View' : 'Cashier Register View'}</span>
-                  </button>
+              {isSuperAdminUser && (
+                <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+                  <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                        color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                        boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onClick={() => {
+                        setDashboardViewMode('today');
+                        setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                      }}
+                    >
+                      <BarChart3Icon size={15} />
+                      <span>Today's Live Overview</span>
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                        color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                        boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onClick={() => setDashboardViewMode('management')}
+                    >
+                      <Building2Icon size={15} />
+                      <span>Company Multi-Branch View</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {dashboardViewMode === 'today' ? (
+              {!isSuperAdminUser || dashboardViewMode === 'today' ? (
                 <TodayDashboardView
                   user={user}
                   shop={shop}
@@ -6479,6 +6502,7 @@ export function App() {
                     setShowItemModal(true);
                   }}
                   showToast={showToast}
+                  onManageBranches={() => setActiveTab('user-management')}
                 />
               ) : (
                 <div className="role-dashboards-view">
@@ -6523,7 +6547,8 @@ export function App() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 1: BENTO POS BILLING TERMINAL */}
           {displayTab === 'pos' && (
@@ -9109,6 +9134,7 @@ export function App() {
                                     <img
                                       src={i.imageUrl || (i as any).image}
                                       alt={i.name}
+                                      referrerPolicy="no-referrer"
                                       className="product-thumb-img"
                                       style={{
                                         width: '100%',
@@ -9116,11 +9142,7 @@ export function App() {
                                         objectFit: 'cover',
                                         display: 'block',
                                       }}
-                                      onError={(e) => {
-                                        (e.currentTarget as HTMLElement).style.display = 'none';
-                                        const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                        if (placeholder) placeholder.style.display = 'flex';
-                                      }}
+                                      onError={(e) => handleProductImageError(e, i.imageUrl || (i as any).image)}
                                     />
                                     <div
                                       className="product-thumb-placeholder"
@@ -13546,11 +13568,9 @@ export function App() {
                         <img
                           src={itemFormImageUrl}
                           alt="Product Preview"
+                          referrerPolicy="no-referrer"
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src =
-                              'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23dc2626" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
-                          }}
+                          onError={(e) => handleProductImageError(e, itemFormImageUrl)}
                         />
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>

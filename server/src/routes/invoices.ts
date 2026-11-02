@@ -8,11 +8,14 @@ import { DEFAULT_CONFIG } from '../../../shared/types.ts';
 import { qrSvg, upiUri } from '../../../shared/qr.ts';
 import { normalizePhone } from '../../../shared/whatsapp.ts';
 import { audit } from '../audit.ts';
+import { resolveBranchScope } from '../branchScope.ts';
+import { invalidateTodayDashboardCache } from './dashboard.ts';
 
 export function registerInvoices(r: Router) {
   // List invoices
   r.get('/api/invoices', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const limit = Math.min(100, Math.max(1, Number(ctx.query.limit ?? 50)));
     const q = (ctx.query.q ?? '').trim().toLowerCase();
 
@@ -37,6 +40,11 @@ export function registerInvoices(r: Router) {
     `;
     const params: unknown[] = [tenantId];
 
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND i.branch_id = ?';
+      params.push(scope.branchId);
+    }
+
     if (q) {
       sql += ' AND (lower(i.number) LIKE ? OR lower(COALESCE(i.customer_name, \'\')) LIKE ? OR i.customer_phone LIKE ?)';
       params.push(`%${q}%`, `%${q}%`, `%${q}%`);
@@ -49,6 +57,7 @@ export function registerInvoices(r: Router) {
     return {
       invoices: rows.map((r: any) => ({
         id: r.id,
+        branchId: r.branchId ?? r.branch_id,
         number: r.number,
         kind: r.kind,
         status: r.status,
@@ -84,7 +93,10 @@ export function registerInvoices(r: Router) {
   // Get invoice details
   r.get('/api/invoices/:id', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const inv = await ctx.db.one('SELECT * FROM invoices WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+    const inv = await ctx.db.one(`SELECT * FROM invoices WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
     if (!inv) throw notFound('Invoice');
 
     const lines = await ctx.db.query('SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY pos ASC', [inv.id]);
@@ -194,6 +206,7 @@ export function registerInvoices(r: Router) {
       fullyReturned: isFullyReturned,
       invoice: {
         ...inv,
+        branchId: inv.branchId ?? inv.branch_id,
         partyId: inv.partyId ?? inv.party_id,
         customerName: inv.customerName ?? inv.customer_name,
         customerPhone: inv.customerPhone ?? inv.customer_phone,
@@ -245,6 +258,19 @@ export function registerInvoices(r: Router) {
   r.post('/api/invoices', requirePerm('sell'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+
+    // POS billing requires an open cashier shift; invoice gets branch_id from active shift
+    const activeShift = await ctx.db.one<any>(
+      "SELECT id, branch_id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
+      [tenantId, ctx.user!.id],
+    );
+    if (!activeShift) {
+      throw bad('An open cashier shift is required to create a bill. Please start your shift at POS Counter.', 'SHIFT_REQUIRED');
+    }
+    const invoiceBranchId = activeShift.branchId ?? activeShift.branch_id ?? ctx.user!.branchId;
+    if (!invoiceBranchId) {
+      throw bad('Branch is required for bill creation. Please link your shift or account to a branch.', 'BRANCH_REQUIRED');
+    }
     const linesInput = V.arr(b.lines, 'Bill items', { min: 1 });
     const paymentsInput = V.arr(b.payments ?? [], 'Payments');
     const customerName = V.optStr(b.customerName, 'Customer name', 100);
@@ -259,10 +285,10 @@ export function registerInvoices(r: Router) {
     if (!partyId && cleanPhoneDigits) {
       const match = await ctx.db.one<{ id: string }>(
         `SELECT id FROM parties 
-         WHERE tenant_id = ? AND type = 'customer' 
+         WHERE tenant_id = ? AND branch_id = ? AND type = 'customer' 
            AND (phone = ? OR REPLACE(phone, ' ', '') LIKE ? OR phone LIKE ?) 
          LIMIT 1`,
-        [tenantId, customerPhone, `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
+        [tenantId, invoiceBranchId, customerPhone, `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
       );
       if (match) partyId = match.id;
     }
@@ -318,7 +344,11 @@ export function registerInvoices(r: Router) {
 
     let assignedNumber = '';
     let totalPaidMinor = 0;
-    const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
+    let location = V.optStr(b.location, 'Location', 50);
+    if (!location) {
+      const br = await ctx.db.one<any>('SELECT code FROM branches WHERE id = ?', [invoiceBranchId]);
+      location = br?.code || ctx.user!.assignedLocation || 'MAIN';
+    }
     const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
     let earnedLoyaltyPoints = 0;
     let customerLoyaltyPoints: number | null = null;
@@ -329,10 +359,10 @@ export function registerInvoices(r: Router) {
       if (!partyId && cleanPhoneDigits && cleanPhoneDigits.length >= 7) {
         const existingParty = await q.one<{ id: string }>(
           `SELECT id FROM parties 
-           WHERE tenant_id = ? AND type = 'customer' 
+           WHERE tenant_id = ? AND branch_id = ? AND type = 'customer' 
              AND (phone = ? OR REPLACE(phone, ' ', '') LIKE ? OR phone LIKE ?) 
            LIMIT 1`,
-          [tenantId, (customerPhone || cleanPhoneDigits).trim(), `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
+          [tenantId, invoiceBranchId, (customerPhone || cleanPhoneDigits).trim(), `%${cleanPhoneDigits}`, `%${cleanPhoneDigits}`]
         );
         if (existingParty) {
           partyId = existingParty.id;
@@ -345,23 +375,35 @@ export function registerInvoices(r: Router) {
           
           await q.exec(
             `INSERT INTO parties (
-              id, tenant_id, type, name, phone, state_code, loyalty_points, active, custom
-            ) VALUES (?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
-            [newCustId, tenantId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
+              id, tenant_id, branch_id, type, name, phone, state_code, loyalty_points, active, custom
+            ) VALUES (?, ?, ?, 'customer', ?, ?, ?, 0, true, '{}'::jsonb)`,
+            [newCustId, tenantId, invoiceBranchId, assignedCustName, (customerPhone || cleanPhoneDigits).trim(), shop.stateCode ?? shop.state_code ?? '33']
           );
           partyId = newCustId;
         }
       }
 
-      // 1. Generate sequential invoice number ensuring zero duplicate collisions
-      const prefix = shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV';
+      // 1. Generate sequential invoice number ensuring zero duplicate collisions across tenant
+      const branchSeriesRow = await q.one<{ series: string }>(
+        "SELECT series FROM number_series WHERE tenant_id = ? AND branch_id = ? AND series NOT IN ('SHF', 'TRF', 'EXP', 'PUR', 'STC', 'ADJ', 'CNT') ORDER BY series = ? DESC LIMIT 1",
+        [tenantId, invoiceBranchId, shop.invoicePrefix || '']
+      );
+      let prefix = branchSeriesRow?.series;
+      if (!prefix) {
+        const branchRow = await q.one<{ code: string }>(
+          'SELECT code FROM branches WHERE id = ? AND tenant_id = ?',
+          [invoiceBranchId, tenantId]
+        );
+        prefix = (branchRow?.code && branchRow.code !== 'MAIN') ? branchRow.code : (shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV');
+      }
+
       while (true) {
         const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
-          `INSERT INTO number_series (tenant_id, series, next_no)
-           VALUES (?, ?, 2)
-           ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+          `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+           VALUES (?, ?, ?, 2)
+           ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
            RETURNING (next_no - 1) AS assigned_no`,
-          [tenantId, prefix],
+          [tenantId, invoiceBranchId, prefix],
         );
         const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
         const candidate = `${prefix}-${1000 + seqNo}`;
@@ -379,11 +421,7 @@ export function registerInvoices(r: Router) {
       }
       const balanceMinor = Math.max(0, calculated.totalMinor - totalPaidMinor);
 
-      // Check for active cashier shift
-      const activeShift = await q.one<{ id: string }>(
-        "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
-        [tenantId, ctx.user!.id],
-      );
+      // Active shift already verified prior to transaction
 
       // 3. Insert invoice
       if (tenderData) {
@@ -394,14 +432,14 @@ export function registerInvoices(r: Router) {
 
       await q.exec(
         `INSERT INTO invoices (
-          id, tenant_id, client_id, number, kind, status, bdate, party_id,
+          id, tenant_id, branch_id, client_id, number, kind, status, bdate, party_id,
           customer_name, customer_phone, party_name, party_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor,
           paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom,
           applied_promotions, promotion_discount_minor
         ) VALUES (
-          ?, ?, ?, ?, 'sale', 'posted', ?, ?,
+          ?, ?, ?, ?, ?, 'sale', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?,
@@ -411,6 +449,7 @@ export function registerInvoices(r: Router) {
         [
           invoiceId,
           tenantId,
+          invoiceBranchId,
           newId('cid'),
           assignedNumber,
           todayStr,
@@ -492,13 +531,14 @@ export function registerInvoices(r: Router) {
 
         await q.exec(
           `INSERT INTO invoice_lines (
-            id, tenant_id, invoice_id, pos, item_id, name, hsn, unit,
+            id, tenant_id, branch_id, invoice_id, pos, item_id, name, hsn, unit,
             qty_milli, price_minor, discount_minor, tax_rate_bp, inclusive,
             taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             lineId,
             tenantId,
+            invoiceBranchId,
             invoiceId,
             i + 1,
             item.itemId || null,
@@ -520,12 +560,12 @@ export function registerInvoices(r: Router) {
 
         // Deduct inventory at the sale's branch location (verifying item exists to prevent foreign key errors)
         if (item.itemId) {
-          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? LIMIT 1', [item.itemId, tenantId]);
+          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? AND branch_id = ? LIMIT 1', [item.itemId, tenantId, invoiceBranchId]);
           if (itemExists) {
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
-               VALUES (?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
-              [newId('sm'), tenantId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'sale', 'invoice', ?, ?)`,
+              [newId('sm'), tenantId, invoiceBranchId, item.itemId, location, -item.qtyMilli, invoiceId, ctx.user!.id],
             );
           }
         }
@@ -553,9 +593,9 @@ export function registerInvoices(r: Router) {
         }
 
         await q.exec(
-          `INSERT INTO payments (id, tenant_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter)
-           VALUES (?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('pay'), tenantId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, counter],
+          `INSERT INTO payments (id, tenant_id, branch_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter)
+           VALUES (?, ?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId('pay'), tenantId, invoiceBranchId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift.id, todayStr, ctx.user!.id, location, counter],
         );
 
         if (method === 'card' && p.reference) {
@@ -611,7 +651,10 @@ export function registerInvoices(r: Router) {
         customerLoyaltyPoints = Number(updatedCust?.loyaltyPoints ?? updatedCust?.loyalty_points ?? 0);
       }
 
-      await audit(q, ctx, {
+      // Invalidate cache
+    invalidateTodayDashboardCache(tenantId);
+
+    await audit(q, ctx, {
         action: 'invoice.create',
         entity: 'invoice',
         entityId: invoiceId,

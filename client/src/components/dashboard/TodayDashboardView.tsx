@@ -11,6 +11,7 @@ import {
 import { OpenShiftModal } from '../shifts/OpenShiftModal.tsx';
 import { CashMovementModal } from '../shifts/CashMovementModal.tsx';
 import { CloseShiftModal } from '../shifts/CloseShiftModal.tsx';
+import { BranchSwitcher } from './BranchSwitcher.tsx';
 import {
   SparklesIcon,
   DownloadIcon,
@@ -26,6 +27,7 @@ import {
   ShoppingCartIcon,
   RefreshCwIcon,
   CheckCircleIcon,
+  LockIcon,
 } from '../inventory/InventoryIcons.tsx';
 
 interface TodayDashboardViewProps {
@@ -38,6 +40,7 @@ interface TodayDashboardViewProps {
   onNavigateToPurchases: () => void;
   onOpenAddProductModal: () => void;
   showToast?: (msg: string) => void;
+  onManageBranches?: () => void;
 }
 
 type ChartMetric = 'sales' | 'bills' | 'profit';
@@ -292,6 +295,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onNavigateToPurchases,
   onOpenAddProductModal,
   showToast,
+  onManageBranches,
 }) => {
   // SWR: Initialize state immediately from cache if available (0ms instant render!)
   const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
@@ -352,10 +356,16 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     }
   }, [chartMetric]);
 
-  const [selectedBranchCode, setSelectedBranchCode] = useState<string>(
-    user.assignedLocation || 'MAIN'
-  );
-  const selectedBranchCodeRef = useRef<string>(user.assignedLocation || 'MAIN');
+  const isOwnerOrManager = ['owner', 'manager'].includes(user.role);
+  const isSuperAdmin = Boolean(user && (user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN'));
+  const firstName = user.name ? user.name.split(' ')[0] : 'User';
+
+  const initialBranchCode = isSuperAdmin
+    ? (localStorage.getItem('sa_selected_branch') || 'all')
+    : (user.assignedLocation || user.branchId || 'MAIN');
+
+  const [selectedBranchCode, setSelectedBranchCode] = useState<string>(initialBranchCode);
+  const selectedBranchCodeRef = useRef<string>(initialBranchCode);
 
   useEffect(() => {
     selectedBranchCodeRef.current = selectedBranchCode;
@@ -365,9 +375,6 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   const [showOpenShiftModal, setShowOpenShiftModal] = useState<boolean>(false);
   const [showCashMovementModal, setShowCashMovementModal] = useState<boolean>(false);
   const [showCloseShiftModal, setShowCloseShiftModal] = useState<boolean>(false);
-
-  const isOwnerOrManager = ['owner', 'manager'].includes(user.role);
-  const firstName = user.name ? user.name.split(' ')[0] : 'User';
 
   // Greeting by time of day
   const greeting = useMemo(() => {
@@ -380,7 +387,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   // Load dashboard data with SWR (Stale-While-Revalidate): background revalidation never blocks the UI
   const loadDashboard = useCallback(
     async (branchOrInitial?: string | boolean, isInitialParam = false) => {
-      let branchToLoad: string = selectedBranchCodeRef.current;
+      let branchToLoad: string = isSuperAdmin ? selectedBranchCodeRef.current : (user.assignedLocation || user.branchId || 'MAIN');
       let isInitial = isInitialParam;
 
       if (typeof branchOrInitial === 'boolean') {
@@ -407,7 +414,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           branchDataMap.set(res.selectedBranch.code.toUpperCase(), res);
         }
         setData(res);
-        if (res.selectedBranch?.code) {
+        if (!isSuperAdmin) {
+          const enforcedCode = res.selectedBranch?.code || user.assignedLocation || 'MAIN';
+          setSelectedBranchCode(enforcedCode);
+          selectedBranchCodeRef.current = enforcedCode;
+        } else if (res.selectedBranch?.code) {
           setSelectedBranchCode(res.selectedBranch.code);
           selectedBranchCodeRef.current = res.selectedBranch.code;
         }
@@ -424,6 +435,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   );
 
   const handleBranchChange = (newBranchCode: string) => {
+    if (isSuperAdmin) {
+      try {
+        localStorage.setItem('sa_selected_branch', newBranchCode);
+      } catch {}
+    }
     if (newBranchCode === selectedBranchCode) return;
     setSelectedBranchCode(newBranchCode);
     selectedBranchCodeRef.current = newBranchCode;
@@ -874,42 +890,35 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
-          {data?.branches && data.branches.length > 1 && (
+          {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
             <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">BRANCH:</span>
-              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                <Building2Icon size={13} style={{ position: 'absolute', left: '10px', pointerEvents: 'none', color: '#6366f1', zIndex: 1 }} />
-                <select
-                  value={selectedBranchCode || ''}
-                  onChange={(e) => handleBranchChange(e.target.value)}
-                  className="dashboard-branch-dropdown"
+              <span className="branch-selector-label">Branch:</span>
+              <BranchSwitcher
+                branches={data.branches}
+                selectedBranchCode={selectedBranchCode}
+                onSelectBranch={handleBranchChange}
+                user={user}
+                onManageBranches={onManageBranches}
+              />
+            </div>
+          ) : (
+            <div className="dashboard-branch-selector">
+              <span className="branch-selector-label">Branch:</span>
+              <div className="branch-selector-pills">
+                <div
+                  className="dashboard-branch-pill active read-only-branch-pill"
                   style={{
-                    paddingLeft: '28px',
-                    paddingRight: '28px',
-                    paddingTop: '5px',
-                    paddingBottom: '5px',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: '1.5px solid #c7d2fe',
-                    background: '#eef2ff',
-                    color: '#3730a3',
-                    outline: 'none',
-                    appearance: 'none',
-                    WebkitAppearance: 'none',
-                    minWidth: '180px',
-                    boxShadow: '0 1px 4px rgba(99,102,241,0.12)',
-                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    cursor: 'default',
+                    userSelect: 'none',
                   }}
+                  title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
                 >
-                  {data.branches.map((b) => (
-                    <option key={b.id || b.code} value={b.code}>
-                      {b.name || b.code}
-                    </option>
-                  ))}
-                </select>
-                <span style={{ position: 'absolute', right: '10px', pointerEvents: 'none', fontSize: '0.6rem', color: '#6366f1' }}>▼</span>
+                  <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
+                  <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
+                  <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
+                </div>
               </div>
             </div>
           )}
@@ -1804,7 +1813,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           userName={user.name}
           userRole={user.role}
           defaultLocation={selectedBranchCode}
-          defaultCounter="COUNTER-1"
+          defaultCounter={user.assignedCounter || "COUNTER-1"}
+          branches={data?.branches}
         />
       )}
 
