@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstHistory } from '../../api.ts';
+import { AlertTriangleIcon } from './GstIcons.tsx';
 
 interface GstFilingHistoryViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -43,7 +44,10 @@ export const GstFilingHistoryView: React.FC<GstFilingHistoryViewProps> = ({ onNa
             Loading filing logs...
           </div>
         ) : error ? (
-          <div className="p-6 text-center text-sm text-rose-600">⚠️ {error}</div>
+          <div className="flex items-center justify-center gap-2 p-6 text-center text-sm text-rose-600">
+            <AlertTriangleIcon className="h-4 w-4" />
+            <span>{error}</span>
+          </div>
         ) : history.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
             <p className="text-base font-semibold">No filing history logged yet.</p>

@@ -342,11 +342,7 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="header-title">
-                Supplier Master &amp; Vendors ({filteredSuppliers.length}{' '}
-                {filteredSuppliers.length === suppliersList.length ? 'total' : `of ${suppliersList.length}`})
-              </h2>
-              <p className="header-subtitle">
+              <p className="header-subtitle" style={{ margin: 0 }}>
                 Purchase distributors, stock inward management, GSTIN verification &amp; payable settlements
               </p>
             </div>

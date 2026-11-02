@@ -6,6 +6,19 @@ import {
   type ItcRegisterItem,
 } from '../../api.ts';
 import { Gstr2bImportModal } from './Gstr2bImportModal.tsx';
+import {
+  UploadIcon,
+  DownloadIcon,
+  SpinnerIcon,
+  BarChartIcon,
+  BookOpenIcon,
+  CheckCircleIcon,
+  BanIcon,
+  ClockIcon,
+  ScaleIcon,
+  AlertTriangleIcon,
+  XCircleIcon,
+} from './GstIcons.tsx';
 
 interface ItcRegisterViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -113,15 +126,35 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
   const getMatchingBadge = (status: string) => {
     switch (status) {
       case 'matched':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">✓ Matched in 2B</span>;
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <CheckCircleIcon className="h-3 w-3" /> Matched in 2B
+          </span>
+        );
       case 'taxable_mismatch':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">⚠️ Taxable Mismatch</span>;
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+            <AlertTriangleIcon className="h-3 w-3" /> Taxable Mismatch
+          </span>
+        );
       case 'gst_mismatch':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">⚠️ Tax Diff</span>;
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+            <AlertTriangleIcon className="h-3 w-3" /> Tax Diff
+          </span>
+        );
       case 'missing_in_2b':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">❌ Not in 2B</span>;
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            <XCircleIcon className="h-3 w-3" /> Not in 2B
+          </span>
+        );
       case 'missing_in_books':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">⚠️ Not in Books</span>;
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+            <AlertTriangleIcon className="h-3 w-3" /> Not in Books
+          </span>
+        );
       default:
         return <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">{status}</span>;
     }
@@ -173,7 +206,8 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
             onClick={() => setIsImportModalOpen(true)}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
           >
-            <span>📥</span> Import GSTR-2B
+            <UploadIcon className="h-4 w-4" />
+            <span>Import GSTR-2B</span>
           </button>
 
           <button
@@ -194,7 +228,8 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
             disabled={exporting}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
           >
-            <span>{exporting ? '⏳' : '📊'}</span> {exporting ? 'Exporting...' : 'Export CSV'}
+            {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <BarChartIcon className="h-4 w-4 text-slate-600" />}
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
         </div>
       </div>
@@ -213,7 +248,10 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition-all hover:border-purple-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">Total Book GST</span>
-              <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">📚 Books</span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <BookOpenIcon className="h-3.5 w-3.5 text-slate-500" />
+                <span>Books</span>
+              </span>
             </div>
             <div className="mt-2 text-2xl font-black text-slate-900 tracking-tight dark:text-white">
               ₹{(summary.totalPotentialItcMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -227,7 +265,10 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           <div className="flex flex-col justify-between rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 to-white p-4 shadow-xs transition-all hover:border-emerald-300 hover:shadow-md dark:border-emerald-900/50 dark:from-slate-900 dark:to-emerald-950/20">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider dark:text-emerald-300">Reviewed Eligible ITC</span>
-              <span className="rounded-lg bg-emerald-100/80 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">✓ Claimable</span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100/80 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-700" />
+                <span>Claimable</span>
+              </span>
             </div>
             <div className="mt-2 text-2xl font-black text-emerald-600 tracking-tight dark:text-emerald-400">
               ₹{(summary.totalReviewedEligibleItcMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -241,7 +282,10 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           <div className="flex flex-col justify-between rounded-2xl border border-rose-200/80 bg-gradient-to-br from-rose-50/70 to-white p-4 shadow-xs transition-all hover:border-rose-300 hover:shadow-md dark:border-rose-900/50 dark:from-slate-900 dark:to-rose-950/20">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-rose-800 uppercase tracking-wider dark:text-rose-300">Ineligible / Blocked ITC</span>
-              <span className="rounded-lg bg-rose-100/80 px-2 py-0.5 text-[11px] font-bold text-rose-800 dark:bg-rose-900/60 dark:text-rose-200">🚫 Sec 17(5)</span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-rose-100/80 px-2 py-0.5 text-[11px] font-bold text-rose-800 dark:bg-rose-900/60 dark:text-rose-200">
+                <BanIcon className="h-3.5 w-3.5 text-rose-700" />
+                <span>Sec 17(5)</span>
+              </span>
             </div>
             <div className="mt-2 text-2xl font-black text-rose-600 tracking-tight dark:text-rose-400">
               ₹{(summary.totalIneligibleItcMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -255,7 +299,10 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           <div className="flex flex-col justify-between rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/70 to-white p-4 shadow-xs transition-all hover:border-amber-300 hover:shadow-md dark:border-amber-900/50 dark:from-slate-900 dark:to-amber-950/20">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-amber-800 uppercase tracking-wider dark:text-amber-300">Pending Review</span>
-              <span className="rounded-lg bg-amber-100/80 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">⏳ Needs Action</span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100/80 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                <ClockIcon className="h-3.5 w-3.5 text-amber-700" />
+                <span>Needs Action</span>
+              </span>
             </div>
             <div className="mt-2 text-2xl font-black text-amber-600 tracking-tight dark:text-amber-400">
               {summary.pendingReviewCount}
@@ -269,7 +316,10 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           <div className="flex flex-col justify-between rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/70 to-white p-4 shadow-xs transition-all hover:border-indigo-300 hover:shadow-md dark:border-indigo-900/50 dark:from-slate-900 dark:to-indigo-950/20">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider dark:text-indigo-300">2B Matching Result</span>
-              <span className="rounded-lg bg-indigo-100/80 px-2 py-0.5 text-[11px] font-bold text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">⚖️ Alignment</span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100/80 px-2 py-0.5 text-[11px] font-bold text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">
+                <ScaleIcon className="h-3.5 w-3.5 text-indigo-700" />
+                <span>Alignment</span>
+              </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl font-black text-emerald-600">{summary.matchedCount}</span>
@@ -340,8 +390,9 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
             Loading ITC reconciliation items...
           </div>
         ) : error ? (
-          <div className="p-6 text-center text-sm text-rose-600 dark:text-rose-400">
-            ⚠️ {error}
+          <div className="flex items-center justify-center gap-2 p-6 text-center text-sm text-rose-600 dark:text-rose-400">
+            <AlertTriangleIcon className="h-4 w-4" />
+            <span>{error}</span>
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="p-12 text-center text-slate-500">

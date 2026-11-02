@@ -738,3 +738,101 @@ export async function enqueueDeletionAlertEmail(
 
   return { logId, status: 'QUEUED' };
 }
+
+
+export interface PasswordResetLinkParams {
+  tenantId: string;
+  userId: string;
+  toEmail: string;
+  userName: string;
+  resetUrl: string;
+}
+
+export function buildPasswordResetLinkEmail(
+  params: PasswordResetLinkParams,
+  storeName: string,
+): { subject: string; text: string; html: string } {
+  const subject = `Reset your password for ${storeName} POS`;
+  const text = `Hello ${params.userName},\n\nWe received a request to reset your password for ${storeName} POS.\n\nTo set a new password, click the link below (valid for 30 minutes):\n${params.resetUrl}\n\nIf you did not request this, you can safely ignore this email.\n\n— ${storeName} Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reset Your Password</title>
+</head>
+<body style="margin: 0; padding: 24px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; background-color: #F8F7FF; color: #1A1830;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #FFFFFF; border-radius: 14px; border: 1px solid #E6E4F0; overflow: hidden;">
+    <tr>
+      <td style="padding: 32px 32px 24px; text-align: center; background-color: #F4F1FF; border-bottom: 1px solid #ECEAF4;">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #5B3BE8;">${escapeHtml(storeName)}</h1>
+        <p style="margin: 6px 0 0; font-size: 14px; color: #5F5B76;">Password Reset Request</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 32px;">
+        <p style="margin: 0 0 16px; font-size: 15px; color: #1A1830; line-height: 1.6;">
+          Hello <strong>${escapeHtml(params.userName)}</strong>,
+        </p>
+        <p style="margin: 0 0 24px; font-size: 14px; color: #5F5B76; line-height: 1.6;">
+          We received a request to reset the password for your account. Click the button below to choose a new password. This link is single-use and will expire in <strong>30 minutes</strong>.
+        </p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${params.resetUrl}" target="_blank" style="display: inline-block; background-color: #5B3BE8; color: #FFFFFF; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 8px;">
+            Reset Password
+          </a>
+        </div>
+        <p style="margin: 24px 0 0; font-size: 13px; color: #7B7793; line-height: 1.5;">
+          If the button above does not work, copy and paste this URL into your browser:<br/>
+          <a href="${params.resetUrl}" style="color: #5B3BE8; word-break: break-all;">${params.resetUrl}</a>
+        </p>
+        <p style="margin: 20px 0 0; font-size: 13px; color: #7B7793; line-height: 1.5;">
+          If you did not request a password reset, you can safely ignore this email — your existing password will remain active.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 20px 32px; background-color: #FCFBFF; border-top: 1px solid #ECEAF4; text-align: center; font-size: 12px; color: #8A86A8;">
+        &copy; ${escapeHtml(storeName)} POS. All rights reserved.
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+export async function enqueuePasswordResetLinkEmail(
+  db: DB,
+  params: PasswordResetLinkParams,
+): Promise<{ logId: string; status: 'QUEUED' }> {
+  const logId = newId('eml');
+  const config = getMailerConfig();
+
+  await db.exec(
+    `INSERT INTO email_logs (id, tenant_id, user_id, to_email, type, status, attempts, created_by, created_at)
+     VALUES (?, ?, ?, ?, 'FORGOT_PASSWORD', 'QUEUED', 0, NULL, now())`,
+    [logId, params.tenantId, params.userId, params.toEmail],
+  );
+
+  const tRow = await db.one<any>('SELECT name FROM tenants WHERE id = ?', [params.tenantId]);
+  const storeName = tRow?.name || config.fromName || 'Shree Krishna Supermarket';
+
+  const { subject, text, html } = buildPasswordResetLinkEmail(params, storeName);
+
+  setImmediate(() => {
+    processEmailJob(db, logId, {
+      fromName: config.fromName || 'Shree Krishna Supermarket',
+      fromAddress: config.fromAddress || 'no-reply@billing.local',
+      toEmail: params.toEmail,
+      subject,
+      text,
+      html,
+    }).catch((err) => {
+      console.error(`[Mailer Worker] Error sending password reset link ${logId}:`, err);
+    });
+  });
+
+  return { logId, status: 'QUEUED' };
+}

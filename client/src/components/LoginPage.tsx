@@ -5,12 +5,18 @@ interface LoginPageProps {
   onSuccess: (data: { token: string; user: User; shop: Shop }) => void;
   onNavigateRegister: () => void;
   onBackToHome: () => void;
+  onRequirePasswordChange?: (params: {
+    changeToken: string;
+    tempPassword?: string;
+    identifier?: string;
+  }) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onSuccess,
   onNavigateRegister,
   onBackToHome,
+  onRequirePasswordChange,
 }) => {
   const [selectedRole, setSelectedRole] = useState<'super_admin' | 'store_manager' | 'cashier'>('super_admin');
   const [email, setEmail] = useState('demo@billing.local');
@@ -37,7 +43,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   // Forgot password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [forgotStatus, setForgotStatus] = useState<{ message: string; isError?: boolean } | null>(null);
   const [isSendingReset, setIsSendingReset] = useState(false);
 
@@ -52,13 +58,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setIsLoading(true);
     try {
-      const data = await api<{ token: string; user: User; shop: Shop }>('/api/auth/login', {
+      const data = await api<{
+        token?: string;
+        user?: User;
+        shop?: Shop;
+        requirePasswordChange?: boolean;
+        changeToken?: string;
+      }>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email: email.trim(), identifier: email.trim(), password }),
       });
 
-      setToken(data.token);
-      onSuccess(data);
+      if (data.requirePasswordChange && data.changeToken) {
+        if (onRequirePasswordChange) {
+          onRequirePasswordChange({
+            changeToken: data.changeToken,
+            tempPassword: password,
+            identifier: email.trim(),
+          });
+        }
+        return;
+      }
+
+      if (data.token && data.user && data.shop) {
+        setToken(data.token);
+        onSuccess(data as { token: string; user: User; shop: Shop });
+      }
     } catch (err: any) {
       setError(err?.message || 'Invalid email or password. Please try again.');
     } finally {
@@ -74,20 +99,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   const handleSendForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail.trim()) {
-      setForgotStatus({ message: 'Please enter your account email address.', isError: true });
+    if (!forgotIdentifier.trim()) {
+      setForgotStatus({ message: 'Please enter your username or email ID.', isError: true });
       return;
     }
 
     setIsSendingReset(true);
     setForgotStatus(null);
     try {
-      const res = await api<{ ok: boolean; message: string; note?: string }>('/api/auth/forgot-password', {
+      await api<{ ok: boolean; message: string }>('/api/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({ email: forgotEmail.trim() }),
+        body: JSON.stringify({ identifier: forgotIdentifier.trim() }),
       });
       setForgotStatus({
-        message: res.note ? `${res.message} Notice: ${res.note}` : res.message,
+        message: "If an account with this username or email exists, we've sent a password reset link to your email.",
         isError: false,
       });
     } catch (err: any) {
@@ -353,7 +378,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type="button"
                   className="forgot-password-link"
                   onClick={() => {
-                    setForgotEmail(email);
+                    setForgotIdentifier(email);
                     setForgotStatus(null);
                     setShowForgotModal(true);
                   }}
@@ -497,7 +522,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
             <div className="modal-body">
               <p className="forgot-modal-desc">
-                Enter your registered business email address. If an account is found, we will issue a secure, single-use reset token and send instructions.
+                Enter your username or registered email address. If your account is found with an email on file, we will send a password reset link.
               </p>
 
               {forgotStatus && (
@@ -509,18 +534,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <form onSubmit={handleSendForgotPassword} className="forgot-form">
                 <div className="form-group">
-                  <label className="form-label" htmlFor="forgot-email">
-                    Account Email
+                  <label className="form-label" htmlFor="forgot-identifier">
+                    Username or email ID
                   </label>
                   <input
-                    id="forgot-email"
-                    type="email"
+                    id="forgot-identifier"
+                    type="text"
                     className="form-input"
                     required
-                    placeholder="you@business.com"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="e.g. karthik.r or manager@store.com"
+                    value={forgotIdentifier}
+                    onChange={(e) => setForgotIdentifier(e.target.value)}
                   />
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
+                    <strong>Note:</strong> Counters and cashiers without an email address: Ask your store manager to reset your password.
+                  </div>
                 </div>
 
                 <div className="modal-actions-row">
@@ -536,7 +564,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="btn btn-primary"
                     disabled={isSendingReset}
                   >
-                    {isSendingReset ? 'Sending...' : 'Send Reset Instructions'}
+                    {isSendingReset ? 'Sending...' : 'Send reset link'}
                   </button>
                 </div>
               </form>

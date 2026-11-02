@@ -62,21 +62,63 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   }
 
   const data = await res.json().catch(() => ({}));
+
+  if (res.status === 403 && (data?.code === 'PASSWORD_CHANGE_REQUIRED' || data?.error?.code === 'PASSWORD_CHANGE_REQUIRED')) {
+    window.dispatchEvent(new CustomEvent('password_change_required'));
+  }
+
   if (!res.ok) {
     throw new Error(data?.error?.message || data?.message || `HTTP Error ${res.status}`);
   }
   return data as T;
 }
 
-export async function changePassword(currentPassword: string, newPassword: string): Promise<{ token: string }> {
-  const res = await api<{ token: string }>('/api/auth/change-password', {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  changeToken?: string
+): Promise<{
+  token: string;
+  user?: User;
+  shop?: any;
+  perms?: string[];
+  role?: string;
+  branchId?: string | null;
+}> {
+  const customHeaders: Record<string, string> = {};
+  if (changeToken) {
+    customHeaders['Authorization'] = `Bearer ${changeToken}`;
+  }
+  const res = await api<{
+    token: string;
+    user?: User;
+    shop?: any;
+    perms?: string[];
+    role?: string;
+    branchId?: string | null;
+  }>('/api/auth/change-password', {
     method: 'POST',
+    headers: customHeaders,
     body: JSON.stringify({ currentPassword, newPassword }),
   });
   if (res.token) {
     setToken(res.token);
   }
   return res;
+}
+
+export async function forgotPassword(identifier: string): Promise<{ ok: boolean; message: string }> {
+  return api<{ ok: boolean; message: string }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ identifier }),
+  });
+}
+
+export async function resetPasswordWithToken(token: string, newPassword: string): Promise<{ ok: boolean; message: string }> {
+  return api<{ ok: boolean; message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  });
 }
 
 export interface User {

@@ -1,6 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstOverview, type GstOverviewMetrics } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  GstBuildingIcon,
+  CalendarIcon,
+  RefreshIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  AlertTriangleIcon,
+  SpinnerIcon,
+  ScaleIcon,
+  FileTextIcon,
+  BarChartIcon,
+  PackageIcon,
+  BriefcaseIcon,
+  DownloadIcon,
+  CheckCircleIcon,
+  BanIcon,
+  CompassIcon,
+  ArrowRightIcon,
+} from './GstIcons.tsx';
 
 interface GstOverviewViewProps {
   tenantGstin?: string;
@@ -53,8 +72,9 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
       {/* Top Filter and Actions Bar */}
       <div className="gst-header-card">
         <div className="gst-header-left">
-          <h2 className="gst-header-title">
-            <span>🏛️</span> GST Compliance &amp; Return Summary
+          <h2 className="gst-header-title flex items-center gap-2">
+            <span className="flex items-center text-indigo-600"><GstBuildingIcon size={22} /></span>
+            <span>GST Compliance &amp; Return Summary</span>
           </h2>
           <p className="gst-header-subtitle">
             Authoritative figures derived from authorized invoices, stock purchases, and reviewed eligible ITC for {periodLabel}.
@@ -67,11 +87,11 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
             <span className="gst-period-label">Period</span>
             <button
               type="button"
-              className="gst-period-nav-btn"
+              className="gst-period-nav-btn flex items-center justify-center"
               onClick={() => changeMonth(-1)}
               title="Previous Month"
             >
-              ◀
+              <ChevronLeftIcon size={13} />
             </button>
             <input
               type="month"
@@ -81,44 +101,47 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
             />
             <button
               type="button"
-              className="gst-period-nav-btn"
+              className="gst-period-nav-btn flex items-center justify-center"
               onClick={() => changeMonth(1)}
               title="Next Month"
             >
-              ▶
+              <ChevronRightIcon size={13} />
             </button>
           </div>
 
           <button
             type="button"
             onClick={setThisMonth}
-            className="gst-pill-btn"
+            className="gst-pill-btn flex items-center gap-1.5"
             title="Jump to current return month"
           >
-            📅 Current
+            <CalendarIcon size={14} />
+            <span>Current</span>
           </button>
 
           <button
             type="button"
             onClick={loadOverview}
             disabled={loading}
-            className="gst-pill-btn"
+            className="gst-pill-btn flex items-center gap-1.5"
             title="Refresh live figures"
           >
-            <span>🔄</span> Refresh
+            {loading ? <SpinnerIcon size={14} /> : <RefreshIcon size={14} />}
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
-          ⚠️ {error}
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
+          <AlertTriangleIcon size={16} />
+          <span>{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
-          <div className="text-2xl animate-spin">⏳</div>
+        <div className="flex h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
+          <SpinnerIcon size={32} className="text-indigo-600" />
           <div className="font-semibold text-slate-700">Aggregating live GST metrics for {periodLabel}...</div>
           <div className="text-xs text-slate-400">Computing outward invoices, purchase registers &amp; verified ITC ledger</div>
         </div>
@@ -158,16 +181,18 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                 <button
                   type="button"
                   onClick={() => onNavigateTab('gst-itc-reconciliation')}
-                  className="gst-hero-btn-primary"
+                  className="gst-hero-btn-primary flex items-center gap-1.5"
                 >
-                  <span>⚖️</span> Reconcile ITC Register
+                  <ScaleIcon size={15} />
+                  <span>Reconcile ITC Register</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onNavigateTab('gst-gstr3b')}
-                  className="gst-hero-btn-secondary"
+                  className="gst-hero-btn-secondary flex items-center gap-1.5"
                 >
-                  <span>📄</span> Prepare GSTR-3B
+                  <FileTextIcon size={15} />
+                  <span>Prepare GSTR-3B</span>
                 </button>
               </div>
             </div>
@@ -182,7 +207,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">01</span>
                   <span className="gst-kpi-title">Outward Taxable</span>
                 </div>
-                <span className="gst-kpi-icon-pill">📊</span>
+                <span className="gst-kpi-icon-pill"><BarChartIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.salesTaxableMinor)}
@@ -197,7 +222,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">02</span>
                   <span className="gst-kpi-title">Output GST</span>
                 </div>
-                <span className="gst-kpi-icon-pill">🏛️</span>
+                <span className="gst-kpi-icon-pill"><GstBuildingIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.outputGstMinor)}
@@ -212,7 +237,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">03</span>
                   <span className="gst-kpi-title">Purchase GST</span>
                 </div>
-                <span className="gst-kpi-icon-pill">📦</span>
+                <span className="gst-kpi-icon-pill"><PackageIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.purchaseGstMinor)}
@@ -227,7 +252,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">04</span>
                   <span className="gst-kpi-title">Expense GST</span>
                 </div>
-                <span className="gst-kpi-icon-pill">💼</span>
+                <span className="gst-kpi-icon-pill"><BriefcaseIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.expenseGstUnderReviewMinor)}
@@ -242,7 +267,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">05</span>
                   <span className="gst-kpi-title">Potential ITC</span>
                 </div>
-                <span className="gst-kpi-icon-pill">📥</span>
+                <span className="gst-kpi-icon-pill"><DownloadIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.potentialItcMinor)}
@@ -257,7 +282,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">06</span>
                   <span className="gst-kpi-title">Reviewed Eligible ITC</span>
                 </div>
-                <span className="gst-kpi-icon-pill" style={{ background: '#d1fae5', color: '#047857' }}>✅</span>
+                <span className="gst-kpi-icon-pill" style={{ background: '#d1fae5', color: '#047857' }}><CheckCircleIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.reviewedEligibleItcMinor)}
@@ -272,7 +297,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">07</span>
                   <span className="gst-kpi-title">Ineligible / Blocked</span>
                 </div>
-                <span className="gst-kpi-icon-pill" style={{ background: '#ffe4e6', color: '#e11d48' }}>🚫</span>
+                <span className="gst-kpi-icon-pill" style={{ background: '#ffe4e6', color: '#e11d48' }}><BanIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {fmtMoney(metrics.ineligibleItcMinor)}
@@ -287,7 +312,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">08</span>
                   <span className="gst-kpi-title">GSTR-2B Differences</span>
                 </div>
-                <span className="gst-kpi-icon-pill" style={{ background: '#fef3c7', color: '#b45309' }}>⚠️</span>
+                <span className="gst-kpi-icon-pill" style={{ background: '#fef3c7', color: '#b45309' }}><AlertTriangleIcon size={16} /></span>
               </div>
               <div className="gst-kpi-val">
                 {metrics.unresolvedMismatchesCount}
@@ -304,7 +329,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">09</span>
                   <span className="gst-kpi-title">GSTR-1 Outward</span>
                 </div>
-                <span className="gst-kpi-icon-pill">📑</span>
+                <span className="gst-kpi-icon-pill"><FileTextIcon size={16} /></span>
               </div>
               <div>
                 <span className={`gst-status-badge ${metrics.gstr1Status === 'ready' ? 'ready' : 'in-progress'}`}>
@@ -322,7 +347,7 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                   <span className="gst-kpi-num-badge">10</span>
                   <span className="gst-kpi-title">GSTR-3B Summary</span>
                 </div>
-                <span className="gst-kpi-icon-pill">📄</span>
+                <span className="gst-kpi-icon-pill"><FileTextIcon size={16} /></span>
               </div>
               <div>
                 <span className={`gst-status-badge ${metrics.gstr3bStatus === 'ready_to_file' ? 'ready' : 'in-progress'}`}>
@@ -343,8 +368,9 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
           {/* Quick Action Navigation Grid: Recommended GST Journey */}
           <div className="gst-journey-card">
             <div className="gst-journey-header">
-              <h3 className="gst-journey-title">
-                <span>🧭</span> Recommended GST Compliance Journey
+              <h3 className="gst-journey-title flex items-center gap-2">
+                <span className="text-indigo-600"><CompassIcon size={20} /></span>
+                <span>Recommended GST Compliance Journey</span>
               </h3>
               <p className="gst-journey-subtitle">
                 Complete all 3 sequential steps each tax period to guarantee audit defense and prevent interest liabilities.
@@ -364,10 +390,10 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                 <button
                   type="button"
                   onClick={() => onNavigateTab('gst-sales-register')}
-                  className="gst-journey-action-btn"
+                  className="gst-journey-action-btn flex items-center justify-between"
                 >
                   <span>View Sales Register</span>
-                  <span>➔</span>
+                  <ArrowRightIcon size={14} />
                 </button>
               </div>
 
@@ -383,10 +409,10 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                 <button
                   type="button"
                   onClick={() => onNavigateTab('gst-itc-reconciliation')}
-                  className="gst-journey-action-btn"
+                  className="gst-journey-action-btn flex items-center justify-between"
                 >
                   <span>Reconcile ITC Register</span>
-                  <span>➔</span>
+                  <ArrowRightIcon size={14} />
                 </button>
               </div>
 
@@ -402,10 +428,10 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
                 <button
                   type="button"
                   onClick={() => onNavigateTab('gst-gstr3b')}
-                  className="gst-journey-action-btn"
+                  className="gst-journey-action-btn flex items-center justify-between"
                 >
                   <span>Open GSTR-3B Worksheet</span>
-                  <span>➔</span>
+                  <ArrowRightIcon size={14} />
                 </button>
               </div>
             </div>

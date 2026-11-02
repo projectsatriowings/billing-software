@@ -65,7 +65,7 @@ export function registerBranches(r: Router) {
       (SELECT count(*):: int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
     (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
        FROM branches b
-       LEFT JOIN users u ON u.id = b.manager_id
+       LEFT JOIN users u ON (u.branch_id = b.id OR u.id = b.manager_id) AND lower(u.role) IN ('manager', 'store_manager') AND u.deleted_at IS NULL
        ${ whereClause }
        ORDER BY b.code = 'MAIN' DESC, b.code ASC`,
       params,
@@ -94,7 +94,7 @@ export function registerBranches(r: Router) {
               (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
               (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
          FROM branches b
-         LEFT JOIN users u ON u.id = b.manager_id
+         LEFT JOIN users u ON (u.branch_id = b.id OR u.id = b.manager_id) AND lower(u.role) IN ('manager', 'store_manager') AND u.deleted_at IS NULL
          WHERE b.tenant_id = ?
          ORDER BY b.code = 'MAIN' DESC, b.code ASC`,
     [tenantId],
@@ -155,8 +155,9 @@ r.post('/api/branches', requirePerm('settings'), async (ctx) => {
       await q.exec('UPDATE tenants SET locations = ?::jsonb WHERE id = ?', [j(curLocs), tenantId]);
     }
 
-    // If manager assigned, add branch to manager's allowed_locations
+    // If manager assigned, sync users.branch_id and add branch to manager's allowed_locations
     if (managerId) {
+      await q.exec('UPDATE users SET branch_id = ?, updated_at = now() WHERE id = ?', [branchId, managerId]);
       const mgrUser = await q.one<any>('SELECT allowed_locations FROM users WHERE id = ?', [managerId]);
       const mgrAllowed: string[] = Array.isArray(mgrUser?.allowedLocations || mgrUser?.allowed_locations)
         ? (mgrUser.allowedLocations || mgrUser.allowed_locations)
@@ -239,9 +240,10 @@ r.post('/api/branches', requirePerm('settings'), async (ctx) => {
         }
       }
 
-      let managerId = cur.manager_id;
+      const curManagerId = cur.managerId ?? cur.manager_id ?? null;
+      let managerId = curManagerId;
       if (isOwner && b.managerId !== undefined) {
-        managerId = V.optStr(b.managerId, 'Store Manager ID', 50);
+        managerId = V.optStr(b.managerId, 'Store Manager ID', 50) || null;
         if (managerId) {
           const mgr = await q.one('SELECT id, role FROM users WHERE id = ? AND tenant_id = ?', [managerId, tenantId]);
           if (!mgr) throw notFound('Store Manager');
@@ -290,13 +292,23 @@ r.post('/api/branches', requirePerm('settings'), async (ctx) => {
 
       await q.exec(
         `UPDATE branches 
-         SET code = ?, name = ?, address = ?, phone = ?, active = ?, counters = ?:: jsonb, manager_id = ?, updated_at = now()
-         WHERE id = ? AND tenant_id = ? `,
+         SET code = ?, name = ?, address = ?, phone = ?, active = ?, counters = ?::jsonb, manager_id = ?, updated_at = now()
+         WHERE id = ? AND tenant_id = ?`,
         [code, name, address, phone, active, j(counters), managerId || null, branchId, tenantId],
       );
 
+      // Keep users.branch_id in sync
+      if (managerId !== curManagerId) {
+        if (curManagerId) {
+          await q.exec('UPDATE users SET branch_id = NULL WHERE id = ?', [curManagerId]);
+        }
+        if (managerId) {
+          await q.exec('UPDATE users SET branch_id = ?, updated_at = now() WHERE id = ?', [branchId, managerId]);
+        }
+      }
+
       // If new manager assigned, ensure allowed_locations includes branch code
-      if (managerId && managerId !== cur.manager_id) {
+      if (managerId && managerId !== curManagerId) {
         const mgrUser = await q.one<any>('SELECT allowed_locations FROM users WHERE id = ?', [managerId]);
         const mgrAllowed: string[] = Array.isArray(mgrUser?.allowedLocations || mgrUser?.allowed_locations)
           ? (mgrUser.allowedLocations || mgrUser.allowed_locations)
@@ -523,8 +535,9 @@ r.delete('/api/branches/:id', requirePerm('settings'), async (ctx) => {
       "SELECT id, name FROM users WHERE branch_id = ? AND tenant_id = ? AND role = 'cashier' AND deleted_at IS NULL",
       [branch.id, tenantId],
     );
-    manager = branch.manager_id
-      ? await q.one<any>('SELECT id, name FROM users WHERE id = ?', [branch.manager_id])
+    const branchMgrId = branch.managerId ?? branch.manager_id;
+    manager = branchMgrId
+      ? await q.one<any>('SELECT id, name FROM users WHERE id = ?', [branchMgrId])
       : null;
 
 
