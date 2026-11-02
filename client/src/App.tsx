@@ -6266,59 +6266,63 @@ export function App() {
           {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
           {displayTab === 'dashboard' && user && (() => {
             const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+            const modeSwitcherControls = isSuperAdminUser ? (
+              <div className="dashboard-mode-switcher-bar" style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <button
+                  type="button"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => {
+                    setDashboardViewMode('today');
+                    setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                  }}
+                >
+                  <BarChart3Icon size={15} />
+                  <span>Today's Live Overview</span>
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                    color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                    boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={() => setDashboardViewMode('management')}
+                >
+                  <Building2Icon size={15} />
+                  <span>Company Multi-Branch View</span>
+                </button>
+              </div>
+            ) : null;
+
             return (
             <div className="dashboard-tab-wrapper">
-              {isSuperAdminUser && (
-                <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
-                  <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '7px',
-                        border: 'none',
-                        fontWeight: 600,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
-                        color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
-                        boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onClick={() => {
-                        setDashboardViewMode('today');
-                        setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
-                      }}
-                    >
-                      <BarChart3Icon size={15} />
-                      <span>Today's Live Overview</span>
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '7px',
-                        border: 'none',
-                        fontWeight: 600,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
-                        color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
-                        boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onClick={() => setDashboardViewMode('management')}
-                    >
-                      <Building2Icon size={15} />
-                      <span>Company Multi-Branch View</span>
-                    </button>
-                  </div>
+              {dashboardViewMode === 'management' && isSuperAdminUser && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', padding: '0 2rem' }}>
+                  {modeSwitcherControls}
                 </div>
               )}
 
@@ -6326,6 +6330,7 @@ export function App() {
                 <TodayDashboardView
                   user={user}
                   shop={shop}
+                  headerRight={modeSwitcherControls}
                   onNavigateToPos={() => setActiveTab('pos')}
                   onNavigateToShifts={() => setActiveTab('shifts')}
                   onNavigateToInventory={() => setActiveTab('inventory')}

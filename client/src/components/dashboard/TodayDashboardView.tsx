@@ -41,6 +41,7 @@ interface TodayDashboardViewProps {
   onOpenAddProductModal: () => void;
   showToast?: (msg: string) => void;
   onManageBranches?: () => void;
+  headerRight?: React.ReactNode;
 }
 
 type ChartMetric = 'sales' | 'bills' | 'profit';
@@ -296,6 +297,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onOpenAddProductModal,
   showToast,
   onManageBranches,
+  headerRight,
 }) => {
   // SWR: Initialize state immediately from cache if available (0ms instant render!)
   const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
@@ -847,40 +849,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="header-actions-area">
-            {/* Inward Purchase Button */}
-            <button
-              type="button"
-              className="btn-dash-action"
-              onClick={onNavigateToPurchases}
-              title="Record supplier purchase invoice & inward goods"
-            >
-              <DownloadIcon size={16} />
-              <span>Purchase Inward</span>
-            </button>
-
-            {/* Add Product Button */}
-            <button
-              type="button"
-              className="btn-dash-action"
-              onClick={onOpenAddProductModal}
-              title="Add new item to catalog"
-            >
-              <PlusIcon size={16} />
-              <span>Add Product</span>
-            </button>
-
-            {/* Primary New Bill (F1) Button */}
-            <button
-              type="button"
-              className="btn-dash-primary"
-              onClick={onNavigateToPos}
-              title="Open POS billing terminal (Hot key: F1)"
-            >
-              <ReceiptIcon size={16} />
-              <span>New Bill (F1)</span>
-            </button>
-          </div>
+          {headerRight && (
+            <div className="header-actions-area">
+              {headerRight}
+            </div>
+          )}
         </div>
 
         {/* Subheader: Today pill & Branch Switcher */}
