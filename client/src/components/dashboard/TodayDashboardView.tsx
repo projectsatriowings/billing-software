@@ -41,7 +41,6 @@ interface TodayDashboardViewProps {
   onOpenAddProductModal: () => void;
   showToast?: (msg: string) => void;
   onManageBranches?: () => void;
-  headerRight?: React.ReactNode;
 }
 
 type ChartMetric = 'sales' | 'bills' | 'profit';
@@ -297,7 +296,6 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onOpenAddProductModal,
   showToast,
   onManageBranches,
-  headerRight,
 }) => {
   // SWR: Initialize state immediately from cache if available (0ms instant render!)
   const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
@@ -836,51 +834,49 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     <div className="today-dash-root">
       {/* 1. TOP HEADER (Greeting, Shop GSTIN, Shift Pill, Actions) */}
       <header className="today-dash-header">
-        <div className="today-dash-header-bar">
-          <div className="header-meta-row">
-            <div className="header-today-pill">
-              <CalendarIcon size={14} style={{ marginRight: "4px" }} />
-              <span>Today · {nowKolkata.formattedDate}</span>
-            </div>
-
-            {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
-              <div className="dashboard-branch-selector">
-                <span className="branch-selector-label">Branch:</span>
-                <BranchSwitcher
-                  branches={data.branches}
-                  selectedBranchCode={selectedBranchCode}
-                  onSelectBranch={handleBranchChange}
-                  user={user}
-                  onManageBranches={onManageBranches}
-                />
-              </div>
-            ) : (
-              <div className="dashboard-branch-selector">
-                <span className="branch-selector-label">Branch:</span>
-                <div className="branch-selector-pills">
-                  <div
-                    className="dashboard-branch-pill active read-only-branch-pill"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      cursor: 'default',
-                      userSelect: 'none',
-                    }}
-                    title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
-                  >
-                    <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
-                    <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
-                    <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
-                  </div>
-                </div>
-              </div>
-            )}
+        <div className="header-meta-row">
+          <div className="header-today-pill">
+            <CalendarIcon size={14} style={{ marginRight: "4px" }} />
+            <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
-          {headerRight && (
-            <div className="today-dash-header-right">
-              {headerRight}
+          {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
+            <div className="dashboard-branch-selector">
+              <span className="branch-selector-label">Branch:</span>
+              <BranchSwitcher
+                branches={data.branches}
+                selectedBranchCode={selectedBranchCode}
+                onSelectBranch={handleBranchChange}
+                user={user}
+                onManageBranches={onManageBranches}
+              />
             </div>
+          ) : (
+            <div className="dashboard-branch-selector">
+              <span className="branch-selector-label">Branch:</span>
+              <div className="branch-selector-pills">
+                <div
+                  className="dashboard-branch-pill active read-only-branch-pill"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    cursor: 'default',
+                    userSelect: 'none',
+                  }}
+                  title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
+                >
+                  <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
+                  <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
+                  <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <span className="super-admin-badge-pill">
+              Super Admin
+            </span>
           )}
         </div>
       </header>

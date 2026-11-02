@@ -32191,3 +32191,60 @@ select.expense-input-control {
   opacity: 0 !important;
   visibility: hidden !important;
 }
+
+
+/* Far-Left Dashboard Greeting in Top Bar */
+.top-dash-greeting-group-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.top-dash-greeting-group-left .header-greeting-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.top-dash-greeting-group-left .header-shop-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  font-weight: 500;
+}
+
+.top-dash-greeting-group-left .header-shop-subtitle .dot-sep {
+  color: #cbd5e1;
+}
+
+.top-dash-greeting-group-left .header-shop-subtitle .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+
+.super-admin-badge-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid #e0e7ff;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.85rem;
+}
