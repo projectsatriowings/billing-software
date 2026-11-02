@@ -836,13 +836,13 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
       <header className="today-dash-header">
         <div className="header-meta-row">
           <div className="header-today-pill">
-            <CalendarIcon size={14} style={{ marginRight: "4px" }} />
+            <CalendarIcon size={14} className="today-pill-icon" />
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
-          {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
-            <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">Branch:</span>
+          <div className="dashboard-branch-selector">
+            <span className="branch-selector-label">Branch:</span>
+            {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
               <BranchSwitcher
                 branches={data.branches}
                 selectedBranchCode={selectedBranchCode}
@@ -850,34 +850,19 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                 user={user}
                 onManageBranches={onManageBranches}
               />
-            </div>
-          ) : (
-            <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">Branch:</span>
+            ) : (
               <div className="branch-selector-pills">
                 <div
                   className="dashboard-branch-pill active read-only-branch-pill"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    cursor: 'default',
-                    userSelect: 'none',
-                  }}
                   title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
                 >
-                  <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
+                  <Building2Icon size={13} className="branch-icon" />
                   <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
-                  <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
+                  <LockIcon size={11} className="branch-lock-icon" />
                 </div>
               </div>
-            </div>
-          )}
-
-          {isSuperAdmin && (
-            <span className="super-admin-badge-pill">
-              Super Admin
-            </span>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
