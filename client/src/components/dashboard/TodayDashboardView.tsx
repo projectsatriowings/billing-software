@@ -23,6 +23,7 @@ import {
   ShieldCheckIcon,
   PackageIcon,
   RotateCcwIcon,
+  TrendingUpIcon,
   AlertTriangleIcon,
   ShoppingCartIcon,
   RefreshCwIcon,
@@ -888,6 +889,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card purple-highlight">
           <div className="kpi-card-header">
             <span className="kpi-label">TODAY'S SALES</span>
+            <span className="kpi-icon-badge purple"><TrendingUpIcon size={15} style={{ color: "#ffffff" }} /></span>
           </div>
           <div className="kpi-value-row">
             <span className="kpi-value mono">
@@ -943,7 +945,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           </div>
           <div className="kpi-value-row">
             <span className="kpi-value mono">
-              <AnimatedCounter value={cards.avgBillValue.avgBillMinor} isRupees={true} decimals={2} animKey={chartAnimKey} />
+              <AnimatedCounter value={cards.avgBillValue.avgBillMinor} isRupees={true} decimals={cards.avgBillValue.avgBillMinor % 100 !== 0 ? 2 : 0} animKey={chartAnimKey} />
             </span>
           </div>
           <div className="kpi-footer-row">
