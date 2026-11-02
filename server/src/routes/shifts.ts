@@ -1,4 +1,5 @@
 import { requirePerm, requireUser } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, forbidden, notFound, HtmlResponse, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { j, type Queryable } from '../db/index.ts';
@@ -255,6 +256,9 @@ export function registerShifts(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const userId = ctx.user!.id;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) throw bad('Branch is required to open shift', 'BRANCH_REQUIRED');
 
     const openingCashMinor = V.int(b.openingCashMinor ?? 0, 'Opening cash float (paise)', { min: 0 });
     const location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
@@ -277,11 +281,11 @@ export function registerShifts(r: Router) {
 
       // 2. Generate sequential shift number (SHF-1001) using number_series
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, 'SHF', 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+        `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+         VALUES (?, ?, 'SHF', 2)
+         ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
          RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId],
+        [tenantId, branchId],
       );
       const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
       const shiftNumber = `SHF-${1000 + seqNo}`;
@@ -291,13 +295,14 @@ export function registerShifts(r: Router) {
 
       await q.exec(
         `INSERT INTO shifts (
-          id, tenant_id, shift_number, user_id, status,
+          id, tenant_id, branch_id, shift_number, user_id, status,
           opened_at, opening_cash_minor, location, counter, note,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`,
         [
           shiftId,
           tenantId,
+          branchId,
           shiftNumber,
           userId,
           now,

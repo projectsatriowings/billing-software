@@ -1,0 +1,408 @@
+/* Branch Switcher Dropdown - Super Admin Only */
+
+.branch-switcher-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.branch-switcher-trigger-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.branch-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #4f46e5;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  line-height: 1.2;
+  user-select: none;
+}
+
+.branch-switcher-trigger:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(79, 70, 229, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.branch-switcher-trigger:active,
+.branch-switcher-trigger.is-open {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.branch-switcher-store-icon {
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.branch-switcher-name {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.branch-switcher-count-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  padding: 0.12rem 0.48rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.branch-switcher-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  opacity: 0.85;
+}
+
+.branch-switcher-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.branch-switcher-sa-tag {
+  display: inline-flex;
+  align-items: center;
+  background: #f5f3ff;
+  color: #6366f1;
+  border: 1px solid #ddd6fe;
+  border-radius: 9999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+/* Dropdown Panel */
+.branch-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 360px;
+  max-width: 90vw;
+  max-height: 420px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.14), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: branchDropdownPop 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes branchDropdownPop {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Search Header */
+.branch-switcher-search-box {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.branch-switcher-search-box .search-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.branch-switcher-search-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  font-size: 0.82rem;
+  color: #0f172a;
+  background: transparent;
+  font-family: inherit;
+}
+
+.branch-switcher-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.branch-switcher-search-clear {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.branch-switcher-search-clear:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+/* Scrollable Branch List */
+.branch-switcher-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 290px;
+  padding: 0.35rem 0;
+}
+
+.branch-switcher-list::-webkit-scrollbar {
+  width: 5px;
+}
+.branch-switcher-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.branch-switcher-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Section Header (Pinned & Cities) */
+.branch-switcher-section-header {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f1f5f9;
+}
+
+.branch-switcher-section-header:first-child {
+  border-top: none;
+}
+
+.branch-switcher-section-count {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Branch Option Row */
+.branch-switcher-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  user-select: none;
+  border-left: 3px solid transparent;
+}
+
+.branch-switcher-option:hover {
+  background: #f8fafc;
+}
+
+.branch-switcher-option.is-highlighted {
+  background: #f1f5f9;
+}
+
+.branch-switcher-option.is-selected {
+  background: #f5f3ff;
+  border-left-color: #6366f1;
+}
+
+.branch-switcher-option.is-selected.is-highlighted {
+  background: #ede9fe;
+}
+
+.branch-switcher-option-main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Status Dot */
+.branch-switcher-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #cbd5e1;
+}
+
+.branch-switcher-status-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.branch-switcher-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.branch-switcher-option-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-switcher-option.is-selected .branch-switcher-option-name {
+  color: #4338ca;
+}
+
+.branch-switcher-option-sub {
+  font-size: 0.7rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right Side Actions (Pin + Checkmark) */
+.branch-switcher-option-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.branch-switcher-pin-btn {
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.branch-switcher-option:hover .branch-switcher-pin-btn,
+.branch-switcher-option.is-highlighted .branch-switcher-pin-btn,
+.branch-switcher-pin-btn.is-pinned {
+  opacity: 1;
+}
+
+.branch-switcher-pin-btn:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.branch-switcher-pin-btn.is-pinned {
+  color: #6366f1;
+}
+
+.branch-switcher-pin-btn.is-pinned:hover {
+  background: #ede9fe;
+  color: #4f46e5;
+}
+
+.branch-switcher-check-icon {
+  color: #6366f1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Empty State */
+.branch-switcher-empty {
+  padding: 1.75rem 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Footer */
+.branch-switcher-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.85rem;
+  background: #fafafa;
+  border-top: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+}
+
+.branch-switcher-footer-hint {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+}
+
+.branch-switcher-manage-btn {
+  border: none;
+  background: transparent;
+  color: #6366f1;
+  font-weight: 700;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition: all 0.15s ease;
+}
+
+.branch-switcher-manage-btn:hover {
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+/* Responsive <= 640px */
+@media (max-width: 640px) {
+  .branch-switcher-dropdown {
+    position: fixed;
+    top: auto;
+    bottom: 12px;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: 75vh;
+    box-shadow: 0 20px 40px -8px rgba(15, 23, 42, 0.25);
+  }
+}
+

@@ -2,6 +2,7 @@ import { requirePerm } from '../auth.ts';
 import { bad, conflict, notFound, FileResponse, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import {
   CATEGORY_SAMPLE_TEMPLATE_CSV,
   parseCategoryCsv,
@@ -22,6 +23,7 @@ export function registerCategories(r: Router) {
   // 2. List categories with parent hierarchy and live product item count
   r.get('/api/categories', requirePerm('items.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const includeInactive = ctx.query.includeInactive === '1' || ctx.query.includeInactive === 'true';
 
     let sql = `
@@ -31,6 +33,10 @@ export function registerCategories(r: Router) {
       WHERE c.tenant_id = ?
     `;
     const params: unknown[] = [tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND c.branch_id = ?';
+      params.push(scope.branchId);
+    }
     if (!includeInactive) {
       sql += ' AND c.active = true';
     }
@@ -38,88 +44,94 @@ export function registerCategories(r: Router) {
 
     let rows = await ctx.db.query(sql, params);
 
-    // Auto-discovery from products: Only register categories that do NOT exist yet
-    const distinctItemCats = await ctx.db.query<{ category: string }>(
-      'SELECT DISTINCT category FROM items WHERE tenant_id = ? AND category IS NOT NULL AND category <> \'\'',
-      [tenantId],
-    );
-    if (distinctItemCats.length > 0) {
-      const existingNames = new Set(rows.map((r: any) => (r.name || '').trim().toLowerCase()));
-      let insertedNew = false;
-      for (const itemCat of distinctItemCats) {
-        const catName = itemCat.category.trim();
-        if (!catName || existingNames.has(catName.toLowerCase())) continue;
+    // Auto-discovery from products: Only register categories for current branch
+    if (scope.branchId) {
+      const distinctItemCats = await ctx.db.query<{ category: string }>(
+        'SELECT DISTINCT category FROM items WHERE tenant_id = ? AND branch_id = ? AND category IS NOT NULL AND category <> \'\'',
+        [tenantId, scope.branchId],
+      );
+      if (distinctItemCats.length > 0) {
+        const existingNames = new Set(rows.map((r: any) => (r.name || '').trim().toLowerCase()));
+        let insertedNew = false;
+        for (const itemCat of distinctItemCats) {
+          const catName = itemCat.category.trim();
+          if (!catName || existingNames.has(catName.toLowerCase())) continue;
 
-        let parentName: string | null = null;
-        let leafName = catName;
-        for (const sep of ['→', '->', '>', '/']) {
-          if (catName.includes(sep)) {
-            const parts = catName.split(sep).map((s) => s.trim());
-            if (parts.length === 2 && parts[0] && parts[1]) {
-              parentName = parts[0];
-              leafName = parts[1];
-              break;
-            }
-          }
-        }
-
-        try {
-          if (parentName) {
-            let parent = await ctx.db.one<{ id: string }>(
-              'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
-              [tenantId, parentName],
-            );
-            if (!parent && !existingNames.has(parentName.toLowerCase())) {
-              const pId = newId('cat');
-              await ctx.db.exec(
-                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
-                [pId, tenantId, parentName],
-              );
-              existingNames.add(parentName.toLowerCase());
-              parent = await ctx.db.one<{ id: string }>(
-                'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
-                [tenantId, parentName],
-              );
-              insertedNew = true;
-            }
-            if (!existingNames.has(leafName.toLowerCase())) {
-              const catId = newId('cat');
-              const res = await ctx.db.exec(
-                'INSERT INTO categories (id, tenant_id, name, parent_id, active) VALUES (?, ?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
-                [catId, tenantId, leafName, parent?.id ?? null],
-              );
-              if (res) {
-                existingNames.add(leafName.toLowerCase());
-                insertedNew = true;
-              }
-            }
-          } else {
-            if (!existingNames.has(catName.toLowerCase())) {
-              const catId = newId('cat');
-              const res = await ctx.db.exec(
-                'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
-                [catId, tenantId, catName],
-              );
-              if (res) {
-                existingNames.add(catName.toLowerCase());
-                insertedNew = true;
+          let parentName: string | null = null;
+          let leafName = catName;
+          for (const sep of ['→', '->', '>', '/']) {
+            if (catName.includes(sep)) {
+              const parts = catName.split(sep).map((s) => s.trim());
+              if (parts.length === 2 && parts[0] && parts[1]) {
+                parentName = parts[0];
+                leafName = parts[1];
+                break;
               }
             }
           }
-        } catch {
-          // ignore duplicate
+
+          try {
+            if (parentName) {
+              let parent = await ctx.db.one<{ id: string }>(
+                'SELECT id FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+                [tenantId, scope.branchId, parentName],
+              );
+              if (!parent && !existingNames.has(parentName.toLowerCase())) {
+                const pId = newId('cat');
+                await ctx.db.exec(
+                  'INSERT INTO categories (id, tenant_id, branch_id, name, active) VALUES (?, ?, ?, ?, true) ON CONFLICT (tenant_id, branch_id, lower(name)) DO NOTHING',
+                  [pId, tenantId, scope.branchId, parentName],
+                );
+                existingNames.add(parentName.toLowerCase());
+                parent = await ctx.db.one<{ id: string }>(
+                  'SELECT id FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+                  [tenantId, scope.branchId, parentName],
+                );
+                insertedNew = true;
+              }
+              if (!existingNames.has(leafName.toLowerCase())) {
+                const catId = newId('cat');
+                const res = await ctx.db.exec(
+                  'INSERT INTO categories (id, tenant_id, branch_id, name, parent_id, active) VALUES (?, ?, ?, ?, ?, true) ON CONFLICT (tenant_id, branch_id, lower(name)) DO NOTHING',
+                  [catId, tenantId, scope.branchId, leafName, parent?.id ?? null],
+                );
+                if (res) {
+                  existingNames.add(leafName.toLowerCase());
+                  insertedNew = true;
+                }
+              }
+            } else {
+              if (!existingNames.has(catName.toLowerCase())) {
+                const catId = newId('cat');
+                const res = await ctx.db.exec(
+                  'INSERT INTO categories (id, tenant_id, branch_id, name, active) VALUES (?, ?, ?, ?, true) ON CONFLICT (tenant_id, branch_id, lower(name)) DO NOTHING',
+                  [catId, tenantId, scope.branchId, catName],
+                );
+                if (res) {
+                  existingNames.add(catName.toLowerCase());
+                  insertedNew = true;
+                }
+              }
+            }
+          } catch {
+            // ignore duplicate
+          }
         }
-      }
-      if (insertedNew) {
-        rows = await ctx.db.query(sql, params);
+        if (insertedNew) {
+          rows = await ctx.db.query(sql, params);
+        }
       }
     }
 
-    // Fetch item counts per category (aggregating on items.category name)
-    const itemCounts = await ctx.db.query<{ category: string; cnt: number }>(
-      'SELECT category, COUNT(*)::int AS cnt FROM items WHERE tenant_id = ? AND active = true AND category IS NOT NULL GROUP BY category',
-      [tenantId],
-    );
+    // Fetch item counts per category (aggregating on items.category name in this branch)
+    let countSql = 'SELECT category, COUNT(*)::int AS cnt FROM items WHERE tenant_id = ? AND active = true AND category IS NOT NULL';
+    const countParams: unknown[] = [tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      countSql += ' AND branch_id = ?';
+      countParams.push(scope.branchId);
+    }
+    countSql += ' GROUP BY category';
+    const itemCounts = await ctx.db.query<{ category: string; cnt: number }>(countSql, countParams);
     const countMap = new Map<string, number>();
     for (const c of itemCounts) {
       if (c.category) countMap.set(c.category.toLowerCase(), Number(c.cnt));
@@ -139,6 +151,7 @@ export function registerCategories(r: Router) {
         return {
           id: cat.id,
           tenantId: cat.tenantId ?? cat.tenant_id,
+          branchId: cat.branchId ?? cat.branch_id,
           name: cat.name,
           description: cat.description ?? null,
           active: Boolean(cat.active),
@@ -155,16 +168,21 @@ export function registerCategories(r: Router) {
   r.post('/api/categories', requirePerm('items.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = b.branchId || b.branch_id || scope.branchId;
+    if (!branchId) {
+      throw bad('Branch ID is required to create a category.', 'BRANCH_REQUIRED');
+    }
 
     const name = V.str(b.name, 'Category name', { required: true, max: 60 });
     const description = V.optStr(b.description, 'Description', 200);
     const parentId = V.optStr(b.parentId ?? b.parent_id, 'Parent category', 60);
 
-    // Validate parent ownership and hierarchy depth
+    // Validate parent ownership and hierarchy depth in this branch
     if (parentId) {
       const parent = await ctx.db.one<{ id: string; name: string; parent_id: string | null }>(
-        'SELECT id, name, parent_id FROM categories WHERE id = ? AND tenant_id = ?',
-        [parentId, tenantId],
+        'SELECT id, name, parent_id FROM categories WHERE id = ? AND tenant_id = ? AND branch_id = ?',
+        [parentId, tenantId, branchId],
       );
       if (!parent) {
         throw bad('Parent category not found.', 'VALIDATION', { field: 'parentId' });
@@ -174,26 +192,26 @@ export function registerCategories(r: Router) {
       }
     }
 
-    // Case-insensitive duplicate check within same tenant
+    // Case-insensitive duplicate check within same branch
     const existing = await ctx.db.one(
-      'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?)',
-      [tenantId, name],
+      'SELECT id FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+      [tenantId, branchId, name],
     );
     if (existing) {
-      throw conflict(`Category "${name}" already exists.`);
+      throw conflict(`Category "${name}" already exists in this branch.`);
     }
 
     const id = newId('cat');
     await ctx.db.tx(async (q) => {
       await q.exec(
-        'INSERT INTO categories (id, tenant_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, ?, true)',
-        [id, tenantId, name, description || null, parentId || null],
+        'INSERT INTO categories (id, tenant_id, branch_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, ?, ?, true)',
+        [id, tenantId, branchId, name, description || null, parentId || null],
       );
       await audit(q, ctx, {
         action: 'category.create',
         entity: 'category',
         entityId: id,
-        detail: { name, parentId: parentId || null },
+        detail: { name, branchId, parentId: parentId || null },
       });
     });
 
@@ -209,6 +227,7 @@ export function registerCategories(r: Router) {
       category: {
         id: created.id,
         tenantId: created.tenantId ?? created.tenant_id,
+        branchId: created.branchId ?? created.branch_id,
         name: created.name,
         description: created.description ?? null,
         active: Boolean(created.active),
@@ -224,11 +243,16 @@ export function registerCategories(r: Router) {
   r.patch('/api/categories/:id', requirePerm('items.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
-    const cat = await ctx.db.one(
-      'SELECT * FROM categories WHERE id = ? AND tenant_id = ?',
-      [ctx.params.id, tenantId],
-    );
+    const scope = await resolveBranchScope(ctx);
+    let checkSql = 'SELECT * FROM categories WHERE id = ? AND tenant_id = ?';
+    const checkParams: unknown[] = [ctx.params.id, tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      checkSql += ' AND branch_id = ?';
+      checkParams.push(scope.branchId);
+    }
+    const cat = await ctx.db.one(checkSql, checkParams);
     if (!cat) throw notFound('Category');
+    const branchId = cat.branchId ?? cat.branch_id ?? scope.branchId;
 
     const name = b.name !== undefined ? V.str(b.name, 'Category name', { required: true, max: 60 }) : cat.name;
     const description = b.description !== undefined ? V.optStr(b.description, 'Description', 200) : (cat.description ?? null);
@@ -237,13 +261,13 @@ export function registerCategories(r: Router) {
     const rawParentId = parentIdProvided ? (b.parentId ?? b.parent_id) : (cat.parentId ?? cat.parent_id ?? null);
     const parentId = rawParentId && String(rawParentId).trim() ? String(rawParentId).trim() : null;
 
-    // Check unique name if name changed
+    // Check unique name if name changed within branch
     if (name.toLowerCase() !== String(cat.name).toLowerCase()) {
       const dup = await ctx.db.one(
-        'SELECT id FROM categories WHERE tenant_id = ? AND lower(name) = lower(?) AND id <> ?',
-        [tenantId, name, cat.id],
+        'SELECT id FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?) AND id <> ?',
+        [tenantId, branchId, name, cat.id],
       );
-      if (dup) throw conflict(`Category "${name}" already exists.`);
+      if (dup) throw conflict(`Category "${name}" already exists in this branch.`);
     }
 
     // Validate parent assignment
@@ -251,67 +275,42 @@ export function registerCategories(r: Router) {
       if (parentId === cat.id) {
         throw bad('A category cannot be its own parent.', 'VALIDATION', { field: 'parentId' });
       }
-
       const parent = await ctx.db.one<{ id: string; name: string; parent_id: string | null }>(
-        'SELECT id, name, parent_id FROM categories WHERE id = ? AND tenant_id = ?',
-        [parentId, tenantId],
+        'SELECT id, name, parent_id FROM categories WHERE id = ? AND tenant_id = ? AND branch_id = ?',
+        [parentId, tenantId, branchId],
       );
       if (!parent) {
         throw bad('Parent category not found.', 'VALIDATION', { field: 'parentId' });
       }
-
-      // Cycle detection: ensure cat.id is not a parent/ancestor of the target parent
-      const child = await ctx.db.one(
-        'SELECT id FROM categories WHERE tenant_id = ? AND id = ? AND parent_id = ?',
-        [tenantId, parentId, cat.id],
-      );
-      if (child) {
-        throw bad('Circular category relationship is not allowed.', 'VALIDATION', { field: 'parentId' });
+      if (parent.parent_id) {
+        throw bad('Cannot nest categories deeper than 2 levels (Main Category → Subcategory).', 'VALIDATION', { field: 'parentId' });
       }
-
-      // Max depth check: if cat has child categories, it cannot be made a child
       const hasChildren = await ctx.db.one(
-        'SELECT id FROM categories WHERE tenant_id = ? AND parent_id = ? LIMIT 1',
-        [tenantId, cat.id],
+        'SELECT 1 FROM categories WHERE parent_id = ? AND tenant_id = ?',
+        [cat.id, tenantId],
       );
       if (hasChildren) {
-        throw bad('A category that has subcategories cannot be converted into a subcategory.', 'VALIDATION', { field: 'parentId' });
-      }
-
-      // Max depth check: if parent is already a subcategory
-      if (parent.parent_id) {
-        throw bad('Cannot nest categories deeper than 2 levels.', 'VALIDATION', { field: 'parentId' });
+        throw bad('This category already has subcategories and cannot become a subcategory itself.', 'VALIDATION', { field: 'parentId' });
       }
     }
 
     await ctx.db.tx(async (q) => {
       await q.exec(
-        'UPDATE categories SET name = ?, description = ?, active = ?, parent_id = ? WHERE id = ? AND tenant_id = ?',
-        [name, description, active, parentId, cat.id, tenantId],
+        `UPDATE categories
+         SET name = ?, description = ?, parent_id = ?, active = ?, updated_at = now()
+         WHERE id = ? AND tenant_id = ?`,
+        [name, description, parentId, active, cat.id, tenantId],
       );
 
-      // If category is deactivated, also deactivate any child subcategories
-      if (!active && Boolean(cat.active)) {
-        await q.exec(
-          'UPDATE categories SET active = false WHERE tenant_id = ? AND parent_id = ?',
-          [tenantId, cat.id],
-        );
-      }
-
-      // Keep products connected if category name changed
+      // If category was renamed, also update products in this branch
       if (name !== cat.name) {
         await q.exec(
-          'UPDATE items SET category = ? WHERE tenant_id = ? AND category = ?',
-          [name, tenantId, cat.name],
+          `UPDATE items SET category = ? WHERE tenant_id = ? AND branch_id = ? AND category = ?`,
+          [name, tenantId, branchId, cat.name],
         );
       }
 
-      await audit(q, ctx, {
-        action: 'category.update',
-        entity: 'category',
-        entityId: cat.id,
-        detail: { name, active, parentId },
-      });
+      await audit(q, ctx, { action: 'category.update', entity: 'category', entityId: cat.id, detail: { name, active } });
     });
 
     const updated = await ctx.db.one(
@@ -326,6 +325,7 @@ export function registerCategories(r: Router) {
       category: {
         id: updated.id,
         tenantId: updated.tenantId ?? updated.tenant_id,
+        branchId: updated.branchId ?? updated.branch_id,
         name: updated.name,
         description: updated.description ?? null,
         active: Boolean(updated.active),
@@ -336,44 +336,54 @@ export function registerCategories(r: Router) {
     };
   });
 
-  // 5. Permanent Delete category (and unlink from items/child categories)
+  // 5. Permanent Delete category
   r.delete('/api/categories/:id', requirePerm('items.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const cat = await ctx.db.one<{ id: string; name: string }>(
-      'SELECT id, name FROM categories WHERE id = ? AND tenant_id = ?',
-      [ctx.params.id, tenantId],
-    );
+    const scope = await resolveBranchScope(ctx);
+    let checkSql = 'SELECT id, name, branch_id FROM categories WHERE id = ? AND tenant_id = ?';
+    const checkParams: unknown[] = [ctx.params.id, tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      checkSql += ' AND branch_id = ?';
+      checkParams.push(scope.branchId);
+    }
+    const cat = await ctx.db.one<{ id: string; name: string; branchId?: string; branch_id?: string }>(checkSql, checkParams);
     if (!cat) throw notFound('Category');
+    const branchId = cat.branchId ?? cat.branch_id;
 
     await ctx.db.tx(async (q) => {
-      // 1. Unlink any products using this category or hierarchy string
+      // 1. Unlink products in this branch
       await q.exec(
-        "UPDATE items SET category = '' WHERE tenant_id = ? AND (lower(category) = lower(?) OR category LIKE ? OR category LIKE ?)",
-        [tenantId, cat.name, `%→ ${cat.name}`, `${cat.name} →%`],
+        "UPDATE items SET category = '' WHERE tenant_id = ? AND branch_id = ? AND (lower(category) = lower(?) OR category LIKE ? OR category LIKE ?)",
+        [tenantId, branchId, cat.name, `%→ ${cat.name}`, `${cat.name} →%`],
       );
 
-      // 2. Unlink any child categories (set their parent_id = NULL so they become top-level)
+      // 2. Unlink child categories
       await q.exec(
-        'UPDATE categories SET parent_id = NULL WHERE tenant_id = ? AND parent_id = ?',
-        [tenantId, cat.id],
+        'UPDATE categories SET parent_id = NULL WHERE tenant_id = ? AND branch_id = ? AND parent_id = ?',
+        [tenantId, branchId, cat.id],
       );
 
-      // 3. Delete the category record
+      // 3. Delete category
       await q.exec(
         'DELETE FROM categories WHERE id = ? AND tenant_id = ?',
         [cat.id, tenantId],
       );
 
-      await audit(q, ctx, { action: 'category.delete', entity: 'category', entityId: cat.id, detail: { name: cat.name } });
+      await audit(q, ctx, { action: 'category.delete', entity: 'category', entityId: cat.id, detail: { name: cat.name, branchId } });
     });
 
     return { ok: true, deleted: cat.id };
   });
 
-  // 6. Bulk Category Import & Preview (handles 1,000+ rows safely)
+  // 6. Bulk Category Import & Preview
   r.post('/api/categories/import', requirePerm('items.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = b.branchId || b.branch_id || scope.branchId;
+    if (!branchId) {
+      throw bad('Branch ID is required to import categories.', 'BRANCH_REQUIRED');
+    }
     const dryRun = Boolean(b.dryRun);
     const updateExisting = Boolean(b.updateExisting);
 
@@ -394,7 +404,6 @@ export function registerCategories(r: Router) {
       throw bad('No data rows found in upload. Please check the file.', 'VALIDATION');
     }
 
-    // Safety limit: up to 2,500 rows per batch
     if (rawRows.length > 2500) {
       throw bad(
         `Import exceeds maximum allowed capacity of 2,500 rows per request (received ${rawRows.length} rows).`,
@@ -402,10 +411,9 @@ export function registerCategories(r: Router) {
       );
     }
 
-    // Query current categories for tenant to validate parent references and duplicates
     const existing = await ctx.db.query<{ id: string; name: string; parent_id: string | null; active: boolean }>(
-      'SELECT id, name, parent_id, active FROM categories WHERE tenant_id = ?',
-      [tenantId],
+      'SELECT id, name, parent_id, active FROM categories WHERE tenant_id = ? AND branch_id = ?',
+      [tenantId, branchId],
     );
 
     const plan = validateAndPlanCategoryImport(
@@ -418,25 +426,32 @@ export function registerCategories(r: Router) {
       })),
     );
 
-    // If dry run, return validation report and preview immediately without DB writes
     if (dryRun) {
       const duplicatesInDb = rawRows.filter(
         (r) => r.name && plan.existingNames.has(r.name.trim().toLowerCase()),
       ).length;
+
+      const fileNames = new Set<string>();
+      let duplicateNamesInFile = 0;
+      for (const r of rawRows) {
+        if (!r.name) continue;
+        const n = r.name.trim().toLowerCase();
+        if (fileNames.has(n)) duplicateNamesInFile++;
+        else fileNames.add(n);
+      }
 
       return {
         valid: plan.valid,
         total: plan.total,
         mainCategoriesCount: plan.mainCategories.length,
         subcategoriesCount: plan.subcategories.length,
-        duplicateCount: duplicatesInDb,
-        errorCount: plan.errors.length,
+        duplicateNamesInFile,
+        duplicatesInDb,
+        existingCategoriesCount: existing.length,
         errors: plan.errors,
-        preview: rawRows.slice(0, 10),
       };
     }
 
-    // If commit import was requested but there are validation errors, reject without DB writes
     if (!plan.valid) {
       throw bad(
         `Import contains ${plan.errors.length} validation error(s). Please review the errors before proceeding.`,
@@ -449,15 +464,12 @@ export function registerCategories(r: Router) {
     let updated = 0;
     let skipped = 0;
 
-    // Execute atomic batch import inside transaction
     await ctx.db.tx(async (q) => {
-      // Build in-memory lookup map of category names to IDs
       const nameToIdMap = new Map<string, string>();
       for (const e of existing) {
         nameToIdMap.set(e.name.toLowerCase().trim(), e.id);
       }
 
-      // PASS 1: Process Main Categories (top-level)
       for (const item of plan.mainCategories) {
         const lower = item.name.toLowerCase();
         const existingId = nameToIdMap.get(lower);
@@ -465,8 +477,8 @@ export function registerCategories(r: Router) {
         if (existingId) {
           if (updateExisting) {
             await q.exec(
-              'UPDATE categories SET description = COALESCE(?, description), active = ? WHERE id = ? AND tenant_id = ?',
-              [item.description, item.active, existingId, tenantId],
+              'UPDATE categories SET description = COALESCE(?, description), active = ? WHERE id = ? AND tenant_id = ? AND branch_id = ?',
+              [item.description, item.active, existingId, tenantId, branchId],
             );
             updated++;
           } else {
@@ -475,15 +487,14 @@ export function registerCategories(r: Router) {
         } else {
           const id = newId('cat');
           await q.exec(
-            'INSERT INTO categories (id, tenant_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, NULL, ?)',
-            [id, tenantId, item.name, item.description, item.active],
+            'INSERT INTO categories (id, tenant_id, branch_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, ?, NULL, ?)',
+            [id, tenantId, branchId, item.name, item.description, item.active],
           );
           nameToIdMap.set(lower, id);
           created++;
         }
       }
 
-      // PASS 2: Process Subcategories (with resolved parent IDs)
       for (const item of plan.subcategories) {
         const lower = item.name.toLowerCase();
         const existingId = nameToIdMap.get(lower);
@@ -497,8 +508,8 @@ export function registerCategories(r: Router) {
         if (existingId) {
           if (updateExisting) {
             await q.exec(
-              'UPDATE categories SET parent_id = ?, description = COALESCE(?, description), active = ? WHERE id = ? AND tenant_id = ?',
-              [parentId, item.description, item.active, existingId, tenantId],
+              'UPDATE categories SET parent_id = ?, description = COALESCE(?, description), active = ? WHERE id = ? AND tenant_id = ? AND branch_id = ?',
+              [parentId, item.description, item.active, existingId, tenantId, branchId],
             );
             updated++;
           } else {
@@ -507,8 +518,8 @@ export function registerCategories(r: Router) {
         } else {
           const id = newId('cat');
           await q.exec(
-            'INSERT INTO categories (id, tenant_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, ?, ?)',
-            [id, tenantId, item.name, item.description, parentId, item.active],
+            'INSERT INTO categories (id, tenant_id, branch_id, name, description, parent_id, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, tenantId, branchId, item.name, item.description, parentId, item.active],
           );
           nameToIdMap.set(lower, id);
           created++;
@@ -520,6 +531,7 @@ export function registerCategories(r: Router) {
         entity: 'category',
         detail: {
           total: plan.total,
+          branchId,
           created,
           updated,
           skipped,

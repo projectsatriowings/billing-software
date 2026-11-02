@@ -134,18 +134,19 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     loadBranches();
   }, []);
 
+  const isSuperAdmin = Boolean(user && (user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN'));
+
   const loadBranches = async () => {
     try {
       setLoadingBranches(true);
-      const res = await api<{ branches: Branch[] }>('/api/branches');
+      const endpoint = isSuperAdmin ? '/api/branches' : '/api/branches?for=transfer_destinations';
+      const res = await api<{ branches: Branch[] }>(endpoint);
       const bList = res.branches || [];
       setBranches(bList);
 
       // Default wizard branches
       if (bList.length > 0) {
-        const defaultSource = user.assignedLocation && bList.some((b) => b.code === user.assignedLocation)
-          ? user.assignedLocation
-          : bList[0].code;
+        const defaultSource = user.assignedLocation || (bList.find(b => b.code === user.assignedLocation)?.code) || bList[0].code;
         setWizardFromBranch(defaultSource);
 
         const defaultDest = bList.find((b) => b.code !== defaultSource)?.code || '';
@@ -1440,11 +1441,12 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             {/* From Branch */}
             <div>
               <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155' }}>
-                From Branch *
+                From Branch * {!isSuperAdmin && <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 500, marginLeft: '4px' }}>(Locked)</span>}
               </label>
               <select
                 className="form-input"
                 value={wizardFromBranch}
+                disabled={!isSuperAdmin}
                 onChange={(e) => {
                   const newFrom = e.target.value;
                   setWizardFromBranch(newFrom);
@@ -1457,6 +1459,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   borderRadius: '8px',
                   borderColor: '#cbd5e1',
                   padding: '0.65rem 0.85rem',
+                  ...(!isSuperAdmin ? { background: '#f8fafc', cursor: 'not-allowed', color: '#475569' } : {}),
                 }}
               >
                 {branches.map((b) => (

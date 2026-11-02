@@ -4,6 +4,7 @@ import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
 import { normalizePhone } from '../../../shared/whatsapp.ts';
 import { validateGstin } from '../../../shared/tax.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 
 function validateCustom(raw: unknown): Record<string, string | number> {
   if (raw === undefined || raw === null || raw === '') return {};
@@ -43,6 +44,7 @@ function formatParty(p: any) {
   return {
     id: p.id,
     tenantId: p.tenantId ?? p.tenant_id,
+    branchId: p.branchId ?? p.branch_id,
     type: p.type,
     name: p.name,
     phone: p.phone ?? null,
@@ -69,20 +71,26 @@ export function registerParties(r: Router) {
   // List parties (customers, suppliers)
   r.get('/api/parties', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const type = ctx.query.type; // customer or supplier
     const q = (ctx.query.q ?? '').trim().toLowerCase();
     const includeInactive = ctx.query.includeInactive === '1' || ctx.query.includeInactive === 'true';
 
     let sql = `
       SELECT p.*,
-             COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor,
-             COALESCE((SELECT SUM(pur.balance_minor) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.status != 'voided'), 0)::bigint AS unpaid_purchases_minor,
-             COALESCE((SELECT COUNT(*) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.status != 'voided' AND pur.balance_minor > 0), 0)::int AS open_purchases_count,
-             (SELECT MIN(COALESCE(pur.supplier_invoice_date, pur.bdate)) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.status != 'voided' AND pur.balance_minor > 0) AS oldest_due_date
+             COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.branch_id = p.branch_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor,
+             COALESCE((SELECT SUM(pur.balance_minor) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.branch_id = p.branch_id AND pur.status != 'voided'), 0)::bigint AS unpaid_purchases_minor,
+             COALESCE((SELECT COUNT(*) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.branch_id = p.branch_id AND pur.status != 'voided' AND pur.balance_minor > 0), 0)::int AS open_purchases_count,
+             (SELECT MIN(COALESCE(pur.supplier_invoice_date, pur.bdate)) FROM purchases pur WHERE pur.supplier_id = p.id AND pur.tenant_id = p.tenant_id AND pur.branch_id = p.branch_id AND pur.status != 'voided' AND pur.balance_minor > 0) AS oldest_due_date
       FROM parties p
       WHERE p.tenant_id = ?
     `;
     const params: unknown[] = [tenantId];
+
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND p.branch_id = ?';
+      params.push(scope.branchId);
+    }
 
     if (!includeInactive) {
       sql += ' AND active = true';
@@ -110,22 +118,26 @@ export function registerParties(r: Router) {
   // Customer Dues Summary & Ageing (0-30, 31-60, 60+ days)
   r.get('/api/parties/dues-summary', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+
+    const branchClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // Fetch unpaid posted invoices grouped by party
     const unpaidInvoices = await ctx.db.query(
       `SELECT party_id, total_minor, balance_minor, bdate, created_at
        FROM invoices
-       WHERE tenant_id = ? AND status = 'posted' AND balance_minor > 0
+       WHERE tenant_id = ? AND status = 'posted' AND balance_minor > 0${branchClause}
        ORDER BY bdate ASC, created_at ASC`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     // Fetch all customers with active advance
     const customers = await ctx.db.query(
       `SELECT id, name, phone, gstin, advance_minor
        FROM parties
-       WHERE tenant_id = ? AND type = 'customer' AND active = true`,
-      [tenantId],
+       WHERE tenant_id = ? AND type = 'customer' AND active = true${branchClause}`,
+      [tenantId, ...branchParams],
     );
 
     const custMap = new Map(customers.map((c: any) => [c.id, {
@@ -215,18 +227,22 @@ export function registerParties(r: Router) {
   // Quick lookup customer by phone number (returns null if not found)
   r.get('/api/parties/by-phone/:phone', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const raw = ctx.params.phone || '';
     const digits = raw.replace(/\D/g, '');
     const last10 = digits.slice(-10);
 
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
     const row = await ctx.db.one(
       `SELECT p.*,
-              COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor
+              COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.branch_id = p.branch_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor
        FROM parties p
-       WHERE p.tenant_id = ? AND p.type = 'customer' AND p.active = true
+       WHERE p.tenant_id = ? AND p.type = 'customer' AND p.active = true${branchFilter}
          AND (p.phone = ? OR REPLACE(p.phone, ' ', '') LIKE ? OR p.phone LIKE ?)
        LIMIT 1`,
-      [tenantId, raw, `%${last10}`, `%${last10}`],
+      [tenantId, ...branchParams, raw, `%${last10}`, `%${last10}`],
     );
 
     if (!row) return { party: null };
@@ -236,12 +252,16 @@ export function registerParties(r: Router) {
   // Get party by ID
   r.get('/api/parties/:id', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
     const row = await ctx.db.one(
       `SELECT p.*,
-              COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor
+              COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.branch_id = p.branch_id AND i.status = 'posted'), 0)::bigint AS unpaid_invoices_minor
        FROM parties p
-       WHERE p.id = ? AND p.tenant_id = ?`,
-      [ctx.params.id, tenantId]
+       WHERE p.id = ? AND p.tenant_id = ?${branchFilter}`,
+      [ctx.params.id, tenantId, ...branchParams]
     );
     if (!row) throw notFound('Party');
     return { party: formatParty(row) };
@@ -251,6 +271,12 @@ export function registerParties(r: Router) {
   r.post('/api/parties', requirePerm('parties.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+
+    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) {
+      throw bad('Branch is required for party creation', 'BRANCH_REQUIRED');
+    }
 
     const name = V.str(b.name, 'Customer/Supplier name', { required: true, max: 120 });
     const type = V.oneOf(b.type, 'Party type', ['customer', 'supplier'] as const, 'customer');
@@ -292,12 +318,12 @@ export function registerParties(r: Router) {
     await ctx.db.tx(async (q) => {
       await q.exec(
         `INSERT INTO parties (
-          id, tenant_id, type, name, phone, email, gstin, state_code,
+          id, tenant_id, branch_id, type, name, phone, email, gstin, state_code,
           address, credit_limit_minor, loyalty_points, custom, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
-        [id, tenantId, type, name, phone, email, gstin, stateCode, address, creditLimitMinor, loyaltyPoints, JSON.stringify(custom)],
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true)`,
+        [id, tenantId, branchId, type, name, phone, email, gstin, stateCode, address, creditLimitMinor, loyaltyPoints, JSON.stringify(custom)],
       );
-      await audit(q, ctx, { action: 'party.create', entity: 'party', entityId: id, detail: { name, type, phone, gstin, loyaltyPoints } });
+      await audit(q, ctx, { action: 'party.create', entity: 'party', entityId: id, detail: { name, type, phone, gstin, loyaltyPoints, branchId } });
     });
 
     const created = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [id, tenantId]);
@@ -308,7 +334,12 @@ export function registerParties(r: Router) {
   r.patch('/api/parties/:id', requirePerm('parties.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
-    const party = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    const scope = await resolveBranchScope(ctx);
+
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
+    const party = await ctx.db.one(`SELECT * FROM parties WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
     if (!party) throw notFound('Party');
 
     const name = b.name !== undefined ? V.str(b.name, 'Name', { required: true, max: 120 }) : party.name;
@@ -371,10 +402,14 @@ export function registerParties(r: Router) {
   r.post('/api/parties/:id/points', requirePerm('parties.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const delta = V.int(b.delta ?? 0, 'Points adjustment delta');
     const reason = V.optStr(b.reason, 'Reason', 120) || 'Points adjustment';
 
-    const party = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
+    const party = await ctx.db.one(`SELECT * FROM parties WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
     if (!party) throw notFound('Customer');
 
     let updatedPoints = 0;
@@ -401,7 +436,12 @@ export function registerParties(r: Router) {
   // Permanently delete party & reclaim DB storage
   r.delete('/api/parties/:id', requirePerm('parties.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const party = await ctx.db.one('SELECT * FROM parties WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    const scope = await resolveBranchScope(ctx);
+
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
+    const party = await ctx.db.one(`SELECT * FROM parties WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
     if (!party) throw notFound('Party');
 
     await ctx.db.tx(async (q) => {
@@ -417,16 +457,20 @@ export function registerParties(r: Router) {
   // Supplier Payables Summary & Ageing (0-30, 31-60, 60+ days)
   r.get('/api/parties/payables-summary', requirePerm('purchases'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const openPurchases = await ctx.db.query(
       `SELECT p.id, p.supplier_id, p.total_minor, p.balance_minor,
               p.supplier_invoice_date, p.bdate, p.created_at,
               part.name AS supplier_name, part.phone AS supplier_phone, part.gstin AS supplier_gstin
        FROM purchases p
-       JOIN parties part ON p.supplier_id = part.id AND part.tenant_id = p.tenant_id
-       WHERE p.tenant_id = ? AND p.status != 'voided' AND p.balance_minor > 0
+       JOIN parties part ON p.supplier_id = part.id AND part.tenant_id = p.tenant_id AND part.branch_id = p.branch_id
+       WHERE p.tenant_id = ? AND p.status != 'voided' AND p.balance_minor > 0${branchFilter}
        ORDER BY COALESCE(p.supplier_invoice_date, p.bdate) ASC`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     const supMap = new Map<string, {
@@ -501,9 +545,14 @@ export function registerParties(r: Router) {
   // Supplier Ledger & Payment History (Chronological running payable)
   r.get('/api/parties/:id/supplier-ledger', requirePerm('purchases'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
     const supplier = await ctx.db.one(
-      'SELECT * FROM parties WHERE id = ? AND tenant_id = ?',
-      [ctx.params.id, tenantId],
+      `SELECT * FROM parties WHERE id = ? AND tenant_id = ?${branchFilter}`,
+      [ctx.params.id, tenantId, ...branchParams],
     );
     if (!supplier) throw notFound('Supplier');
 
@@ -513,9 +562,9 @@ export function registerParties(r: Router) {
               purchase_date, bdate, total_minor, paid_minor, balance_minor, status,
               created_at, void_reason, voided_at
        FROM purchases
-       WHERE supplier_id = ? AND tenant_id = ?
+       WHERE supplier_id = ? AND tenant_id = ? AND branch_id = ?
        ORDER BY created_at ASC`,
-      [supplier.id, tenantId],
+      [supplier.id, tenantId, supplier.branch_id],
     );
 
     // 2. Fetch all supplier payments
@@ -525,9 +574,9 @@ export function registerParties(r: Router) {
               u.name AS recorded_by_name
        FROM payments p
        LEFT JOIN users u ON p.created_by = u.id
-       WHERE p.party_id = ? AND p.tenant_id = ? AND p.kind = 'supplier_payment'
+       WHERE p.party_id = ? AND p.tenant_id = ? AND p.branch_id = ? AND p.kind = 'supplier_payment'
        ORDER BY p.created_at ASC`,
-      [supplier.id, tenantId],
+      [supplier.id, tenantId, supplier.branch_id],
     );
 
     // 3. Interleave into chronological ledger
@@ -647,4 +696,3 @@ export function registerParties(r: Router) {
     };
   });
 }
-

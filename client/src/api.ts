@@ -50,6 +50,10 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const selectedBranch = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
+  if (selectedBranch && selectedBranch.toLowerCase() !== 'all') {
+    headers['x-branch-id'] = selectedBranch;
+  }
 
   const res = await fetch(path, {
     ...options,

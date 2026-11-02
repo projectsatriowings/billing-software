@@ -130,25 +130,19 @@ export function registerDashboard(r: Router) {
       ''
     ).trim();
 
-    // 0. Ultra-fast in-memory cache check (3.5s TTL)
-    const cacheKey = `${tenantId}:${rawBranchParam || ctx.user!.assignedLocation || 'MAIN'}:${userRole}:${ctx.user!.id}`;
-    const cached = todayDashboardCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.data;
-    }
+    const isSuperAdmin = userRole === 'owner' || String(userRole).toUpperCase() === 'SUPER_ADMIN';
 
     // 1. Fetch authorized branches and timezone concurrently
     let branchWhereClause = 'WHERE b.tenant_id = ?';
     const branchQueryParams: unknown[] = [tenantId];
 
-    if (isManager) {
-      const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-      branchWhereClause += ` AND b.code IN (${allowed.map(() => '?').join(', ')})`;
-      branchQueryParams.push(...allowed);
-    } else if (isCashier) {
-      const assigned = ctx.user!.assignedLocation || 'MAIN';
-      branchWhereClause += ' AND b.code = ?';
-      branchQueryParams.push(assigned);
+    if (!isSuperAdmin) {
+      const userBranchId = ctx.user!.branchId;
+      if (!userBranchId) {
+        throw bad("Your account isn't linked to a branch. Contact your admin.", 'NO_BRANCH');
+      }
+      branchWhereClause += ' AND (b.id = ? OR b.code = ?)';
+      branchQueryParams.push(userBranchId, userBranchId);
     }
 
     const [tenantRow, branchRows] = await Promise.all([
@@ -165,51 +159,109 @@ export function registerDashboard(r: Router) {
 
     const tz = tenantRow?.timezone || 'Asia/Kolkata';
 
+    if (!isSuperAdmin && branchRows.length === 0) {
+      throw bad("Your account isn't linked to a branch. Contact your admin.", 'NO_BRANCH');
+    }
+
     // 2. Identify active branch requested by client
     const requestedBranchParam =
       rawBranchParam && !['true', 'false', 'undefined', 'null'].includes(rawBranchParam.toLowerCase())
         ? rawBranchParam
         : '';
 
-    let activeBranch: any = null;
-    if (requestedBranchParam) {
-      const match = branchRows.find(
-        (b) => b.id === requestedBranchParam || b.code.toUpperCase() === requestedBranchParam.toUpperCase()
+    // Enforce role permission for 'all'
+    if (!isSuperAdmin && requestedBranchParam.toLowerCase() === 'all') {
+      throw bad('Unauthorized branch access. Only super admins can view overall data across all branches.', 'FORBIDDEN');
+    }
+
+    // Determine user's assigned branch code for non-super-admin
+    let userAssignedBranchCode = ctx.user!.assignedLocation || 'MAIN';
+    const userBranchId = ctx.user!.branchId;
+    if (userBranchId) {
+      const userBr = branchRows.find(
+        (b: any) => b.id === userBranchId || (b.code && b.code.toUpperCase() === userBranchId.toUpperCase())
       );
-      if (!match) {
-        if (isCashier || isManager) {
-          throw bad('Unauthorized branch access.', 'FORBIDDEN');
+      if (userBr) userAssignedBranchCode = userBr.code;
+    }
+
+    let isAllBranches = false;
+    let activeBranch: any = null;
+
+    if (isSuperAdmin) {
+      if (requestedBranchParam.toLowerCase() === 'all') {
+        isAllBranches = true;
+        const allCounters = Array.from(new Set(branchRows.flatMap((b: any) => parseCounters(b.counters))));
+        activeBranch = {
+          id: 'all',
+          code: 'all',
+          name: 'All branches (overall)',
+          counters: allCounters.length > 0 ? allCounters : ['COUNTER-1'],
+        };
+      } else if (requestedBranchParam) {
+        const match = branchRows.find(
+          (b: any) => b.id === requestedBranchParam || b.code.toUpperCase() === requestedBranchParam.toUpperCase()
+        );
+        if (match) {
+          activeBranch = match;
+        } else {
+          isAllBranches = true;
+          activeBranch = {
+            id: 'all',
+            code: 'all',
+            name: 'All branches (overall)',
+            counters: ['COUNTER-1'],
+          };
         }
       } else {
-        activeBranch = match;
+        // Default on login for super admin: "All branches (overall)"
+        isAllBranches = true;
+        activeBranch = {
+          id: 'all',
+          code: 'all',
+          name: 'All branches (overall)',
+          counters: ['COUNTER-1'],
+        };
       }
+    } else {
+      // Non-super-admin: strictly restricted to their assigned branch
+      activeBranch = branchRows[0];
     }
 
-    if (!activeBranch) {
-      const assigned = (ctx.user!.assignedLocation || 'MAIN').toUpperCase();
-      activeBranch = branchRows.find((b) => b.code.toUpperCase() === assigned) || branchRows[0];
+    // 0. Ultra-fast in-memory cache check with accurate branch key
+    const effectiveBranchKey = isAllBranches ? 'ALL' : (activeBranch.code || activeBranch.id).toUpperCase();
+    const cacheKey = `${tenantId}:${effectiveBranchKey}:${userRole}:${ctx.user!.id}`;
+    const cached = todayDashboardCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
     }
 
-    if (!activeBranch) {
-      activeBranch = {
-        id: 'br_default',
-        code: 'MAIN',
-        name: 'Main Branch',
-        counters: ['COUNTER-1'],
-      };
-    }
+    // 3. Branch transactions filtering
+    let invBranchClause = '';
+    let invBranchParams: string[] = [];
+    let invDirectBranchClause = '';
+    let invDirectBranchParams: string[] = [];
+    let payBranchClause = '';
+    let payBranchParams: string[] = [];
+    let smBranchClause = '';
+    let smBranchParams: string[] = [];
+    let itemBranchClause = '';
+    let itemBranchParams: string[] = [];
 
-    // 3. Branch locations for filtering transactions
-    const activeBranchCode = activeBranch.code;
-    const activeBranchId = activeBranch.id;
-    const branchLocations: string[] = [activeBranchCode, activeBranchId];
+    if (!isAllBranches && activeBranch?.id) {
+      invBranchClause = ' AND i.branch_id = ?';
+      invBranchParams = [activeBranch.id];
 
-    if (activeBranchCode === 'MAIN') {
-      branchLocations.push('COUNTER-1');
-    } else if (activeBranchCode === 'GODOWN') {
-      branchLocations.push('COUNTER-2');
-    } else if (activeBranchCode === 'NHGJHGJHG') {
-      branchLocations.push('COUNTER-3');
+      invDirectBranchClause = ' AND branch_id = ?';
+      invDirectBranchParams = [activeBranch.id];
+
+      payBranchClause = ' AND p.branch_id = ?';
+      payBranchParams = [activeBranch.id];
+
+      smBranchClause = ' AND sm.branch_id = ?';
+      smBranchParams = [activeBranch.id];
+
+      itemBranchClause = ' AND i.branch_id = ?';
+      itemBranchParams = [activeBranch.id];
     }
 
     const now = new Date();
@@ -257,17 +309,13 @@ export function registerDashboard(r: Router) {
        WHERE s.tenant_id = ? AND s.user_id = ? AND s.status = 'open'`;
     const shiftParams: any[] = [tenantId, ctx.user!.id];
 
-    if (branchLocations.length > 0) {
-      shiftSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
-      shiftParams.push(...branchLocations);
-    } else if (counterParam) {
-      shiftSql += ' AND (s.location = ? OR s.location = ?)';
-      shiftParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+    if (!isAllBranches && activeBranch?.id) {
+      shiftSql += ' AND s.branch_id = ?';
+      shiftParams.push(activeBranch.id);
     }
     shiftSql += ' ORDER BY s.opened_at DESC LIMIT 1';
 
     const assignedCounters = parseCounters(activeBranch.counters);
-    const branchLocPlaceholders = branchLocations.map(() => '?').join(', ');
 
     // 4. PARALLELIZE ALL 14 DATABASE QUERIES CONCURRENTLY VIA Promise.all
     const [
@@ -305,8 +353,9 @@ export function registerDashboard(r: Router) {
          WHERE i.tenant_id = ?
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
-           AND i.kind IN ('sale', 'credit_note')`,
-        [tenantId, todayYMD, tz, todayYMD],
+           AND i.kind IN ('sale', 'credit_note')
+           ${invBranchClause}`,
+        [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
       ),
 
       // 2. Comparison sales (yesterday)
@@ -320,8 +369,9 @@ export function registerDashboard(r: Router) {
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
            AND i.kind IN ('sale', 'credit_note')
-           AND i.created_at <= ?`,
-        [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString()],
+           AND i.created_at <= ?
+           ${invBranchClause}`,
+        [tenantId, compDateYMD, tz, compDateYMD, compCutoff.toISOString(), ...invBranchParams],
       ),
 
       // 3. COGS (if owner or manager)
@@ -342,8 +392,9 @@ export function registerDashboard(r: Router) {
              WHERE i.tenant_id = ?
                AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
                AND i.status = 'posted'
-               AND i.kind IN ('sale', 'credit_note')`,
-            [tenantId, todayYMD, tz, todayYMD],
+               AND i.kind IN ('sale', 'credit_note')
+               ${invBranchClause}`,
+            [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
           )
         : Promise.resolve(null),
 
@@ -363,8 +414,9 @@ export function registerDashboard(r: Router) {
          WHERE i.tenant_id = ?
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
-           AND i.kind = 'sale'`,
-        [tenantId, todayYMD, tz, todayYMD],
+           AND i.kind = 'sale'
+           ${invBranchClause}`,
+        [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
       ),
 
       // 5. Today hourly breakdown
@@ -380,6 +432,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            ${invBranchClause}
         ),
         hourly_invoices AS (
           SELECT
@@ -406,6 +459,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            ${invBranchClause}
           GROUP BY hr
         )
         SELECT
@@ -416,7 +470,7 @@ export function registerDashboard(r: Router) {
         FROM hourly_invoices hi
         LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
         ORDER BY hi.hr ASC`,
-        [tz, tenantId, todayYMD, tz, todayYMD, tz, tenantId, todayYMD, tz, todayYMD],
+        [tz, tenantId, todayYMD, tz, todayYMD, ...invBranchParams, tz, tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
       ),
 
       // 6. Comparison hourly breakdown (yesterday)
@@ -432,6 +486,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            ${invBranchClause}
         ),
         hourly_invoices AS (
           SELECT
@@ -458,6 +513,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind IN ('sale', 'credit_note')
+            ${invBranchClause}
           GROUP BY hr
         )
         SELECT
@@ -468,7 +524,7 @@ export function registerDashboard(r: Router) {
         FROM hourly_invoices hi
         LEFT JOIN hourly_cogs hc ON hc.hr = hi.hr
         ORDER BY hi.hr ASC`,
-        [tz, tenantId, compDateYMD, tz, compDateYMD, tz, tenantId, compDateYMD, tz, compDateYMD],
+        [tz, tenantId, compDateYMD, tz, compDateYMD, ...invBranchParams, tz, tenantId, compDateYMD, tz, compDateYMD, ...invBranchParams],
       ),
 
       // 7. Payment modes breakdown
@@ -478,6 +534,7 @@ export function registerDashboard(r: Router) {
           COALESCE(SUM(p.amount_minor), 0)::bigint AS total_minor
          FROM payments p
          LEFT JOIN invoices i ON i.id = p.invoice_id
+         LEFT JOIN shifts s ON s.id = p.shift_id
          WHERE p.tenant_id = ?
            AND (p.status IS NULL OR p.status = 'posted')
            AND COALESCE(p.kind, 'receipt') = 'receipt'
@@ -486,8 +543,9 @@ export function registerDashboard(r: Router) {
              OR
              (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
            )
+           ${payBranchClause}
          GROUP BY LOWER(COALESCE(p.mode, p.method, 'cash'))`,
-        [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, todayYMD, tz, todayYMD, ...payBranchParams],
       ),
 
       // 8. Refunds breakdown
@@ -501,8 +559,9 @@ export function registerDashboard(r: Router) {
            AND kind = 'credit_note'
            AND status = 'posted'
            AND refund_amount_minor > 0
+           ${invDirectBranchClause}
          GROUP BY LOWER(COALESCE(refund_mode, 'cash'))`,
-        [tenantId, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, ...invDirectBranchParams],
       ),
 
       // 9. Top 5 sellers
@@ -532,11 +591,12 @@ export function registerDashboard(r: Router) {
            AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
            AND i.status = 'posted'
            AND i.kind IN ('sale', 'credit_note')
+           ${invBranchClause}
          GROUP BY COALESCE(it.id, il.item_id), COALESCE(it.name, il.name, 'Item'), COALESCE(it.unit, il.unit, 'pcs')
          HAVING SUM(CASE WHEN i.kind = 'sale' THEN il.total_minor WHEN i.kind = 'credit_note' THEN -il.total_minor ELSE 0 END) > 0
          ORDER BY sales_minor DESC
          LIMIT 5`,
-        [tenantId, todayYMD, tz, todayYMD],
+        [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
       ),
 
       // 10. Stock attention (optimized CTE aggregation instead of correlated subquery per row)
@@ -545,6 +605,7 @@ export function registerDashboard(r: Router) {
           SELECT sm.item_id, SUM(sm.qty_milli)::bigint AS stock_milli
           FROM stock_moves sm
           WHERE sm.tenant_id = ?
+            ${smBranchClause}
           GROUP BY sm.item_id
         ),
         today_sold AS (
@@ -557,6 +618,7 @@ export function registerDashboard(r: Router) {
             AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
             AND i.status = 'posted'
             AND i.kind = 'sale'
+            ${invBranchClause}
           GROUP BY il.item_id
         ),
         item_stock AS (
@@ -572,6 +634,7 @@ export function registerDashboard(r: Router) {
           LEFT JOIN sm_agg sma ON sma.item_id = i.id
           LEFT JOIN today_sold ts ON ts.item_id = i.id
           WHERE i.tenant_id = ?
+            ${itemBranchClause}
             AND i.active = true
             AND i.track_stock = true
         )
@@ -596,7 +659,7 @@ export function registerDashboard(r: Router) {
           sold_today_milli DESC,
           stock_milli ASC
         LIMIT 5`,
-        [tenantId, tenantId, todayYMD, tz, todayYMD, tenantId],
+        [tenantId, ...smBranchParams, tenantId, todayYMD, tz, todayYMD, ...invBranchParams, tenantId, ...itemBranchParams],
       ),
 
       // 11. Shift row
@@ -625,11 +688,7 @@ export function registerDashboard(r: Router) {
            AND (p.status IS NULL OR p.status = 'posted')
            AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
            AND COALESCE(p.kind, 'receipt') = 'receipt'
-           AND (
-             (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
-             OR
-             (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
-           )`,
+           ${payBranchClause}`,
         [
           tenantId,
           todayYMD,
@@ -638,9 +697,7 @@ export function registerDashboard(r: Router) {
           todayYMD,
           tz,
           todayYMD,
-          ...branchLocations,
-          ...branchLocations,
-          ...branchLocations,
+          ...payBranchParams,
         ],
       ),
 
@@ -665,11 +722,7 @@ export function registerDashboard(r: Router) {
            )
            AND (p.status IS NULL OR p.status = 'posted')
            AND p.kind = 'refund'
-           AND (
-             (s.id IS NOT NULL AND s.location IN (${branchLocPlaceholders}))
-             OR
-             (s.id IS NULL AND (p.location IN (${branchLocPlaceholders}) OR i.location IN (${branchLocPlaceholders})))
-           )`,
+           ${payBranchClause}`,
         [
           tenantId,
           todayYMD,
@@ -678,9 +731,7 @@ export function registerDashboard(r: Router) {
           todayYMD,
           tz,
           todayYMD,
-          ...branchLocations,
-          ...branchLocations,
-          ...branchLocations,
+          ...payBranchParams,
         ],
       ),
 
@@ -697,8 +748,8 @@ export function registerDashboard(r: Router) {
            AND kind = 'credit_note'
            AND status = 'posted'
            AND refund_amount_minor > 0
-           AND location IN (${branchLocPlaceholders})`,
-        [tenantId, todayYMD, tz, todayYMD, ...branchLocations],
+           ${invDirectBranchClause}`,
+        [tenantId, todayYMD, tz, todayYMD, ...invDirectBranchParams],
       ),
     ]);
 
@@ -710,12 +761,9 @@ export function registerDashboard(r: Router) {
          JOIN users u ON u.id = s.user_id
          WHERE s.tenant_id = ? AND s.status = 'open'`;
       const fallbackParams: any[] = [tenantId];
-      if (branchLocations.length > 0) {
-        fallbackSql += ` AND s.location IN (${branchLocations.map(() => '?').join(', ')})`;
-        fallbackParams.push(...branchLocations);
-      } else if (counterParam) {
-        fallbackSql += ' AND (s.location = ? OR s.location = ?)';
-        fallbackParams.push(counterParam, counterParam === 'Counter 1' ? 'MAIN' : counterParam);
+      if (!isAllBranches && activeBranch?.id) {
+        fallbackSql += ' AND s.branch_id = ?';
+        fallbackParams.push(activeBranch.id);
       }
       fallbackSql += ' ORDER BY s.opened_at DESC LIMIT 1';
 
