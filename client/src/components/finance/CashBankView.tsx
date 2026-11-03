@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { fetchFinanceCashBank } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  RefreshCwIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  AlertTriangleIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 export function CashBankView() {
   const [data, setData] = useState<any>(null);
@@ -42,7 +48,7 @@ export function CashBankView() {
           className="btn btn-secondary"
           style={{ padding: '0.55rem 0.9rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: 'auto' }}
         >
-          🔄 Refresh Balances
+          <RefreshCwIcon size={14} /> Refresh Balances
         </button>
       </div>
 
@@ -56,7 +62,7 @@ export function CashBankView() {
           fontWeight: 600,
           color: '#be123c',
         }}>
-          ⚠️ {error}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><AlertTriangleIcon size={16} /> {error}</span>
         </div>
       )}
 
@@ -133,7 +139,7 @@ export function CashBankView() {
               boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
             }}>
               <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.85rem' }}>
-                💰 Inward Collections by Method
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><TrendingUpIcon size={17} style={{ color: '#059669' }} /> Inward Collections by Method</span>
               </h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
                 <tbody>
@@ -166,7 +172,7 @@ export function CashBankView() {
               boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
             }}>
               <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.85rem' }}>
-                💸 Outward Payouts by Method (Suppliers &amp; Expenses)
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><TrendingDownIcon size={17} style={{ color: '#e11d48' }} /> Outward Payouts by Method (Suppliers &amp; Expenses)</span>
               </h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
                 <tbody>

@@ -114,6 +114,13 @@ import {
   BarChart3Icon,
   Building2Icon,
   SparklesIcon,
+  RupeeIcon,
+  ReceiptIcon,
+  TruckIcon,
+  InboxIcon,
+  FileTextIcon,
+  TrendingUpIcon,
+  WalletIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -187,6 +194,14 @@ export const HIDE_BUSINESS_BAR_TABS = new Set([
   'receivables',
   'reports',
   'user-management',
+  'gst-overview',
+  'gst-sales-register',
+  'gst-purchase-register',
+  'gst-itc-reconciliation',
+  'gst-gstr3b',
+  'gst-gstr1',
+  'gst-import-export',
+  'gst-filing-history',
 ]);
 
 // Explicit header titles shown at the left end of the top header bar for the 6 core modules
@@ -224,6 +239,14 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'payables': 'Accounts Payable',
   'receivables': 'Accounts Receivable',
   'reports': 'Management Reports',
+  'gst-overview': 'GST Compliance & Filing Overview',
+  'gst-sales-register': 'GST Sales Register',
+  'gst-purchase-register': 'GST Purchase Register',
+  'gst-itc-reconciliation': 'ITC Register & Reconciliation',
+  'gst-gstr3b': 'GSTR-3B Filing',
+  'gst-gstr1': 'GSTR-1 Outward Supplies',
+  'gst-import-export': 'GST Import & Export',
+  'gst-filing-history': 'GST Filing History',
 };
 
 export interface ToastItem {
@@ -681,6 +704,7 @@ export function App() {
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
   const [isInventoryHovered, setIsInventoryHovered] = useState(false);
+  const [inventoryInitialTab, setInventoryInitialTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>('overview');
   const inventoryHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inventoryDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -813,6 +837,26 @@ export function App() {
   const [upiManualRef, setUpiManualRef] = useState('');
   const [paymentCardRef, setPaymentCardRef] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchScope, setSelectedBranchScope] = useState<string>(() => {
+    return localStorage.getItem('sa_selected_branch') || 'all';
+  });
+
+  const handleGlobalBranchChange = (newBranchCode: string) => {
+    setSelectedBranchScope(newBranchCode);
+    if (newBranchCode && newBranchCode.toLowerCase() !== 'all') {
+      localStorage.setItem('sa_selected_branch', newBranchCode);
+      sessionStorage.setItem('sa_selected_branch', newBranchCode);
+    } else {
+      localStorage.setItem('sa_selected_branch', 'all');
+      sessionStorage.setItem('sa_selected_branch', 'all');
+    }
+    loadInvoices();
+    loadReports();
+    window.dispatchEvent(new CustomEvent('branch_scope_changed', { detail: newBranchCode }));
+    loadItems();
+    loadPurchases();
+    loadParties();
+  };
   const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
   const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
@@ -919,6 +963,7 @@ export function App() {
   // Invoices list state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoiceFilterDate, setInvoiceFilterDate] = useState<string>('');
+  const [invoiceBranchFilter, setInvoiceBranchFilter] = useState<string>('all');
 
   // Analytics state
   const [report, setReport] = useState<DashboardReport | null>(null);
@@ -1233,6 +1278,8 @@ export function App() {
   const [purOtherChargesRupees, setPurOtherChargesRupees] = useState('0');
   const [purOtherChargesGstBp, setPurOtherChargesGstBp] = useState(0);
   const [purNote, setPurNote] = useState('');
+  const [purAttachmentName, setPurAttachmentName] = useState('');
+  const [purAttachmentData, setPurAttachmentData] = useState('');
   const [purLines, setPurLines] = useState<Array<{
     itemId: string;
     name: string;
@@ -1622,7 +1669,28 @@ export function App() {
   const loadItems = async () => {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
-      setItems(res.items);
+      // Deduplicate products by SKU, barcode, or ID to prevent duplicate rows in product catalogue,
+      // while consolidating multi-branch live ledger stock on the canonical product entry
+      const raw = res.items || [];
+      const deduplicated: Item[] = [];
+      const seen = new Map<string, Item>();
+      for (const item of raw) {
+        const skuKey = item.sku?.trim().toUpperCase();
+        const barcodeKey = item.barcode?.trim();
+        const key = skuKey ? `sku:${skuKey}` : barcodeKey ? `bc:${barcodeKey}` : `id:${item.id}`;
+        const existing = seen.get(key);
+        if (existing) {
+          existing.currentStockMilli = (existing.currentStockMilli || 0) + (item.currentStockMilli || 0);
+        } else {
+          const itemCopy = { ...item };
+          seen.set(key, itemCopy);
+          if (skuKey) seen.set(`sku:${skuKey}`, itemCopy);
+          if (barcodeKey) seen.set(`bc:${barcodeKey}`, itemCopy);
+          seen.set(`id:${item.id}`, itemCopy);
+          deduplicated.push(itemCopy);
+        }
+      }
+      setItems(deduplicated);
     } catch (err) {
       console.error('Failed to load items', err);
     }
@@ -1707,7 +1775,7 @@ export function App() {
     }
   };
 
-  const openNewPurchaseModal = (preselectedSupplierId?: string) => {
+  const openNewPurchaseModal = (preselectedSupplierId?: string, initialLines?: any[]) => {
     const suppliers = parties.filter((p) => p.type === 'supplier');
     setPurSupplierId(preselectedSupplierId || suppliers[0]?.id || '');
     setPurSupplierInvoiceNumber('');
@@ -1720,7 +1788,11 @@ export function App() {
     setPurOtherChargesRupees('0');
     setPurOtherChargesGstBp(0);
     setPurNote('');
-    if (items.length > 0) {
+    setPurAttachmentName('');
+    setPurAttachmentData('');
+    if (initialLines && initialLines.length > 0) {
+      setPurLines(initialLines);
+    } else if (items.length > 0) {
       const firstItem = items[0];
       setPurLines([{
         itemId: firstItem.id,
@@ -1742,8 +1814,157 @@ export function App() {
     setShowPurchaseModal(true);
   };
 
-  const openNewPurchaseModalForSupplier = (supplierId: string) => {
+  const openNewPurchaseModalForSupplier = (supplierId?: string) => {
     openNewPurchaseModal(supplierId);
+  };
+
+  const handleBillFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size exceeds 5MB limit. Please upload a smaller photo or compressed PDF.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPurAttachmentName(file.name);
+      setPurAttachmentData(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRepeatPreviousPurchase = (prevPur: Purchase) => {
+    if (!prevPur.lines || prevPur.lines.length === 0) {
+      alert('Selected purchase has no line items.');
+      return;
+    }
+    const cloned = prevPur.lines.map((l) => {
+      const matched = items.find((it) => it.id === l.itemId);
+      return {
+        itemId: l.itemId,
+        name: l.name,
+        unit: l.unit || matched?.unit || 'pcs',
+        receivedQty: ((l.receivedQtyMilli || l.qtyMilli || 1000) / 1000),
+        billedQty: ((l.billedQtyMilli || l.receivedQtyMilli || l.qtyMilli || 1000) / 1000),
+        costRupees: (l.costMinor || 0) / 100,
+        taxRateBp: l.taxRateBp ?? matched?.taxRateBp ?? 0,
+        discountRupees: (l.discountMinor || 0) / 100,
+        batchNo: '',
+        expiry: '',
+        trackBatch: Boolean((matched as any)?.trackBatch ?? (matched as any)?.track_batch ?? (matched as any)?.hasBatches),
+        sellingPriceMinor: matched?.priceMinor,
+      };
+    });
+    setPurLines(cloned);
+    if (prevPur.supplierId) {
+      setPurSupplierId(prevPur.supplierId);
+    }
+    showToast(`Loaded ${cloned.length} items from previous purchase #${prevPur.supplierInvoiceNumber || prevPur.billNo || prevPur.purchaseNumber}`);
+  };
+
+  const handleLoadLowStockForSupplier = () => {
+    if (!purSupplierId) {
+      alert('Please choose a supplier first.');
+      return;
+    }
+    const outItems = items.filter((it) => {
+      const isVendorMatch = it.preferredSupplierId === purSupplierId;
+      const isDepleted = (it.currentStockMilli ?? 0) <= 0;
+      const isBelowMin = (it.minStockMilli || 0) > 0 && (it.currentStockMilli ?? 0) <= (it.minStockMilli || 0);
+      return isVendorMatch || isDepleted || isBelowMin;
+    });
+    if (outItems.length === 0) {
+      alert('No out-of-stock or low-stock items found in your catalog for this supplier.');
+      return;
+    }
+    const loaded = outItems.map((it) => ({
+      itemId: it.id,
+      name: it.name,
+      unit: it.unit || 'pcs',
+      receivedQty: Math.max(1, Math.round(((it.reorderLevelMilli || 10000) / 1000))),
+      billedQty: Math.max(1, Math.round(((it.reorderLevelMilli || 10000) / 1000))),
+      costRupees: (it.costMinor || it.priceMinor || 0) / 100,
+      taxRateBp: it.taxRateBp || 0,
+      discountRupees: 0,
+      batchNo: '',
+      expiry: '',
+      trackBatch: Boolean((it as any).trackBatch ?? (it as any).track_batch ?? (it as any).hasBatches),
+      sellingPriceMinor: it.priceMinor,
+    }));
+    setPurLines(loaded);
+    showToast(`Loaded ${loaded.length} reorder / out-of-stock items`);
+  };
+
+  const handleImportPurchaseCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const rows = text.split(/\r?\n/).filter((r) => r.trim().length > 0);
+        if (rows.length < 2) {
+          alert('CSV file must have a header row and at least 1 product row.');
+          return;
+        }
+        const parsedLines: any[] = [];
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+          if (cols.length < 2) continue;
+          const [key, qtyStr, rateStr, taxStr] = cols;
+          if (!key) continue;
+          const matched = items.find(
+            (it) =>
+              it.barcode === key ||
+              ((it as any).barcodes && (it as any).barcodes.includes(key)) ||
+              it.name.toLowerCase() === key.toLowerCase() ||
+              it.id === key
+          );
+          const qty = parseFloat(qtyStr) || 1;
+          const costRupees = rateStr ? parseFloat(rateStr) || 0 : ((matched?.costMinor || matched?.priceMinor || 0) / 100);
+          const taxRateBp = taxStr ? Math.round(parseFloat(taxStr) * 100) : (matched?.taxRateBp || 0);
+          if (matched) {
+            parsedLines.push({
+              itemId: matched.id,
+              name: matched.name,
+              unit: matched.unit || 'pcs',
+              receivedQty: qty,
+              billedQty: qty,
+              costRupees,
+              taxRateBp,
+              discountRupees: 0,
+              batchNo: '',
+              expiry: '',
+              trackBatch: Boolean((matched as any).trackBatch ?? (matched as any).track_batch ?? (matched as any).hasBatches),
+              sellingPriceMinor: matched.priceMinor,
+            });
+          }
+        }
+        if (parsedLines.length > 0) {
+          setPurLines(parsedLines);
+          showToast(`Successfully imported ${parsedLines.length} items from CSV`);
+        } else {
+          alert('No items in the CSV matched your catalog. Make sure the first column matches product barcode or exact name.');
+        }
+      } catch (err: any) {
+        alert('Failed to parse CSV: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleDownloadPurchaseCsvTemplate = () => {
+    const header = 'Product Name or Barcode,Quantity,Cost Rate (₹),GST Rate (%)\n';
+    const sample = items.slice(0, 3).map((it) => `"${it.name}",10,${(it.costMinor || it.priceMinor || 0) / 100},${(it.taxRateBp || 0) / 100}`).join('\n');
+    const blob = new Blob([header + sample], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'purchase_items_template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleAddPurLine = () => {
@@ -1836,6 +2057,8 @@ export function App() {
         otherChargesMinor,
         otherChargesGstBp: purOtherChargesGstBp,
         note: purNote.trim() || undefined,
+        attachmentName: purAttachmentName.trim() || undefined,
+        attachmentData: purAttachmentData || undefined,
         lines: purLines.map((l) => ({
           itemId: l.itemId,
           receivedQtyMilli: Math.max(1, Math.round(l.receivedQty * 1000)),
@@ -6189,6 +6412,46 @@ export function App() {
             <div className="top-header-title-spacer" />
           )}
           <div className="top-global-actions">
+            {(user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN') && branches.length > 0 && (
+              <div
+                className="top-branch-selector-pill"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  background: '#f8fafc',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '10px',
+                  border: '1.5px solid #cbd5e1',
+                }}
+              >
+                <Building2Icon size={16} style={{ color: '#6d4aff' }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
+                <select
+                  value={selectedBranchScope}
+                  onChange={(e) => handleGlobalBranchChange(e.target.value)}
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                  title="Switch branch scope for sales, expenses, and inventory"
+                >
+                  <option value="all">All Branches (Overall)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.code || b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="button"
               className="top-notification-btn"
@@ -6197,7 +6460,12 @@ export function App() {
                   ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock) — Click to review`
                   : 'No inventory alerts'
               }
-              onClick={() => setActiveTab('inventory')}
+              onClick={() => {
+                setActiveTab('inventory');
+                setShowInventoryDropdown(true);
+                // Navigate to replenishment tab if there are stock alerts, otherwise overview
+                setInventoryInitialTab(totalStockAlerts > 0 ? 'replenish' : 'overview');
+              }}
             >
               <span className="notif-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -6281,7 +6549,32 @@ export function App() {
                 </span>
               </div>
 
-              <div className="content-header-right">
+              <div className="content-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {user.role === 'owner' && branches.length > 0 ? (
+                  <div className="header-branch-select-wrap" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
+                    <select
+                      value={selectedBranchScope}
+                      onChange={(e) => handleGlobalBranchChange(e.target.value)}
+                      style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b' }}
+                      title="Filter views by branch"
+                    >
+                      <option value="all">All Branches (Overall)</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.code || b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="header-store-chip" title="Active Branch Scope">
+                    <span className="store-chip-dot"></span>
+                    <span className="store-chip-text">
+                      🏢 <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
+                    </span>
+                  </div>
+                )}
                 <div className="header-store-chip">
                   <span className="store-chip-dot"></span>
                   <span className="store-chip-text">
@@ -6293,28 +6586,130 @@ export function App() {
           )}
 
           {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-          {displayTab === 'dashboard' && user && (
-            <div className="dashboard-tab-wrapper">
-              <TodayDashboardView
-                user={user}
-                shop={shop}
-                onNavigateToPos={() => setActiveTab('pos')}
-                onNavigateToShifts={() => setActiveTab('shifts')}
-                onNavigateToInventory={() => setActiveTab('inventory')}
-                onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
-                onNavigateToPurchases={() => {
-                  setActiveTab('purchases');
-                  loadPurchases();
-                }}
-                onOpenAddProductModal={() => {
-                  setEditingItem(null);
-                  setShowItemModal(true);
-                }}
-                showToast={showToast}
-                onManageBranches={() => setActiveTab('user-management')}
-              />
-            </div>
-          )}
+          {displayTab === 'dashboard' && user && (() => {
+            const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+            return (
+              <div className="dashboard-tab-wrapper">
+                {isSuperAdminUser && (
+                  <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+                    <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <button
+                        type="button"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '7px',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                          color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                          boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => {
+                          setDashboardViewMode('today');
+                          setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                        }}
+                      >
+                        <BarChart3Icon size={15} />
+                        <span>Today's Live Overview</span>
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '7px',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                          color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                          boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => setDashboardViewMode('management')}
+                      >
+                        <Building2Icon size={15} />
+                        <span>Company Multi-Branch View</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!isSuperAdminUser || dashboardViewMode === 'today' ? (
+                  <TodayDashboardView
+                    user={user}
+                    shop={shop}
+                    selectedBranch={selectedBranchScope}
+                    onBranchChange={handleGlobalBranchChange}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                    onNavigateToShifts={() => setActiveTab('shifts')}
+                    onNavigateToInventory={() => setActiveTab('inventory')}
+                    onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+                    onNavigateToPurchases={() => {
+                      setActiveTab('purchases');
+                      loadPurchases();
+                    }}
+                    onOpenAddProductModal={() => {
+                      setEditingItem(null);
+                      setShowItemModal(true);
+                    }}
+                    showToast={showToast}
+                    onManageBranches={() => setActiveTab('user-management')}
+                  />
+                ) : (
+                  <div className="role-dashboards-view">
+                    {user.role === 'owner' && (
+                      <SuperAdminDashboard
+                        user={user}
+                        shop={shop}
+                        report={report}
+                        onRefreshReport={loadReports}
+                        onNavigate={setActiveTab}
+                      />
+                    )}
+                    {user.role === 'manager' && (
+                      <StoreManagerDashboard
+                        user={user}
+                        shop={shop}
+                        onNavigate={(tab) => {
+                          if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                            setShowInventoryDropdown(true);
+                          }
+                          setActiveTab(tab as any);
+                        }}
+                      />
+                    )}
+                    {user?.role === 'cashier' && (
+                      <CashierDashboard
+                        user={user}
+                        shop={shop}
+                        onNavigateToPos={() => setActiveTab('pos')}
+                        onNavigateToShifts={() => setActiveTab('shifts')}
+                      />
+                    )}
+                    {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+                      <SuperAdminDashboard
+                        user={user}
+                        shop={shop}
+                        report={report}
+                        onRefreshReport={loadReports}
+                        onNavigate={setActiveTab}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* TAB 1: BENTO POS BILLING TERMINAL */}
           {displayTab === 'pos' && (
@@ -9978,6 +10373,7 @@ export function App() {
               userRole={user?.role as any}
               businessType={shop?.businessType}
               allowNegativeStock={shop?.businessType === 'restaurant' || shop?.businessType === 'service'}
+              initialTab={inventoryInitialTab}
               onNavigateToCategories={() => setActiveTab('categories')}
               onNavigateToProductAnalysis={() => {
                 setActiveTab('product-movement');
@@ -10029,11 +10425,60 @@ export function App() {
           {/* TAB 3: BILLS & INVOICES */}
           {displayTab === 'invoices' && (() => {
             const displayedInvoices = invoices.filter((inv) => {
-              if (!invoiceFilterDate) return true;
-              return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+              const matchDate = !invoiceFilterDate || inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+              const matchBranch = !invoiceBranchFilter || invoiceBranchFilter === 'all' || inv.branchId === invoiceBranchFilter || (inv as any).location === invoiceBranchFilter;
+              return matchDate && matchBranch;
             });
             return (
               <div className="card">
+                {branches.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', padding: '0.65rem 0.85rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Sales:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceBranchFilter('all')}
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: invoiceBranchFilter === 'all' ? 700 : 500,
+                        background: invoiceBranchFilter === 'all' ? '#f3f0ff' : '#ffffff',
+                        border: invoiceBranchFilter === 'all' ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                        color: invoiceBranchFilter === 'all' ? '#6d4aff' : '#334155',
+                        padding: '0.25rem 0.6rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      All Branches ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
+                    </button>
+                    {branches.map((b) => {
+                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      const isSelected = invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setInvoiceBranchFilter(b.id)}
+                          style={{
+                            fontSize: '0.75rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            background: isSelected ? '#f3f0ff' : '#ffffff',
+                            border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                            color: isSelected ? '#6d4aff' : '#334155',
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
@@ -10050,11 +10495,27 @@ export function App() {
                       )}
                     </div>
                   </div>
+                  {branches.length > 0 && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Filter Branch:</span>
+                      <select
+                        value={invoiceBranchFilter}
+                        onChange={(e) => setInvoiceBranchFilter(e.target.value)}
+                        style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
+                      >
+                        <option value="all">All Branches</option>
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Invoice No</th>
+                      {branches.length > 0 && <th>Branch</th>}
                       <th>Date & Time</th>
                       <th>Customer / Reference</th>
                       <th>Total Amount</th>
@@ -10087,6 +10548,25 @@ export function App() {
                             </span>
                           )}
                         </td>
+                        {branches.length > 0 && (
+                          <td>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              padding: '0.2rem 0.45rem',
+                              borderRadius: '6px',
+                              border: '1px solid #e2e8f0',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              🏢 {branches.find(b => b.id === inv.branchId || b.code === (inv as any).location)?.code || 'MAIN'}
+                            </span>
+                          </td>
+                        )}
                         <td>{new Date(inv.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{inv.customerName || 'Walk-in Customer'}</div>
@@ -10364,6 +10844,7 @@ export function App() {
               onPaySupplier={(s) => handleOpenPaySupplier(s)}
               onOpenLedger={(sId) => handleOpenSupplierLedger(sId)}
               onNewPurchase={(sId) => openNewPurchaseModalForSupplier(sId)}
+              onRepeatPurchase={(pur) => handleRepeatPreviousPurchase(pur)}
               onToggleActive={(s) => handleTogglePartyActive(s)}
               onRefresh={() => {
                 loadParties();
@@ -10408,7 +10889,7 @@ export function App() {
                 <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
-                      📥
+                      <TruckIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#6366f1' }}>
@@ -10420,7 +10901,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      🏛️
+                      <LandmarkIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#10b981' }}>
@@ -10432,7 +10913,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                      💳
+                      <CreditCardIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#ef4444' }}>
@@ -10444,7 +10925,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      📑
+                      <FileTextIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
@@ -10690,7 +11171,7 @@ export function App() {
               <div className="kpi-grid">
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                    💰
+                    <RupeeIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono" style={{ color: '#10b981' }}>
@@ -10702,7 +11183,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                    🧾
+                    <ReceiptIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{report.today.billCount}</div>
@@ -10712,7 +11193,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                    🏛️
+                    <LandmarkIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
@@ -10722,7 +11203,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
-                    📥
+                    <WalletIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono" style={{ color: '#ea580c' }}>
@@ -10734,7 +11215,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
-                    📦
+                    <PackageIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{report.overall.itemCount}</div>
@@ -10791,6 +11272,47 @@ export function App() {
                   </table>
                 </div>
               </div>
+
+              {/* Branch-Wise Sales & Collections Performance */}
+              {branches.length > 0 && (
+                <div className="card" style={{ marginTop: '1.25rem' }}>
+                  <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2Icon size={18} style={{ color: '#6d4aff' }} />
+                    <span>Branch-Wise Sales & Operations Performance</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                    {branches.map((b) => {
+                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      const bTaxable = bSales.reduce((sum, i) => sum + (i.taxableMinor || 0), 0);
+                      const bGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
+                      const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
+                      const bReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      return (
+                        <div key={b.id} style={{ background: '#f8fafc', borderRadius: '12px', border: '1.5px solid #e2e8f0', padding: '1.1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
+                            <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>{b.code}</span>
+                          </div>
+                          <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
+                            {formatRupees(bSalesTotal)}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bSales.length}</strong></span>
+                            <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
+                          </div>
+                          {bReturnsTotal > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
+                              Returns: {formatRupees(bReturnsTotal)} ({bReturns.length} credit notes)
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
               <div className="card" style={{ marginTop: '1.25rem' }}>
@@ -12464,6 +12986,7 @@ export function App() {
           {displayTab === 'payments' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <PaymentsView
+                key={selectedBranchScope}
                 onOpenCustomerLedger={(cid) => {
                   const customer = parties.find((p) => p.id === cid || p.name === cid);
                   if (customer) {
@@ -12489,22 +13012,27 @@ export function App() {
           {displayTab === 'expenses' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <ExpensesView
+                key={selectedBranchScope}
                 userRole={user.role}
                 userLocation={shop?.locations?.[0] || shop?.address}
                 suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
+                branches={branches}
+                selectedBranch={selectedBranchScope}
+                onBranchChange={handleGlobalBranchChange}
               />
             </div>
           )}
 
           {displayTab === 'cashbank' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <CashBankView />
+              <CashBankView key={selectedBranchScope} />
             </div>
           )}
 
           {displayTab === 'receivables' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <ReceivablesView
+                key={selectedBranchScope}
                 onCollectPayment={(cid) => {
                   const customer = parties.find((p) => p.id === cid || p.name === cid);
                   if (customer) {
@@ -12521,6 +13049,7 @@ export function App() {
           {displayTab === 'payables' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <PayablesView
+                key={selectedBranchScope}
                 onPaySupplier={(sid) => {
                   const supplier = parties.find((p) => p.id === sid || p.name === sid);
                   if (supplier) {
@@ -12537,49 +13066,49 @@ export function App() {
           {/* GST FILING TAB VIEWS */}
           {displayTab === 'gst-overview' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+              <GstOverviewView key={selectedBranchScope} tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-sales-register' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstSalesRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-purchase-register' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstPurchaseRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-itc-reconciliation' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <ItcRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-gstr3b' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <Gstr3bView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-gstr1' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
+              <Gstr1View key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-import-export' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstImportExportView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-filing-history' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstFilingHistoryView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
         </div>
@@ -15102,6 +15631,130 @@ export function App() {
                       />
                     </div>
                   </div>
+
+                  {/* Supplier Bill Document Attachment Zone */}
+                  <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #cbd5e1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: purAttachmentData ? '#ecfdf5' : '#eff6ff', color: purAttachmentData ? '#059669' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                        {purAttachmentData ? '✓' : '📎'}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#1e293b' }}>
+                          {purAttachmentData ? 'Supplier Bill Attached' : 'Attach Supplier Bill (Photo / PDF)'}
+                        </div>
+                        <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
+                          {purAttachmentName ? `${purAttachmentName}` : 'Upload physical invoice photo or PDF for audit proof (Max 5MB)'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {purAttachmentData ? (
+                        <>
+                          {purAttachmentData.startsWith('data:image') && (
+                            <img
+                              src={purAttachmentData}
+                              alt="Bill Preview"
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                            />
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: '#fca5a5' }}
+                            onClick={() => {
+                              setPurAttachmentName('');
+                              setPurAttachmentData('');
+                            }}
+                          >
+                            ✕ Remove File
+                          </button>
+                        </>
+                      ) : (
+                        <label
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: '#ffffff', borderColor: '#2563eb', color: '#2563eb', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
+                        >
+                          <span>📷 Upload Bill File / Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            style={{ display: 'none' }}
+                            onChange={handleBillFileChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fast Reorder & Bulk Tools */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.65rem 0.95rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1.1rem' }}>⚡</span>
+                    <div>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', display: 'block' }}>
+                        Quick Reorder & Bulk Inward:
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: '#15803d' }}>
+                        Skip entering products one-by-one when restocked from this supplier
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Copy Last Bill */}
+                    {(() => {
+                      const supplierPastPurchases = purchases.filter((p) => p.supplierId === purSupplierId && p.status !== 'voided');
+                      if (supplierPastPurchases.length === 0) return null;
+                      const lastPurchase = supplierPastPurchases[0];
+                      return (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#16a34a', color: '#166534', fontWeight: 600 }}
+                          onClick={() => handleRepeatPreviousPurchase(lastPurchase)}
+                          title={`Load all products from last invoice #${lastPurchase.supplierInvoiceNumber || lastPurchase.billNo || lastPurchase.purchaseNumber}`}
+                        >
+                          🔄 Copy Last Bill Items
+                        </button>
+                      );
+                    })()}
+
+                    {/* Load Out-of-Stock / Reorder Items */}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#0284c7', color: '#0369a1', fontWeight: 600 }}
+                      onClick={handleLoadLowStockForSupplier}
+                      title="Automatically load all products with 0 stock or below minimum stock"
+                    >
+                      📦 Load Finished / Low Stock Items
+                    </button>
+
+                    {/* Import CSV */}
+                    <label
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#9333ea', color: '#7e22ce', fontWeight: 600, cursor: 'pointer', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                      title="Upload items list from Excel / CSV"
+                    >
+                      📥 Import CSV
+                      <input
+                        type="file"
+                        accept=".csv,.txt"
+                        style={{ display: 'none' }}
+                        onChange={handleImportPurchaseCsv}
+                      />
+                    </label>
+
+                    {/* CSV Template */}
+                    <button
+                      type="button"
+                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.74rem', textDecoration: 'underline', cursor: 'pointer', padding: '0 4px' }}
+                      onClick={handleDownloadPurchaseCsvTemplate}
+                      title="Download sample CSV template"
+                    >
+                      CSV Template
+                    </button>
+                  </div>
                 </div>
 
                 {/* Lines Table Zone */}
@@ -15660,6 +16313,49 @@ export function App() {
                   </div>
                 </div>
 
+                {/* Attached Supplier Bill Document */}
+                {pur.attachmentData && (
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <span style={{ fontSize: '1.3rem' }}>📎</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
+                          Physical Supplier Bill Attached
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#475569' }}>
+                          {pur.attachmentName || 'supplier_invoice'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {pur.attachmentData.startsWith('data:image') && (
+                        <a
+                          href={pur.attachmentData}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <img
+                            src={pur.attachmentData}
+                            alt="Preview"
+                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #93c5fd' }}
+                          />
+                        </a>
+                      )}
+                      <a
+                        href={pur.attachmentData}
+                        download={pur.attachmentName || `supplier_bill_${pur.supplierInvoiceNumber || pur.purchaseNumber}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: '#ffffff', color: '#1d4ed8', borderColor: '#93c5fd', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
+                      >
+                        <span>📥 Download / View Bill</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
                 {/* Lines Table */}
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
                   <table className="data-table" style={{ margin: 0 }}>
@@ -15802,6 +16498,20 @@ export function App() {
 
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ background: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe', fontWeight: 600 }}
+                    onClick={() => {
+                      const prev = pur;
+                      setSelectedPurchaseDetails(null);
+                      handleRepeatPreviousPurchase(prev);
+                      setShowPurchaseModal(true);
+                    }}
+                    title="Load all items from this bill into a new purchase"
+                  >
+                    🔄 Reorder / Repeat Bill
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary"

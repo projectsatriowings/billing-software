@@ -127,10 +127,11 @@ export function registerDashboard(r: Router) {
       (ctx.query.branch as string) ||
       (ctx.query.branchId as string) ||
       (ctx.query.branchCode as string) ||
+      (ctx.req.headers['x-branch-id'] as string) ||
       ''
     ).trim();
 
-    const isSuperAdmin = userRole === 'owner' || String(userRole).toUpperCase() === 'SUPER_ADMIN';
+    const isSuperAdmin = userRole === 'owner' || (userRole as string) === 'admin' || String(userRole).toUpperCase() === 'SUPER_ADMIN';
 
     // 1. Fetch authorized branches and timezone concurrently
     let branchWhereClause = 'WHERE b.tenant_id = ?';

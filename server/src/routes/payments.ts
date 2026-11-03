@@ -2,6 +2,7 @@ import { requirePerm, requireUser } from '../auth.ts';
 import { bad, forbidden, notFound, HtmlResponse, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { can } from '../../../shared/types.ts';
 import { normalizePhone } from '../../../shared/whatsapp.ts';
 import { qrSvg, upiUri } from '../../../shared/qr.ts';
@@ -22,6 +23,15 @@ export function registerPayments(r: Router) {
   r.post('/api/payments', requirePerm('collect'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    let branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) {
+      const mainBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? ORDER BY code = 'MAIN' DESC LIMIT 1",
+        [tenantId],
+      );
+      branchId = mainBr?.id || null;
+    }
 
     // Idempotency check: if already processed for this tenant, return existing record
     const idempotencyKey = V.optStr(b.idempotencyKey, 'Idempotency key', 128);
@@ -213,13 +223,14 @@ export function registerPayments(r: Router) {
       // 7. Insert payment record
       await q.exec(
         `INSERT INTO payments (
-          id, tenant_id, client_id, customer_id, party_id, receipt_number, amount_minor,
+          id, tenant_id, branch_id, client_id, customer_id, party_id, receipt_number, amount_minor,
           mode, method, reference_no, reference, shift_id, payment_date, bdate, note, received_by, created_by,
           advance_minor, status, idempotency_key, share_token, kind, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, 'receipt', NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'posted', ?, ?, 'receipt', NOW())`,
         [
           paymentId,
           tenantId,
+          branchId,
           (b.clientId as string) ?? null,
           customerId,
           customerId,
@@ -246,9 +257,9 @@ export function registerPayments(r: Router) {
         const allocId = newId('pa');
         await q.exec(
           `INSERT INTO payment_allocations (
-            id, tenant_id, payment_id, invoice_id, customer_id, amount_minor, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-          [allocId, tenantId, paymentId, alloc.invoiceId, customerId, alloc.amountMinor],
+            id, tenant_id, branch_id, payment_id, invoice_id, customer_id, amount_minor, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [allocId, tenantId, branchId, paymentId, alloc.invoiceId, customerId, alloc.amountMinor],
         );
       }
 
@@ -295,6 +306,7 @@ export function registerPayments(r: Router) {
   // 1b. List Customer Receipts / Payments
   r.get('/api/payments', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const limit = Math.min(Math.max(V.int(ctx.query.limit ?? 50, 'Limit', { min: 1, max: 200 }), 1), 200);
     const offset = Math.max(V.int(ctx.query.offset ?? 0, 'Offset', { min: 0 }), 0);
     const mode = ctx.query.mode ? String(ctx.query.mode) : null;
@@ -316,6 +328,11 @@ export function registerPayments(r: Router) {
         AND (p.kind IS NULL OR p.kind != 'supplier_payment')
     `;
     const params: unknown[] = [tenantId];
+
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL)`;
+      params.push(scope.branchId);
+    }
 
     if (mode && mode !== 'ALL') {
       sql += ` AND (p.mode = ? OR p.method = ?)`;
@@ -363,6 +380,7 @@ export function registerPayments(r: Router) {
   // 1c. List Supplier Payments / Disbursements History
   const handleSupplierPayments = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const limit = Math.min(Math.max(V.int(ctx.query.limit ?? 50, 'Limit', { min: 1, max: 200 }), 1), 200);
     const offset = Math.max(V.int(ctx.query.offset ?? 0, 'Offset', { min: 0 }), 0);
     const method = ctx.query.mode || ctx.query.method ? String(ctx.query.mode || ctx.query.method) : null;
@@ -387,6 +405,11 @@ export function registerPayments(r: Router) {
       WHERE p.tenant_id = ? AND p.kind = 'supplier_payment'
     `;
     const params: unknown[] = [tenantId];
+
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ` AND (p.branch_id = ? OR p.branch_id IS NULL)`;
+      params.push(scope.branchId);
+    }
 
     if (method && method !== 'ALL') {
       sql += ` AND (p.method = ? OR p.mode = ?)`;
@@ -1282,52 +1305,55 @@ export function registerPayments(r: Router) {
   // Cash & Bank Overview
   r.get('/api/finance/cash-bank', requirePerm('reports'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const todayStr = new Date().toISOString().slice(0, 10);
+    const brClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // 1. Drawer Cash collections today
     const cashSales = await ctx.db.one<{ total: number }>(
       `SELECT COALESCE(SUM(paid_minor), 0)::bigint AS total
        FROM invoices
-       WHERE tenant_id = ? AND bdate = ? AND status = 'posted' AND kind = 'sale'`,
-      [tenantId, todayStr],
+       WHERE tenant_id = ? AND bdate = ? AND status = 'posted' AND kind = 'sale' ${brClause}`,
+      [tenantId, todayStr, ...brParams],
     );
 
     // Collections by method
     const collectionsByMethod = await ctx.db.query<{ method: string; total: number }>(
       `SELECT COALESCE(mode, method) AS method, COALESCE(SUM(amount_minor), 0)::bigint AS total
        FROM payments
-       WHERE tenant_id = ? AND (status IS NULL OR status = 'posted')
+       WHERE tenant_id = ? AND (status IS NULL OR status = 'posted') ${brClause}
        GROUP BY COALESCE(mode, method)
        ORDER BY total DESC`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     // Supplier payments out by method
     const supplierPaymentsByMethod = await ctx.db.query<{ method: string; total: number }>(
       `SELECT COALESCE(method, 'cash') AS method, COALESCE(SUM(amount_minor), 0)::bigint AS total
        FROM payments
-       WHERE tenant_id = ? AND kind = 'supplier_payment' AND status = 'posted'
+       WHERE tenant_id = ? AND kind = 'supplier_payment' AND status = 'posted' ${brClause}
        GROUP BY COALESCE(method, 'cash')
        ORDER BY total DESC`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     // Cash movements from active shifts
     const cashMovements = await ctx.db.query<{ movement_type: string; total: number }>(
       `SELECT movement_type, COALESCE(SUM(amount_minor), 0)::bigint AS total
        FROM cash_movements
-       WHERE tenant_id = ?
+       WHERE tenant_id = ? ${brClause}
        GROUP BY movement_type`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     // Expenses paid by method
     const expensesByMethod = await ctx.db.query<{ payment_method: string; total: number }>(
       `SELECT payment_method, COALESCE(SUM(paid_minor), 0)::bigint AS total
        FROM expenses
-       WHERE tenant_id = ? AND status = 'posted'
+       WHERE tenant_id = ? AND status = 'posted' ${brClause}
        GROUP BY payment_method`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     const getSum = (arr: any[], key: string, valKey = 'total') =>
@@ -1357,6 +1383,9 @@ export function registerPayments(r: Router) {
   // Receivables (Customer Outstanding Dues & Aging)
   r.get('/api/finance/receivables', requirePerm('reports'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const brClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND (i.branch_id = ? OR p.branch_id = ?)' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId, scope.branchId] : [];
 
     const customersWithDues = await ctx.db.query(
       `SELECT
@@ -1366,10 +1395,10 @@ export function registerPayments(r: Router) {
         MIN(i.bdate) AS oldest_invoice_date
        FROM parties p
        JOIN invoices i ON i.party_id = p.id AND i.tenant_id = p.tenant_id
-       WHERE p.tenant_id = ? AND p.type = 'customer' AND i.status = 'posted' AND i.balance_minor > 0
+       WHERE p.tenant_id = ? AND p.type = 'customer' AND i.status = 'posted' AND i.balance_minor > 0 ${brClause}
        GROUP BY p.id, p.name, p.phone
        ORDER BY total_due_minor DESC`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     const totalReceivableMinor = customersWithDues.reduce((sum, c: any) => sum + Number(c.totalDueMinor ?? c.total_due_minor ?? 0), 0);
@@ -1391,6 +1420,9 @@ export function registerPayments(r: Router) {
   // Payables (Supplier Outstanding Dues & Aging)
   r.get('/api/finance/payables', requirePerm('reports'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const brClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND (pur.branch_id = ? OR part.branch_id = ?)' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId, scope.branchId] : [];
 
     const suppliersWithPayables = await ctx.db.query(
       `SELECT
@@ -1401,10 +1433,10 @@ export function registerPayments(r: Router) {
         MIN(COALESCE(pur.purchase_date, pur.bdate)) AS oldest_bill_date
        FROM parties part
        JOIN purchases pur ON pur.supplier_id = part.id AND pur.tenant_id = part.tenant_id
-       WHERE part.tenant_id = ? AND part.type = 'supplier' AND pur.status != 'voided' AND pur.balance_minor > 0
+       WHERE part.tenant_id = ? AND part.type = 'supplier' AND pur.status != 'voided' AND pur.balance_minor > 0 ${brClause}
        GROUP BY part.id, part.name, part.phone, part.gstin
        ORDER BY total_payable_minor DESC`,
-      [tenantId],
+      [tenantId, ...brParams],
     );
 
     const totalPayableMinor = suppliersWithPayables.reduce((sum, s: any) => sum + Number(s.totalPayableMinor ?? s.total_payable_minor ?? 0), 0);

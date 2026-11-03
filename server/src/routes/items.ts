@@ -323,6 +323,16 @@ export function registerItems(r: Router) {
       }
     }
 
+    if (sku) {
+      const existingSku = await ctx.db.one<{ id: string; name: string }>(
+        'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND sku = ?',
+        [tenantId, branchId, sku],
+      );
+      if (existingSku) {
+        throw conflict(`Item "${existingSku.name}" already uses this SKU code in this branch.`);
+      }
+    }
+
     const id = newId('i');
 
     await ctx.db.tx(async (q) => {
@@ -410,6 +420,16 @@ export function registerItems(r: Router) {
       }
     }
 
+    if (sku && sku !== item.sku) {
+      const dupSku = await ctx.db.one<{ id: string; name: string }>(
+        'SELECT id, name FROM items WHERE tenant_id = ? AND sku = ? AND id <> ?',
+        [tenantId, sku, item.id],
+      );
+      if (dupSku) {
+        throw conflict(`Item "${dupSku.name}" already uses this SKU code.`);
+      }
+    }
+
     await ctx.db.tx(async (q) => {
       await q.exec(
         `UPDATE items SET
@@ -468,6 +488,9 @@ export function registerItems(r: Router) {
     await ctx.db.tx(async (q) => {
       await q.exec('UPDATE invoice_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('UPDATE purchase_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('UPDATE stock_transfer_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);
@@ -498,6 +521,9 @@ export function registerItems(r: Router) {
     await ctx.db.tx(async (q) => {
       await q.exec('UPDATE invoice_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('UPDATE purchase_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('UPDATE stock_transfer_lines SET item_id = NULL WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_adjustments WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
+      await q.exec('DELETE FROM stock_count_lines WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM stock_moves WHERE item_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM product_barcodes WHERE product_id = ? AND tenant_id = ?', [item.id, tenantId]);
       await q.exec('DELETE FROM items WHERE id = ? AND tenant_id = ?', [item.id, tenantId]);

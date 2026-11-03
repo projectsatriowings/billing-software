@@ -49,6 +49,7 @@ interface InventoryDashboardProps {
   userRole?: Role;
   businessType?: string;
   allowNegativeStock?: boolean;
+  initialTab?: 'overview' | 'ledger' | 'counts' | 'replenish' | 'insights';
   onNavigateToPurchases?: (supplierId?: string, itemId?: string) => void;
   onNavigateToCategories?: () => void;
   onNavigateToProductAnalysis?: () => void;
@@ -64,13 +65,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   userRole,
   businessType = 'retail',
   allowNegativeStock = false,
+  initialTab = 'overview',
   onNavigateToPurchases,
   onNavigateToCategories,
   onNavigateToProductAnalysis,
   showToast,
   onReloadItems,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>(initialTab);
   const [stats, setStats] = useState<InventoryDashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState<boolean>(true);
   const [insights, setInsights] = useState<InventoryInsights | null>(null);

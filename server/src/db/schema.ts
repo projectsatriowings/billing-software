@@ -1254,7 +1254,7 @@ version: 29,
          AND lower(u.role) IN ('manager', 'store_manager')`,
     ],
   },
-    {
+  {
     version: 46,
     statements: [
       // 1. Drop unused branch_inventory table and view
@@ -1382,6 +1382,42 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS idx_invoice_lines_tenant_branch ON invoice_lines (tenant_id, branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_purchase_lines_tenant_branch ON purchase_lines (tenant_id, branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_stock_count_lines_tenant_branch ON stock_count_lines (tenant_id, branch_id)`,
+    ],
+  },
+  {
+    version: 47,
+    statements: [
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_name TEXT`,
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_data TEXT`,
+    ],
+  },
+  {
+    version: 48,
+    statements: [
+      `ALTER TABLE purchase_lines ALTER COLUMN item_id DROP NOT NULL`,
+      `ALTER TABLE stock_transfer_lines ALTER COLUMN item_id DROP NOT NULL`,
+      `ALTER TABLE items ALTER COLUMN branch_id DROP NOT NULL`,
+    ],
+  },
+  {
+    version: 49,
+    statements: [
+      `ALTER TABLE product_barcodes ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_moves ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE categories ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE parties ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_adjustments ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_count_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_counts ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE purchase_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE purchases ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE invoice_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE invoices ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE payments ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE expenses ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE shifts ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE cash_movements ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE terminal_transactions ALTER COLUMN branch_id DROP NOT NULL`,
     ],
   },
   {

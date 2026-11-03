@@ -338,6 +338,7 @@ export interface Invoice {
   kind: string;
   status: string;
   bdate: string;
+  branchId?: string;
   partyId?: string;
   customerName?: string;
   customerPhone?: string;
@@ -345,6 +346,7 @@ export interface Invoice {
   taxableMinor: number;
   cgstMinor: number;
   sgstMinor: number;
+  igstMinor?: number;
   paidMinor: number;
   balanceMinor: number;
   returnedMinor?: number;
