@@ -15,6 +15,7 @@ import {
 } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
 import { validateGstin } from '../../../../shared/tax.ts';
+import { Building2Icon } from '../inventory/InventoryIcons.tsx';
 
 type DatePreset = 'all' | 'today' | 'this_month' | 'last_month' | 'this_quarter' | 'this_fy' | 'custom';
 
@@ -75,15 +76,26 @@ interface ExpensesViewProps {
   userRole?: string;
   userLocation?: string;
   suppliers?: { id: string; name: string; gstin?: string | null }[];
+  branches?: { id: string; name: string; code?: string }[];
+  selectedBranch?: string;
+  onBranchChange?: (branchCodeOrId: string) => void;
 }
 
-export function ExpensesView({ userRole, userLocation, suppliers = [] }: ExpensesViewProps) {
+export function ExpensesView({
+  userRole,
+  userLocation,
+  suppliers = [],
+  branches = [],
+  selectedBranch = 'all',
+  onBranchChange,
+}: ExpensesViewProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Filters & Datebar
+  const [branchFilter, setBranchFilter] = useState<string>(selectedBranch || 'ALL');
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -131,6 +143,13 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
   const [formPaidRupees, setFormPaidRupees] = useState('');
   const [formGstTreatment, setFormGstTreatment] = useState<GstTreatment>('exempt');
   const [formItcEligibility, setFormItcEligibility] = useState<ItcEligibility>('ineligible');
+  const [formBranchId, setFormBranchId] = useState<string>('');
+
+  useEffect(() => {
+    if (selectedBranch) {
+      setBranchFilter(selectedBranch);
+    }
+  }, [selectedBranch]);
 
   const canWrite = userRole === 'owner' || userRole === 'manager' || userRole === 'accountant';
   const canVoid = userRole === 'owner' || userRole === 'manager';
@@ -147,6 +166,9 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
       if (treatmentFilter !== 'ALL') params.gstTreatment = treatmentFilter;
       if (itcFilter !== 'ALL') params.itcEligibility = itcFilter;
       if (searchQuery.trim()) params.q = searchQuery.trim();
+      if (branchFilter && branchFilter.toLowerCase() !== 'all') {
+        params.branch = branchFilter;
+      }
 
       const res = await fetchExpenses(params);
       setExpenses(res.expenses);
@@ -161,7 +183,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
 
   useEffect(() => {
     loadExpenses();
-  }, [from, to, categoryFilter, statusFilter, treatmentFilter, itcFilter, page]);
+  }, [from, to, categoryFilter, statusFilter, treatmentFilter, itcFilter, branchFilter, page]);
 
   // Live Tax Calculation in Form
   const parsedAmountMinor = Math.round((parseFloat(formAmountRupees) || 0) * 100);
@@ -206,6 +228,10 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
     setFormPaidRupees('');
     setFormGstTreatment('exempt');
     setFormItcEligibility('ineligible');
+    const initialBr = (branchFilter && branchFilter.toLowerCase() !== 'all')
+      ? (branches.find(b => b.id === branchFilter || b.code?.toUpperCase() === branchFilter.toUpperCase())?.id || branches[0]?.id || '')
+      : (branches[0]?.id || '');
+    setFormBranchId(initialBr);
     setShowFormModal(true);
   };
 
@@ -213,6 +239,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
     setEditingExpense(exp);
     setFormDate(exp.expenseDate);
     setFormCategory((exp.category as any) || 'rent');
+    setFormBranchId((exp as any).branchId || branches[0]?.id || '');
     setFormDesc(exp.description || '');
     setFormNotes(exp.notes || '');
     setFormSupplierId(exp.supplierId || '');
@@ -280,7 +307,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             : Math.round((parseFloat(formPaidRupees) || 0) * 100);
 
       const activeBranch = localStorage.getItem('sa_selected_branch');
-      const branchIdParam = (activeBranch && activeBranch.toLowerCase() !== 'all') ? activeBranch : undefined;
+      const branchIdParam = formBranchId || ((activeBranch && activeBranch.toLowerCase() !== 'all') ? activeBranch : undefined);
 
       const payload = {
         branchId: branchIdParam,
@@ -654,6 +681,55 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
         </div>
       </div>
 
+      {/* Branch-Wise Breakdown Pills for Super Admin */}
+      {branches.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1rem', background: '#ffffff', padding: '0.75rem 1rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Breakdown:
+          </span>
+          <button
+            type="button"
+            onClick={() => { setBranchFilter('ALL'); if (onBranchChange) onBranchChange('all'); }}
+            style={{
+              padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              border: branchFilter.toUpperCase() === 'ALL' ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+              background: branchFilter.toUpperCase() === 'ALL' ? '#f3f0ff' : '#ffffff',
+              color: branchFilter.toUpperCase() === 'ALL' ? '#6d4aff' : '#475569',
+              fontWeight: branchFilter.toUpperCase() === 'ALL' ? 700 : 500,
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            All Branches ({fmtMoney(summary.totalMinor)})
+          </button>
+          {branches.map(b => {
+            const isSelected = branchFilter === b.id || branchFilter === b.code || (b.code && branchFilter.toUpperCase() === b.code.toUpperCase());
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => { setBranchFilter(b.code || b.id); if (onBranchChange) onBranchChange(b.code || b.id); }}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '8px',
+                  border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                  background: isSelected ? '#f3f0ff' : '#ffffff',
+                  color: isSelected ? '#6d4aff' : '#475569',
+                  fontWeight: isSelected ? 700 : 500,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {b.name} ({b.code})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Datebar & Filters Container Card */}
       <div className="expense-filter-card">
         {/* Tier 1: Period Presets & Interactive Custom Date Trigger */}
@@ -753,8 +829,42 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
         {/* Divider */}
         <div style={{ height: '1px', background: '#f1f5f9' }} />
 
-        {/* Tier 2: Category, Payment, ITC & Search Filter (Fully Responsive Grid) */}
+        {/* Tier 2: Branch, Category, Payment, ITC & Search Filter (Fully Responsive Grid) */}
         <div className="expense-filter-grid">
+          {branches.length > 0 && (
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <Building2Icon size={12} style={{ color: '#6d4aff' }} /> Branch
+              </label>
+              <select
+                value={branchFilter}
+                onChange={(e) => {
+                  setBranchFilter(e.target.value);
+                  setPage(1);
+                  if (onBranchChange) onBranchChange(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.65rem',
+                  fontSize: '0.85rem',
+                  borderRadius: '8px',
+                  border: '1.5px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#1e293b',
+                  fontWeight: 600,
+                  outline: 'none',
+                }}
+              >
+                <option value="ALL">🏢 All Branches (Overall)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.code || b.id}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Category
@@ -977,6 +1087,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '0.85rem 1rem' }}>Expense #</th>
+                  {branches.length > 0 && <th style={{ padding: '0.85rem 1rem' }}>Branch</th>}
                   <th style={{ padding: '0.85rem 1rem' }}>Date</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Category</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Vendor / Supplier</th>
@@ -1012,6 +1123,25 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                           </span>
                         )}
                       </td>
+                      {branches.length > 0 && (
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            background: '#f1f5f9',
+                            color: '#475569',
+                            padding: '0.2rem 0.45rem',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            🏢 {branches.find(b => b.id === (exp as any).branchId || b.code === (exp as any).branchId)?.code || 'MAIN'}
+                          </span>
+                        </td>
+                      )}
                       <td style={{ padding: '0.85rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>{exp.expenseDate}</td>
                       <td style={{ padding: '0.85rem 1rem' }}>
                         <span style={{ background: '#f8f7ff', color: '#4338ca', border: '1px solid #e0e7ff', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600' }}>
@@ -1263,6 +1393,26 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Primary Expense Info */}
               <div className="expense-form-row-2">
+                {branches.length > 0 && (
+                  <div className="expense-form-group">
+                    <label className="expense-form-label">
+                      Branch <span className="required">*</span>
+                    </label>
+                    <select
+                      value={formBranchId}
+                      onChange={(e) => setFormBranchId(e.target.value)}
+                      className="expense-input-control"
+                      required
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="expense-form-group">
                   <label className="expense-form-label">
                     Expense Date <span className="required">*</span>

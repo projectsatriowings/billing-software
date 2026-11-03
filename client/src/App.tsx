@@ -825,6 +825,8 @@ export function App() {
       localStorage.setItem('sa_selected_branch', 'all');
       sessionStorage.setItem('sa_selected_branch', 'all');
     }
+    loadInvoices();
+    loadReports();
   };
   const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
   const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
@@ -932,6 +934,7 @@ export function App() {
   // Invoices list state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoiceFilterDate, setInvoiceFilterDate] = useState<string>('');
+  const [invoiceBranchFilter, setInvoiceBranchFilter] = useState<string>('all');
 
   // Analytics state
   const [report, setReport] = useState<DashboardReport | null>(null);
@@ -6360,6 +6363,46 @@ export function App() {
             <div className="top-header-title-spacer" />
           )}
           <div className="top-global-actions">
+            {(user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN') && branches.length > 0 && (
+              <div
+                className="top-branch-selector-pill"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  background: '#f8fafc',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '10px',
+                  border: '1.5px solid #cbd5e1',
+                }}
+              >
+                <Building2Icon size={16} style={{ color: '#6d4aff' }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
+                <select
+                  value={selectedBranchScope}
+                  onChange={(e) => handleGlobalBranchChange(e.target.value)}
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                  title="Switch branch scope for sales, expenses, and inventory"
+                >
+                  <option value="all">🏢 All Branches (Overall)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.code || b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="button"
               className="top-notification-btn"
@@ -10331,11 +10374,60 @@ export function App() {
           {/* TAB 3: BILLS & INVOICES */}
           {displayTab === 'invoices' && (() => {
             const displayedInvoices = invoices.filter((inv) => {
-              if (!invoiceFilterDate) return true;
-              return inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+              const matchDate = !invoiceFilterDate || inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
+              const matchBranch = !invoiceBranchFilter || invoiceBranchFilter === 'all' || inv.branchId === invoiceBranchFilter || (inv as any).location === invoiceBranchFilter;
+              return matchDate && matchBranch;
             });
             return (
               <div className="card">
+                {branches.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', padding: '0.65rem 0.85rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Sales:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceBranchFilter('all')}
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: invoiceBranchFilter === 'all' ? 700 : 500,
+                        background: invoiceBranchFilter === 'all' ? '#f3f0ff' : '#ffffff',
+                        border: invoiceBranchFilter === 'all' ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                        color: invoiceBranchFilter === 'all' ? '#6d4aff' : '#334155',
+                        padding: '0.25rem 0.6rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      All Branches ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
+                    </button>
+                    {branches.map((b) => {
+                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      const isSelected = invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setInvoiceBranchFilter(b.id)}
+                          style={{
+                            fontSize: '0.75rem',
+                            fontWeight: isSelected ? 700 : 500,
+                            background: isSelected ? '#f3f0ff' : '#ffffff',
+                            border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                            color: isSelected ? '#6d4aff' : '#334155',
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div>
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
@@ -10352,11 +10444,27 @@ export function App() {
                       )}
                     </div>
                   </div>
+                  {branches.length > 0 && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Filter Branch:</span>
+                      <select
+                        value={invoiceBranchFilter}
+                        onChange={(e) => setInvoiceBranchFilter(e.target.value)}
+                        style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
+                      >
+                        <option value="all">All Branches</option>
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Invoice No</th>
+                      {branches.length > 0 && <th>Branch</th>}
                       <th>Date & Time</th>
                       <th>Customer / Reference</th>
                       <th>Total Amount</th>
@@ -10389,6 +10497,25 @@ export function App() {
                             </span>
                           )}
                         </td>
+                        {branches.length > 0 && (
+                          <td>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              padding: '0.2rem 0.45rem',
+                              borderRadius: '6px',
+                              border: '1px solid #e2e8f0',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              🏢 {branches.find(b => b.id === inv.branchId || b.code === (inv as any).location)?.code || 'MAIN'}
+                            </span>
+                          </td>
+                        )}
                         <td>{new Date(inv.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{inv.customerName || 'Walk-in Customer'}</div>
@@ -11094,6 +11221,47 @@ export function App() {
                   </table>
                 </div>
               </div>
+
+              {/* Branch-Wise Sales & Collections Performance */}
+              {branches.length > 0 && (
+                <div className="card" style={{ marginTop: '1.25rem' }}>
+                  <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2Icon size={18} style={{ color: '#6d4aff' }} />
+                    <span>Branch-Wise Sales & Operations Performance</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                    {branches.map((b) => {
+                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      const bTaxable = bSales.reduce((sum, i) => sum + (i.taxableMinor || 0), 0);
+                      const bGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
+                      const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
+                      const bReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                      return (
+                        <div key={b.id} style={{ background: '#f8fafc', borderRadius: '12px', border: '1.5px solid #e2e8f0', padding: '1.1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
+                            <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>{b.code}</span>
+                          </div>
+                          <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
+                            {formatRupees(bSalesTotal)}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bSales.length}</strong></span>
+                            <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
+                          </div>
+                          {bReturnsTotal > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
+                              Returns: {formatRupees(bReturnsTotal)} ({bReturns.length} credit notes)
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
               <div className="card" style={{ marginTop: '1.25rem' }}>
@@ -12797,6 +12965,9 @@ export function App() {
                 userRole={user.role}
                 userLocation={shop?.locations?.[0] || shop?.address}
                 suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
+                branches={branches}
+                selectedBranch={selectedBranchScope}
+                onBranchChange={handleGlobalBranchChange}
               />
             </div>
           )}
