@@ -827,6 +827,10 @@ export function App() {
     }
     loadInvoices();
     loadReports();
+    window.dispatchEvent(new CustomEvent('branch_scope_changed', { detail: newBranchCode }));
+    loadItems();
+    loadPurchases();
+    loadParties();
   };
   const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
   const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
@@ -6599,6 +6603,8 @@ export function App() {
                 <TodayDashboardView
                   user={user}
                   shop={shop}
+                  selectedBranch={selectedBranchScope}
+                  onBranchChange={handleGlobalBranchChange}
                   onNavigateToPos={() => setActiveTab('pos')}
                   onNavigateToShifts={() => setActiveTab('shifts')}
                   onNavigateToInventory={() => setActiveTab('inventory')}
