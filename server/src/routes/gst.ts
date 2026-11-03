@@ -167,11 +167,12 @@ export function registerGst(r: Router) {
   r.get('/api/gst/sales-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
     const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
@@ -240,11 +241,12 @@ export function registerGst(r: Router) {
   r.get('/api/gst/purchase-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
     const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
@@ -351,11 +353,12 @@ export function registerGst(r: Router) {
   r.get('/api/gst/itc-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
     const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
@@ -1064,11 +1067,12 @@ export function registerGst(r: Router) {
   r.get('/api/gst/sales-register/export', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
     const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
@@ -1135,11 +1139,12 @@ export function registerGst(r: Router) {
   r.get('/api/gst/purchase-register/export', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
     const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
@@ -1251,11 +1256,12 @@ export function registerGst(r: Router) {
   const exportItcRecon = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
 
     const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
     const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';

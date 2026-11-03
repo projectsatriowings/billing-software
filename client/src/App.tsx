@@ -193,6 +193,14 @@ export const HIDE_BUSINESS_BAR_TABS = new Set([
   'receivables',
   'reports',
   'user-management',
+  'gst-overview',
+  'gst-sales-register',
+  'gst-purchase-register',
+  'gst-itc-reconciliation',
+  'gst-gstr3b',
+  'gst-gstr1',
+  'gst-import-export',
+  'gst-filing-history',
 ]);
 
 // Explicit header titles shown at the left end of the top header bar for the 6 core modules
@@ -230,6 +238,14 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'payables': 'Accounts Payable',
   'receivables': 'Accounts Receivable',
   'reports': 'Management Reports',
+  'gst-overview': 'GST Compliance & Filing Overview',
+  'gst-sales-register': 'GST Sales Register',
+  'gst-purchase-register': 'GST Purchase Register',
+  'gst-itc-reconciliation': 'ITC Register & Reconciliation',
+  'gst-gstr3b': 'GSTR-3B Filing',
+  'gst-gstr1': 'GSTR-1 Outward Supplies',
+  'gst-import-export': 'GST Import & Export',
+  'gst-filing-history': 'GST Filing History',
 };
 
 export interface ToastItem {

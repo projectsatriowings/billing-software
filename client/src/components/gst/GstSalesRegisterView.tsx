@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstSalesRegister, downloadFile } from '../../api.ts';
-import { DownloadIcon, SpinnerIcon, AlertTriangleIcon } from './GstIcons.tsx';
+import { DownloadIcon, SpinnerIcon, AlertTriangleIcon, RefreshIcon } from './GstIcons.tsx';
 
 interface GstSalesRegisterViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
