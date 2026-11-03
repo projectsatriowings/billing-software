@@ -805,6 +805,20 @@ export function App() {
   const [upiManualRef, setUpiManualRef] = useState('');
   const [paymentCardRef, setPaymentCardRef] = useState<string>('');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchScope, setSelectedBranchScope] = useState<string>(() => {
+    return localStorage.getItem('sa_selected_branch') || 'all';
+  });
+
+  const handleGlobalBranchChange = (newBranchCode: string) => {
+    setSelectedBranchScope(newBranchCode);
+    if (newBranchCode && newBranchCode.toLowerCase() !== 'all') {
+      localStorage.setItem('sa_selected_branch', newBranchCode);
+      sessionStorage.setItem('sa_selected_branch', newBranchCode);
+    } else {
+      localStorage.setItem('sa_selected_branch', 'all');
+      sessionStorage.setItem('sa_selected_branch', 'all');
+    }
+  };
   const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
   const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
@@ -6436,7 +6450,32 @@ export function App() {
                 </span>
               </div>
 
-              <div className="content-header-right">
+              <div className="content-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {user.role === 'owner' && branches.length > 0 ? (
+                  <div className="header-branch-select-wrap" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>🏢 Branch:</span>
+                    <select
+                      value={selectedBranchScope}
+                      onChange={(e) => handleGlobalBranchChange(e.target.value)}
+                      style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b' }}
+                      title="Filter views by branch"
+                    >
+                      <option value="all">All Branches (Overall)</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.code || b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="header-store-chip" title="Active Branch Scope">
+                    <span className="store-chip-dot"></span>
+                    <span className="store-chip-text">
+                      🏢 <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
+                    </span>
+                  </div>
+                )}
                 <div className="header-store-chip">
                   <span className="store-chip-dot"></span>
                   <span className="store-chip-text">
@@ -12721,6 +12760,7 @@ export function App() {
           {displayTab === 'payments' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <PaymentsView
+                key={selectedBranchScope}
                 onOpenCustomerLedger={(cid) => {
                   const customer = parties.find((p) => p.id === cid || p.name === cid);
                   if (customer) {
@@ -12746,6 +12786,7 @@ export function App() {
           {displayTab === 'expenses' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <ExpensesView
+                key={selectedBranchScope}
                 userRole={user.role}
                 userLocation={shop?.locations?.[0] || shop?.address}
                 suppliers={parties.filter((p) => p.type === 'supplier').map((s) => ({ id: s.id, name: s.name, gstin: s.gstin }))}
@@ -12755,13 +12796,14 @@ export function App() {
 
           {displayTab === 'cashbank' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <CashBankView />
+              <CashBankView key={selectedBranchScope} />
             </div>
           )}
 
           {displayTab === 'receivables' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <ReceivablesView
+                key={selectedBranchScope}
                 onCollectPayment={(cid) => {
                   const customer = parties.find((p) => p.id === cid || p.name === cid);
                   if (customer) {
@@ -12778,6 +12820,7 @@ export function App() {
           {displayTab === 'payables' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
               <PayablesView
+                key={selectedBranchScope}
                 onPaySupplier={(sid) => {
                   const supplier = parties.find((p) => p.id === sid || p.name === sid);
                   if (supplier) {
@@ -12794,49 +12837,49 @@ export function App() {
           {/* GST FILING TAB VIEWS */}
           {displayTab === 'gst-overview' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstOverviewView tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
+              <GstOverviewView key={selectedBranchScope} tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-sales-register' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstSalesRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstSalesRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-purchase-register' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstPurchaseRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstPurchaseRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-itc-reconciliation' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <ItcRegisterView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <ItcRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-gstr3b' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <Gstr3bView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <Gstr3bView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-gstr1' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <Gstr1View onNavigate={(tab) => setActiveTab(tab as any)} />
+              <Gstr1View key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-import-export' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstImportExportView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstImportExportView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
 
           {displayTab === 'gst-filing-history' && (
             <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-              <GstFilingHistoryView onNavigate={(tab) => setActiveTab(tab as any)} />
+              <GstFilingHistoryView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
         </div>

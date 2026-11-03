@@ -279,7 +279,11 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             ? 0
             : Math.round((parseFloat(formPaidRupees) || 0) * 100);
 
+      const activeBranch = localStorage.getItem('sa_selected_branch');
+      const branchIdParam = (activeBranch && activeBranch.toLowerCase() !== 'all') ? activeBranch : undefined;
+
       const payload = {
+        branchId: branchIdParam,
         expenseDate: formDate,
         category: formCategory,
         description: formDesc || undefined,
