@@ -15,7 +15,28 @@ import {
 } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
 import { validateGstin } from '../../../../shared/tax.ts';
-import { Building2Icon } from '../inventory/InventoryIcons.tsx';
+import {
+  Building2Icon,
+  ZapIcon,
+  DownloadIcon,
+  RefreshCwIcon,
+  PlusIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
+  BriefcaseIcon,
+  FileTextIcon,
+  LandmarkIcon,
+  ScaleIcon,
+  CreditCardIcon,
+  CalendarIcon,
+  SearchIcon,
+  FileSpreadsheetIcon,
+  EyeIcon,
+  Edit3Icon,
+  XCircleIcon,
+  RupeeIcon,
+  XIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 type DatePreset = 'all' | 'today' | 'this_month' | 'last_month' | 'this_quarter' | 'this_fy' | 'custom';
 
@@ -502,7 +523,7 @@ export function ExpensesView({
             fontWeight: 700,
             border: '1px solid #ede9fe',
           }}>
-            ⚡ Expense Register &amp; ITC Tracker
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><ZapIcon size={14} style={{ color: '#6d4aff' }} /> Expense Register &amp; ITC Tracker</span>
           </span>
           <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
             • {totalCount} total entries recorded
@@ -531,7 +552,7 @@ export function ExpensesView({
               opacity: isExporting ? 0.7 : 1,
             }}
           >
-            {isExporting ? '⏳ Exporting...' : '📥 Export CSV'}
+            {isExporting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} className="animate-spin" /> Exporting...</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DownloadIcon size={14} /> Export CSV</span>}
           </button>
           <button
             type="button"
@@ -552,7 +573,7 @@ export function ExpensesView({
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
-            🔄 Refresh
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} /> Refresh</span>
           </button>
           {canWrite && (
             <button
@@ -573,7 +594,7 @@ export function ExpensesView({
                 boxShadow: '0 4px 14px rgba(109, 74, 255, 0.35)',
               }}
             >
-              ➕ Record Expense
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PlusIcon size={15} /> Record Expense</span>
             </button>
           )}
         </div>
@@ -582,14 +603,14 @@ export function ExpensesView({
       {/* Success & Error alerts */}
       {successMsg && (
         <div style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', padding: '0.75rem 1rem', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600 }}>✅ {successMsg}</span>
-          <button type="button" onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#166534' }}>✕</button>
+          <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CheckCircle2Icon size={16} /> {successMsg}</span>
+          <button type="button" onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#166534' }}><XIcon size={16} /></button>
         </div>
       )}
       {error && (
         <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', padding: '0.75rem 1rem', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600 }}>⚠️ {error}</span>
-          <button type="button" onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#991b1b' }}>✕</button>
+          <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><AlertTriangleIcon size={16} /> {error}</span>
+          <button type="button" onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#991b1b' }}><XIcon size={16} /></button>
         </div>
       )}
 
@@ -602,7 +623,7 @@ export function ExpensesView({
             <span className="expense-kpi-label" style={{ color: '#4338ca' }}>
               Total Expenses
             </span>
-            <span style={{ fontSize: '1.1rem' }}>💼</span>
+            <BriefcaseIcon size={18} style={{ color: '#4338ca' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#1e1b4b' }}>
             {fmtMoney(summary.totalMinor)}
@@ -619,7 +640,7 @@ export function ExpensesView({
             <span className="expense-kpi-label" style={{ color: '#1d4ed8' }}>
               Taxable Value
             </span>
-            <span style={{ fontSize: '1.1rem' }}>📄</span>
+            <FileTextIcon size={18} style={{ color: '#2563eb' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#2563eb' }}>
             {fmtMoney(summary.taxableMinor)}
@@ -636,7 +657,7 @@ export function ExpensesView({
             <span className="expense-kpi-label" style={{ color: '#b45309' }}>
               Expense GST
             </span>
-            <span style={{ fontSize: '1.1rem' }}>🏛️</span>
+            <LandmarkIcon size={18} style={{ color: '#d97706' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#d97706' }}>
             {fmtMoney(summary.totalGstMinor)}
@@ -653,7 +674,7 @@ export function ExpensesView({
             <span className="expense-kpi-label" style={{ color: '#047857' }}>
               Eligible ITC Claimed
             </span>
-            <span style={{ fontSize: '1.1rem' }}>⚖️</span>
+            <ScaleIcon size={18} style={{ color: '#059669' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#059669' }}>
             {fmtMoney(summary.itcMinor)}
@@ -670,7 +691,7 @@ export function ExpensesView({
             <span className="expense-kpi-label" style={{ color: '#be123c' }}>
               Paid vs Due
             </span>
-            <span style={{ fontSize: '1.1rem' }}>💳</span>
+            <CreditCardIcon size={18} style={{ color: '#be123c' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#0f172a' }}>
             {fmtMoney(summary.paidMinor)}
@@ -789,7 +810,7 @@ export function ExpensesView({
               }}
               title="Click to select custom dates or pick by month"
             >
-              <span style={{ fontSize: '0.9rem' }}>📅</span>
+              <CalendarIcon size={15} style={{ color: '#6d4aff' }} />
               <span>
                 {from && to
                   ? `${formatDateDisplay(from)} → ${formatDateDisplay(to)}`
@@ -819,9 +840,7 @@ export function ExpensesView({
                   color: '#64748b',
                 }}
                 title="Reset date filter"
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             )}
           </div>
         </div>
@@ -855,7 +874,7 @@ export function ExpensesView({
                   outline: 'none',
                 }}
               >
-                <option value="ALL">🏢 All Branches (Overall)</option>
+                <option value="ALL">All Branches (Overall)</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.code || b.id}>
                     {b.name} ({b.code})
@@ -963,17 +982,15 @@ export function ExpensesView({
                   outline: 'none',
                 }}
               />
-              <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.9rem' }}>
-                🔍
+              <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
+                <SearchIcon size={14} />
               </span>
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => { setSearchQuery(''); }}
                   style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.8rem' }}
-                >
-                  ✕
-                </button>
+                ><XIcon size={14} /></button>
               )}
             </div>
           </div>
@@ -1029,9 +1046,10 @@ export function ExpensesView({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.75rem',
+              color: '#6366f1',
+              border: '1px solid #e0e7ff',
             }}>
-              📂
+              <FileSpreadsheetIcon size={26} />
             </div>
             <h4 style={{ margin: '0 0 0.35rem', fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>
               No expenses found
@@ -1057,7 +1075,7 @@ export function ExpensesView({
                     cursor: 'pointer',
                   }}
                 >
-                  🔄 Reset Filters
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} /> Reset Filters</span>
                 </button>
               )}
               {canWrite && (
@@ -1076,7 +1094,7 @@ export function ExpensesView({
                     boxShadow: '0 4px 14px rgba(109, 74, 255, 0.35)',
                   }}
                 >
-                  ➕ Record New Expense
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PlusIcon size={15} /> Record New Expense</span>
                 </button>
               )}
             </div>
@@ -1138,7 +1156,7 @@ export function ExpensesView({
                             border: '1px solid #e2e8f0',
                             whiteSpace: 'nowrap',
                           }}>
-                            🏢 {branches.find(b => b.id === (exp as any).branchId || b.code === (exp as any).branchId)?.code || 'MAIN'}
+                            {branches.find(b => b.id === (exp as any).branchId || b.code === (exp as any).branchId)?.code || 'MAIN'}
                           </span>
                         </td>
                       )}
@@ -1248,7 +1266,7 @@ export function ExpensesView({
                           }}
                           title="View Details"
                         >
-                          👁️
+                          <EyeIcon size={14} style={{ color: '#475569' }} />
                         </button>
                         {canWrite && !isVoided && (
                           <button
@@ -1265,7 +1283,7 @@ export function ExpensesView({
                             }}
                             title="Edit Expense"
                           >
-                            ✏️
+                            <Edit3Icon size={14} style={{ color: '#475569' }} />
                           </button>
                         )}
                         {canVoid && !isVoided && (
@@ -1283,7 +1301,7 @@ export function ExpensesView({
                             }}
                             title="Void Expense"
                           >
-                            🚫
+                            <XCircleIcon size={14} style={{ color: '#dc2626' }} />
                           </button>
                         )}
                       </td>
@@ -1358,7 +1376,7 @@ export function ExpensesView({
             {/* Modal Header */}
             <div className="expense-modal-header">
               <div className="expense-modal-title-wrap">
-                <div className="expense-modal-icon-badge">💼</div>
+                <div className="expense-modal-icon-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><BriefcaseIcon size={20} style={{ color: '#6d4aff' }} /></div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
                     {editingExpense ? `Edit Expense (${editingExpense.expenseNumber})` : 'Record Business Expense'}
@@ -1385,9 +1403,7 @@ export function ExpensesView({
                   justifyContent: 'center',
                   transition: 'all 0.15s ease',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1446,7 +1462,7 @@ export function ExpensesView({
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>🏢</span> Vendor / Supplier Details
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2Icon size={16} style={{ color: '#6d4aff' }} /> Vendor / Supplier Details</span>
                   </div>
                   <span className="expense-badge-pill expense-badge-optional">Optional</span>
                 </div>
@@ -1519,7 +1535,7 @@ export function ExpensesView({
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>💰</span> Amount &amp; GST Details
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><RupeeIcon size={16} style={{ color: '#6d4aff' }} /> Amount &amp; GST Details</span>
                   </div>
                   <span className="expense-badge-pill expense-badge-auto">Live Tax Engine</span>
                 </div>
@@ -1662,7 +1678,7 @@ export function ExpensesView({
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>💳</span> Payment Status &amp; Mode
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CreditCardIcon size={16} style={{ color: '#6d4aff' }} /> Payment Status &amp; Mode</span>
                   </div>
                 </div>
 
@@ -1782,7 +1798,7 @@ export function ExpensesView({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '0.75rem' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span style={{ color: '#6d4aff' }}>📄</span> Expense Voucher #{viewingExpense.expenseNumber}
+                  <FileTextIcon size={18} style={{ color: '#6d4aff' }} /> Expense Voucher #{viewingExpense.expenseNumber}
                 </h3>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.15rem' }}>
                   Recorded on {formatDateDisplay(viewingExpense.expenseDate)}
@@ -1804,9 +1820,7 @@ export function ExpensesView({
                   fontSize: '0.85rem',
                   color: '#64748b',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', fontSize: '0.85rem', background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -1860,7 +1874,7 @@ export function ExpensesView({
             style={{ maxWidth: '460px', padding: '1.5rem' }}
           >
             <h3 style={{ margin: '0 0 0.5rem', color: '#dc2626', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span>🚫</span> Void Expense #{voidingExpense.expenseNumber}
+              <XCircleIcon size={18} style={{ color: '#dc2626' }} /> Void Expense #{voidingExpense.expenseNumber}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4 }}>
               Voiding this expense reverses financial entries and marks linked ITC credit as ineligible. This cannot be undone.
@@ -1937,7 +1951,7 @@ export function ExpensesView({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
               <div>
                 <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>📅</span> Select Accounting Period
+                  <CalendarIcon size={18} style={{ color: '#6d4aff' }} /> Select Accounting Period
                 </h4>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.15rem' }}>
                   Pick a calendar month or choose an exact custom date range
@@ -1959,9 +1973,7 @@ export function ExpensesView({
                   fontSize: '0.85rem',
                   color: '#64748b',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             {/* Quick 1-Click Month Grid with Year Stepper */}

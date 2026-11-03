@@ -6414,7 +6414,7 @@ export function App() {
                   }}
                   title="Switch branch scope for sales, expenses, and inventory"
                 >
-                  <option value="all">🏢 All Branches (Overall)</option>
+                  <option value="all">All Branches (Overall)</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.code || b.id}>
                       {b.name} ({b.code})
@@ -6523,7 +6523,7 @@ export function App() {
               <div className="content-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 {user.role === 'owner' && branches.length > 0 ? (
                   <div className="header-branch-select-wrap" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>🏢 Branch:</span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
                     <select
                       value={selectedBranchScope}
                       onChange={(e) => handleGlobalBranchChange(e.target.value)}
