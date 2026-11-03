@@ -161,7 +161,14 @@ export function registerExpenses(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const b = ctx.body ?? {};
     const scope = await resolveBranchScope(ctx);
-    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    let branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) {
+      const mainBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? ORDER BY code = 'MAIN' DESC LIMIT 1",
+        [tenantId],
+      );
+      branchId = mainBr?.id || null;
+    }
     if (!branchId) throw bad('Branch is required for expenses', 'BRANCH_REQUIRED');
 
     // 1. Idempotency Check

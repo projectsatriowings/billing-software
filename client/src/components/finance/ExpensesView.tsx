@@ -15,6 +15,28 @@ import {
 } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
 import { validateGstin } from '../../../../shared/tax.ts';
+import {
+  Building2Icon,
+  ZapIcon,
+  DownloadIcon,
+  RefreshCwIcon,
+  PlusIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
+  BriefcaseIcon,
+  FileTextIcon,
+  LandmarkIcon,
+  ScaleIcon,
+  CreditCardIcon,
+  CalendarIcon,
+  SearchIcon,
+  FileSpreadsheetIcon,
+  EyeIcon,
+  Edit3Icon,
+  XCircleIcon,
+  RupeeIcon,
+  XIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 type DatePreset = 'all' | 'today' | 'this_month' | 'last_month' | 'this_quarter' | 'this_fy' | 'custom';
 
@@ -75,15 +97,26 @@ interface ExpensesViewProps {
   userRole?: string;
   userLocation?: string;
   suppliers?: { id: string; name: string; gstin?: string | null }[];
+  branches?: { id: string; name: string; code?: string }[];
+  selectedBranch?: string;
+  onBranchChange?: (branchCodeOrId: string) => void;
 }
 
-export function ExpensesView({ userRole, userLocation, suppliers = [] }: ExpensesViewProps) {
+export function ExpensesView({
+  userRole,
+  userLocation,
+  suppliers = [],
+  branches = [],
+  selectedBranch = 'all',
+  onBranchChange,
+}: ExpensesViewProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Filters & Datebar
+  const [branchFilter, setBranchFilter] = useState<string>(selectedBranch || 'ALL');
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -131,6 +164,13 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
   const [formPaidRupees, setFormPaidRupees] = useState('');
   const [formGstTreatment, setFormGstTreatment] = useState<GstTreatment>('exempt');
   const [formItcEligibility, setFormItcEligibility] = useState<ItcEligibility>('ineligible');
+  const [formBranchId, setFormBranchId] = useState<string>('');
+
+  useEffect(() => {
+    if (selectedBranch) {
+      setBranchFilter(selectedBranch);
+    }
+  }, [selectedBranch]);
 
   const canWrite = userRole === 'owner' || userRole === 'manager' || userRole === 'accountant';
   const canVoid = userRole === 'owner' || userRole === 'manager';
@@ -147,6 +187,9 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
       if (treatmentFilter !== 'ALL') params.gstTreatment = treatmentFilter;
       if (itcFilter !== 'ALL') params.itcEligibility = itcFilter;
       if (searchQuery.trim()) params.q = searchQuery.trim();
+      if (branchFilter && branchFilter.toLowerCase() !== 'all') {
+        params.branch = branchFilter;
+      }
 
       const res = await fetchExpenses(params);
       setExpenses(res.expenses);
@@ -161,7 +204,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
 
   useEffect(() => {
     loadExpenses();
-  }, [from, to, categoryFilter, statusFilter, treatmentFilter, itcFilter, page]);
+  }, [from, to, categoryFilter, statusFilter, treatmentFilter, itcFilter, branchFilter, page]);
 
   // Live Tax Calculation in Form
   const parsedAmountMinor = Math.round((parseFloat(formAmountRupees) || 0) * 100);
@@ -206,6 +249,10 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
     setFormPaidRupees('');
     setFormGstTreatment('exempt');
     setFormItcEligibility('ineligible');
+    const initialBr = (branchFilter && branchFilter.toLowerCase() !== 'all')
+      ? (branches.find(b => b.id === branchFilter || b.code?.toUpperCase() === branchFilter.toUpperCase())?.id || branches[0]?.id || '')
+      : (branches[0]?.id || '');
+    setFormBranchId(initialBr);
     setShowFormModal(true);
   };
 
@@ -213,6 +260,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
     setEditingExpense(exp);
     setFormDate(exp.expenseDate);
     setFormCategory((exp.category as any) || 'rent');
+    setFormBranchId((exp as any).branchId || branches[0]?.id || '');
     setFormDesc(exp.description || '');
     setFormNotes(exp.notes || '');
     setFormSupplierId(exp.supplierId || '');
@@ -279,7 +327,11 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             ? 0
             : Math.round((parseFloat(formPaidRupees) || 0) * 100);
 
+      const activeBranch = localStorage.getItem('sa_selected_branch');
+      const branchIdParam = formBranchId || ((activeBranch && activeBranch.toLowerCase() !== 'all') ? activeBranch : undefined);
+
       const payload = {
+        branchId: branchIdParam,
         expenseDate: formDate,
         category: formCategory,
         description: formDesc || undefined,
@@ -471,7 +523,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             fontWeight: 700,
             border: '1px solid #ede9fe',
           }}>
-            ⚡ Expense Register &amp; ITC Tracker
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><ZapIcon size={14} style={{ color: '#6d4aff' }} /> Expense Register &amp; ITC Tracker</span>
           </span>
           <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
             • {totalCount} total entries recorded
@@ -500,7 +552,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               opacity: isExporting ? 0.7 : 1,
             }}
           >
-            {isExporting ? '⏳ Exporting...' : '📥 Export CSV'}
+            {isExporting ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} className="animate-spin" /> Exporting...</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DownloadIcon size={14} /> Export CSV</span>}
           </button>
           <button
             type="button"
@@ -521,7 +573,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}
           >
-            🔄 Refresh
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} /> Refresh</span>
           </button>
           {canWrite && (
             <button
@@ -542,7 +594,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                 boxShadow: '0 4px 14px rgba(109, 74, 255, 0.35)',
               }}
             >
-              ➕ Record Expense
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PlusIcon size={15} /> Record Expense</span>
             </button>
           )}
         </div>
@@ -551,14 +603,14 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
       {/* Success & Error alerts */}
       {successMsg && (
         <div style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', padding: '0.75rem 1rem', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600 }}>✅ {successMsg}</span>
-          <button type="button" onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#166534' }}>✕</button>
+          <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CheckCircle2Icon size={16} /> {successMsg}</span>
+          <button type="button" onClick={() => setSuccessMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#166534' }}><XIcon size={16} /></button>
         </div>
       )}
       {error && (
         <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', padding: '0.75rem 1rem', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600 }}>⚠️ {error}</span>
-          <button type="button" onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#991b1b' }}>✕</button>
+          <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><AlertTriangleIcon size={16} /> {error}</span>
+          <button type="button" onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#991b1b' }}><XIcon size={16} /></button>
         </div>
       )}
 
@@ -571,7 +623,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <span className="expense-kpi-label" style={{ color: '#4338ca' }}>
               Total Expenses
             </span>
-            <span style={{ fontSize: '1.1rem' }}>💼</span>
+            <BriefcaseIcon size={18} style={{ color: '#4338ca' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#1e1b4b' }}>
             {fmtMoney(summary.totalMinor)}
@@ -588,7 +640,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <span className="expense-kpi-label" style={{ color: '#1d4ed8' }}>
               Taxable Value
             </span>
-            <span style={{ fontSize: '1.1rem' }}>📄</span>
+            <FileTextIcon size={18} style={{ color: '#2563eb' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#2563eb' }}>
             {fmtMoney(summary.taxableMinor)}
@@ -605,7 +657,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <span className="expense-kpi-label" style={{ color: '#b45309' }}>
               Expense GST
             </span>
-            <span style={{ fontSize: '1.1rem' }}>🏛️</span>
+            <LandmarkIcon size={18} style={{ color: '#d97706' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#d97706' }}>
             {fmtMoney(summary.totalGstMinor)}
@@ -622,7 +674,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <span className="expense-kpi-label" style={{ color: '#047857' }}>
               Eligible ITC Claimed
             </span>
-            <span style={{ fontSize: '1.1rem' }}>⚖️</span>
+            <ScaleIcon size={18} style={{ color: '#059669' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#059669' }}>
             {fmtMoney(summary.itcMinor)}
@@ -639,7 +691,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <span className="expense-kpi-label" style={{ color: '#be123c' }}>
               Paid vs Due
             </span>
-            <span style={{ fontSize: '1.1rem' }}>💳</span>
+            <CreditCardIcon size={18} style={{ color: '#be123c' }} />
           </div>
           <div className="expense-kpi-value" style={{ color: '#0f172a' }}>
             {fmtMoney(summary.paidMinor)}
@@ -649,6 +701,55 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
           </div>
         </div>
       </div>
+
+      {/* Branch-Wise Breakdown Pills for Super Admin */}
+      {branches.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1rem', background: '#ffffff', padding: '0.75rem 1rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Breakdown:
+          </span>
+          <button
+            type="button"
+            onClick={() => { setBranchFilter('ALL'); if (onBranchChange) onBranchChange('all'); }}
+            style={{
+              padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              border: branchFilter.toUpperCase() === 'ALL' ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+              background: branchFilter.toUpperCase() === 'ALL' ? '#f3f0ff' : '#ffffff',
+              color: branchFilter.toUpperCase() === 'ALL' ? '#6d4aff' : '#475569',
+              fontWeight: branchFilter.toUpperCase() === 'ALL' ? 700 : 500,
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            All Branches ({fmtMoney(summary.totalMinor)})
+          </button>
+          {branches.map(b => {
+            const isSelected = branchFilter === b.id || branchFilter === b.code || (b.code && branchFilter.toUpperCase() === b.code.toUpperCase());
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => { setBranchFilter(b.code || b.id); if (onBranchChange) onBranchChange(b.code || b.id); }}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '8px',
+                  border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                  background: isSelected ? '#f3f0ff' : '#ffffff',
+                  color: isSelected ? '#6d4aff' : '#475569',
+                  fontWeight: isSelected ? 700 : 500,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {b.name} ({b.code})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Datebar & Filters Container Card */}
       <div className="expense-filter-card">
@@ -709,7 +810,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               }}
               title="Click to select custom dates or pick by month"
             >
-              <span style={{ fontSize: '0.9rem' }}>📅</span>
+              <CalendarIcon size={15} style={{ color: '#6d4aff' }} />
               <span>
                 {from && to
                   ? `${formatDateDisplay(from)} → ${formatDateDisplay(to)}`
@@ -739,9 +840,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                   color: '#64748b',
                 }}
                 title="Reset date filter"
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             )}
           </div>
         </div>
@@ -749,8 +848,42 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
         {/* Divider */}
         <div style={{ height: '1px', background: '#f1f5f9' }} />
 
-        {/* Tier 2: Category, Payment, ITC & Search Filter (Fully Responsive Grid) */}
+        {/* Tier 2: Branch, Category, Payment, ITC & Search Filter (Fully Responsive Grid) */}
         <div className="expense-filter-grid">
+          {branches.length > 0 && (
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <Building2Icon size={12} style={{ color: '#6d4aff' }} /> Branch
+              </label>
+              <select
+                value={branchFilter}
+                onChange={(e) => {
+                  setBranchFilter(e.target.value);
+                  setPage(1);
+                  if (onBranchChange) onBranchChange(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.65rem',
+                  fontSize: '0.85rem',
+                  borderRadius: '8px',
+                  border: '1.5px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#1e293b',
+                  fontWeight: 600,
+                  outline: 'none',
+                }}
+              >
+                <option value="ALL">All Branches (Overall)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.code || b.id}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Category
@@ -849,17 +982,15 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                   outline: 'none',
                 }}
               />
-              <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.9rem' }}>
-                🔍
+              <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
+                <SearchIcon size={14} />
               </span>
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => { setSearchQuery(''); }}
                   style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.8rem' }}
-                >
-                  ✕
-                </button>
+                ><XIcon size={14} /></button>
               )}
             </div>
           </div>
@@ -915,9 +1046,10 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.75rem',
+              color: '#6366f1',
+              border: '1px solid #e0e7ff',
             }}>
-              📂
+              <FileSpreadsheetIcon size={26} />
             </div>
             <h4 style={{ margin: '0 0 0.35rem', fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>
               No expenses found
@@ -943,7 +1075,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                     cursor: 'pointer',
                   }}
                 >
-                  🔄 Reset Filters
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} /> Reset Filters</span>
                 </button>
               )}
               {canWrite && (
@@ -962,7 +1094,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                     boxShadow: '0 4px 14px rgba(109, 74, 255, 0.35)',
                   }}
                 >
-                  ➕ Record New Expense
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><PlusIcon size={15} /> Record New Expense</span>
                 </button>
               )}
             </div>
@@ -973,6 +1105,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '0.85rem 1rem' }}>Expense #</th>
+                  {branches.length > 0 && <th style={{ padding: '0.85rem 1rem' }}>Branch</th>}
                   <th style={{ padding: '0.85rem 1rem' }}>Date</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Category</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Vendor / Supplier</th>
@@ -1008,6 +1141,25 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                           </span>
                         )}
                       </td>
+                      {branches.length > 0 && (
+                        <td style={{ padding: '0.85rem 1rem' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            background: '#f1f5f9',
+                            color: '#475569',
+                            padding: '0.2rem 0.45rem',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {branches.find(b => b.id === (exp as any).branchId || b.code === (exp as any).branchId)?.code || 'MAIN'}
+                          </span>
+                        </td>
+                      )}
                       <td style={{ padding: '0.85rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>{exp.expenseDate}</td>
                       <td style={{ padding: '0.85rem 1rem' }}>
                         <span style={{ background: '#f8f7ff', color: '#4338ca', border: '1px solid #e0e7ff', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600' }}>
@@ -1114,7 +1266,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                           }}
                           title="View Details"
                         >
-                          👁️
+                          <EyeIcon size={14} style={{ color: '#475569' }} />
                         </button>
                         {canWrite && !isVoided && (
                           <button
@@ -1131,7 +1283,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                             }}
                             title="Edit Expense"
                           >
-                            ✏️
+                            <Edit3Icon size={14} style={{ color: '#475569' }} />
                           </button>
                         )}
                         {canVoid && !isVoided && (
@@ -1149,7 +1301,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                             }}
                             title="Void Expense"
                           >
-                            🚫
+                            <XCircleIcon size={14} style={{ color: '#dc2626' }} />
                           </button>
                         )}
                       </td>
@@ -1224,7 +1376,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             {/* Modal Header */}
             <div className="expense-modal-header">
               <div className="expense-modal-title-wrap">
-                <div className="expense-modal-icon-badge">💼</div>
+                <div className="expense-modal-icon-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><BriefcaseIcon size={20} style={{ color: '#6d4aff' }} /></div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
                     {editingExpense ? `Edit Expense (${editingExpense.expenseNumber})` : 'Record Business Expense'}
@@ -1251,14 +1403,32 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                   justifyContent: 'center',
                   transition: 'all 0.15s ease',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Primary Expense Info */}
               <div className="expense-form-row-2">
+                {branches.length > 0 && (
+                  <div className="expense-form-group">
+                    <label className="expense-form-label">
+                      Branch <span className="required">*</span>
+                    </label>
+                    <select
+                      value={formBranchId}
+                      onChange={(e) => setFormBranchId(e.target.value)}
+                      className="expense-input-control"
+                      required
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="expense-form-group">
                   <label className="expense-form-label">
                     Expense Date <span className="required">*</span>
@@ -1292,7 +1462,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>🏢</span> Vendor / Supplier Details
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Building2Icon size={16} style={{ color: '#6d4aff' }} /> Vendor / Supplier Details</span>
                   </div>
                   <span className="expense-badge-pill expense-badge-optional">Optional</span>
                 </div>
@@ -1365,7 +1535,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>💰</span> Amount &amp; GST Details
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><RupeeIcon size={16} style={{ color: '#6d4aff' }} /> Amount &amp; GST Details</span>
                   </div>
                   <span className="expense-badge-pill expense-badge-auto">Live Tax Engine</span>
                 </div>
@@ -1508,7 +1678,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
               <div className="expense-form-card">
                 <div className="expense-card-header">
                   <div className="expense-card-title">
-                    <span>💳</span> Payment Status &amp; Mode
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CreditCardIcon size={16} style={{ color: '#6d4aff' }} /> Payment Status &amp; Mode</span>
                   </div>
                 </div>
 
@@ -1628,7 +1798,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '0.75rem' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span style={{ color: '#6d4aff' }}>📄</span> Expense Voucher #{viewingExpense.expenseNumber}
+                  <FileTextIcon size={18} style={{ color: '#6d4aff' }} /> Expense Voucher #{viewingExpense.expenseNumber}
                 </h3>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.15rem' }}>
                   Recorded on {formatDateDisplay(viewingExpense.expenseDate)}
@@ -1650,9 +1820,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                   fontSize: '0.85rem',
                   color: '#64748b',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', fontSize: '0.85rem', background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -1706,7 +1874,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             style={{ maxWidth: '460px', padding: '1.5rem' }}
           >
             <h3 style={{ margin: '0 0 0.5rem', color: '#dc2626', fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span>🚫</span> Void Expense #{voidingExpense.expenseNumber}
+              <XCircleIcon size={18} style={{ color: '#dc2626' }} /> Void Expense #{voidingExpense.expenseNumber}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4 }}>
               Voiding this expense reverses financial entries and marks linked ITC credit as ineligible. This cannot be undone.
@@ -1783,7 +1951,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
               <div>
                 <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span>📅</span> Select Accounting Period
+                  <CalendarIcon size={18} style={{ color: '#6d4aff' }} /> Select Accounting Period
                 </h4>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.15rem' }}>
                   Pick a calendar month or choose an exact custom date range
@@ -1805,9 +1973,7 @@ export function ExpensesView({ userRole, userLocation, suppliers = [] }: Expense
                   fontSize: '0.85rem',
                   color: '#64748b',
                 }}
-              >
-                ✕
-              </button>
+              ><XIcon size={14} /></button>
             </div>
 
             {/* Quick 1-Click Month Grid with Year Stepper */}

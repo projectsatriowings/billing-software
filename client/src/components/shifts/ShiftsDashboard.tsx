@@ -13,6 +13,13 @@ import { OpenShiftModal } from './OpenShiftModal.tsx';
 import { CashMovementModal } from './CashMovementModal.tsx';
 import { CloseShiftModal } from './CloseShiftModal.tsx';
 import { ShiftClosingReportModal } from './ShiftClosingReportModal.tsx';
+import {
+  RupeeIcon,
+  BanknoteIcon,
+  CreditCardIcon,
+  RefreshCwIcon,
+  TrendingUpIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface ShiftsDashboardProps {
   user: User;
@@ -257,7 +264,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <div className="shift-kpi-card highlight-expected">
             <div className="kpi-card-top">
               <span className="kpi-label">EXPECTED IN DRAWER</span>
-              <span className="kpi-icon">💰</span>
+              <span className="kpi-icon"><RupeeIcon size={18} /></span>
             </div>
             <div className="kpi-main-val font-mono">{formatMoney(summary.expectedCashMinor)}</div>
             <span className="kpi-subtext">
@@ -269,7 +276,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <div className="shift-kpi-card">
             <div className="kpi-card-top">
               <span className="kpi-label">CASH SALES</span>
-              <span className="kpi-icon text-success">💵</span>
+              <span className="kpi-icon text-success"><BanknoteIcon size={18} /></span>
             </div>
             <div className="kpi-main-val font-mono text-success">{formatMoney(summary.cashSalesMinor)}</div>
             <span className="kpi-subtext">Received into drawer from POS checkout</span>
@@ -279,7 +286,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <div className="shift-kpi-card">
             <div className="kpi-card-top">
               <span className="kpi-label">NON-CASH (UPI / CARD)</span>
-              <span className="kpi-icon text-primary">💳</span>
+              <span className="kpi-icon text-primary"><CreditCardIcon size={18} /></span>
             </div>
             <div className="kpi-main-val font-mono text-primary">{formatMoney(summary.nonCashPaymentsMinor)}</div>
             <span className="kpi-subtext">Direct bank credit (excluded from drawer)</span>
@@ -289,7 +296,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <div className="shift-kpi-card">
             <div className="kpi-card-top">
               <span className="kpi-label">NET CASH IN / OUT</span>
-              <span className="kpi-icon text-warning">🔄</span>
+              <span className="kpi-icon text-warning"><RefreshCwIcon size={18} /></span>
             </div>
             <div className="kpi-main-val font-mono text-warning">
               {formatMoney(summary.cashInMinor - summary.cashOutMinor)}
@@ -303,7 +310,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           <div className="shift-kpi-card">
             <div className="kpi-card-top">
               <span className="kpi-label">TOTAL COLLECTIONS</span>
-              <span className="kpi-icon">📈</span>
+              <span className="kpi-icon"><TrendingUpIcon size={18} /></span>
             </div>
             <div className="kpi-main-val font-mono">{formatMoney(summary.totalCollectedMinor)}</div>
             <span className="kpi-subtext">

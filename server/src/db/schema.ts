@@ -1254,7 +1254,7 @@ version: 29,
          AND lower(u.role) IN ('manager', 'store_manager')`,
     ],
   },
-    {
+  {
     version: 46,
     statements: [
       // 1. Drop unused branch_inventory table and view
@@ -1382,6 +1382,13 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS idx_invoice_lines_tenant_branch ON invoice_lines (tenant_id, branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_purchase_lines_tenant_branch ON purchase_lines (tenant_id, branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_stock_count_lines_tenant_branch ON stock_count_lines (tenant_id, branch_id)`,
+    ],
+  },
+  {
+    version: 47,
+    statements: [
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_name TEXT`,
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_data TEXT`,
     ],
   },
   {

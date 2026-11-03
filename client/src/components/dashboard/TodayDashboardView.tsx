@@ -41,6 +41,8 @@ interface TodayDashboardViewProps {
   onOpenAddProductModal: () => void;
   showToast?: (msg: string) => void;
   onManageBranches?: () => void;
+  selectedBranch?: string;
+  onBranchChange?: (branch: string) => void;
 }
 
 type ChartMetric = 'sales' | 'bills' | 'profit';
@@ -296,6 +298,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onOpenAddProductModal,
   showToast,
   onManageBranches,
+  selectedBranch,
+  onBranchChange,
 }) => {
   // SWR: Initialize state immediately from cache if available (0ms instant render!)
   const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
@@ -370,6 +374,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   useEffect(() => {
     selectedBranchCodeRef.current = selectedBranchCode;
   }, [selectedBranchCode]);
+
+  useEffect(() => {
+    if (selectedBranch && selectedBranch !== selectedBranchCodeRef.current) {
+      handleBranchChange(selectedBranch);
+    }
+  }, [selectedBranch]);
 
   // Modals state for cashier shift actions
   const [showOpenShiftModal, setShowOpenShiftModal] = useState<boolean>(false);
@@ -816,7 +826,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           <div className="error-icon"><AlertTriangleIcon size={32} /></div>
           <h3>Failed to load Today's Overview</h3>
           <p>{error}</p>
-          <button className="btn btn-primary" onClick={() => loadDashboard(true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <button className="btn btn-primary" onClick={() => loadDashboard(selectedBranchCodeRef.current || 'all', true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
             <RefreshCwIcon size={15} />
             <span>Retry</span>
           </button>

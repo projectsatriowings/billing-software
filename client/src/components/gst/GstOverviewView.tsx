@@ -75,6 +75,26 @@ export function GstOverviewView({ tenantGstin = '', onNavigateTab }: GstOverview
           <h2 className="gst-header-title flex items-center gap-2">
             <span className="flex items-center text-indigo-600"><GstBuildingIcon size={22} /></span>
             <span>GST Compliance &amp; Return Summary</span>
+            {(() => {
+              const br = localStorage.getItem('sa_selected_branch') || 'all';
+              const isAll = !br || br.toLowerCase() === 'all';
+              return (
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.55rem',
+                    borderRadius: '20px',
+                    marginLeft: '0.5rem',
+                    background: isAll ? '#e0f2fe' : '#fef3c7',
+                    color: isAll ? '#0369a1' : '#b45309',
+                    border: `1px solid ${isAll ? '#bae6fd' : '#fde68a'}`,
+                  }}
+                >
+                  {isAll ? '🏢 All Branches (Overall GSTIN)' : `🏢 Branch: ${br.toUpperCase()}`}
+                </span>
+              );
+            })()}
           </h2>
           <p className="gst-header-subtitle">
             Authoritative figures derived from authorized invoices, stock purchases, and reviewed eligible ITC for {periodLabel}.
