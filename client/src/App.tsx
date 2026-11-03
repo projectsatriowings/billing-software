@@ -113,6 +113,13 @@ import {
   ArrowRightIcon,
   BarChart3Icon,
   Building2Icon,
+  RupeeIcon,
+  ReceiptIcon,
+  TruckIcon,
+  InboxIcon,
+  FileTextIcon,
+  TrendingUpIcon,
+  WalletIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -10704,7 +10711,7 @@ export function App() {
                 <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
-                      📥
+                      <TruckIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#6366f1' }}>
@@ -10716,7 +10723,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      🏛️
+                      <LandmarkIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#10b981' }}>
@@ -10728,7 +10735,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                      💳
+                      <CreditCardIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#ef4444' }}>
@@ -10740,7 +10747,7 @@ export function App() {
 
                   <div className="kpi-card">
                     <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      📑
+                      <FileTextIcon size={24} />
                     </div>
                     <div>
                       <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
@@ -10986,7 +10993,7 @@ export function App() {
               <div className="kpi-grid">
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                    💰
+                    <RupeeIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono" style={{ color: '#10b981' }}>
@@ -10998,7 +11005,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                    🧾
+                    <ReceiptIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{report.today.billCount}</div>
@@ -11008,7 +11015,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                    🏛️
+                    <LandmarkIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
@@ -11018,7 +11025,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
-                    📥
+                    <WalletIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono" style={{ color: '#ea580c' }}>
@@ -11030,7 +11037,7 @@ export function App() {
 
                 <div className="kpi-card">
                   <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
-                    📦
+                    <PackageIcon size={24} />
                   </div>
                   <div>
                     <div className="kpi-val mono">{report.overall.itemCount}</div>
