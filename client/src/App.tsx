@@ -3155,6 +3155,13 @@ export function App() {
         customerLoyaltyPoints?: number;
         partyId?: string;
         isNewCustomer?: boolean;
+        sms?: {
+          sent: boolean;
+          status: string;
+          error?: string;
+          skipped?: boolean;
+          messageId?: string;
+        } | null;
       }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
@@ -3211,7 +3218,8 @@ export function App() {
           }
         }
       }
-      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}`);
+      const smsSuffix = res.sms?.sent ? ' • 📲 SMS Sent!' : '';
+      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}${smsSuffix}`);
       window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
