@@ -139,15 +139,15 @@ export async function computeShiftFinancials(
       cm.id,
       cm.tenant_id,
       cm.shift_id,
-      COALESCE(cm.movement_type, cm.type, 'cash_in') AS movement_type,
+      cm.movement_type,
       cm.amount_minor,
       cm.reason,
       cm.notes,
-      COALESCE(cm.created_by, cm.performed_by) AS created_by,
+      cm.created_by,
       u.name AS created_by_name,
       cm.created_at
      FROM cash_movements cm
-     LEFT JOIN users u ON u.id = COALESCE(cm.created_by, cm.performed_by)
+     LEFT JOIN users u ON u.id = cm.created_by
      WHERE cm.tenant_id = ? AND cm.shift_id = ?
      ORDER BY cm.created_at ASC`,
     [tenantId, shiftId],
