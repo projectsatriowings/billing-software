@@ -1075,8 +1075,8 @@ const ProductSalesBreakdownCard: React.FC<{
                         {isVol
                           ? `${item.unitsSold}+`
                           : isProf
-                          ? formatRupees(item.profitMinor || Math.round(item.revenueMinor * 0.25))
-                          : formatRupees(item.revenueMinor)}
+                            ? formatRupees(item.profitMinor || Math.round(item.revenueMinor * 0.25))
+                            : formatRupees(item.revenueMinor)}
                       </td>
                     </tr>
                   ))}
@@ -2617,9 +2617,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           <div className="cat-leaderboard-rank-col">
                             <span className={`cat-lead-rank-badge rank-${idx + 1}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
                               {idx === 0 ? <AwardMedalIcon color="#b45309" size={13} /> :
-                               idx === 1 ? <AwardMedalIcon color="#475569" size={13} /> :
-                               idx === 2 ? <AwardMedalIcon color="#92400e" size={13} /> :
-                               `#${idx + 1}`}
+                                idx === 1 ? <AwardMedalIcon color="#475569" size={13} /> :
+                                  idx === 2 ? <AwardMedalIcon color="#92400e" size={13} /> :
+                                    `#${idx + 1}`}
                             </span>
                             <div className="cat-lead-avatar" style={{ background: iconMeta.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               {iconMeta.icon}

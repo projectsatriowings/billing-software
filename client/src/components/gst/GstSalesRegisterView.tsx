@@ -1,6 +1,212 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchGstSalesRegister, downloadFile } from '../../api.ts';
-import { DownloadIcon, SpinnerIcon, AlertTriangleIcon, RefreshIcon } from './GstIcons.tsx';
+import {
+  DownloadIcon,
+  SpinnerIcon,
+  AlertTriangleIcon,
+  RefreshIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FileSpreadsheetIcon,
+} from './GstIcons.tsx';
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+interface MonthYearPickerProps {
+  value: string; // 'YYYY-MM'
+  onChange: (val: string) => void;
+}
+
+export const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [selectedYearStr, selectedMonthStr] = (value || '').split('-');
+  const selectedYear = parseInt(selectedYearStr, 10) || new Date().getFullYear();
+  const selectedMonth = parseInt(selectedMonthStr, 10) || (new Date().getMonth() + 1);
+
+  const [viewYear, setViewYear] = useState<number>(selectedYear);
+
+  useEffect(() => {
+    setViewYear(selectedYear);
+  }, [selectedYear]);
+
+  // Click outside to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const displayMonthName = MONTH_NAMES[selectedMonth - 1] || 'Nov';
+  const displayLabel = `${displayMonthName} ${selectedYear}`;
+
+  return (
+    <div className="relative inline-block w-full sm:w-auto" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          height: '40px',
+          borderRadius: '10px',
+          border: isOpen ? '1px solid #5B4FE9' : '1px solid #E2E0EF',
+          background: '#FFFFFF',
+          padding: '0 14px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+          transition: 'all 0.15s ease',
+          fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+          width: '100%',
+          justifyContent: 'space-between',
+          boxSizing: 'border-box',
+        }}
+        onMouseEnter={(e) => {
+          if (!isOpen) e.currentTarget.style.borderColor = '#CBD5E1';
+        }}
+        onMouseLeave={(e) => {
+          if (!isOpen) e.currentTarget.style.borderColor = '#E2E0EF';
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <CalendarIcon size={16} className="text-slate-500" />
+          <span style={{ color: '#64748B', fontSize: '13px', fontWeight: 500 }}>Period:</span>
+          <span style={{ color: '#0F172A', fontSize: '14px', fontWeight: 600 }}>{displayLabel}</span>
+        </div>
+        <ChevronDownIcon
+          size={14}
+          className="text-slate-400 transition-transform duration-200"
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'none', marginLeft: '6px' }}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            zIndex: 60,
+            background: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E0EF',
+            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.04)',
+            padding: '16px',
+            width: '260px',
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Year Switcher Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setViewYear((y) => y - 1)}
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                background: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#475569',
+              }}
+              title="Previous Year"
+            >
+              <ChevronLeftIcon size={14} />
+            </button>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>{viewYear}</span>
+            <button
+              type="button"
+              onClick={() => setViewYear((y) => y + 1)}
+              disabled={viewYear >= currentYear}
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                background: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: viewYear >= currentYear ? 'not-allowed' : 'pointer',
+                color: viewYear >= currentYear ? '#CBD5E1' : '#475569',
+                opacity: viewYear >= currentYear ? 0.4 : 1,
+              }}
+              title="Next Year"
+            >
+              <ChevronRightIcon size={14} />
+            </button>
+          </div>
+
+          {/* 3x4 Month Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            {MONTH_NAMES.map((name, idx) => {
+              const monthNum = idx + 1;
+              const isFuture = viewYear > currentYear || (viewYear === currentYear && monthNum > currentMonth);
+              const isSelected = viewYear === selectedYear && monthNum === selectedMonth;
+              const monthKey = `${viewYear}-${String(monthNum).padStart(2, '0')}`;
+
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={isFuture}
+                  onClick={() => {
+                    onChange(monthKey);
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    height: '36px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: isSelected ? 600 : 500,
+                    cursor: isFuture ? 'not-allowed' : 'pointer',
+                    background: isSelected ? '#5B4CF5' : 'transparent',
+                    color: isSelected ? '#FFFFFF' : isFuture ? '#CBD5E1' : '#334155',
+                    boxShadow: isSelected ? '0 2px 6px rgba(91, 76, 245, 0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected && !isFuture) {
+                      e.currentTarget.style.backgroundColor = '#F1F5F9';
+                      e.currentTarget.style.color = '#0F172A';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected && !isFuture) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#334155';
+                    }
+                  }}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface GstSalesRegisterViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -26,6 +232,19 @@ export const GstSalesRegisterView: React.FC<GstSalesRegisterViewProps> = ({ onNa
   const [search, setSearch] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [exporting, setExporting] = useState<boolean>(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState<boolean>(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [exportMenuOpen]);
 
   const loadData = async () => {
     try {
@@ -74,38 +293,93 @@ export const GstSalesRegisterView: React.FC<GstSalesRegisterViewProps> = ({ onNa
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            GST Sales Register (Outward Supplies)
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Comprehensive audit log of all outward retail and wholesale bills, GST breakdown, and B2B/B2C classification.
-          </p>
+    <div className="gst-sales-register-container">
+      {/* ── ACTIONS ROW: PERIOD PICKER & EXPORT CSV BUTTON ── */}
+      <div className="gst-sales-register-actions-row">
+        {/* Left: Custom Month/Year Picker */}
+        <div className="gst-sales-register-period-wrapper">
+          <MonthYearPicker value={period} onChange={setPeriod} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
-            <input
-              type="month"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            />
-          </div>
-
+        {/* Right: Export CSV Split Button */}
+        <div className="gst-export-split-btn-container" ref={exportMenuRef}>
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={exporting}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="gst-export-split-btn-main"
+            title="Export outward sales register to CSV"
           >
-            {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <DownloadIcon className="h-4 w-4 text-slate-600" />}
+            {exporting ? (
+              <SpinnerIcon size={16} className="text-slate-500 animate-spin" />
+            ) : (
+              <DownloadIcon size={16} className="text-slate-600" />
+            )}
             <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
+
+          {/* Full-height vertical divider */}
+          <div className="gst-export-split-btn-divider" aria-hidden="true" />
+
+          {/* Dropdown Toggle Chevron */}
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen(!exportMenuOpen)}
+            disabled={exporting}
+            className={`gst-export-split-btn-chevron ${exportMenuOpen ? 'is-active' : ''}`}
+            title="More export options"
+            aria-expanded={exportMenuOpen}
+            aria-haspopup="true"
+          >
+            <ChevronDownIcon
+              size={14}
+              style={{
+                transform: exportMenuOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.15s ease',
+              }}
+            />
+          </button>
+
+          {/* Export Menu Dropdown (Right-aligned popover) */}
+          {exportMenuOpen && (
+            <div className="gst-export-dropdown-popover">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  handleExportCsv();
+                }}
+                className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md flex items-center gap-2"
+              >
+                <DownloadIcon size={14} className="text-slate-500" />
+                <span>Export CSV (Sales Register)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false);
+                  handleExportCsv();
+                }}
+                className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md flex items-center gap-2"
+              >
+                <FileSpreadsheetIcon size={14} className="text-emerald-600" />
+                <span>Export Excel (.csv)</span>
+              </button>
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    onNavigate('gst-gstr1');
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-md flex items-center gap-2"
+                >
+                  <span className="text-purple-600 font-bold text-[10px] px-1.5 py-0.5 bg-purple-50 rounded">JSON</span>
+                  <span>GSTR-1 Outward Supplies</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -156,7 +430,7 @@ export const GstSalesRegisterView: React.FC<GstSalesRegisterViewProps> = ({ onNa
       )}
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900" style={{ marginBottom: '1.5rem' }}>
         <div className="flex-1 min-w-[200px]">
           <input
             type="text"
@@ -198,59 +472,69 @@ export const GstSalesRegisterView: React.FC<GstSalesRegisterViewProps> = ({ onNa
             <table className="w-full text-left text-xs">
               <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <tr>
-                  <th className="py-3 px-3">Invoice Number</th>
-                  <th className="py-3 px-3">Date</th>
-                  <th className="py-3 px-3">Customer Name</th>
-                  <th className="py-3 px-3">GSTIN</th>
-                  <th className="py-3 px-3 text-center">Type</th>
-                  <th className="py-3 px-3 text-right">Taxable Value</th>
-                  <th className="py-3 px-3 text-right">CGST</th>
-                  <th className="py-3 px-3 text-right">SGST</th>
-                  <th className="py-3 px-3 text-right">IGST</th>
-                  <th className="py-3 px-3 text-right font-bold">Total Amount</th>
+                  <th className="p-3">Invoice #</th>
+                  <th className="p-3">Date</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Customer Name</th>
+                  <th className="p-3">Customer GSTIN</th>
+                  <th className="p-3">Place of Supply</th>
+                  <th className="p-3 text-right">Taxable Value</th>
+                  <th className="p-3 text-right">CGST</th>
+                  <th className="p-3 text-right">SGST</th>
+                  <th className="p-3 text-right">IGST</th>
+                  <th className="p-3 text-right">Round Off</th>
+                  <th className="p-3 text-right">Total Value</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
-                {filteredInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                    <td className="py-3 px-3 font-semibold text-indigo-600 dark:text-indigo-400">
-                      {inv.invoiceNumber || inv.number || '-'}
-                    </td>
-                    <td className="py-3 px-3 text-slate-500">{inv.invoiceDate || inv.date || '-'}</td>
-                    <td className="py-3 px-3 font-sans font-medium text-slate-900 dark:text-slate-100">
-                      {inv.customerName || 'Walk-in Customer'}
-                    </td>
-                    <td className="py-3 px-3 text-[11px] text-slate-600 dark:text-slate-400">
-                      {inv.customerGstin || <span className="text-slate-400 font-sans italic">N/A</span>}
-                    </td>
-                    <td className="py-3 px-3 text-center font-sans">
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${
-                          inv.customerGstin
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200'
-                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                        }`}
-                      >
-                        {inv.customerGstin ? 'B2B' : 'B2C'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300">
-                      ₹{(inv.taxableMinor / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-400">
-                      ₹{(inv.cgstMinor / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-400">
-                      ₹{(inv.sgstMinor / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-400">
-                      ₹{(inv.igstMinor / 100).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold text-slate-900 dark:text-white">
-                      ₹{(inv.totalMinor / 100).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                {filteredInvoices.map((inv) => {
+                  const isB2B = Boolean(inv.customerGstin);
+                  return (
+                    <tr key={inv.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                        {inv.invoiceNumber || inv.number}
+                      </td>
+                      <td className="p-3 text-slate-600 dark:text-slate-300">{inv.invoiceDate || inv.bdate}</td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${isB2B
+                            ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'
+                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            }`}
+                        >
+                          {isB2B ? 'B2B' : 'B2C'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-800 dark:text-slate-200">
+                        {inv.customerName || (isB2B ? 'Registered Buyer' : 'Counter Retail Cash')}
+                      </td>
+                      <td className="p-3 font-mono text-slate-600 dark:text-slate-400">
+                        {inv.customerGstin || '—'}
+                      </td>
+                      <td className="p-3 text-slate-600 dark:text-slate-400">
+                        {inv.placeOfSupplyState || (inv.intra ? 'Tamil Nadu (33)' : 'Interstate')}
+                      </td>
+                      <td className="p-3 text-right font-medium text-slate-900 dark:text-white">
+                        ₹{(inv.taxableMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-right text-slate-600 dark:text-slate-300">
+                        ₹{(inv.cgstMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-right text-slate-600 dark:text-slate-300">
+                        ₹{(inv.sgstMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-right text-slate-600 dark:text-slate-300">
+                        ₹{(inv.igstMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-right text-slate-400">
+                        {inv.roundOffMinor ? `₹${(inv.roundOffMinor / 100).toFixed(2)}` : '—'}
+                      </td>
+                      <td className="p-3 text-right font-bold text-slate-900 dark:text-white">
+                        ₹{(inv.totalAmountMinor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -102,17 +102,8 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
     <div className="gstr3b-view-wrapper">
       {/* Header and Action Controls Card */}
       <div className="gstr3b-header-card">
-        <div className="gstr3b-header-left">
-          <h1 className="gstr3b-header-title">
-            <span className="inline-flex items-center text-indigo-600"><FileTextIcon className="h-6 w-6" /></span> GSTR-3B Preparation &amp; Filing Worksheets
-          </h1>
-          <p className="gstr3b-header-subtitle">
-            Monthly summary return computation based on authorized sales invoices and reviewed eligible Input Tax Credit for {periodLabel}.
-          </p>
-        </div>
-
-        <div className="gstr3b-header-actions">
-          {/* Month Stepper Picker */}
+        {/* Left group: PERIOD selector + Current button */}
+        <div className="gstr3b-controls-group gstr3b-period-controls">
           <div className="gst-period-picker-group">
             <span className="gst-period-label">Period</span>
             <button
@@ -148,7 +139,10 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             <CalendarIcon className="h-3.5 w-3.5" />
             <span>Current</span>
           </button>
+        </div>
 
+        {/* Right group: Export JSON / CSV + Mark Reviewed & Lock */}
+        <div className="gstr3b-controls-group gstr3b-action-controls">
           <button
             type="button"
             onClick={async () => {

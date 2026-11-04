@@ -694,125 +694,45 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
         display: 'flex',
         flexDirection: 'column',
         gap: '1.5rem',
-        padding: '0.5rem 0 2rem 0',
+        padding: '0 0 2rem 0',
       }}
     >
       {/* =========================================================================
           SCREEN 1: STOCK TRANSFER – TRANSFER LIST
           ========================================================================= */}
       {activeView === 'list' && (
-        <div
-          className="card stock-transfer-list-card"
-          style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)',
-            padding: '1.75rem',
-          }}
-        >
-          {/* Header row with Module Icon, Title, Subtitle, and Primary Actions */}
+        <div className="stock-transfer-list-view">
+          {/* Top Actions Row between Top App Bar and the Card */}
+          <div className="stock-transfer-actions-row">
+            <button
+              type="button"
+              onClick={loadTransfersList}
+              title="Refresh transfer list"
+              className="stock-transfer-btn-refresh"
+            >
+              <RefreshCwIcon size={14} className={loadingList ? 'spin' : ''} />
+              <span>Refresh</span>
+            </button>
+
+            <button
+              type="button"
+              className="stock-transfer-btn-create"
+              onClick={handleStartCreateTransfer}
+            >
+              <span>+</span> Create New Transfer
+            </button>
+          </div>
+
           <div
+            className="card stock-transfer-list-card"
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '1rem',
-              marginBottom: '1.5rem',
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)',
+              padding: '24px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-                  flexShrink: 0,
-                }}
-              >
-                <TruckIcon size={22} />
-              </div>
-              <div>
-                <h2
-                  style={{
-                    fontSize: '1.3rem',
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    margin: 0,
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  Stock Transfer – Transfer List
-                </h2>
-                <div style={{ fontSize: '0.84rem', color: '#64748b', marginTop: '2px' }}>
-                  View and manage stock transfers between branches
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <button
-                type="button"
-                onClick={loadTransfersList}
-                title="Refresh transfer list"
-                style={{
-                  background: '#ffffff',
-                  color: '#475569',
-                  border: '1px solid #cbd5e1',
-                  padding: '0.6rem 0.9rem',
-                  borderRadius: '10px',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f8fafc';
-                  e.currentTarget.style.borderColor = '#94a3b8';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#ffffff';
-                  e.currentTarget.style.borderColor = '#cbd5e1';
-                }}
-              >
-                <RefreshCwIcon size={14} className={loadingList ? 'spin' : ''} />
-                <span>Refresh</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleStartCreateTransfer}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '0.65rem 1.25rem',
-                  borderRadius: '10px',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-                  cursor: 'pointer',
-                }}
-              >
-                <span>+</span> Create New Transfer
-              </button>
-            </div>
-          </div>
 
           {/* Incoming Shipments Alert Banner (visible when transfers in transit are arriving at user's branch) */}
           {(() => {
@@ -1364,6 +1284,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
         </div>
       )}
 

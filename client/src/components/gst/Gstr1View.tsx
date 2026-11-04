@@ -44,17 +44,8 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            GSTR-1 Preparation (Outward Supplies Return)
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Worksheets categorized into B2B Invoices (Table 4) and B2C Supplies (Table 7) for GST Portal filing.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Filter & Export Controls */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
             <input
@@ -85,7 +76,6 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
           >
             <span className="inline-flex items-center">{exporting ? <SpinnerIcon size={15} /> : <DownloadIcon size={15} />}</span> {exporting ? 'Exporting...' : 'Download GSTR-1 CSV'}
           </button>
-        </div>
       </div>
 
       {loading ? (
@@ -102,9 +92,9 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-3.5 dark:border-slate-800 dark:bg-slate-800/60">
               <div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                <h1 className="text-sm font-bold text-slate-900 dark:text-white">
                   Table 4: B2B Invoices (Supplies to Registered Persons)
-                </h2>
+                </h1>
                 <p className="text-xs text-slate-500">Invoices containing valid recipient GSTIN</p>
               </div>
               <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">

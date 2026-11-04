@@ -111,8 +111,8 @@ import {
   UploadCloudIcon,
   DownloadIcon,
   ArrowRightIcon,
-  BarChart3Icon,
   Building2Icon,
+  CalendarIcon,
   SparklesIcon,
   RupeeIcon,
   ReceiptIcon,
@@ -124,9 +124,8 @@ import {
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
-import { SuperAdminDashboard } from './components/dashboards/SuperAdminDashboard';
+import { BranchSelector } from './components/common/BranchSelector';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
-import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
@@ -162,6 +161,7 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
   '/products',
   '/items',
   '/categories',
+  '/inventory',
   '/discounts',
   '/promotions',
   '/customers',
@@ -177,11 +177,16 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
   '/receivables',
   '/reports',
   '/user-management',
+  '/gst-import-export',
+  '/gst-filing-history',
 ];
 
 export const HIDE_BUSINESS_BAR_TABS = new Set([
   'items',
   'categories',
+  'inventory',
+  'stock-transfer',
+  'product-movement',
   'promotions',
   'customers',
   'suppliers',
@@ -206,6 +211,7 @@ export const HIDE_BUSINESS_BAR_TABS = new Set([
 
 // Explicit header titles shown at the left end of the top header bar for the 6 core modules
 export const PAGE_TITLES: Record<string, string> = {
+  '/inventory': 'Inventory Hub',
   '/products': 'Products',
   '/items': 'Products',
   '/categories': 'Categories',
@@ -226,6 +232,7 @@ export const PAGE_TITLES: Record<string, string> = {
 };
 
 export const TAB_PAGE_TITLES: Record<string, string> = {
+  'inventory': 'Inventory Hub',
   'items': 'Product Catalogue',
   'categories': 'Category Management',
   'promotions': 'Discounts & Offers',
@@ -555,7 +562,6 @@ export function App() {
     | 'promotions'
     | 'user-management'
   >('dashboard');
-  const [dashboardViewMode, setDashboardViewMode] = useState<'today' | 'management'>('today');
   const [displayTab, setDisplayTab] = useState<string>('dashboard');
   const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
 
@@ -2311,7 +2317,7 @@ export function App() {
           localStorage.removeItem('selected_branch');
           sessionStorage.removeItem('sa_selected_branch');
           sessionStorage.removeItem('selected_branch');
-        } catch {}
+        } catch { }
       }
       loadMyBusinesses();
     } catch (err: any) {
@@ -2330,7 +2336,7 @@ export function App() {
       localStorage.removeItem('selected_branch');
       sessionStorage.removeItem('sa_selected_branch');
       sessionStorage.removeItem('selected_branch');
-    } catch {}
+    } catch { }
     setUser(null);
     setShop(null);
     navigateTo('landing');
@@ -5509,7 +5515,7 @@ export function App() {
                 e.stopPropagation();
                 setAutoCollapsedForPos(false);
                 setIsSidebarCollapsed(!isSidebarCollapsed);
-                
+
               }}
               title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
               aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -6391,21 +6397,61 @@ export function App() {
       {/* Main Body */}
       <main className="main-content">
         {/* Top Global Bar Matching Image 2 */}
-        <div className={`top-global-bar ${hideBusinessBar ? 'no-divider' : ''}`}>
-          {currentHeaderTitle ? (
+        <div className={`top-global-bar ${hideBusinessBar ? 'no-divider' : ''} ${displayTab === 'dashboard' ? 'dashboard-top-bar' : ''}`}>
+          {displayTab === 'inventory' || activeTab === 'inventory' ? (
+            <div className="top-inventory-header-left">
+              <h1 className="top-inventory-title">
+                Inventory Hub
+              </h1>
+            </div>
+          ) : displayTab === 'product-movement' || activeTab === 'product-movement' ? (
+            <div className="top-product-movement-header-left">
+              <h1 className="top-product-movement-title">
+                Product Movement Analysis
+              </h1>
+            </div>
+          ) : displayTab === 'stock-transfer' || activeTab === 'stock-transfer' ? (
+            <div
+              className="top-stock-transfer-header-left"
+              title="View and manage stock transfers between branches"
+            >
+              <div className="top-stock-transfer-icon-tile">
+                <TruckIcon size={18} />
+              </div>
+              <h1 className="top-stock-transfer-title">
+                <span className="stock-transfer-title-full">Stock Transfer – Transfer List</span>
+                <span className="stock-transfer-title-short">Stock Transfer</span>
+              </h1>
+            </div>
+          ) : currentHeaderTitle ? (
             <h1 className="top-header-title" title={currentHeaderTitle}>
               {currentHeaderTitle}
             </h1>
           ) : displayTab === 'dashboard' && user ? (
             <div className="top-dash-greeting-group-left">
               <h1 className="header-greeting-title">
-                <span>{dashboardGreeting}, {userFirstName}</span>
-                <SparklesIcon size={18} style={{ color: '#6366f1', marginLeft: '6px', verticalAlign: 'middle' }} />
+                {dashboardGreeting}, {userFirstName}
               </h1>
-              <div className="header-shop-subtitle">
-                <span>{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
-                <span className="dot-sep">·</span>
-                <span className="mono">GSTIN {shop?.gstin || '33AAAAA0000A1Z9'}</span>
+              <div className="header-meta-line">
+                <span className="header-meta-item header-shop-name">{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
+                <span className="header-meta-sep">·</span>
+                <span className="header-meta-item header-gstin-wrap">
+                  <span className="header-gstin-label">GSTIN </span>
+                  <span className="header-gstin-val">{shop?.gstin || '33AAAAA0000A1Z9'}</span>
+                </span>
+                <span className="header-meta-sep">·</span>
+                <span className="header-meta-item header-date-wrap">
+                  <CalendarIcon size={15} className="header-calendar-icon" />
+                  <span>
+                    {new Date().toLocaleDateString('en-GB', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      timeZone: 'Asia/Kolkata',
+                    })}
+                  </span>
+                </span>
               </div>
             </div>
           ) : (
@@ -6413,57 +6459,25 @@ export function App() {
           )}
           <div className="top-global-actions">
             {(user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN') && branches.length > 0 && (
-              <div
-                className="top-branch-selector-pill"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  background: '#f8fafc',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1',
-                }}
-              >
-                <Building2Icon size={16} style={{ color: '#6d4aff' }} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
-                <select
-                  value={selectedBranchScope}
-                  onChange={(e) => handleGlobalBranchChange(e.target.value)}
-                  style={{
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#1e293b',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                  title="Switch branch scope for sales, expenses, and inventory"
-                >
-                  <option value="all">All Branches (Overall)</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.code || b.id}>
-                      {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <BranchSelector
+                branches={branches}
+                selectedBranch={selectedBranchScope}
+                onSelectBranch={handleGlobalBranchChange}
+                canAccessOverall={user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN'}
+              />
             )}
             <button
               type="button"
               className="top-notification-btn"
+              aria-label="Notifications"
               title={
                 totalStockAlerts > 0
-                  ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock) — Click to review`
-                  : 'No inventory alerts'
+                  ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock)`
+                  : 'Notifications'
               }
               onClick={() => {
                 setActiveTab('inventory');
                 setShowInventoryDropdown(true);
-                // Navigate to replenishment tab if there are stock alerts, otherwise overview
                 setInventoryInitialTab(totalStockAlerts > 0 ? 'replenish' : 'overview');
               }}
             >
@@ -6474,18 +6488,28 @@ export function App() {
                 </svg>
               </span>
               {totalStockAlerts > 0 && (
-                <span className={`notif-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}>
+                <span className="notif-badge">
                   {totalStockAlerts}
                 </span>
               )}
             </button>
-            <div className="top-user-chip" onClick={() => setActiveTab('settings')}>
+            <div className="top-user-chip" onClick={() => setActiveTab('settings')} title="Settings & Profile">
               <div className="top-user-avatar">
-                {user.name.slice(0, 1).toUpperCase()}
+                {(user?.name || 'User').replace(/\s*\([^)]*\)/g, '').trim().slice(0, 1).toUpperCase()}
               </div>
               <div className="top-user-details">
-                <span className="top-user-name">{user.name}</span>
-                <span className="top-user-role">{user.role}</span>
+                <span className="top-user-name">{(user?.name || 'User').replace(/\s*\([^)]*\)/g, '').trim()}</span>
+                <span className="top-user-role">
+                  {user?.role === 'owner' || String(user?.role).toUpperCase() === 'SUPER_ADMIN'
+                    ? 'Super Admin · Owner'
+                    : user?.role === 'manager'
+                    ? 'Store Manager'
+                    : user?.role === 'cashier'
+                    ? 'Cashier'
+                    : user?.role
+                    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                    : 'Staff'}
+                </span>
               </div>
             </div>
           </div>
@@ -6500,8 +6524,6 @@ export function App() {
                 <h1 className="content-page-title">
                   {displayTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
                   {displayTab === 'items' && 'Product & Stock Catalog'}
-                  {displayTab === 'inventory' && 'Inventory Hub & Stock Operations'}
-                  {displayTab === 'product-movement' && 'Product Analysis'}
                   {displayTab === 'purchases' && 'Purchases & Stock Inward'}
                   {displayTab === 'invoices' && 'Sales Invoices & Bills'}
                   {displayTab === 'customers' && 'Customer Directory & Loyalty Points'}
@@ -6520,13 +6542,10 @@ export function App() {
                   {displayTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
                   {displayTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
                   {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
-                  {displayTab === 'gst-filing-history' && 'GST Return Filing History'}
                 </h1>
                 <span className="content-page-subtitle">
                   {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
                   {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
-                  {displayTab === 'inventory' && 'Real-time stock valuation, movements ledger, manual adjustments, physical count audits, and replenishment'}
-                  {displayTab === 'product-movement' && 'Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded'}
                   {displayTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                   {displayTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
                   {displayTab === 'customers' && 'Manage customer directory, contact numbers, GSTINs, and loyalty points'}
@@ -6545,36 +6564,16 @@ export function App() {
                   {displayTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
                   {displayTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
                   {displayTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
-                  {displayTab === 'gst-filing-history' && 'Permanent historical audit log of filed returns, ARN numbers, and tax snapshots'}
                 </span>
               </div>
 
               <div className="content-header-right" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                {user.role === 'owner' && branches.length > 0 ? (
-                  <div className="header-branch-select-wrap" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', padding: '0.3rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Branch:</span>
-                    <select
-                      value={selectedBranchScope}
-                      onChange={(e) => handleGlobalBranchChange(e.target.value)}
-                      style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b' }}
-                      title="Filter views by branch"
-                    >
-                      <option value="all">All Branches (Overall)</option>
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.code || b.id}>
-                          {b.name} ({b.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="header-store-chip" title="Active Branch Scope">
+                <div className="header-store-chip" title="Active Branch Scope">
                     <span className="store-chip-dot"></span>
                     <span className="store-chip-text">
                       🏢 <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
                     </span>
                   </div>
-                )}
                 <div className="header-store-chip">
                   <span className="store-chip-dot"></span>
                   <span className="store-chip-text">
@@ -6585,131 +6584,31 @@ export function App() {
             </header>
           )}
 
-          {/* TAB 0: DASHBOARDS (TODAY OVERVIEW + ROLE-BASED MANAGEMENT DASHBOARDS) */}
-          {displayTab === 'dashboard' && user && (() => {
-            const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
-            return (
-              <div className="dashboard-tab-wrapper">
-                {isSuperAdminUser && (
-                  <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
-                    <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <button
-                        type="button"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '6px 14px',
-                          borderRadius: '7px',
-                          border: 'none',
-                          fontWeight: 600,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
-                          color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
-                          boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onClick={() => {
-                          setDashboardViewMode('today');
-                          setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
-                        }}
-                      >
-                        <BarChart3Icon size={15} />
-                        <span>Today's Live Overview</span>
-                      </button>
-                      <button
-                        type="button"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '6px 14px',
-                          borderRadius: '7px',
-                          border: 'none',
-                          fontWeight: 600,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
-                          color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
-                          boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onClick={() => setDashboardViewMode('management')}
-                      >
-                        <Building2Icon size={15} />
-                        <span>Company Multi-Branch View</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {!isSuperAdminUser || dashboardViewMode === 'today' ? (
-                  <TodayDashboardView
-                    user={user}
-                    shop={shop}
-                    selectedBranch={selectedBranchScope}
-                    onBranchChange={handleGlobalBranchChange}
-                    onNavigateToPos={() => setActiveTab('pos')}
-                    onNavigateToShifts={() => setActiveTab('shifts')}
-                    onNavigateToInventory={() => setActiveTab('inventory')}
-                    onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
-                    onNavigateToPurchases={() => {
-                      setActiveTab('purchases');
-                      loadPurchases();
-                    }}
-                    onOpenAddProductModal={() => {
-                      setEditingItem(null);
-                      setShowItemModal(true);
-                    }}
-                    showToast={showToast}
-                    onManageBranches={() => setActiveTab('user-management')}
-                  />
-                ) : (
-                  <div className="role-dashboards-view">
-                    {user.role === 'owner' && (
-                      <SuperAdminDashboard
-                        user={user}
-                        shop={shop}
-                        report={report}
-                        onRefreshReport={loadReports}
-                        onNavigate={setActiveTab}
-                      />
-                    )}
-                    {user.role === 'manager' && (
-                      <StoreManagerDashboard
-                        user={user}
-                        shop={shop}
-                        onNavigate={(tab) => {
-                          if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
-                            setShowInventoryDropdown(true);
-                          }
-                          setActiveTab(tab as any);
-                        }}
-                      />
-                    )}
-                    {user?.role === 'cashier' && (
-                      <CashierDashboard
-                        user={user}
-                        shop={shop}
-                        onNavigateToPos={() => setActiveTab('pos')}
-                        onNavigateToShifts={() => setActiveTab('shifts')}
-                      />
-                    )}
-                    {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
-                      <SuperAdminDashboard
-                        user={user}
-                        shop={shop}
-                        report={report}
-                        onRefreshReport={loadReports}
-                        onNavigate={setActiveTab}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          {/* TAB 0: DASHBOARD (TODAY'S LIVE OVERVIEW) */}
+          {displayTab === 'dashboard' && user && (
+            <div className="dashboard-tab-wrapper">
+              <TodayDashboardView
+                user={user}
+                shop={shop}
+                selectedBranch={selectedBranchScope}
+                onBranchChange={handleGlobalBranchChange}
+                onNavigateToPos={() => setActiveTab('pos')}
+                onNavigateToShifts={() => setActiveTab('shifts')}
+                onNavigateToInventory={() => setActiveTab('inventory')}
+                onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+                onNavigateToPurchases={() => {
+                  setActiveTab('purchases');
+                  loadPurchases();
+                }}
+                onOpenAddProductModal={() => {
+                  setEditingItem(null);
+                  setShowItemModal(true);
+                }}
+                showToast={showToast}
+                onManageBranches={() => setActiveTab('user-management')}
+              />
+            </div>
+          )}
 
           {/* TAB 1: BENTO POS BILLING TERMINAL */}
           {displayTab === 'pos' && (
@@ -13071,7 +12970,7 @@ export function App() {
           )}
 
           {displayTab === 'gst-sales-register' && (
-            <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
+            <div className="tab-content-wrapper" style={{ padding: '16px 1.5rem 1.5rem' }}>
               <GstSalesRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
             </div>
           )}
