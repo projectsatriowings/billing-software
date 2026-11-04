@@ -787,6 +787,13 @@
   animation: srbCardCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
 }
 
+.srb-panel-sellers,
+.srb-panel-intelligence {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
 .srb-panel-sellers {
   grid-column: span 7;
 }
@@ -806,7 +813,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid #f1f5f9;
   gap: 0.75rem;
