@@ -27,6 +27,7 @@ import {
   BrainIcon,
   XIcon,
 } from './InventoryIcons.tsx';
+import './DribbbleBentoStockReport.css';
 
 interface ProductMovementAnalysisViewProps {
   categories: string[];
@@ -177,7 +178,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
     let list = [...data.products];
 
-    // Search query (name, sku, barcode, category)
+    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
@@ -271,7 +272,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `stock-report-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `bento-stock-report-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -287,502 +288,152 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const slowPct = Math.round(((summary?.slowMovingCount || 0) / totalTracked) * 100);
   const nonPct = Math.max(0, 100 - fastPct - slowPct);
 
+  // Health score (fast moving percentage + 0.5 * slow moving percentage)
+  const healthScore = Math.min(100, Math.round(fastPct + slowPct * 0.5));
+
   const hasActiveFilters = searchQuery !== '' || categoryFilter !== 'ALL' || statusFilter !== 'ALL';
 
   return (
-    <div className="inventory-module-wrapper">
-      {/* ── 1. MODULE TITLE BAR (EXACT INVENTORY HUB HEADER) ── */}
-      <div className="inventory-title-bar">
-        <div className="title-left">
-          <div className="title-row">
-            <div className="title-icon-box">
-              <WarehouseIcon size={20} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                <h1 className="inventory-heading">Stock Report</h1>
-                <span className="badge-live-sync" title="Connected to PostgreSQL stock ledger">
-                  <span className="live-indicator-dot"></span>
-                  Neon PostgreSQL Live
-                </span>
-                <span className="inventory-title-subtitle">
-                  • Product movement velocity, fast/slow turnover &amp; dead stock analysis
-                </span>
-              </div>
-            </div>
+    <div className="dribbble-bento-canvas">
+      {/* ── 1. DRIBBLE BENTO TOP CONTROL BAR ── */}
+      <div className="dribbble-bento-header">
+        <div className="dribbble-header-left">
+          <div className="dribbble-header-icon">
+            <WarehouseIcon size={24} />
+          </div>
+          <div className="dribbble-header-title-box">
+            <h1>
+              Stock Movement Bento
+              <span className="dribbble-pill-chip live">
+                <span className="dot"></span> Live Sync
+              </span>
+            </h1>
+            <p>
+              Real-time product turnover analytics, sales velocity &amp; capital intelligence
+            </p>
           </div>
         </div>
 
-        <div className="title-actions">
+        <div className="dribbble-header-actions">
+          {/* Date Range Switcher Pills */}
+          <div className="dribbble-range-pills" role="radiogroup">
+            <button
+              type="button"
+              className={`dribbble-range-btn ${selectedRange === '7d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('7d');
+                setShowCustomPicker(false);
+                setPage(1);
+              }}
+            >
+              7 Days
+            </button>
+            <button
+              type="button"
+              className={`dribbble-range-btn ${selectedRange === '30d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('30d');
+                setShowCustomPicker(false);
+                setPage(1);
+              }}
+            >
+              30 Days
+            </button>
+            <button
+              type="button"
+              className={`dribbble-range-btn ${selectedRange === '90d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('90d');
+                setShowCustomPicker(false);
+                setPage(1);
+              }}
+            >
+              90 Days
+            </button>
+            <button
+              type="button"
+              className={`dribbble-range-btn ${selectedRange === 'custom' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('custom');
+                setShowCustomPicker(!showCustomPicker);
+              }}
+            >
+              <CalendarIcon size={13} /> Custom
+            </button>
+          </div>
+
+          {rangeDisplayLabel && (
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+              {rangeDisplayLabel}
+            </span>
+          )}
+
           <button
             type="button"
-            className="btn-inv-header-outline"
+            className="dribbble-btn-subtle"
             onClick={() => loadAnalysis(true)}
             disabled={isRefreshing || loading}
-            title="Refresh Stock Movement Analytics"
+            title="Refresh Data"
           >
             <RefreshCwIcon size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            {isRefreshing ? 'Syncing...' : 'Refresh'}
           </button>
 
           <button
             type="button"
-            className="btn-inv-header-primary"
+            className="dribbble-btn-primary"
             onClick={handleExportCsv}
             disabled={!data || data.products.length === 0}
-            title="Export Stock Report to CSV"
+            title="Export CSV"
           >
             <DownloadIcon size={14} /> Export CSV
           </button>
         </div>
       </div>
 
-      {/* ── 2. ERROR STATE ── */}
-      {error && (
-        <div className="service-business-notice-card" style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
-          <AlertTriangleIcon size={20} style={{ color: '#dc2626', flexShrink: 0 }} />
-          <div style={{ flex: 1, color: '#991b1b' }}>
-            <strong>Analytics Error:</strong> {error}
-          </div>
-          <button
-            type="button"
-            className="btn-action-small"
-            onClick={() => loadAnalysis()}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* ── 3. BENTO STYLE LAYOUT (2-TIER BALANCED BENTO GRID) ── */}
-      {summary && (
-        <div className="inventory-bento-grid">
-          {/* BENTO HERO TILE 1: Movement Pulse & Valuation */}
-          <div className="bento-card bento-hero-valuation">
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge indigo">
-                  <RupeeIcon size={15} />
-                </div>
-                <div>
-                  <span className="bento-card-title">Movement &amp; Valuation</span>
-                  <span className="bento-card-subtitle">Real-time units sold &amp; portfolio</span>
-                </div>
-              </div>
-              <span className="badge-live-sync-pill" title="Live PostgreSQL Data Window">
-                <span className="live-indicator-dot-sm"></span>
-                Live Sync
-              </span>
-            </div>
-
-            <div className="bento-hero-val-num">
-              {summary.totalUnitsSold.toLocaleString('en-IN')}{' '}
-              <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                units sold
-              </span>
-              {invStats?.totalStockValueMinor != null && (
-                <span
-                  style={{
-                    fontSize: '0.95rem',
-                    fontWeight: 600,
-                    color: 'var(--text-dim)',
-                    marginLeft: '0.65rem',
-                  }}
-                  title="Current Item Master Inventory Valuation"
-                >
-                  • ₹{((invStats.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} value
-                </span>
-              )}
-            </div>
-
-            <div className="bento-health-section">
-              <div className="bento-health-bar">
-                <div
-                  className="health-seg green"
-                  style={{ width: `${fastPct}%` }}
-                  title={`Fast-Moving: ${summary.fastMovingCount} (${fastPct}%)`}
-                />
-                <div
-                  className="health-seg amber"
-                  style={{ width: `${slowPct}%` }}
-                  title={`Slow-Moving: ${summary.slowMovingCount} (${slowPct}%)`}
-                />
-                <div
-                  className="health-seg rose"
-                  style={{ width: `${nonPct}%` }}
-                  title={`Non-Moving: ${summary.nonMovingCount} (${nonPct}%)`}
-                />
-              </div>
-              <div className="bento-health-legend">
-                <span className="legend-tag">
-                  <span className="legend-dot green"></span>
-                  Fast: <strong className="text-green">{fastPct}%</strong> ({summary.fastMovingCount})
-                </span>
-                <span className="legend-tag">
-                  <span className="legend-dot amber"></span>
-                  Slow: <strong className="text-amber">{slowPct}%</strong> ({summary.slowMovingCount})
-                </span>
-                <span className="legend-tag">
-                  <span className="legend-dot rose"></span>
-                  Non-Moving: <strong className="text-red">{nonPct}%</strong> ({summary.nonMovingCount})
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* BENTO HERO TILE 2: Restock & Movement Action Center */}
-          <div
-            className={`bento-card bento-hero-alert ${
-              summary.nonMovingCount > 0 ? 'alert-critical' : 'alert-healthy'
-            }`}
-          >
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div
-                  className={`bento-icon-badge ${
-                    summary.nonMovingCount > 0 ? 'pulse-red' : 'green'
-                  }`}
-                >
-                  {summary.nonMovingCount > 0 ? (
-                    <AlertOctagonIcon size={16} />
-                  ) : (
-                    <CheckCircleIcon size={16} />
-                  )}
-                </div>
-                <div>
-                  <span className="bento-card-title">Turnover &amp; Action Center</span>
-                  <span className="bento-card-subtitle">Supply replenishment &amp; dead stock</span>
-                </div>
-              </div>
-              <span
-                className={`bento-alert-badge ${
-                  summary.nonMovingCount > 0 ? 'red' : 'green'
-                }`}
-              >
-                {summary.nonMovingCount > 0 ? 'Action Needed' : 'Healthy Velocity'}
-              </span>
-            </div>
-
-            <div className="bento-alert-headline">
-              {summary.nonMovingCount > 0 && (
-                <span className="text-red">
-                  <strong>{summary.nonMovingCount}</strong> Non-Moving
-                </span>
-              )}
-              {summary.nonMovingCount > 0 && summary.slowMovingCount > 0 && (
-                <span className="alert-sep">•</span>
-              )}
-              {summary.slowMovingCount > 0 && (
-                <span className="text-amber">
-                  <strong>{summary.slowMovingCount}</strong> Slow Buffer
-                </span>
-              )}
-              {summary.fastMovingCount > 0 && <span className="alert-sep">•</span>}
-              {summary.fastMovingCount > 0 && (
-                <span className="text-green">
-                  <strong>{summary.fastMovingCount}</strong> Fast Moving
-                </span>
-              )}
-            </div>
-
-            <div className="bento-alert-actions">
-              <button
-                type="button"
-                className="bento-btn-action red"
-                onClick={() => {
-                  setStatusFilter(statusFilter === 'non_moving' ? 'ALL' : 'non_moving');
-                  setPage(1);
-                }}
-              >
-                Review Non-Moving <ArrowRightIcon size={12} />
-              </button>
-              <button
-                type="button"
-                className="bento-btn-action amber"
-                onClick={() => {
-                  setStatusFilter(statusFilter === 'slow_moving' ? 'ALL' : 'slow_moving');
-                  setPage(1);
-                }}
-              >
-                Review Slow-Moving
-              </button>
-              {onNavigateToPurchases && (
-                <button
-                  type="button"
-                  className="bento-btn-action secondary"
-                  onClick={() => onNavigateToPurchases()}
-                >
-                  Open Purchases
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* BENTO CARD 3: Fast-Moving (Row 2, Span 3) */}
-          <div
-            className={`bento-card bento-stat-card ${
-              statusFilter === 'fast_moving' ? 'bento-filter-active active-green' : ''
-            }`}
-            onClick={() => {
-              setStatusFilter((prev) => (prev === 'fast_moving' ? 'ALL' : 'fast_moving'));
-              setPage(1);
-            }}
-            title={
-              statusFilter === 'fast_moving'
-                ? 'Click to clear fast-moving filter'
-                : 'Click to filter fast-moving items'
-            }
-          >
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge green">
-                  <ZapIcon size={15} />
-                </div>
-                <span className="bento-card-title">Fast-Moving</span>
-              </div>
-              <span className="kpi-sub-badge green">{fastPct}%</span>
-            </div>
-            <div className="bento-stat-num mono text-green">
-              {summary.fastMovingCount}
-            </div>
-            <div className="bento-card-footer">
-              <span>
-                {statusFilter === 'fast_moving'
-                  ? '✓ Filter active (Click to reset)'
-                  : `≥ ${summary.fastMinUnits} units or ≥ ${summary.fastMinTxns} bills`}
-              </span>
-              <span className="bento-link-arrow">
-                <ArrowRightIcon size={12} />
-              </span>
-            </div>
-          </div>
-
-          {/* BENTO CARD 4: Slow-Moving (Row 2, Span 3) */}
-          <div
-            className={`bento-card bento-stat-card ${
-              statusFilter === 'slow_moving' ? 'bento-filter-active active-amber' : ''
-            }`}
-            onClick={() => {
-              setStatusFilter((prev) => (prev === 'slow_moving' ? 'ALL' : 'slow_moving'));
-              setPage(1);
-            }}
-            title={
-              statusFilter === 'slow_moving'
-                ? 'Click to clear slow-moving filter'
-                : 'Click to filter slow-moving items'
-            }
-          >
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge amber">
-                  <HourglassIcon size={15} />
-                </div>
-                <span className="bento-card-title">Slow-Moving</span>
-              </div>
-              <span className="kpi-sub-badge amber">{slowPct}%</span>
-            </div>
-            <div className="bento-stat-num mono text-amber">
-              {summary.slowMovingCount}
-            </div>
-            <div className="bento-card-footer">
-              <span>
-                {statusFilter === 'slow_moving'
-                  ? '✓ Filter active (Click to reset)'
-                  : `1–${summary.fastMinUnits - 1} units sold in period`}
-              </span>
-              <span className="bento-link-arrow">
-                <ArrowRightIcon size={12} />
-              </span>
-            </div>
-          </div>
-
-          {/* BENTO CARD 5: Non-Moving / Dead Stock (Row 2, Span 3) */}
-          <div
-            className={`bento-card bento-stat-card ${
-              statusFilter === 'non_moving' ? 'bento-filter-active active-red' : ''
-            }`}
-            onClick={() => {
-              setStatusFilter((prev) => (prev === 'non_moving' ? 'ALL' : 'non_moving'));
-              setPage(1);
-            }}
-            title={
-              statusFilter === 'non_moving'
-                ? 'Click to clear non-moving filter'
-                : 'Click to filter non-moving items'
-            }
-          >
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge red">
-                  <AlertOctagonIcon size={15} />
-                </div>
-                <span className="bento-card-title">Non-Moving</span>
-              </div>
-              <span className="kpi-sub-badge red">{nonPct}%</span>
-            </div>
-            <div className="bento-stat-num mono text-red">
-              {summary.nonMovingCount}
-            </div>
-            <div className="bento-card-footer">
-              <span>
-                {statusFilter === 'non_moving'
-                  ? '✓ Filter active (Click to reset)'
-                  : `0 sales in past ${summary.rangeDays} days`}
-              </span>
-              <span className="bento-link-arrow">
-                <ArrowRightIcon size={12} />
-              </span>
-            </div>
-          </div>
-
-          {/* BENTO CARD 6: Active Items / Total Tracked (Row 2, Span 3) */}
-          <div
-            className={`bento-card bento-stat-card ${
-              statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery
-                ? 'bento-filter-active active-purple'
-                : ''
-            }`}
-            onClick={() => {
-              setStatusFilter('ALL');
-              setCategoryFilter('ALL');
-              setSearchQuery('');
-              setPage(1);
-            }}
-            title="Click to view all active catalog items"
-          >
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge purple">
-                  <PackageIcon size={15} />
-                </div>
-                <span className="bento-card-title">Active Items</span>
-              </div>
-              <span className="kpi-sub-badge purple" title={`${categories.length} Categories`}>
-                {categories.length} Cats
-              </span>
-            </div>
-            <div className="bento-stat-num mono">
-              {summary.totalTrackedProducts}
-            </div>
-            <div className="bento-card-footer">
-              <span>
-                {statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery
-                  ? '✓ Showing all products'
-                  : `Across ${summary.totalSalesBills} bills`}
-              </span>
-              <span className="bento-link-arrow">
-                <ArrowRightIcon size={12} />
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 4. SUB-NAVIGATION BAR (DATE RANGE SWITCHER) ── */}
-      <div className="inventory-nav-tabs-bar">
-        <button
-          type="button"
-          className={`inv-tab-btn ${selectedRange === '7d' ? 'active' : ''}`}
-          onClick={() => {
-            setSelectedRange('7d');
-            setShowCustomPicker(false);
-            setPage(1);
-          }}
-        >
-          <span>Last 7 Days</span>
-        </button>
-        <button
-          type="button"
-          className={`inv-tab-btn ${selectedRange === '30d' ? 'active' : ''}`}
-          onClick={() => {
-            setSelectedRange('30d');
-            setShowCustomPicker(false);
-            setPage(1);
-          }}
-        >
-          <span>Last 30 Days</span>
-        </button>
-        <button
-          type="button"
-          className={`inv-tab-btn ${selectedRange === '90d' ? 'active' : ''}`}
-          onClick={() => {
-            setSelectedRange('90d');
-            setShowCustomPicker(false);
-            setPage(1);
-          }}
-        >
-          <span>Last 90 Days</span>
-        </button>
-        <button
-          type="button"
-          className={`inv-tab-btn ${selectedRange === 'custom' ? 'active' : ''}`}
-          onClick={() => {
-            setSelectedRange('custom');
-            setShowCustomPicker(!showCustomPicker);
-          }}
-        >
-          <CalendarIcon size={14} />
-          <span>Custom Range</span>
-        </button>
-
-        {rangeDisplayLabel && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              paddingRight: '0.85rem',
-              fontSize: '0.78rem',
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-            }}
-          >
-            📅 {rangeDisplayLabel}
-          </span>
-        )}
-      </div>
-
       {/* Custom Date Range Popover */}
       {showCustomPicker && selectedRange === 'custom' && (
-        <form
-          onSubmit={handleApplyCustomRange}
-          className="inv-table-filters-card"
-          style={{ gap: '0.75rem', marginTop: '-0.35rem' }}
-        >
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            Custom Date Range:
+        <form onSubmit={handleApplyCustomRange} className="dribbble-custom-popover">
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+            Custom Period:
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>From:</label>
+            <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>From:</label>
             <input
               type="date"
-              className="inv-search-input"
-              style={{ width: '150px', height: '34px', padding: '0 0.5rem' }}
+              style={{
+                padding: '0.4rem 0.65rem',
+                borderRadius: '10px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.82rem',
+              }}
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               required
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>To:</label>
+            <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>To:</label>
             <input
               type="date"
-              className="inv-search-input"
-              style={{ width: '150px', height: '34px', padding: '0 0.5rem' }}
+              style={{
+                padding: '0.4rem 0.65rem',
+                borderRadius: '10px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.82rem',
+              }}
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
               required
             />
           </div>
-          <button
-            type="submit"
-            className="btn-inv-header-primary"
-            style={{ padding: '0.35rem 0.85rem' }}
-          >
-            Apply Range
+          <button type="submit" className="dribbble-btn-primary" style={{ padding: '0.4rem 0.85rem' }}>
+            Apply Filter
           </button>
           <button
             type="button"
-            className="btn-inv-header-outline"
-            style={{ padding: '0.35rem 0.75rem' }}
+            className="dribbble-btn-subtle"
+            style={{ padding: '0.4rem 0.75rem' }}
             onClick={() => setShowCustomPicker(false)}
           >
             Cancel
@@ -790,215 +441,177 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         </form>
       )}
 
-      {/* ── 5. INSIGHTS & RISK INTELLIGENCE CARDS ── */}
-      {data && (
-        <div className="insights-grid" style={{ marginBottom: '0.85rem' }}>
-          {/* Panel 1: Top 10 Best Sellers */}
-          <div className="insights-panel-card">
-            <div className="insights-panel-header">
-              <h3>
-                <TrophyIcon size={16} /> Top 10 Best-Selling Products
-              </h3>
-              <span className="kpi-sub-badge purple">By Quantity Sold</span>
+      {/* Error Card */}
+      {error && (
+        <div
+          className="dribbble-card"
+          style={{
+            padding: '1.25rem 1.5rem',
+            background: '#fef2f2',
+            borderColor: '#fca5a5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#991b1b' }}>
+            <AlertTriangleIcon size={20} color="#dc2626" />
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{error}</span>
+          </div>
+          <button type="button" className="dribbble-btn-subtle" onClick={() => loadAnalysis()}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* ── 2. HERO BENTO DECK (3 ASYMMETRIC CARDS - IMAGES 1, 2 & 3) ── */}
+      {summary && (
+        <div className="dribbble-hero-grid">
+          {/* Card 1: Velocity Pulse (Mint Gradient - Image 1 & 3) */}
+          <div className="dribbble-card dribbble-card-mint">
+            <div>
+              <div className="dribbble-card-top-row">
+                <span className="dribbble-card-label mint">
+                  <ZapIcon size={14} color="#059669" /> Velocity Pulse
+                </span>
+                <span className="dribbble-pill-chip" style={{ background: '#dcfce7', color: '#065f46', borderColor: '#a7f3d0' }}>
+                  {fastPct}% High Velocity
+                </span>
+              </div>
+              <div className="dribbble-big-metric mint">
+                {summary.totalUnitsSold.toLocaleString('en-IN')}{' '}
+                <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>units</span>
+              </div>
+              <div className="dribbble-sub-desc mint">
+                Dispatched across <b>{summary.totalSalesBills}</b> completed customer invoices
+              </div>
             </div>
-            <div className="insights-panel-body" style={{ padding: '0.85rem 1rem' }}>
-              {topSellers.length === 0 ? (
-                <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.84rem' }}>
-                  No completed sales recorded during this date window.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                  {topSellers.map((item, idx) => {
-                    const pct = Math.max(6, Math.min(100, (item.unitsSold / topSellerMax) * 100));
-                    return (
-                      <div
-                        key={item.id || idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.65rem',
-                          fontSize: '0.8rem',
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: '24px',
-                            fontFamily: 'monospace',
-                            fontWeight: 700,
-                            color: idx === 0 ? '#b45309' : idx === 1 ? '#475569' : idx === 2 ? '#c2410c' : 'var(--text-muted)',
-                          }}
-                        >
-                          #{idx + 1}
-                        </span>
-                        <span
-                          style={{
-                            width: '150px',
-                            minWidth: '150px',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            fontWeight: 600,
-                            color: 'var(--text-main)',
-                          }}
-                          title={item.name}
-                        >
-                          {item.name}
-                        </span>
-                        <div
-                          style={{
-                            flex: 1,
-                            height: '8px',
-                            background: '#f1f5f9',
-                            borderRadius: '999px',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${pct}%`,
-                              height: '100%',
-                              background: 'var(--primary)',
-                              borderRadius: '999px',
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </div>
-                        <span
-                          className="mono"
-                          style={{
-                            minWidth: '65px',
-                            textAlign: 'right',
-                            fontWeight: 800,
-                            color: 'var(--text-main)',
-                          }}
-                        >
-                          {item.unitsSold} {item.unit}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+
+            {/* Inset Neumorphic Capsule Bars (Image 1 "Home Energy Overview" & Image 3) */}
+            <div className="dribbble-mini-bars-well">
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '45%' }} />
+              </div>
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '70%' }} />
+              </div>
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '95%' }} />
+              </div>
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '60%' }} />
+              </div>
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '85%' }} />
+              </div>
+              <div className="dribbble-capsule-col">
+                <div className="dribbble-capsule-bar" style={{ height: '100%' }} />
+              </div>
             </div>
           </div>
 
-          {/* Panel 2: Grounded Movement Risk Intelligence */}
-          <div className="insights-panel-card">
-            <div className="insights-panel-header">
-              <h3>
-                <BrainIcon size={16} /> Grounded Stock Risk Intelligence
-              </h3>
-              <span className="badge-live-sync-pill">
-                <span className="live-indicator-dot-sm"></span>PostgreSQL Live
-              </span>
+          {/* Card 2: Dark Contrast Obsidian Card (Image 3 "NAPPAY BACK") */}
+          <div className="dribbble-card dribbble-card-dark">
+            <div>
+              <div className="dribbble-card-top-row">
+                <span className="dribbble-card-label dark">
+                  <RupeeIcon size={14} color="#38bdf8" /> Portfolio Capital
+                </span>
+                <span className="dribbble-pill-chip" style={{ background: 'rgba(255,255,255,0.1)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}>
+                  Asset Valuation
+                </span>
+              </div>
+              <div className="dribbble-big-metric dark">
+                {invStats?.totalStockValueMinor != null
+                  ? formatCurrency(invStats.totalStockValueMinor)
+                  : data?.insights.nonMovingSummary.tiedCapitalMinor
+                  ? formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)
+                  : '₹0'}
+              </div>
+              <div className="dribbble-sub-desc dark">
+                Total valuation in active PostgreSQL item inventory
+              </div>
             </div>
-            <div
-              className="insights-panel-body"
-              style={{
-                padding: '0.85rem 1rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.65rem',
-              }}
-            >
-              {/* Runway insight */}
-              {data.insights.bestSeller ? (
-                <div
-                  style={{
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    borderRadius: '8px',
-                    padding: '0.6rem 0.85rem',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                    <strong style={{ color: '#92400e', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <TrophyIcon size={14} color="#b45309" />
-                      Best Seller: {data.insights.bestSeller.name}
-                    </strong>
-                    <span className="runway-badge high">
-                      {data.insights.bestSeller.runwayDays !== null &&
-                      data.insights.bestSeller.runwayDays !== undefined
-                        ? `~${data.insights.bestSeller.runwayDays}d Runway`
-                        : 'Active Seller'}
-                    </span>
-                  </div>
-                  <div style={{ color: '#78350f', fontSize: '0.76rem', lineHeight: 1.4 }}>
-                    Dispatched {data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit} across {data.insights.bestSeller.salesTxns} bills.
-                    {data.insights.bestSeller.currentStockUnits !== undefined && (
-                      <span> Only {data.insights.bestSeller.currentStockUnits} {data.insights.bestSeller.unit} remaining on shelves.</span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                  No top seller data available for this range.
-                </div>
-              )}
 
-              {/* Slowing item insight */}
-              {data.insights.slowingProduct ? (
-                <div
-                  style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: '8px',
-                    padding: '0.6rem 0.85rem',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                    <strong style={{ color: '#1e40af', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <ZapIcon size={14} color="#1d4ed8" />
-                      Demand Warning: {data.insights.slowingProduct.name}
-                    </strong>
-                    <span className="status-pill amber">Slowing</span>
-                  </div>
-                  <div style={{ color: '#1e3a8a', fontSize: '0.76rem', lineHeight: 1.4 }}>
-                    {data.insights.slowingProduct.message}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '8px',
-                    padding: '0.6rem 0.85rem',
-                    fontSize: '0.8rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: '#15803d',
-                  }}
-                >
-                  <CheckCircleIcon size={14} color="#15803d" />
-                  <span>No severe slow-moving inventory bottlenecks detected.</span>
-                </div>
-              )}
+            {/* Inset Neon Well */}
+            <div className="dribbble-dark-inset-well">
+              <div className="dribbble-dark-stat-item">
+                <span className="lbl">Active Items</span>
+                <span className="val cyan">{summary.totalTrackedProducts} SKUs</span>
+              </div>
+              <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)' }} />
+              <div className="dribbble-dark-stat-item">
+                <span className="lbl">Dormant Capital</span>
+                <span className="val fuchsia">
+                  {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
 
-              {/* Tied Capital insight */}
-              <div
-                style={{
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: '8px',
-                  padding: '0.6rem 0.85rem',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                  <strong style={{ color: '#991b1b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <AlertOctagonIcon size={14} color="#dc2626" />
-                    Dormant Capital: {data.insights.nonMovingSummary.count} SKUs
-                  </strong>
-                  <span className="dead-capital-badge">
-                    {formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}
-                  </span>
+          {/* Card 3: Radial Speedo / Circulation Meter (Image 1 "Wellness Score 84%" & Image 2) */}
+          <div className="dribbble-card dribbble-card-radial">
+            <div>
+              <div className="dribbble-card-top-row">
+                <span className="dribbble-card-label purple">
+                  <CheckCircleIcon size={14} color="#7c3aed" /> Circulation Index
+                </span>
+                <span className="dribbble-pill-chip" style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}>
+                  {healthScore >= 70 ? 'Optimal' : 'Attention'}
+                </span>
+              </div>
+              <div className="dribbble-sub-desc purple" style={{ marginTop: '0' }}>
+                Inventory health &amp; turnover velocity distribution
+              </div>
+            </div>
+
+            {/* Circular Speedo Gauge */}
+            <div className="dribbble-radial-widget">
+              <div className="dribbble-radial-svg-box">
+                <svg width="80" height="80" viewBox="0 0 80 80">
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="32"
+                    fill="none"
+                    stroke="#e2e8f0"
+                    strokeWidth="7"
+                  />
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="32"
+                    fill="none"
+                    stroke="url(#radialGradient)"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    strokeDasharray="201.06"
+                    strokeDashoffset={201.06 * (1 - healthScore / 100)}
+                    transform="rotate(-90 40 40)"
+                    style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+                  />
+                  <defs>
+                    <linearGradient id="radialGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#6366f1" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="dribbble-radial-text">{healthScore}%</div>
+              </div>
+
+              <div className="dribbble-radial-legend">
+                <div className="dribbble-legend-line">
+                  <span><span className="dribbble-legend-dot green"></span>Fast-Moving:</span>
+                  <span style={{ color: '#047857' }}>{fastPct}%</span>
                 </div>
-                <div style={{ color: '#7f1d1d', fontSize: '0.76rem', lineHeight: 1.4 }}>
-                  Zero units sold over the last {data.insights.nonMovingSummary.days} days. Review shelf demand before raising future supplier purchase orders.
+                <div className="dribbble-legend-line">
+                  <span><span className="dribbble-legend-dot amber"></span>Slow-Moving:</span>
+                  <span style={{ color: '#b45309' }}>{slowPct}%</span>
+                </div>
+                <div className="dribbble-legend-line">
+                  <span><span className="dribbble-legend-dot red"></span>Non-Moving:</span>
+                  <span style={{ color: '#dc2626' }}>{nonPct}%</span>
                 </div>
               </div>
             </div>
@@ -1006,57 +619,319 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         </div>
       )}
 
-      {/* ── 6. SUB-VIEW: STOCK MOVEMENT TABLE & FILTERS ── */}
-      <div className="inv-subview-content">
-        {/* Table Filters Bar */}
-        <div className="inv-table-filters-card">
-          <div className="inv-search-box">
-            <SearchIcon
-              size={16}
-              style={{
-                position: 'absolute',
-                left: '0.75rem',
-                color: 'var(--text-dim)',
-                pointerEvents: 'none',
-              }}
-            />
-            <input
-              type="text"
-              className="inv-search-input"
-              placeholder="Search products by name, SKU, or category..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="clear-search-btn"
-                onClick={() => {
-                  setSearchQuery('');
-                  setPage(1);
-                }}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                aria-label="Clear Search"
-              >
-                <XIcon size={12} />
-              </button>
+      {/* ── 3. SECONDARY BENTO KPI TILES (4 MODULAR SQUARES - IMAGE 1) ── */}
+      {summary && (
+        <div className="dribbble-kpi-quad">
+          {/* Card A: Fast-Moving */}
+          <div
+            className={`dribbble-stat-tile ${statusFilter === 'fast_moving' ? 'active-green' : ''}`}
+            onClick={() => {
+              setStatusFilter((prev) => (prev === 'fast_moving' ? 'ALL' : 'fast_moving'));
+              setPage(1);
+            }}
+          >
+            <div className="dribbble-card-top-row">
+              <div className="dribbble-tile-icon-box green">
+                <ZapIcon size={16} />
+              </div>
+              <span className="dribbble-pill-chip" style={{ background: '#ecfdf5', color: '#065f46' }}>
+                {fastPct}%
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>FAST-MOVING</div>
+              <div className="dribbble-stat-tile-num green">{summary.fastMovingCount}</div>
+            </div>
+            <div className="dribbble-stat-tile-footer">
+              <span>≥ {summary.fastMinUnits} units or ≥ {summary.fastMinTxns} bills</span>
+              <ArrowRightIcon size={12} color="#059669" />
+            </div>
+          </div>
+
+          {/* Card B: Slow-Moving */}
+          <div
+            className={`dribbble-stat-tile ${statusFilter === 'slow_moving' ? 'active-amber' : ''}`}
+            onClick={() => {
+              setStatusFilter((prev) => (prev === 'slow_moving' ? 'ALL' : 'slow_moving'));
+              setPage(1);
+            }}
+          >
+            <div className="dribbble-card-top-row">
+              <div className="dribbble-tile-icon-box amber">
+                <HourglassIcon size={16} />
+              </div>
+              <span className="dribbble-pill-chip" style={{ background: '#fffbeb', color: '#92400e' }}>
+                {slowPct}%
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>SLOW-MOVING</div>
+              <div className="dribbble-stat-tile-num amber">{summary.slowMovingCount}</div>
+            </div>
+            <div className="dribbble-stat-tile-footer">
+              <span>1–{summary.fastMinUnits - 1} units in period</span>
+              <ArrowRightIcon size={12} color="#d97706" />
+            </div>
+          </div>
+
+          {/* Card C: Dead Stock */}
+          <div
+            className={`dribbble-stat-tile ${statusFilter === 'non_moving' ? 'active-red' : ''}`}
+            onClick={() => {
+              setStatusFilter((prev) => (prev === 'non_moving' ? 'ALL' : 'non_moving'));
+              setPage(1);
+            }}
+          >
+            <div className="dribbble-card-top-row">
+              <div className="dribbble-tile-icon-box red">
+                <AlertOctagonIcon size={16} />
+              </div>
+              <span className="dribbble-pill-chip" style={{ background: '#fef2f2', color: '#991b1b' }}>
+                {nonPct}%
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>DEAD STOCK</div>
+              <div className="dribbble-stat-tile-num red">{summary.nonMovingCount}</div>
+            </div>
+            <div className="dribbble-stat-tile-footer">
+              <span>0 sales in past {summary.rangeDays} days</span>
+              <ArrowRightIcon size={12} color="#dc2626" />
+            </div>
+          </div>
+
+          {/* Card D: Active SKUs */}
+          <div
+            className={`dribbble-stat-tile ${statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery ? 'active-purple' : ''}`}
+            onClick={() => {
+              setStatusFilter('ALL');
+              setCategoryFilter('ALL');
+              setSearchQuery('');
+              setPage(1);
+            }}
+          >
+            <div className="dribbble-card-top-row">
+              <div className="dribbble-tile-icon-box purple">
+                <PackageIcon size={16} />
+              </div>
+              <span className="dribbble-pill-chip" style={{ background: '#ede9fe', color: '#6d28d9' }}>
+                {categories.length} Cats
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>ACTIVE CATALOGUE</div>
+              <div className="dribbble-stat-tile-num purple">{summary.totalTrackedProducts}</div>
+            </div>
+            <div className="dribbble-stat-tile-footer">
+              <span>Across {summary.totalSalesBills} bills</span>
+              <ArrowRightIcon size={12} color="#6366f1" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. VISUAL INTELLIGENCE BENTO (TOP SELLERS & AI RISK - IMAGE 1 & 2) ── */}
+      {data && (
+        <div className="dribbble-visual-grid">
+          {/* Card 1: Top 10 Best Sellers (Span 7) */}
+          <div className="dribbble-card dribbble-sellers-card">
+            <div className="dribbble-section-heading">
+              <h2>
+                <TrophyIcon size={18} color="#d97706" /> Top 10 Best-Selling Products
+              </h2>
+              <span className="dribbble-pill-chip">By Quantity Sold</span>
+            </div>
+
+            {topSellers.length === 0 ? (
+              <div style={{ padding: '3rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+                No completed sales recorded during this date window.
+              </div>
+            ) : (
+              <div>
+                {topSellers.map((item, idx) => {
+                  const pct = Math.max(8, Math.min(100, (item.unitsSold / topSellerMax) * 100));
+                  const rankClass =
+                    idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : 'default';
+
+                  return (
+                    <div key={item.id || idx} className="dribbble-seller-row">
+                      <div className={`dribbble-rank-tag ${rankClass}`}>
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                      </div>
+                      <span className="dribbble-seller-name" title={item.name}>
+                        {item.name}
+                      </span>
+                      <div className="dribbble-progress-capsule">
+                        <div className="dribbble-progress-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="dribbble-seller-qty">
+                        {item.unitsSold.toLocaleString('en-IN')}{' '}
+                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{item.unit}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <div className="inv-filter-group">
-            {/* Category Filter */}
+          {/* Card 2: Grounded Risk Intelligence (Span 5 - Image 2 Nested Box Aesthetic) */}
+          <div className="dribbble-card dribbble-risk-card">
+            <div className="dribbble-section-heading">
+              <h2>
+                <BrainIcon size={18} color="#6366f1" /> Grounded Risk Intelligence
+              </h2>
+              <span className="dribbble-pill-chip live">
+                <span className="dot"></span> Live Sync
+              </span>
+            </div>
+
+            {/* Box 1: Best Seller Runway */}
+            {data.insights.bestSeller ? (
+              <div className="dribbble-risk-nested-box gold">
+                <div className="dribbble-risk-top">
+                  <span className="dribbble-risk-title">
+                    <TrophyIcon size={14} color="#b45309" />
+                    Top Seller: {data.insights.bestSeller.name}
+                  </span>
+                  <span className="dribbble-pill-chip" style={{ background: '#fef3c7', color: '#b45309' }}>
+                    {data.insights.bestSeller.runwayDays !== null &&
+                    data.insights.bestSeller.runwayDays !== undefined
+                      ? `~${data.insights.bestSeller.runwayDays}d Runway`
+                      : 'Active Seller'}
+                  </span>
+                </div>
+                <p className="dribbble-risk-desc">
+                  Generated <b>{data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit}</b> across{' '}
+                  <b>{data.insights.bestSeller.salesTxns}</b> bills.
+                  {data.insights.bestSeller.currentStockUnits !== undefined && (
+                    <span> Current shelf inventory is {data.insights.bestSeller.currentStockUnits} {data.insights.bestSeller.unit}.</span>
+                  )}
+                </p>
+                {onNavigateToPurchases && (
+                  <button
+                    type="button"
+                    className="dribbble-btn-subtle"
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem', marginTop: '0.45rem' }}
+                    onClick={() => onNavigateToPurchases()}
+                  >
+                    + Reorder Product
+                  </button>
+                )}
+              </div>
+            ) : null}
+
+            {/* Box 2: Slowing Demand */}
+            {data.insights.slowingProduct ? (
+              <div className="dribbble-risk-nested-box blue">
+                <div className="dribbble-risk-top">
+                  <span className="dribbble-risk-title">
+                    <ZapIcon size={14} color="#2563eb" />
+                    Demand Warning: {data.insights.slowingProduct.name}
+                  </span>
+                  <span className="dribbble-pill-chip" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+                    Slowing
+                  </span>
+                </div>
+                <p className="dribbble-risk-desc">
+                  {data.insights.slowingProduct.message}
+                </p>
+              </div>
+            ) : (
+              <div className="dribbble-risk-nested-box" style={{ borderLeft: '4px solid #10b981' }}>
+                <div className="dribbble-risk-top">
+                  <span className="dribbble-risk-title" style={{ color: '#047857' }}>
+                    <CheckCircleIcon size={14} color="#10b981" />
+                    Smooth Circulation
+                  </span>
+                  <span className="dribbble-pill-chip" style={{ background: '#d1fae5', color: '#047857' }}>
+                    Healthy
+                  </span>
+                </div>
+                <p className="dribbble-risk-desc">
+                  No critical velocity drop-offs or bottlenecked products detected.
+                </p>
+              </div>
+            )}
+
+            {/* Box 3: Dormant Capital */}
+            <div className="dribbble-risk-nested-box rose">
+              <div className="dribbble-risk-top">
+                <span className="dribbble-risk-title">
+                  <AlertOctagonIcon size={14} color="#dc2626" />
+                  Dormant Capital: {data.insights.nonMovingSummary.count} SKUs
+                </span>
+                <span className="dribbble-pill-chip" style={{ background: '#fee2e2', color: '#dc2626', fontWeight: 800 }}>
+                  {formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}
+                </span>
+              </div>
+              <p className="dribbble-risk-desc">
+                Zero sales recorded in the past {data.insights.nonMovingSummary.days} days. Review shelf demand before ordering more from suppliers.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 5. MASTER STOCK LEDGER TABLE (BENTO CONTAINER) ── */}
+      <div className="dribbble-card dribbble-table-card">
+        {/* Controls Bar */}
+        <div className="dribbble-table-controls">
+          <div className="dribbble-controls-left">
+            {/* Search Pill */}
+            <div className="dribbble-search-pill-box">
+              <SearchIcon
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#94a3b8',
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search products by name, SKU or category..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <XIcon size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Category Dropdown Pill */}
             <select
-              className="inv-select"
+              className="dribbble-select-pill"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
                 setPage(1);
               }}
             >
-              <option value="ALL">All Categories</option>
+              <option value="ALL">All Categories ▾</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -1064,42 +939,43 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               ))}
             </select>
 
-            {/* Movement Status Filter */}
+            {/* Movement Status Pill */}
             <select
-              className="inv-select"
+              className="dribbble-select-pill"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setPage(1);
               }}
             >
-              <option value="ALL">All Movement Statuses</option>
+              <option value="ALL">All Movement Status ▾</option>
               <option value="fast_moving">⚡ Fast-Moving</option>
               <option value="slow_moving">⏳ Slow-Moving</option>
               <option value="non_moving">🛑 Non-Moving</option>
             </select>
 
-            {/* Sorting */}
+            {/* Sorting Pill */}
             <select
-              className="inv-select"
+              className="dribbble-select-pill"
               value={sortField}
               onChange={(e) => {
                 setSortField(e.target.value as any);
                 setPage(1);
               }}
             >
-              <option value="units_desc">Units Sold (High-Low)</option>
-              <option value="units_asc">Units Sold (Low-High)</option>
-              <option value="txns_desc">Invoices / Txns (High-Low)</option>
-              <option value="name_asc">Name (A-Z)</option>
-              <option value="stock_desc">Current Stock (High-Low)</option>
-              <option value="stock_asc">Current Stock (Low-High)</option>
+              <option value="units_desc">Sort: Units Sold (High-Low)</option>
+              <option value="units_asc">Sort: Units Sold (Low-High)</option>
+              <option value="txns_desc">Sort: Invoices / Bills (High-Low)</option>
+              <option value="name_asc">Sort: Product Name (A-Z)</option>
+              <option value="stock_desc">Sort: Current Stock (High-Low)</option>
+              <option value="stock_asc">Sort: Current Stock (Low-High)</option>
             </select>
 
             {hasActiveFilters && (
               <button
                 type="button"
-                className="btn-action-small"
+                className="dribbble-btn-subtle"
+                style={{ padding: '0.4rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem' }}
                 onClick={() => {
                   setSearchQuery('');
                   setCategoryFilter('ALL');
@@ -1111,87 +987,67 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               </button>
             )}
           </div>
+
+          <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+            Showing <b>{filteredProducts.length}</b> of <b>{data?.products.length || 0}</b> products
+          </div>
         </div>
 
-        {/* Master Stock Ledger Table */}
-        <div className="ledger-table-wrap">
-          {loading && !data ? (
-            <div className="table-loading-spinner" style={{ padding: '3rem', textAlign: 'center' }}>
-              <div className="spinner"></div>
-              <p style={{ marginTop: '0.75rem', color: 'var(--text-muted)' }}>
-                Loading product movement ledger...
-              </p>
-            </div>
-          ) : paginatedProducts.length === 0 ? (
-            <div className="table-empty-state">
-              <div className="table-empty-icon-wrap">
-                <PackageIcon size={32} />
-              </div>
-              <h3>No Matching Products Found</h3>
-              <p>
-                {hasActiveFilters
-                  ? 'No inventory items matched your current search or filter criteria.'
-                  : 'No product movements recorded in this date range.'}
-              </p>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="reset-filter-btn"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setCategoryFilter('ALL');
-                    setStatusFilter('ALL');
-                    setPage(1);
-                  }}
+        {/* Master Data Table */}
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+          <table className="dribbble-ledger-table">
+            <thead>
+              <tr>
+                <th
+                  style={{ cursor: 'pointer' }}
+                  onClick={() =>
+                    setSortField((prev) => (prev === 'name_asc' ? 'units_desc' : 'name_asc'))
+                  }
                 >
-                  Clear All Filters
-                </button>
-              )}
-            </div>
-          ) : (
-            <table className="inventory-data-table">
-              <thead>
+                  PRODUCT &amp; IDENTIFIERS {sortField === 'name_asc' ? '▴' : ''}
+                </th>
+                <th>CATEGORY</th>
+                <th
+                  style={{ cursor: 'pointer' }}
+                  onClick={() =>
+                    setSortField((prev) => (prev === 'stock_desc' ? 'stock_asc' : 'stock_desc'))
+                  }
+                >
+                  CURRENT STOCK {sortField === 'stock_desc' ? '▼' : sortField === 'stock_asc' ? '▲' : ''}
+                </th>
+                <th
+                  style={{ cursor: 'pointer', color: '#6366f1' }}
+                  onClick={() =>
+                    setSortField((prev) => (prev === 'units_desc' ? 'units_asc' : 'units_desc'))
+                  }
+                >
+                  UNITS SOLD {sortField === 'units_desc' ? '▼' : sortField === 'units_asc' ? '▲' : ''}
+                </th>
+                <th
+                  style={{ cursor: 'pointer' }}
+                  onClick={() =>
+                    setSortField((prev) => (prev === 'txns_desc' ? 'units_desc' : 'txns_desc'))
+                  }
+                >
+                  BILLS {sortField === 'txns_desc' ? '▼' : ''}
+                </th>
+                <th>LAST SOLD</th>
+                <th>MOVEMENT STATUS</th>
+                <th style={{ textAlign: 'right' }}>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedProducts.length === 0 ? (
                 <tr>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setSortField((prev) => (prev === 'name_asc' ? 'units_desc' : 'name_asc'))
-                    }
-                  >
-                    PRODUCT &amp; IDENTIFIERS {sortField === 'name_asc' ? '▴' : ''}
-                  </th>
-                  <th>CATEGORY</th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setSortField((prev) => (prev === 'stock_desc' ? 'stock_asc' : 'stock_desc'))
-                    }
-                  >
-                    CURRENT STOCK {sortField === 'stock_desc' ? '▼' : sortField === 'stock_asc' ? '▲' : ''}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer', color: 'var(--primary)' }}
-                    onClick={() =>
-                      setSortField((prev) => (prev === 'units_desc' ? 'units_asc' : 'units_desc'))
-                    }
-                  >
-                    UNITS SOLD {sortField === 'units_desc' ? '▼' : sortField === 'units_asc' ? '▲' : ''}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setSortField((prev) => (prev === 'txns_desc' ? 'units_desc' : 'txns_desc'))
-                    }
-                  >
-                    INVOICE BILLS {sortField === 'txns_desc' ? '▼' : ''}
-                  </th>
-                  <th>LAST SOLD</th>
-                  <th>MOVEMENT STATUS</th>
-                  <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '3.5rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>🔍</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#475569' }}>
+                      No matching products found
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {paginatedProducts.map((p) => {
+              ) : (
+                paginatedProducts.map((p) => {
                   const isNegStock = p.currentStockUnits < 0;
                   const isLowStock = p.currentStockUnits >= 0 && p.currentStockUnits <= 5;
 
@@ -1199,8 +1055,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     <tr key={p.id}>
                       {/* Product Name & SKU */}
                       <td>
-                        <div className="item-cell-title">{p.name}</div>
-                        <div className="item-cell-sub">
+                        <div className="dribbble-table-prod-name">{p.name}</div>
+                        <div className="dribbble-table-prod-sub">
                           SKU: {p.sku || '—'}
                           {p.barcode ? ` · Barcode: ${p.barcode}` : ''}
                         </div>
@@ -1208,15 +1064,19 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
                       {/* Category */}
                       <td>
-                        <span className="category-pill">{p.category || 'General'}</span>
+                        <span className="dribbble-pill-chip" style={{ fontSize: '0.72rem' }}>
+                          {p.category || 'General'}
+                        </span>
                       </td>
 
                       {/* Current Stock */}
                       <td>
                         <span
-                          className={`stock-number-pill ${
-                            isNegStock ? 'negative' : isLowStock ? 'low' : ''
-                          }`}
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            color: isNegStock ? '#dc2626' : isLowStock ? '#d97706' : '#1e293b',
+                          }}
                         >
                           {p.currentStockUnits.toLocaleString('en-IN')} {p.unit}
                         </span>
@@ -1225,91 +1085,85 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                       {/* Units Sold */}
                       <td>
                         <span
-                          className="stock-number-pill"
-                          style={{ color: 'var(--primary)', fontWeight: 800 }}
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 800,
+                            color: '#6366f1',
+                            fontSize: '0.92rem',
+                          }}
                         >
                           {p.unitsSold.toLocaleString('en-IN')} {p.unit}
                         </span>
                       </td>
 
-                      {/* Invoice Bills */}
+                      {/* Bills */}
                       <td>
-                        <span className="mono" style={{ fontWeight: 600 }}>
-                          {p.salesTxns} bills
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {p.salesTxns}
                         </span>
                       </td>
 
                       {/* Last Sold Date */}
-                      <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ color: '#64748b', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
                         {formatLastSold(p.lastSoldAt)}
                       </td>
 
                       {/* Movement Status Badge */}
                       <td>
                         {p.movementStatus === 'fast_moving' && (
-                          <span className="status-pill green">
-                            <ZapIcon size={12} color="#065f46" /> Fast-Moving
+                          <span className="dribbble-badge-pill green">
+                            <ZapIcon size={12} color="#047857" /> Fast-Moving
                           </span>
                         )}
                         {p.movementStatus === 'slow_moving' && (
-                          <span className="status-pill amber">
-                            <HourglassIcon size={12} color="#92400e" /> Slow-Moving
+                          <span className="dribbble-badge-pill amber">
+                            <HourglassIcon size={12} color="#b45309" /> Slow-Moving
                           </span>
                         )}
                         {p.movementStatus === 'non_moving' && (
-                          <span className="status-pill red">
-                            <AlertOctagonIcon size={12} color="#991b1b" /> Non-Moving
+                          <span className="dribbble-badge-pill red">
+                            <AlertOctagonIcon size={12} color="#dc2626" /> Non-Moving
                           </span>
                         )}
                       </td>
 
                       {/* Action */}
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
-                          {onNavigateToPurchases &&
-                          (p.movementStatus === 'fast_moving' || isLowStock) ? (
-                            <button
-                              type="button"
-                              className="btn-action-small primary"
-                              onClick={() => onNavigateToPurchases(undefined, p.id)}
-                              title={`Create Purchase Order for ${p.name}`}
-                            >
-                              + Restock
-                            </button>
-                          ) : (
-                            <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-                              {p.movementStatus === 'non_moving' ? 'Hold POs' : 'Adequate'}
-                            </span>
-                          )}
-                        </div>
+                        {onNavigateToPurchases &&
+                        (p.movementStatus === 'fast_moving' || isLowStock) ? (
+                          <button
+                            type="button"
+                            className="dribbble-btn-subtle"
+                            style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                            onClick={() => onNavigateToPurchases(undefined, p.id)}
+                            title={`Create Purchase Order for ${p.name}`}
+                          >
+                            + Restock
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                            {p.movementStatus === 'non_moving' ? 'Hold POs' : 'Adequate'}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          )}
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* Pagination Bar */}
+        {/* Table Footer with Pagination */}
         {totalItems > 0 && (
-          <div className="pagination-bar">
-            <div
-              className="pagination-info"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}
-            >
-              <span>
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, totalItems)} of {totalItems} items
-              </span>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                  fontSize: '0.74rem',
-                }}
-              >
+          <div className="dribbble-table-footer">
+            <div>
+              Showing {(page - 1) * pageSize + 1} to{' '}
+              {Math.min(page * pageSize, totalItems)} of {totalItems} products
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.76rem' }}>
                 Rows:
                 <select
                   value={pageSize}
@@ -1318,13 +1172,11 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     setPage(1);
                   }}
                   style={{
-                    padding: '0.15rem 0.35rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-card)',
-                    color: 'var(--text-main)',
-                    fontSize: '0.74rem',
-                    cursor: 'pointer',
+                    padding: '0.2rem 0.45rem',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: '0.76rem',
                   }}
                 >
                   <option value={15}>15</option>
@@ -1332,32 +1184,34 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   <option value={50}>50</option>
                   <option value={100}>100</option>
                 </select>
-              </span>
-            </div>
-
-            {totalItems > pageSize && (
-              <div className="pagination-buttons">
-                <button
-                  type="button"
-                  className="page-btn"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </button>
-                <span className="page-current">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="page-btn"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </button>
               </div>
-            )}
+
+              {totalItems > pageSize && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <button
+                    type="button"
+                    className="dribbble-btn-subtle"
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155' }}>
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="dribbble-btn-subtle"
+                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
