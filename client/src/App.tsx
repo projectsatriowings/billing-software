@@ -916,7 +916,25 @@ export function App() {
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch { }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebarCollapsed', String(next));
+      } catch { }
+      return next;
+    });
+  };
 
   const [autoCollapsedForPos, setAutoCollapsedForPos] = useState(false);
   const [showProductCatalogDrawer, setShowProductCatalogDrawer] = useState(false);
@@ -943,13 +961,12 @@ export function App() {
 
   useEffect(() => {
     if (activeTab === 'pos') {
-      if (!isSidebarCollapsed) {
-        setIsSidebarCollapsed(true);
-        setAutoCollapsedForPos(true);
-      }
-    } else if (autoCollapsedForPos && typeof window !== 'undefined' && window.innerWidth >= 1200) {
-      setIsSidebarCollapsed(false);
-      setAutoCollapsedForPos(false);
+      try {
+        // POS Counter defaults to collapsed on first visit if user has not set a preference
+        if (localStorage.getItem('sidebarCollapsed') === null && !isSidebarCollapsed) {
+          setIsSidebarCollapsed(true);
+        }
+      } catch { }
     }
   }, [activeTab]);
 
@@ -5494,17 +5511,17 @@ export function App() {
               className="sidebar-brand"
               onClick={() => navigateTo('landing')}
               style={{ cursor: 'pointer' }}
-              title="View public Landing Page"
+              title="Adaptive Billing · Cloud POS & GST"
             >
               <div className="sidebar-brand-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M12 2L2 22h20L12 2z" />
                   <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
                 </svg>
               </div>
               <div className="sidebar-brand-text">
                 <span className="sidebar-brand-title">Adaptive Billing</span>
-                <span className="sidebar-brand-subtitle">Cloud POS & GST</span>
+                <span className="sidebar-brand-subtitle">Cloud POS &amp; GST</span>
               </div>
             </div>
 
@@ -5513,18 +5530,31 @@ export function App() {
               className="sidebar-collapse-toggle"
               onClick={(e) => {
                 e.stopPropagation();
-                setAutoCollapsedForPos(false);
-                setIsSidebarCollapsed(!isSidebarCollapsed);
-
+                toggleSidebar();
               }}
-              title={isSidebarCollapsed ? "Expand sidebar (Full view)" : "Collapse sidebar (Icon only)"}
-              aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={isSidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+              aria-label={isSidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+              aria-expanded={!isSidebarCollapsed}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={isSidebarCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"} />
-              </svg>
+              {isSidebarCollapsed ? (
+                // ☰ Hamburger icon (3 bars) to open
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              ) : (
+                // X Close icon to collapse
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              )}
             </button>
           </div>
+
+          {/* Rail Divider visible in collapsed mode */}
+          <div className="sidebar-rail-divider" aria-hidden="true" />
 
           {/* Interactive Multi-Business Switcher & Store Profile */}
           <div className="sidebar-store-wrapper">
@@ -5532,29 +5562,29 @@ export function App() {
               type="button"
               className="sidebar-store-btn"
               onClick={() => {
-                if (isSidebarCollapsed) {
-                  setIsSidebarCollapsed(false);
-                  setShowBusinessDropdown(true);
-                } else {
-                  setShowBusinessDropdown(!showBusinessDropdown);
-                }
+                setShowBusinessDropdown(!showBusinessDropdown);
               }}
-              title="Click to view store profile and partition details"
+              title={shop?.name || 'Store Profile'}
             >
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0, boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="sidebar-store-icon-tile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                   <polyline points="9 22 9 12 15 12 15 22"></polyline>
                 </svg>
               </div>
               <div className="sidebar-store-info">
                 <span className="sidebar-store-name">
-                  {shop?.name || 'Green Mart Supermarket'}
+                  {shop?.name || 'Shree Krishna Supermarket'}
                 </span>
                 <span className="sidebar-store-badge">
-                  {getBusinessLabel(shop?.businessType)} <span className="chevron-arrow">▾</span>
+                  {getBusinessLabel(shop?.businessType)}
                 </span>
               </div>
+              <span className="sidebar-store-chevron" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
             </button>
 
             {showBusinessDropdown && (
@@ -5750,19 +5780,21 @@ export function App() {
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''}`}
+                className={`sidebar-nav-item ${activeTab === 'items' ? 'active' : ''} ${items.length > 0 ? 'has-badge' : ''}`}
                 onClick={() => setActiveTab('items')}
-                title={`Products Inventory (${items.length} items)`}
+                title={`Products (${items.length} items)`}
               >
                 <span className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                     <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
                     <line x1="12" y1="22.08" x2="12" y2="12" />
                   </svg>
                 </span>
                 <span className="nav-text">Products</span>
-                <span className="nav-count-badge">{items.length}</span>
+                <span className="nav-right-slot">
+                  <span className="nav-count-badge">{items.length}</span>
+                </span>
               </button>
             )}
 
@@ -5770,18 +5802,20 @@ export function App() {
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''}`}
+                className={`sidebar-nav-item ${activeTab === 'categories' ? 'active' : ''} ${categoriesList.length > 0 ? 'has-badge' : ''}`}
                 onClick={() => setActiveTab('categories')}
                 title={`Categories (${categoriesList.length} categories)`}
               >
                 <span className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
                     <line x1="7" y1="7" x2="7.01" y2="7" />
                   </svg>
                 </span>
                 <span className="nav-text">Categories</span>
-                <span className="nav-count-badge">{categoriesList.length}</span>
+                <span className="nav-right-slot">
+                  <span className="nav-count-badge">{categoriesList.length}</span>
+                </span>
               </button>
             )}
 
@@ -5797,7 +5831,13 @@ export function App() {
                   type="button"
                   className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''} ${activeTab === 'product-movement' || activeTab === 'stock-transfer' ? 'has-active-child' : ''
                     } ${isInventorySubmenuVisible && activeTab !== 'inventory' && activeTab !== 'product-movement' && activeTab !== 'stock-transfer' ? 'open-highlight' : ''}`}
-                  onClick={handleInventoryClick}
+                  onClick={() => {
+                  if (isSidebarCollapsed) {
+                    setActiveTab('inventory');
+                  } else {
+                    handleInventoryClick();
+                  }
+                }}
                   aria-haspopup="true"
                   aria-expanded={isInventorySubmenuVisible}
                   title="Inventory Hub & Stock Operations"
@@ -5810,7 +5850,7 @@ export function App() {
                     </svg>
                   </span>
                   <span className="nav-text">Inventory Hub</span>
-                  <div className="nav-trailing">
+                  <span className="nav-right-slot">
                     {totalStockAlerts > 0 && (
                       <span
                         className={`nav-count-badge ${outOfStockItems.length > 0 ? 'blinking-badge-red' : 'blinking-badge-amber'}`}
@@ -5819,15 +5859,15 @@ export function App() {
                         {totalStockAlerts}
                       </span>
                     )}
-                    <span className={`nav-dropdown-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
+                    <span className={`sidebar-chevron ${isInventorySubmenuVisible ? 'open' : ''}`} aria-hidden="true">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </span>
-                  </div>
+                  </span>
                 </button>
 
-                {isInventorySubmenuVisible && (
+                {!isSidebarCollapsed && isInventorySubmenuVisible && (
                   <div className="sidebar-submenu-list" role="menu">
                     <button
                       type="button"
@@ -5914,7 +5954,6 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Sales Analysis</span>
-                <span className="nav-badge-new">NEW</span>
               </button>
             )}
 
@@ -5934,7 +5973,6 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Discounts &amp; Offers</span>
-                <span className="nav-badge-new">NEW</span>
               </button>
             )}
 
@@ -5963,12 +6001,12 @@ export function App() {
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
+                className={`sidebar-nav-item ${activeTab === 'customers' ? 'active' : ''} ${parties.filter((p) => p.type === 'customer').length > 0 ? 'has-badge' : ''}`}
                 onClick={() => setActiveTab('customers')}
-                title={`Customers Directory (${parties.filter((p) => p.type === 'customer').length})`}
+                title={`Customers (${parties.filter((p) => p.type === 'customer').length})`}
               >
                 <span className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -5976,7 +6014,9 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Customers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+                <span className="nav-right-slot">
+                  <span className="nav-count-badge">{parties.filter((p) => p.type === 'customer').length}</span>
+                </span>
               </button>
             )}
 
@@ -5984,12 +6024,12 @@ export function App() {
             {user.role !== 'cashier' && (
               <button
                 type="button"
-                className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''}`}
+                className={`sidebar-nav-item ${activeTab === 'suppliers' ? 'active' : ''} ${parties.filter((p) => p.type === 'supplier').length > 0 ? 'has-badge' : ''}`}
                 onClick={() => setActiveTab('suppliers')}
-                title={`Suppliers Directory (${parties.filter((p) => p.type === 'supplier').length})`}
+                title={`Suppliers (${parties.filter((p) => p.type === 'supplier').length})`}
               >
                 <span className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="1" y="3" width="15" height="13" rx="1" />
                     <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
                     <circle cx="5.5" cy="18.5" r="2.5" />
@@ -5997,7 +6037,9 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">Suppliers</span>
-                <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+                <span className="nav-right-slot">
+                  <span className="nav-count-badge">{parties.filter((p) => p.type === 'supplier').length}</span>
+                </span>
               </button>
             )}
 
@@ -6007,7 +6049,13 @@ export function App() {
                 <button
                   type="button"
                   className="sidebar-nav-item"
-                  onClick={() => setIsAccountsOpen(!isAccountsOpen)}
+                  onClick={() => {
+                  if (isSidebarCollapsed) {
+                    setActiveTab('invoices');
+                  } else {
+                    setIsAccountsOpen(!isAccountsOpen);
+                  }
+                }}
                   aria-expanded={isAccountsOpen}
                 >
                   <span className="nav-icon">
@@ -6017,14 +6065,16 @@ export function App() {
                     </svg>
                   </span>
                   <span className="nav-text">Accounts &amp; Finance</span>
-                  <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
+                  <span className="nav-right-slot">
+                    <span className={`sidebar-chevron ${isAccountsOpen ? 'open' : ''}`} aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </span>
                   </span>
                 </button>
 
-                {isAccountsOpen && (
+                {!isSidebarCollapsed && isAccountsOpen && (
                   <div className="sidebar-sub-items">
                     <button
                       type="button"
@@ -6151,7 +6201,13 @@ export function App() {
                 <button
                   type="button"
                   className="sidebar-nav-item"
-                  onClick={() => setIsGstOpen(!isGstOpen)}
+                  onClick={() => {
+                  if (isSidebarCollapsed) {
+                    setActiveTab('gst-overview');
+                  } else {
+                    setIsGstOpen(!isGstOpen);
+                  }
+                }}
                   aria-expanded={isGstOpen}
                 >
                   <span className="nav-icon">
@@ -6160,14 +6216,16 @@ export function App() {
                     </svg>
                   </span>
                   <span className="nav-text">GST Filing</span>
-                  <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
+                  <span className="nav-right-slot">
+                    <span className={`sidebar-chevron ${isGstOpen ? 'open' : ''}`} aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </span>
                   </span>
                 </button>
 
-                {isGstOpen && (
+                {!isSidebarCollapsed && isGstOpen && (
                   <div className="sidebar-sub-items">
                     <button
                       type="button"
