@@ -17488,7 +17488,7 @@ export function App() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '1.25rem' }}>💬</span>
+                <WhatsAppIcon size={22} />
                 <div>
                   <div style={{ fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>Resend Bill on WhatsApp</div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#166534' }}>
@@ -17655,7 +17655,7 @@ export function App() {
                   marginBottom: '0.5rem',
                 }}
               >
-                <span>💬</span>
+                <WhatsAppIcon size={18} />
                 {resendSendState === 'sent' ? 'Sent — Send Again' : 'Send Bill on WhatsApp'}
               </button>
 
