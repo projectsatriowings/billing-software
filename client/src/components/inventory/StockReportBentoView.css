@@ -1,0 +1,1181 @@
+/* ==========================================================================
+   STOCK REPORT BENTO VIEW STYLES
+   Ultra-Modern Dribbble 3D Bento Dashboard Layout
+   Features: Layered 3D Inset Cards, Obsidian Contrast Tile, Arc Speedometer Gauge,
+   Pastel Micro-Metrics, Pill Progress Bars, and Master Stock Ledger Table.
+   ========================================================================== */
+
+/* ── 0. ROOT CONTAINER & AMBIENT CANVAS ── */
+.stock-report-bento-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  color: #1e293b;
+  padding: 0.25rem 0 2rem 0;
+}
+
+/* ── 1. HEADER BENTO CARD ── */
+.srb-header-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 20px;
+  padding: 1.1rem 1.4rem;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.srb-header-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6d4aff 0%, #8b5cf6 50%, #10b981 100%);
+}
+
+.srb-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+}
+
+.srb-header-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #6d4aff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 4px 12px rgba(109, 74, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.srb-header-title {
+  font-size: 1.28rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.srb-header-sub {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0.2rem 0 0 0;
+  font-weight: 500;
+}
+
+.srb-badge-live {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.15);
+}
+
+.srb-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+  animation: srbPulseGreen 2s infinite;
+}
+
+@keyframes srbPulseGreen {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.srb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Range Switcher Pills (Neumorphic Segmented Control) */
+.srb-range-pills {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.srb-range-btn {
+  padding: 0.42rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.srb-range-btn:hover:not(.active) {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.srb-range-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.srb-date-label-pill {
+  font-size: 0.78rem;
+  color: #475569;
+  font-weight: 600;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.42rem 0.8rem;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.srb-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.srb-btn-outline:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.srb-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.48rem 1.05rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: none;
+  background: linear-gradient(135deg, #6d4aff 0%, #5b36f5 100%);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 3px 10px rgba(109, 74, 255, 0.28);
+}
+
+.srb-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(109, 74, 255, 0.35);
+}
+
+/* Custom Date Drawer */
+.srb-custom-popover {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #ffffff;
+  padding: 0.85rem 1.2rem;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08);
+  flex-wrap: wrap;
+  margin-top: -0.25rem;
+}
+
+/* ==========================================================================
+   2. TOP ASYMMETRIC HERO BENTO DECK (12 Columns)
+   Card 1: Circulation Arc Gauge (Span 4)
+   Card 2: Obsidian Movement Pulse (Span 4)
+   Card 3: Action Radar & Risk Buffer (Span 4)
+   ========================================================================== */
+.srb-hero-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.15rem;
+  width: 100%;
+}
+
+.srb-hero-col-4 {
+  grid-column: span 4;
+}
+
+@media (max-width: 1200px) {
+  .srb-hero-col-4 {
+    grid-column: span 12;
+  }
+}
+
+/* Base Bento Card Structure */
+.srb-bento-box {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 20px;
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.srb-bento-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
+  border-color: #cbd5e1;
+}
+
+/* ── Hero Card 1: Circulation Arc Gauge ── */
+.srb-box-circulation {
+  background: linear-gradient(145deg, #ffffff 0%, #faf8ff 60%, #f4f0ff 100%);
+  border-color: #e9e3fe;
+}
+
+.srb-arc-gauge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0 0.2rem 0;
+  position: relative;
+}
+
+.srb-arc-svg {
+  width: 170px;
+  height: 98px;
+  overflow: visible;
+}
+
+.srb-arc-bg {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+
+.srb-arc-fill {
+  fill: none;
+  stroke: url(#srbGaugeGrad);
+  stroke-width: 11;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.srb-arc-center-text {
+  position: absolute;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.srb-arc-pct {
+  font-size: 1.85rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.srb-arc-sub {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Circulation Metrics Panel inside Card 1 */
+.srb-inset-3d-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 14px;
+  padding: 0.65rem 0.85rem;
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+  margin-top: 0.65rem;
+}
+
+.srb-segmented-meter {
+  display: flex;
+  height: 7px;
+  border-radius: 9999px;
+  overflow: hidden;
+  gap: 3px;
+  background: #f1f5f9;
+  margin-bottom: 0.5rem;
+}
+
+.srb-seg-block {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+.srb-seg-block.green { background: #10b981; }
+.srb-seg-block.amber { background: #f59e0b; }
+.srb-seg-block.red { background: #ef4444; }
+
+.srb-circ-legend-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* ── Hero Card 2: Obsidian Movement Pulse (Dribbble Dark Tile) ── */
+.srb-box-obsidian {
+  background: linear-gradient(145deg, #181926 0%, #12131e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: 0 14px 34px -6px rgba(18, 19, 30, 0.35);
+}
+
+.srb-box-obsidian:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px -4px rgba(18, 19, 30, 0.45);
+  border-color: rgba(109, 74, 255, 0.35);
+}
+
+.srb-obsidian-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: #a5b4fc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.55rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.srb-obsidian-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #818cf8;
+  box-shadow: 0 0 6px #818cf8;
+}
+
+.srb-obsidian-num {
+  font-size: 2.3rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0.35rem 0 0.1rem 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.srb-obsidian-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Rounded Pillar Bars (Image 2 & Image 4 Inspiration) */
+.srb-pillar-bars-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 7px;
+  height: 52px;
+  padding: 0.45rem 0.65rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.85rem 0;
+}
+
+.srb-pillar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.srb-pillar-fill {
+  width: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  transition: height 0.4s ease;
+}
+
+.srb-pillar-col:hover .srb-pillar-fill {
+  background: linear-gradient(180deg, #a5b4fc 0%, #818cf8 100%);
+}
+
+.srb-obsidian-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.55rem;
+}
+
+/* ── Hero Card 3: Action Radar & Risk Buffer ── */
+.srb-box-radar {
+  background: linear-gradient(145deg, #fff8f8 0%, #ffffff 70%);
+  border-color: #fecdd3;
+}
+
+.srb-radar-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.65rem 0;
+}
+
+.srb-radar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02);
+  transition: all 0.15s ease;
+}
+
+.srb-radar-row:hover {
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.srb-radar-row.alert-red {
+  background: #fff5f5;
+  border-color: #fed7d7;
+}
+
+.srb-radar-row.alert-amber {
+  background: #fffdf5;
+  border-color: #fef3c7;
+}
+
+.srb-radar-btn {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.28rem 0.6rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.srb-radar-btn.red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.srb-radar-btn.red:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.srb-radar-btn.amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.srb-radar-btn.amber:hover {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   3. FOUR MODULAR BENTO METRIC TILES (Row 2, Span 3 each)
+   Inspired by Image 2 (Mint, Amber, Red, Violet Pastel Tiles)
+   ========================================================================== */
+.srb-metric-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.15rem;
+  width: 100%;
+}
+
+.srb-metric-tile {
+  grid-column: span 3;
+  border-radius: 18px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 22px -4px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+}
+
+.srb-metric-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 32px -4px rgba(15, 23, 42, 0.09);
+}
+
+@media (max-width: 1100px) {
+  .srb-metric-tile {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 640px) {
+  .srb-metric-tile {
+    grid-column: span 12;
+  }
+}
+
+/* Tile 1: Fast-Moving (Mint/Emerald) */
+.srb-metric-tile.mint {
+  background: linear-gradient(145deg, #f0fdf4 0%, #ffffff 80%);
+  border: 1px solid #bbf7d0;
+}
+
+.srb-metric-tile.mint:hover,
+.srb-metric-tile.mint.active {
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px #10b981, 0 12px 28px -4px rgba(16, 185, 129, 0.2);
+}
+
+/* Tile 2: Slow-Moving (Amber Sunset) */
+.srb-metric-tile.amber {
+  background: linear-gradient(145deg, #fffbeb 0%, #ffffff 80%);
+  border: 1px solid #fde68a;
+}
+
+.srb-metric-tile.amber:hover,
+.srb-metric-tile.amber.active {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px #f59e0b, 0 12px 28px -4px rgba(245, 158, 11, 0.2);
+}
+
+/* Tile 3: Dead Stock (Coral Red) */
+.srb-metric-tile.coral {
+  background: linear-gradient(145deg, #fef2f2 0%, #ffffff 80%);
+  border: 1px solid #fca5a5;
+}
+
+.srb-metric-tile.coral:hover,
+.srb-metric-tile.coral.active {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px #ef4444, 0 12px 28px -4px rgba(239, 68, 68, 0.2);
+}
+
+/* Tile 4: Tied Assets / Active SKUs (Soft Violet) */
+.srb-metric-tile.violet {
+  background: linear-gradient(145deg, #f5f3ff 0%, #ffffff 80%);
+  border: 1px solid #ddd6fe;
+}
+
+.srb-metric-tile.violet:hover,
+.srb-metric-tile.violet.active {
+  border-color: #6d4aff;
+  box-shadow: 0 0 0 2px #6d4aff, 0 12px 28px -4px rgba(109, 74, 255, 0.2);
+}
+
+/* Card Header Structure */
+.srb-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.srb-tile-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.srb-tile-icon-box.green { background: #dcfce7; color: #15803d; }
+.srb-tile-icon-box.amber { background: #fef3c7; color: #b45309; }
+.srb-tile-icon-box.red { background: #fee2e2; color: #b91c1c; }
+.srb-tile-icon-box.purple { background: #ede9fe; color: #6d4aff; }
+
+.srb-tile-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.srb-tile-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.16rem 0.55rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.srb-tile-pill.green { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.srb-tile-pill.amber { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.srb-tile-pill.red { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
+.srb-tile-pill.purple { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+
+.srb-tile-big-num {
+  font-size: 1.85rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0.3rem 0;
+}
+
+.srb-tile-big-num.green { color: #059669; }
+.srb-tile-big-num.amber { color: #d97706; }
+.srb-tile-big-num.red { color: #dc2626; }
+.srb-tile-big-num.purple { color: #4338ca; }
+
+.srb-tile-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #64748b;
+  border-top: 1px dashed rgba(203, 213, 225, 0.7);
+  padding-top: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+/* ==========================================================================
+   4. VISUAL INTELLIGENCE & LEADERBOARD BENTO DECK (12 Columns)
+   Panel A: Top 10 Best Sellers (Span 7)
+   Panel B: Grounded Risk Intelligence (Span 5)
+   ========================================================================= */
+.srb-visual-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.15rem;
+  width: 100%;
+}
+
+.srb-panel-sellers {
+  grid-column: span 7;
+}
+
+.srb-panel-intelligence {
+  grid-column: span 5;
+}
+
+@media (max-width: 1100px) {
+  .srb-panel-sellers,
+  .srb-panel-intelligence {
+    grid-column: span 12;
+  }
+}
+
+.srb-deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.95rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.srb-deck-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* Leaderboard Rows */
+.srb-leader-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+  font-size: 0.82rem;
+}
+
+.srb-leader-row:hover {
+  background: #f8fafc;
+  transform: translateX(2px);
+}
+
+.srb-rank-pill {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.srb-rank-pill.gold {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+}
+
+.srb-rank-pill.silver {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.srb-rank-pill.bronze {
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+  color: #9a3412;
+  border: 1px solid #fb923c;
+}
+
+.srb-rank-pill.standard {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.srb-leader-info {
+  width: 170px;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+}
+
+.srb-leader-name {
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.srb-leader-cat {
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.srb-leader-track {
+  flex: 1;
+  height: 9px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.srb-leader-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #6d4aff 0%, #8b5cf6 100%);
+  transition: width 0.4s ease;
+  box-shadow: 0 1px 4px rgba(109, 74, 255, 0.3);
+}
+
+.srb-leader-qty {
+  min-width: 75px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Grounded Risk Inset 3D Cards */
+.srb-risk-layer-card {
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.03);
+  transition: all 0.15s ease;
+}
+
+.srb-risk-layer-card:hover {
+  transform: translateY(-1px);
+}
+
+.srb-risk-layer-card.gold {
+  background: #fffdf5;
+  border: 1px solid #fde68a;
+  color: #78350f;
+}
+
+.srb-risk-layer-card.blue {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.srb-risk-layer-card.green {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.srb-risk-layer-card.red {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+}
+
+.srb-risk-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 800;
+  margin-bottom: 0.3rem;
+  font-size: 0.82rem;
+}
+
+/* ==========================================================================
+   5. MASTER STOCK LEDGER TABLE & FILTERS BENTO CARD
+   ========================================================================== */
+.srb-table-bento-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.srb-table-toolbar {
+  padding: 0.85rem 1.25rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.srb-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  flex: 1 1 520px;
+}
+
+.srb-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 250px;
+  max-width: 360px;
+}
+
+.srb-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 2rem 0 2.3rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.82rem;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.srb-search-input:focus {
+  border-color: #6d4aff;
+  box-shadow: 0 0 0 3px rgba(109, 74, 255, 0.12);
+}
+
+.srb-select {
+  height: 38px;
+  padding: 0 0.95rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.srb-select:focus {
+  border-color: #6d4aff;
+}
+
+.srb-filter-status-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.srb-filter-pill-btn {
+  padding: 0.32rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.srb-filter-pill-btn.active {
+  background: #0f172a;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Master Table Design */
+.srb-master-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.srb-master-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.srb-master-table td {
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  color: #334155;
+  transition: background-color 0.12s ease;
+}
+
+.srb-master-table tr:hover td {
+  background-color: #faf9ff;
+}
+
+.srb-table-product-name {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.86rem;
+}
+
+.srb-table-product-sku {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.srb-stock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 9999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.srb-stock-pill.healthy {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.srb-stock-pill.low {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.srb-stock-pill.zero {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.srb-movement-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.srb-movement-status-badge.fast {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.srb-movement-status-badge.slow {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.srb-movement-status-badge.dead {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.srb-btn-restock-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  color: #6d4aff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.srb-btn-restock-action:hover {
+  background: #6d4aff;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(109, 74, 255, 0.25);
+}
+
+/* Pagination Bar */
+.srb-table-pagination {
+  padding: 0.85rem 1.25rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.srb-page-nav-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.srb-page-btn {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.srb-page-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.srb-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.srb-page-btn.current {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+  font-weight: 700;
+}

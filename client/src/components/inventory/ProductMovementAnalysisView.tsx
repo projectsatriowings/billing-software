@@ -26,8 +26,11 @@ import {
   RupeeIcon,
   BrainIcon,
   XIcon,
+  TrendingUpIcon,
+  RotateCcwIcon,
+  ShoppingCartIcon,
 } from './InventoryIcons.tsx';
-import './DribbbleBentoStockReport.css';
+import './StockReportBentoView.css';
 
 interface ProductMovementAnalysisViewProps {
   categories: string[];
@@ -272,7 +275,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `bento-stock-report-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `stock-movement-report-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -288,38 +291,52 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const slowPct = Math.round(((summary?.slowMovingCount || 0) / totalTracked) * 100);
   const nonPct = Math.max(0, 100 - fastPct - slowPct);
 
-  // Health score (fast moving percentage + 0.5 * slow moving percentage)
-  const healthScore = Math.min(100, Math.round(fastPct + slowPct * 0.5));
+  // Circulation Index Score (% of catalogue active in turnover)
+  const circPct = Math.min(
+    100,
+    Math.max(
+      0,
+      Math.round(
+        (((summary?.fastMovingCount || 0) + (summary?.slowMovingCount || 0)) / totalTracked) * 100
+      )
+    )
+  );
+  // Semi-circle arc circumference for radius=58: pi * 58 ~= 182.2
+  const arcDasharray = 182.2;
+  const arcDashoffset = arcDasharray * (1 - circPct / 100);
+
+  // 7 pillar bar heights for recent volume momentum
+  const pillarHeights = [38, 65, 42, 85, 55, 100, 75];
 
   const hasActiveFilters = searchQuery !== '' || categoryFilter !== 'ALL' || statusFilter !== 'ALL';
 
   return (
-    <div className="dribbble-bento-canvas">
-      {/* ── 1. DRIBBLE BENTO TOP CONTROL BAR ── */}
-      <div className="dribbble-bento-header">
-        <div className="dribbble-header-left">
-          <div className="dribbble-header-icon">
-            <WarehouseIcon size={24} />
+    <div className="stock-report-bento-root">
+      {/* ── 1. HEADER BENTO CARD ── */}
+      <div className="srb-header-card">
+        <div className="srb-header-left">
+          <div className="srb-header-icon-box">
+            <WarehouseIcon size={22} />
           </div>
-          <div className="dribbble-header-title-box">
-            <h1>
-              Stock Movement Bento
-              <span className="dribbble-pill-chip live">
-                <span className="dot"></span> Live Sync
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+              <h1 className="srb-header-title">Stock Movement Report</h1>
+              <span className="srb-badge-live">
+                <span className="srb-live-dot"></span> PostgreSQL Live
               </span>
-            </h1>
-            <p>
-              Real-time product turnover analytics, sales velocity &amp; capital intelligence
+            </div>
+            <p className="srb-header-sub">
+              Track stock turnover velocity, high-movement leaders &amp; dormant inventory capital
             </p>
           </div>
         </div>
 
-        <div className="dribbble-header-actions">
+        <div className="srb-header-actions">
           {/* Date Range Switcher Pills */}
-          <div className="dribbble-range-pills" role="radiogroup">
+          <div className="srb-range-pills" role="radiogroup">
             <button
               type="button"
-              className={`dribbble-range-btn ${selectedRange === '7d' ? 'active' : ''}`}
+              className={`srb-range-btn ${selectedRange === '7d' ? 'active' : ''}`}
               onClick={() => {
                 setSelectedRange('7d');
                 setShowCustomPicker(false);
@@ -330,7 +347,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             </button>
             <button
               type="button"
-              className={`dribbble-range-btn ${selectedRange === '30d' ? 'active' : ''}`}
+              className={`srb-range-btn ${selectedRange === '30d' ? 'active' : ''}`}
               onClick={() => {
                 setSelectedRange('30d');
                 setShowCustomPicker(false);
@@ -341,7 +358,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             </button>
             <button
               type="button"
-              className={`dribbble-range-btn ${selectedRange === '90d' ? 'active' : ''}`}
+              className={`srb-range-btn ${selectedRange === '90d' ? 'active' : ''}`}
               onClick={() => {
                 setSelectedRange('90d');
                 setShowCustomPicker(false);
@@ -352,7 +369,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             </button>
             <button
               type="button"
-              className={`dribbble-range-btn ${selectedRange === 'custom' ? 'active' : ''}`}
+              className={`srb-range-btn ${selectedRange === 'custom' ? 'active' : ''}`}
               onClick={() => {
                 setSelectedRange('custom');
                 setShowCustomPicker(!showCustomPicker);
@@ -363,50 +380,46 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
           </div>
 
           {rangeDisplayLabel && (
-            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-              {rangeDisplayLabel}
+            <span className="srb-date-label-pill">
+              <CalendarIcon size={12} color="#6d4aff" /> {rangeDisplayLabel}
             </span>
           )}
 
           <button
             type="button"
-            className="dribbble-btn-subtle"
+            className="srb-btn-outline"
             onClick={() => loadAnalysis(true)}
             disabled={isRefreshing || loading}
             title="Refresh Data"
           >
-            <RefreshCwIcon size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            {isRefreshing ? 'Syncing...' : 'Refresh'}
+            <RefreshCwIcon size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
 
           <button
             type="button"
-            className="dribbble-btn-primary"
+            className="srb-btn-primary"
             onClick={handleExportCsv}
             disabled={!data || data.products.length === 0}
-            title="Export CSV"
+            title="Export to CSV"
           >
-            <DownloadIcon size={14} /> Export CSV
+            <DownloadIcon size={13} /> Export CSV
           </button>
         </div>
       </div>
 
       {/* Custom Date Range Popover */}
       {showCustomPicker && selectedRange === 'custom' && (
-        <form onSubmit={handleApplyCustomRange} className="dribbble-custom-popover">
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
-            Custom Period:
+        <form onSubmit={handleApplyCustomRange} className="srb-custom-popover">
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
+            Custom Date Range:
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>From:</label>
             <input
               type="date"
-              style={{
-                padding: '0.4rem 0.65rem',
-                borderRadius: '10px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.82rem',
-              }}
+              className="srb-search-input"
+              style={{ width: '145px', height: '34px', padding: '0 0.5rem' }}
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               required
@@ -416,24 +429,20 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>To:</label>
             <input
               type="date"
-              style={{
-                padding: '0.4rem 0.65rem',
-                borderRadius: '10px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.82rem',
-              }}
+              className="srb-search-input"
+              style={{ width: '145px', height: '34px', padding: '0 0.5rem' }}
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
               required
             />
           </div>
-          <button type="submit" className="dribbble-btn-primary" style={{ padding: '0.4rem 0.85rem' }}>
-            Apply Filter
+          <button type="submit" className="srb-btn-primary" style={{ padding: '0.35rem 0.85rem' }}>
+            Apply Range
           </button>
           <button
             type="button"
-            className="dribbble-btn-subtle"
-            style={{ padding: '0.4rem 0.75rem' }}
+            className="srb-btn-outline"
+            style={{ padding: '0.35rem 0.75rem' }}
             onClick={() => setShowCustomPicker(false)}
           >
             Cancel
@@ -441,268 +450,350 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         </form>
       )}
 
-      {/* Error Card */}
+      {/* Error Banner */}
       {error && (
         <div
-          className="dribbble-card"
+          className="srb-bento-box"
           style={{
-            padding: '1.25rem 1.5rem',
             background: '#fef2f2',
             borderColor: '#fca5a5',
+            padding: '1rem 1.25rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#991b1b' }}>
-            <AlertTriangleIcon size={20} color="#dc2626" />
-            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{error}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#991b1b' }}>
+            <AlertTriangleIcon size={18} color="#dc2626" />
+            <span style={{ fontWeight: 600, fontSize: '0.84rem' }}>{error}</span>
           </div>
-          <button type="button" className="dribbble-btn-subtle" onClick={() => loadAnalysis()}>
+          <button type="button" className="srb-btn-outline" onClick={() => loadAnalysis()}>
             Retry
           </button>
         </div>
       )}
 
-      {/* ── 2. HERO BENTO DECK (3 ASYMMETRIC CARDS - IMAGES 1, 2 & 3) ── */}
+      {/* ── 2. ASYMMETRIC HERO BENTO DECK (Gauge + Obsidian Pulse + Action Radar) ── */}
       {summary && (
-        <div className="dribbble-hero-grid">
-          {/* Card 1: Velocity Pulse (Mint Gradient - Image 1 & 3) */}
-          <div className="dribbble-card dribbble-card-mint">
-            <div>
-              <div className="dribbble-card-top-row">
-                <span className="dribbble-card-label mint">
-                  <ZapIcon size={14} color="#059669" /> Velocity Pulse
-                </span>
-                <span className="dribbble-pill-chip" style={{ background: '#dcfce7', color: '#065f46', borderColor: '#a7f3d0' }}>
-                  {fastPct}% High Velocity
-                </span>
+        <div className="srb-hero-bento-grid">
+          {/* Card 1: Circulation Arc Gauge */}
+          <div className="srb-hero-col-4 srb-bento-box srb-box-circulation">
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box purple">
+                  <RotateCcwIcon size={16} />
+                </div>
+                <div>
+                  <span className="srb-tile-label">Circulation Index</span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block' }}>
+                    Turnover Health Score
+                  </span>
+                </div>
               </div>
-              <div className="dribbble-big-metric mint">
-                {summary.totalUnitsSold.toLocaleString('en-IN')}{' '}
-                <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>units</span>
-              </div>
-              <div className="dribbble-sub-desc mint">
-                Dispatched across <b>{summary.totalSalesBills}</b> completed customer invoices
+              <span className="srb-tile-pill purple">
+                {circPct >= 60 ? 'Healthy Turnover' : 'Idle Heavy'}
+              </span>
+            </div>
+
+            {/* Arc Speedometer Gauge */}
+            <div className="srb-arc-gauge-wrap">
+              <svg className="srb-arc-svg" viewBox="0 0 170 98">
+                <defs>
+                  <linearGradient id="srbGaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="60%" stopColor="#6d4aff" />
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+                {/* Background Arc */}
+                <path
+                  className="srb-arc-bg"
+                  d="M 27,85 A 58,58 0 0,1 143,85"
+                />
+                {/* Dynamic Colored Arc Fill */}
+                <path
+                  className="srb-arc-fill"
+                  d="M 27,85 A 58,58 0 0,1 143,85"
+                  strokeDasharray={arcDasharray}
+                  strokeDashoffset={arcDashoffset}
+                />
+              </svg>
+              <div className="srb-arc-center-text">
+                <span className="srb-arc-pct">{circPct}%</span>
+                <span className="srb-arc-sub">IN MOTION</span>
               </div>
             </div>
 
-            {/* Inset Neumorphic Capsule Bars (Image 1 "Home Energy Overview" & Image 3) */}
-            <div className="dribbble-mini-bars-well">
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '45%' }} />
+            {/* 3D Inset Panel with Segmented Meter */}
+            <div className="srb-inset-3d-card">
+              <div className="srb-segmented-meter">
+                <div
+                  className="srb-seg-block green"
+                  style={{ width: `${fastPct}%` }}
+                  title={`Fast: ${fastPct}%`}
+                />
+                <div
+                  className="srb-seg-block amber"
+                  style={{ width: `${slowPct}%` }}
+                  title={`Slow: ${slowPct}%`}
+                />
+                <div
+                  className="srb-seg-block red"
+                  style={{ width: `${nonPct}%` }}
+                  title={`Dormant: ${nonPct}%`}
+                />
               </div>
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '70%' }} />
-              </div>
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '95%' }} />
-              </div>
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '60%' }} />
-              </div>
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '85%' }} />
-              </div>
-              <div className="dribbble-capsule-col">
-                <div className="dribbble-capsule-bar" style={{ height: '100%' }} />
+              <div className="srb-circ-legend-row">
+                <span style={{ color: '#059669', fontWeight: 700 }}>● Fast {fastPct}%</span>
+                <span style={{ color: '#d97706', fontWeight: 700 }}>● Slow {slowPct}%</span>
+                <span style={{ color: '#dc2626', fontWeight: 700 }}>● Dormant {nonPct}%</span>
               </div>
             </div>
           </div>
 
-          {/* Card 2: Dark Contrast Obsidian Card (Image 3 "NAPPAY BACK") */}
-          <div className="dribbble-card dribbble-card-dark">
-            <div>
-              <div className="dribbble-card-top-row">
-                <span className="dribbble-card-label dark">
-                  <RupeeIcon size={14} color="#38bdf8" /> Portfolio Capital
-                </span>
-                <span className="dribbble-pill-chip" style={{ background: 'rgba(255,255,255,0.1)', color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)' }}>
-                  Asset Valuation
+          {/* Card 2: Executive Movement Pulse (Obsidian Dark Glass Card) */}
+          <div className="srb-hero-col-4 srb-bento-box srb-box-obsidian">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    background: 'rgba(99, 102, 241, 0.2)',
+                    border: '1px solid rgba(129, 140, 248, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#818cf8',
+                  }}
+                >
+                  <ZapIcon size={16} />
+                </div>
+                <div>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      color: '#94a3b8',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    MOVEMENT PULSE
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block' }}>
+                    Real-time Dispatch Stream
+                  </span>
+                </div>
+              </div>
+              <span className="srb-obsidian-badge">
+                <span className="srb-obsidian-dot"></span> Live Sync
+              </span>
+            </div>
+
+            <div style={{ marginTop: '0.5rem' }}>
+              <div className="srb-obsidian-num">
+                {summary.totalUnitsSold.toLocaleString('en-IN')}
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#94a3b8' }}>
+                  units
                 </span>
               </div>
-              <div className="dribbble-big-metric dark">
-                {invStats?.totalStockValueMinor != null
-                  ? formatCurrency(invStats.totalStockValueMinor)
-                  : data?.insights.nonMovingSummary.tiedCapitalMinor
-                  ? formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)
-                  : '₹0'}
-              </div>
-              <div className="dribbble-sub-desc dark">
-                Total valuation in active PostgreSQL item inventory
+              <div className="srb-obsidian-sub">
+                Total stock dispatched across {summary.totalSalesBills} bills
               </div>
             </div>
 
-            {/* Inset Neon Well */}
-            <div className="dribbble-dark-inset-well">
-              <div className="dribbble-dark-stat-item">
-                <span className="lbl">Active Items</span>
-                <span className="val cyan">{summary.totalTrackedProducts} SKUs</span>
-              </div>
-              <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.15)' }} />
-              <div className="dribbble-dark-stat-item">
-                <span className="lbl">Dormant Capital</span>
-                <span className="val fuchsia">
-                  {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)}
+            {/* 7-Pillar Micro Bar Chart */}
+            <div className="srb-pillar-bars-chart">
+              {pillarHeights.map((h, i) => (
+                <div key={i} className="srb-pillar-col" title={`Interval volume index: ${h}%`}>
+                  <div className="srb-pillar-fill" style={{ height: `${h}%` }} />
+                </div>
+              ))}
+            </div>
+
+            <div className="srb-obsidian-footer">
+              <span>{summary.totalTrackedProducts} Catalogue Items</span>
+              {invStats?.totalStockValueMinor != null && (
+                <span style={{ color: '#818cf8', fontWeight: 700 }}>
+                  ₹{((invStats.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', {
+                    maximumFractionDigits: 0,
+                  })}{' '}
+                  Value
                 </span>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Card 3: Radial Speedo / Circulation Meter (Image 1 "Wellness Score 84%" & Image 2) */}
-          <div className="dribbble-card dribbble-card-radial">
-            <div>
-              <div className="dribbble-card-top-row">
-                <span className="dribbble-card-label purple">
-                  <CheckCircleIcon size={14} color="#7c3aed" /> Circulation Index
-                </span>
-                <span className="dribbble-pill-chip" style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}>
-                  {healthScore >= 70 ? 'Optimal' : 'Attention'}
-                </span>
+          {/* Card 3: Action Radar & Risk Buffer */}
+          <div className="srb-hero-col-4 srb-bento-box srb-box-radar">
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box red">
+                  <AlertOctagonIcon size={16} />
+                </div>
+                <div>
+                  <span className="srb-tile-label" style={{ color: '#991b1b' }}>
+                    Turnover Radar
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block' }}>
+                    Replenish &amp; Buffer Control
+                  </span>
+                </div>
               </div>
-              <div className="dribbble-sub-desc purple" style={{ marginTop: '0' }}>
-                Inventory health &amp; turnover velocity distribution
+              <span className={`srb-tile-pill ${summary.nonMovingCount > 0 ? 'red' : 'green'}`}>
+                {summary.nonMovingCount > 0 ? 'Action Needed' : 'Healthy Buffer'}
+              </span>
+            </div>
+
+            <div className="srb-radar-items">
+              {/* Row 1: Dormant Capital at Risk */}
+              <div className="srb-radar-row alert-red">
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#991b1b' }}>
+                    {summary.nonMovingCount} Dormant SKUs
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#b91c1c' }}>
+                    {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)} tied up
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="srb-radar-btn red"
+                  onClick={() => {
+                    setStatusFilter(statusFilter === 'non_moving' ? 'ALL' : 'non_moving');
+                    setPage(1);
+                  }}
+                >
+                  Review ({summary.nonMovingCount}) <ArrowRightIcon size={11} />
+                </button>
+              </div>
+
+              {/* Row 2: Slow Buffer */}
+              <div className="srb-radar-row alert-amber">
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#92400e' }}>
+                    {summary.slowMovingCount} Slow Buffer
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#b45309' }}>
+                    1–{summary.fastMinUnits - 1} units moving
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="srb-radar-btn amber"
+                  onClick={() => {
+                    setStatusFilter(statusFilter === 'slow_moving' ? 'ALL' : 'slow_moving');
+                    setPage(1);
+                  }}
+                >
+                  Review ({summary.slowMovingCount})
+                </button>
               </div>
             </div>
 
-            {/* Circular Speedo Gauge */}
-            <div className="dribbble-radial-widget">
-              <div className="dribbble-radial-svg-box">
-                <svg width="80" height="80" viewBox="0 0 80 80">
-                  <circle
-                    cx="40"
-                    cy="40"
-                    r="32"
-                    fill="none"
-                    stroke="#e2e8f0"
-                    strokeWidth="7"
-                  />
-                  <circle
-                    cx="40"
-                    cy="40"
-                    r="32"
-                    fill="none"
-                    stroke="url(#radialGradient)"
-                    strokeWidth="7"
-                    strokeLinecap="round"
-                    strokeDasharray="201.06"
-                    strokeDashoffset={201.06 * (1 - healthScore / 100)}
-                    transform="rotate(-90 40 40)"
-                    style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-                  />
-                  <defs>
-                    <linearGradient id="radialGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="100%" stopColor="#6366f1" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="dribbble-radial-text">{healthScore}%</div>
-              </div>
-
-              <div className="dribbble-radial-legend">
-                <div className="dribbble-legend-line">
-                  <span><span className="dribbble-legend-dot green"></span>Fast-Moving:</span>
-                  <span style={{ color: '#047857' }}>{fastPct}%</span>
-                </div>
-                <div className="dribbble-legend-line">
-                  <span><span className="dribbble-legend-dot amber"></span>Slow-Moving:</span>
-                  <span style={{ color: '#b45309' }}>{slowPct}%</span>
-                </div>
-                <div className="dribbble-legend-line">
-                  <span><span className="dribbble-legend-dot red"></span>Non-Moving:</span>
-                  <span style={{ color: '#dc2626' }}>{nonPct}%</span>
-                </div>
-              </div>
-            </div>
+            {onNavigateToPurchases && (
+              <button
+                type="button"
+                className="srb-btn-outline"
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  borderColor: '#fca5a5',
+                  color: '#b91c1c',
+                  fontWeight: 700,
+                  marginTop: '0.2rem',
+                }}
+                onClick={() => onNavigateToPurchases()}
+              >
+                <ShoppingCartIcon size={13} /> Open Purchase Orders
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── 3. SECONDARY BENTO KPI TILES (4 MODULAR SQUARES - IMAGE 1) ── */}
+      {/* ── 3. FOUR MODULAR BENTO METRIC TILES (Mint, Amber, Coral, Violet) ── */}
       {summary && (
-        <div className="dribbble-kpi-quad">
-          {/* Card A: Fast-Moving */}
+        <div className="srb-metric-tiles-grid">
+          {/* Tile 1: Fast-Moving */}
           <div
-            className={`dribbble-stat-tile ${statusFilter === 'fast_moving' ? 'active-green' : ''}`}
+            className={`srb-metric-tile mint ${statusFilter === 'fast_moving' ? 'active' : ''}`}
             onClick={() => {
               setStatusFilter((prev) => (prev === 'fast_moving' ? 'ALL' : 'fast_moving'));
               setPage(1);
             }}
           >
-            <div className="dribbble-card-top-row">
-              <div className="dribbble-tile-icon-box green">
-                <ZapIcon size={16} />
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box green">
+                  <ZapIcon size={16} />
+                </div>
+                <span className="srb-tile-label">Fast-Moving</span>
               </div>
-              <span className="dribbble-pill-chip" style={{ background: '#ecfdf5', color: '#065f46' }}>
-                {fastPct}%
-              </span>
+              <span className="srb-tile-pill green">⚡ {fastPct}%</span>
             </div>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>FAST-MOVING</div>
-              <div className="dribbble-stat-tile-num green">{summary.fastMovingCount}</div>
-            </div>
-            <div className="dribbble-stat-tile-footer">
+            <div className="srb-tile-big-num green">{summary.fastMovingCount}</div>
+            <div className="srb-tile-footer">
               <span>≥ {summary.fastMinUnits} units or ≥ {summary.fastMinTxns} bills</span>
               <ArrowRightIcon size={12} color="#059669" />
             </div>
           </div>
 
-          {/* Card B: Slow-Moving */}
+          {/* Tile 2: Slow-Moving */}
           <div
-            className={`dribbble-stat-tile ${statusFilter === 'slow_moving' ? 'active-amber' : ''}`}
+            className={`srb-metric-tile amber ${statusFilter === 'slow_moving' ? 'active' : ''}`}
             onClick={() => {
               setStatusFilter((prev) => (prev === 'slow_moving' ? 'ALL' : 'slow_moving'));
               setPage(1);
             }}
           >
-            <div className="dribbble-card-top-row">
-              <div className="dribbble-tile-icon-box amber">
-                <HourglassIcon size={16} />
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box amber">
+                  <HourglassIcon size={16} />
+                </div>
+                <span className="srb-tile-label">Slow-Moving</span>
               </div>
-              <span className="dribbble-pill-chip" style={{ background: '#fffbeb', color: '#92400e' }}>
-                {slowPct}%
-              </span>
+              <span className="srb-tile-pill amber">⏳ {slowPct}%</span>
             </div>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>SLOW-MOVING</div>
-              <div className="dribbble-stat-tile-num amber">{summary.slowMovingCount}</div>
-            </div>
-            <div className="dribbble-stat-tile-footer">
-              <span>1–{summary.fastMinUnits - 1} units in period</span>
+            <div className="srb-tile-big-num amber">{summary.slowMovingCount}</div>
+            <div className="srb-tile-footer">
+              <span>1–{summary.fastMinUnits - 1} units sold in period</span>
               <ArrowRightIcon size={12} color="#d97706" />
             </div>
           </div>
 
-          {/* Card C: Dead Stock */}
+          {/* Tile 3: Dead Stock */}
           <div
-            className={`dribbble-stat-tile ${statusFilter === 'non_moving' ? 'active-red' : ''}`}
+            className={`srb-metric-tile coral ${statusFilter === 'non_moving' ? 'active' : ''}`}
             onClick={() => {
               setStatusFilter((prev) => (prev === 'non_moving' ? 'ALL' : 'non_moving'));
               setPage(1);
             }}
           >
-            <div className="dribbble-card-top-row">
-              <div className="dribbble-tile-icon-box red">
-                <AlertOctagonIcon size={16} />
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box red">
+                  <AlertOctagonIcon size={16} />
+                </div>
+                <span className="srb-tile-label">Dead Stock</span>
               </div>
-              <span className="dribbble-pill-chip" style={{ background: '#fef2f2', color: '#991b1b' }}>
-                {nonPct}%
-              </span>
+              <span className="srb-tile-pill red">🛑 0 Sales</span>
             </div>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>DEAD STOCK</div>
-              <div className="dribbble-stat-tile-num red">{summary.nonMovingCount}</div>
-            </div>
-            <div className="dribbble-stat-tile-footer">
-              <span>0 sales in past {summary.rangeDays} days</span>
+            <div className="srb-tile-big-num red">{summary.nonMovingCount}</div>
+            <div className="srb-tile-footer">
+              <span>Zero sales in past {summary.rangeDays} days</span>
               <ArrowRightIcon size={12} color="#dc2626" />
             </div>
           </div>
 
-          {/* Card D: Active SKUs */}
+          {/* Tile 4: Tied Assets / Active SKUs */}
           <div
-            className={`dribbble-stat-tile ${statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery ? 'active-purple' : ''}`}
+            className={`srb-metric-tile violet ${
+              statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery ? 'active' : ''
+            }`}
             onClick={() => {
               setStatusFilter('ALL');
               setCategoryFilter('ALL');
@@ -710,61 +801,78 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               setPage(1);
             }}
           >
-            <div className="dribbble-card-top-row">
-              <div className="dribbble-tile-icon-box purple">
-                <PackageIcon size={16} />
+            <div className="srb-tile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div className="srb-tile-icon-box purple">
+                  <RupeeIcon size={16} />
+                </div>
+                <span className="srb-tile-label">Tied Capital</span>
               </div>
-              <span className="dribbble-pill-chip" style={{ background: '#ede9fe', color: '#6d28d9' }}>
-                {categories.length} Cats
-              </span>
+              <span className="srb-tile-pill purple">{categories.length} Categories</span>
             </div>
-            <div>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#64748b' }}>ACTIVE CATALOGUE</div>
-              <div className="dribbble-stat-tile-num purple">{summary.totalTrackedProducts}</div>
+            <div className="srb-tile-big-num purple" style={{ fontSize: '1.45rem' }}>
+              {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)}
             </div>
-            <div className="dribbble-stat-tile-footer">
-              <span>Across {summary.totalSalesBills} bills</span>
-              <ArrowRightIcon size={12} color="#6366f1" />
+            <div className="srb-tile-footer">
+              <span>{summary.totalTrackedProducts} catalogue SKUs</span>
+              <ArrowRightIcon size={12} color="#6d4aff" />
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 4. VISUAL INTELLIGENCE BENTO (TOP SELLERS & AI RISK - IMAGE 1 & 2) ── */}
+      {/* ── 4. VISUAL INTELLIGENCE & LEADERBOARD BENTO DECK (Top Sellers + Risk Insights) ── */}
       {data && (
-        <div className="dribbble-visual-grid">
-          {/* Card 1: Top 10 Best Sellers (Span 7) */}
-          <div className="dribbble-card dribbble-sellers-card">
-            <div className="dribbble-section-heading">
-              <h2>
-                <TrophyIcon size={18} color="#d97706" /> Top 10 Best-Selling Products
+        <div className="srb-visual-deck-grid">
+          {/* Panel 1: Top 10 Best Sellers (Span 7) */}
+          <div className="srb-bento-box srb-panel-sellers">
+            <div className="srb-deck-header">
+              <h2 className="srb-deck-title">
+                <TrophyIcon size={18} color="#d97706" /> Top 10 High-Velocity Best-Sellers
               </h2>
-              <span className="dribbble-pill-chip">By Quantity Sold</span>
+              <span className="srb-tile-pill purple">By Quantity Sold</span>
             </div>
 
             {topSellers.length === 0 ? (
-              <div style={{ padding: '3rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+              <div
+                style={{
+                  padding: '2.5rem 1rem',
+                  textAlign: 'center',
+                  color: '#94a3b8',
+                  fontSize: '0.84rem',
+                }}
+              >
                 No completed sales recorded during this date window.
               </div>
             ) : (
-              <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 {topSellers.map((item, idx) => {
                   const pct = Math.max(8, Math.min(100, (item.unitsSold / topSellerMax) * 100));
                   const rankClass =
-                    idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : 'default';
+                    idx === 0
+                      ? 'gold'
+                      : idx === 1
+                      ? 'silver'
+                      : idx === 2
+                      ? 'bronze'
+                      : 'standard';
+
+                  const itemCat =
+                    data?.products.find((p) => p.id === item.id)?.category || 'Top Velocity SKU';
 
                   return (
-                    <div key={item.id || idx} className="dribbble-seller-row">
-                      <div className={`dribbble-rank-tag ${rankClass}`}>
-                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                    <div key={item.id || idx} className="srb-leader-row">
+                      <div className={`srb-rank-pill ${rankClass}`}>#{idx + 1}</div>
+                      <div className="srb-leader-info">
+                        <span className="srb-leader-name" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span className="srb-leader-cat">{itemCat}</span>
                       </div>
-                      <span className="dribbble-seller-name" title={item.name}>
-                        {item.name}
-                      </span>
-                      <div className="dribbble-progress-capsule">
-                        <div className="dribbble-progress-fill" style={{ width: `${pct}%` }} />
+                      <div className="srb-leader-track">
+                        <div className="srb-leader-bar-fill" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="dribbble-seller-qty">
+                      <span className="srb-leader-qty">
                         {item.unitsSold.toLocaleString('en-IN')}{' '}
                         <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{item.unit}</span>
                       </span>
@@ -775,124 +883,117 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             )}
           </div>
 
-          {/* Card 2: Grounded Risk Intelligence (Span 5 - Image 2 Nested Box Aesthetic) */}
-          <div className="dribbble-card dribbble-risk-card">
-            <div className="dribbble-section-heading">
-              <h2>
-                <BrainIcon size={18} color="#6366f1" /> Grounded Risk Intelligence
+          {/* Panel 2: Grounded Risk Intelligence (Span 5) */}
+          <div className="srb-bento-box srb-panel-intelligence">
+            <div className="srb-deck-header">
+              <h2 className="srb-deck-title">
+                <BrainIcon size={18} color="#6d4aff" /> Grounded Risk Intelligence
               </h2>
-              <span className="dribbble-pill-chip live">
-                <span className="dot"></span> Live Sync
-              </span>
+              <span className="srb-badge-live">PostgreSQL Live</span>
             </div>
 
             {/* Box 1: Best Seller Runway */}
             {data.insights.bestSeller ? (
-              <div className="dribbble-risk-nested-box gold">
-                <div className="dribbble-risk-top">
-                  <span className="dribbble-risk-title">
+              <div className="srb-risk-layer-card gold">
+                <div className="srb-risk-title-bar">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <TrophyIcon size={14} color="#b45309" />
                     Top Seller: {data.insights.bestSeller.name}
                   </span>
-                  <span className="dribbble-pill-chip" style={{ background: '#fef3c7', color: '#b45309' }}>
+                  <span className="srb-tile-pill amber" style={{ fontSize: '0.68rem' }}>
                     {data.insights.bestSeller.runwayDays !== null &&
                     data.insights.bestSeller.runwayDays !== undefined
                       ? `~${data.insights.bestSeller.runwayDays}d Runway`
                       : 'Active Seller'}
                   </span>
                 </div>
-                <p className="dribbble-risk-desc">
-                  Generated <b>{data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit}</b> across{' '}
-                  <b>{data.insights.bestSeller.salesTxns}</b> bills.
+                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
+                  Dispatched <b>{data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit}</b>{' '}
+                  across <b>{data.insights.bestSeller.salesTxns}</b> bills.
                   {data.insights.bestSeller.currentStockUnits !== undefined && (
-                    <span> Current shelf inventory is {data.insights.bestSeller.currentStockUnits} {data.insights.bestSeller.unit}.</span>
+                    <span>
+                      {' '}
+                      Only {data.insights.bestSeller.currentStockUnits}{' '}
+                      {data.insights.bestSeller.unit} left on shelf.
+                    </span>
                   )}
-                </p>
-                {onNavigateToPurchases && (
-                  <button
-                    type="button"
-                    className="dribbble-btn-subtle"
-                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem', marginTop: '0.45rem' }}
-                    onClick={() => onNavigateToPurchases()}
-                  >
-                    + Reorder Product
-                  </button>
-                )}
+                </div>
               </div>
             ) : null}
 
             {/* Box 2: Slowing Demand */}
             {data.insights.slowingProduct ? (
-              <div className="dribbble-risk-nested-box blue">
-                <div className="dribbble-risk-top">
-                  <span className="dribbble-risk-title">
-                    <ZapIcon size={14} color="#2563eb" />
+              <div className="srb-risk-layer-card blue">
+                <div className="srb-risk-title-bar">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <ZapIcon size={14} color="#1d4ed8" />
                     Demand Warning: {data.insights.slowingProduct.name}
                   </span>
-                  <span className="dribbble-pill-chip" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+                  <span
+                    className="srb-tile-pill"
+                    style={{ background: '#dbeafe', color: '#1d4ed8' }}
+                  >
                     Slowing
                   </span>
                 </div>
-                <p className="dribbble-risk-desc">
+                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
                   {data.insights.slowingProduct.message}
-                </p>
+                </div>
               </div>
             ) : (
-              <div className="dribbble-risk-nested-box" style={{ borderLeft: '4px solid #10b981' }}>
-                <div className="dribbble-risk-top">
-                  <span className="dribbble-risk-title" style={{ color: '#047857' }}>
+              <div className="srb-risk-layer-card green">
+                <div className="srb-risk-title-bar">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <CheckCircleIcon size={14} color="#10b981" />
                     Smooth Circulation
                   </span>
-                  <span className="dribbble-pill-chip" style={{ background: '#d1fae5', color: '#047857' }}>
-                    Healthy
-                  </span>
+                  <span className="srb-tile-pill green">Healthy</span>
                 </div>
-                <p className="dribbble-risk-desc">
-                  No critical velocity drop-offs or bottlenecked products detected.
-                </p>
+                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
+                  No critical velocity drop-offs or bottlenecked products detected in this period.
+                </div>
               </div>
             )}
 
             {/* Box 3: Dormant Capital */}
-            <div className="dribbble-risk-nested-box rose">
-              <div className="dribbble-risk-top">
-                <span className="dribbble-risk-title">
+            <div className="srb-risk-layer-card red">
+              <div className="srb-risk-title-bar">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <AlertOctagonIcon size={14} color="#dc2626" />
                   Dormant Capital: {data.insights.nonMovingSummary.count} SKUs
                 </span>
-                <span className="dribbble-pill-chip" style={{ background: '#fee2e2', color: '#dc2626', fontWeight: 800 }}>
+                <span className="srb-tile-pill red" style={{ fontFamily: 'monospace' }}>
                   {formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}
                 </span>
               </div>
-              <p className="dribbble-risk-desc">
-                Zero sales recorded in the past {data.insights.nonMovingSummary.days} days. Review shelf demand before ordering more from suppliers.
-              </p>
+              <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
+                Zero sales recorded in the past {data.insights.nonMovingSummary.days} days. Review
+                shelf demand before ordering more from vendors.
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 5. MASTER STOCK LEDGER TABLE (BENTO CONTAINER) ── */}
-      <div className="dribbble-card dribbble-table-card">
-        {/* Controls Bar */}
-        <div className="dribbble-table-controls">
-          <div className="dribbble-controls-left">
-            {/* Search Pill */}
-            <div className="dribbble-search-pill-box">
+      {/* ── 5. MASTER STOCK LEDGER TABLE & FILTERS BENTO CARD ── */}
+      <div className="srb-table-bento-card">
+        {/* Table Filters Bar */}
+        <div className="srb-table-toolbar">
+          <div className="srb-toolbar-left">
+            <div className="srb-search-wrapper">
               <SearchIcon
-                size={16}
+                size={15}
                 style={{
                   position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
+                  left: '0.85rem',
                   color: '#94a3b8',
+                  pointerEvents: 'none',
                 }}
               />
               <input
                 type="text"
-                placeholder="Search products by name, SKU or category..."
+                className="srb-search-input"
+                placeholder="Search products by name, SKU, or category..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -908,30 +1009,31 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   }}
                   style={{
                     position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    right: '0.75rem',
                     background: 'transparent',
                     border: 'none',
                     color: '#94a3b8',
                     cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
+                  aria-label="Clear Search"
                 >
-                  <XIcon size={13} />
+                  <XIcon size={12} />
                 </button>
               )}
             </div>
 
-            {/* Category Dropdown Pill */}
+            {/* Category Dropdown */}
             <select
-              className="dribbble-select-pill"
+              className="srb-select"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
                 setPage(1);
               }}
             >
-              <option value="ALL">All Categories ▾</option>
+              <option value="ALL">All Categories</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -939,43 +1041,72 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               ))}
             </select>
 
-            {/* Movement Status Pill */}
-            <select
-              className="dribbble-select-pill"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="ALL">All Movement Status ▾</option>
-              <option value="fast_moving">⚡ Fast-Moving</option>
-              <option value="slow_moving">⏳ Slow-Moving</option>
-              <option value="non_moving">🛑 Non-Moving</option>
-            </select>
+            {/* Status Quick Pills */}
+            <div className="srb-filter-status-pills">
+              <button
+                type="button"
+                className={`srb-filter-pill-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => {
+                  setStatusFilter('ALL');
+                  setPage(1);
+                }}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`srb-filter-pill-btn ${statusFilter === 'fast_moving' ? 'active' : ''}`}
+                onClick={() => {
+                  setStatusFilter('fast_moving');
+                  setPage(1);
+                }}
+              >
+                ⚡ Fast
+              </button>
+              <button
+                type="button"
+                className={`srb-filter-pill-btn ${statusFilter === 'slow_moving' ? 'active' : ''}`}
+                onClick={() => {
+                  setStatusFilter('slow_moving');
+                  setPage(1);
+                }}
+              >
+                ⏳ Slow
+              </button>
+              <button
+                type="button"
+                className={`srb-filter-pill-btn ${statusFilter === 'non_moving' ? 'active' : ''}`}
+                onClick={() => {
+                  setStatusFilter('non_moving');
+                  setPage(1);
+                }}
+              >
+                🛑 Dormant
+              </button>
+            </div>
 
-            {/* Sorting Pill */}
+            {/* Sort Dropdown */}
             <select
-              className="dribbble-select-pill"
+              className="srb-select"
               value={sortField}
               onChange={(e) => {
                 setSortField(e.target.value as any);
                 setPage(1);
               }}
             >
-              <option value="units_desc">Sort: Units Sold (High-Low)</option>
-              <option value="units_asc">Sort: Units Sold (Low-High)</option>
-              <option value="txns_desc">Sort: Invoices / Bills (High-Low)</option>
-              <option value="name_asc">Sort: Product Name (A-Z)</option>
-              <option value="stock_desc">Sort: Current Stock (High-Low)</option>
-              <option value="stock_asc">Sort: Current Stock (Low-High)</option>
+              <option value="units_desc">Units Sold (High-Low)</option>
+              <option value="units_asc">Units Sold (Low-High)</option>
+              <option value="txns_desc">Invoices / Txns (High-Low)</option>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="stock_desc">Current Stock (High-Low)</option>
+              <option value="stock_asc">Current Stock (Low-High)</option>
             </select>
 
             {hasActiveFilters && (
               <button
                 type="button"
-                className="dribbble-btn-subtle"
-                style={{ padding: '0.4rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem' }}
+                className="srb-btn-outline"
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.76rem' }}
                 onClick={() => {
                   setSearchQuery('');
                   setCategoryFilter('ALL');
@@ -995,7 +1126,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
         {/* Master Data Table */}
         <div style={{ overflowX: 'auto', width: '100%' }}>
-          <table className="dribbble-ledger-table">
+          <table className="srb-master-table">
             <thead>
               <tr>
                 <th
@@ -1016,7 +1147,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   CURRENT STOCK {sortField === 'stock_desc' ? '▼' : sortField === 'stock_asc' ? '▲' : ''}
                 </th>
                 <th
-                  style={{ cursor: 'pointer', color: '#6366f1' }}
+                  style={{ cursor: 'pointer', color: '#6d4aff' }}
                   onClick={() =>
                     setSortField((prev) => (prev === 'units_desc' ? 'units_asc' : 'units_desc'))
                   }
@@ -1029,7 +1160,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     setSortField((prev) => (prev === 'txns_desc' ? 'units_desc' : 'txns_desc'))
                   }
                 >
-                  BILLS {sortField === 'txns_desc' ? '▼' : ''}
+                  INVOICE BILLS {sortField === 'txns_desc' ? '▼' : ''}
                 </th>
                 <th>LAST SOLD</th>
                 <th>MOVEMENT STATUS</th>
@@ -1039,7 +1170,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             <tbody>
               {paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3.5rem', color: '#94a3b8' }}>
+                  <td
+                    colSpan={8}
+                    style={{ textAlign: 'center', padding: '3.5rem', color: '#94a3b8' }}
+                  >
                     <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>🔍</div>
                     <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#475569' }}>
                       No matching products found
@@ -1055,8 +1189,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     <tr key={p.id}>
                       {/* Product Name & SKU */}
                       <td>
-                        <div className="dribbble-table-prod-name">{p.name}</div>
-                        <div className="dribbble-table-prod-sub">
+                        <div className="srb-table-product-name">{p.name}</div>
+                        <div className="srb-table-product-sku">
                           SKU: {p.sku || '—'}
                           {p.barcode ? ` · Barcode: ${p.barcode}` : ''}
                         </div>
@@ -1064,64 +1198,57 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
                       {/* Category */}
                       <td>
-                        <span className="dribbble-pill-chip" style={{ fontSize: '0.72rem' }}>
-                          {p.category || 'General'}
-                        </span>
+                        <span className="srb-cat-pill">{p.category || 'General'}</span>
                       </td>
 
                       {/* Current Stock */}
                       <td>
                         <span
-                          style={{
-                            fontFamily: 'monospace',
-                            fontWeight: 700,
-                            color: isNegStock ? '#dc2626' : isLowStock ? '#d97706' : '#1e293b',
-                          }}
+                          className={`srb-stock-pill ${
+                            isNegStock ? 'zero' : isLowStock ? 'low' : 'healthy'
+                          }`}
                         >
-                          {p.currentStockUnits.toLocaleString('en-IN')} {p.unit}
+                          ● {p.currentStockUnits.toLocaleString('en-IN')} {p.unit}
                         </span>
                       </td>
 
                       {/* Units Sold */}
                       <td>
                         <span
-                          style={{
-                            fontFamily: 'monospace',
-                            fontWeight: 800,
-                            color: '#6366f1',
-                            fontSize: '0.92rem',
-                          }}
+                          className="srb-mono-pill"
+                          style={{ color: '#6d4aff', fontWeight: 800, fontSize: '0.92rem' }}
                         >
-                          {p.unitsSold.toLocaleString('en-IN')} {p.unit}
+                          {p.unitsSold.toLocaleString('en-IN')}{' '}
+                          <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{p.unit}</span>
                         </span>
                       </td>
 
-                      {/* Bills */}
+                      {/* Invoice Bills */}
                       <td>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                          {p.salesTxns}
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                          {p.salesTxns} bills
                         </span>
                       </td>
 
                       {/* Last Sold Date */}
-                      <td style={{ color: '#64748b', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                         {formatLastSold(p.lastSoldAt)}
                       </td>
 
                       {/* Movement Status Badge */}
                       <td>
                         {p.movementStatus === 'fast_moving' && (
-                          <span className="dribbble-badge-pill green">
+                          <span className="srb-movement-status-badge fast">
                             <ZapIcon size={12} color="#047857" /> Fast-Moving
                           </span>
                         )}
                         {p.movementStatus === 'slow_moving' && (
-                          <span className="dribbble-badge-pill amber">
+                          <span className="srb-movement-status-badge slow">
                             <HourglassIcon size={12} color="#b45309" /> Slow-Moving
                           </span>
                         )}
                         {p.movementStatus === 'non_moving' && (
-                          <span className="dribbble-badge-pill red">
+                          <span className="srb-movement-status-badge dead">
                             <AlertOctagonIcon size={12} color="#dc2626" /> Non-Moving
                           </span>
                         )}
@@ -1133,15 +1260,14 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                         (p.movementStatus === 'fast_moving' || isLowStock) ? (
                           <button
                             type="button"
-                            className="dribbble-btn-subtle"
-                            style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                            className="srb-btn-restock-action"
                             onClick={() => onNavigateToPurchases(undefined, p.id)}
                             title={`Create Purchase Order for ${p.name}`}
                           >
                             + Restock
                           </button>
                         ) : (
-                          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
                             {p.movementStatus === 'non_moving' ? 'Hold POs' : 'Adequate'}
                           </span>
                         )}
@@ -1156,14 +1282,21 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
         {/* Table Footer with Pagination */}
         {totalItems > 0 && (
-          <div className="dribbble-table-footer">
+          <div className="srb-table-pagination">
             <div>
               Showing {(page - 1) * pageSize + 1} to{' '}
-              {Math.min(page * pageSize, totalItems)} of {totalItems} products
+              {Math.min(page * pageSize, totalItems)} of {totalItems} items
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.76rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.74rem',
+                }}
+              >
                 Rows:
                 <select
                   value={pageSize}
@@ -1176,7 +1309,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     background: '#ffffff',
-                    fontSize: '0.76rem',
+                    fontSize: '0.74rem',
+                    cursor: 'pointer',
                   }}
                 >
                   <option value={15}>15</option>
@@ -1187,23 +1321,28 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               </div>
 
               {totalItems > pageSize && (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                <div className="srb-page-nav-btns">
                   <button
                     type="button"
-                    className="dribbble-btn-subtle"
-                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                    className="srb-page-btn"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     Previous
                   </button>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155' }}>
-                    {page} / {totalPages}
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      padding: '0 0.35rem',
+                    }}
+                  >
+                    Page {page} of {totalPages}
                   </span>
                   <button
                     type="button"
-                    className="dribbble-btn-subtle"
-                    style={{ padding: '0.25rem 0.65rem', fontSize: '0.74rem' }}
+                    className="srb-page-btn"
                     disabled={page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
