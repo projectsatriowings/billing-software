@@ -4,6 +4,7 @@ import { App } from './App';
 import { MobileScanner } from './components/MobileScanner';
 import { CustomerDisplay } from './components/CustomerDisplay';
 import './index.css';
+import './components/inventory/PurchaseBentoModal.css';
 
 // Safety error listener to prevent silent blank screens on mobile devices
 window.addEventListener('error', (e) => {

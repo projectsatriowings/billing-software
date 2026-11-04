@@ -121,6 +121,10 @@ import {
   FileTextIcon,
   TrendingUpIcon,
   WalletIcon,
+  RotateCcwIcon,
+  FileSpreadsheetIcon,
+  ShoppingCartIcon,
+  CalendarIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -15532,42 +15536,74 @@ export function App() {
         };
 
         return (
-          <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '1080px', width: '96%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-              <div className="modal-header">
-                <div>
-                  <h3 className="card-title" style={{ margin: 0 }}>
-                    📥 New Purchase & Stock Inward
-                  </h3>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Record supplier bill faithfully • Stock in on save • Input Tax Credit (ITC) recorded
+          <div className="pbm-modal-overlay">
+            <div className="pbm-modal-container">
+              {/* 1. Modal Bento Header */}
+              <div className="pbm-header">
+                <div className="pbm-header-left">
+                  <div className="pbm-header-icon-box">
+                    <ShoppingCartIcon size={22} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <h3 className="pbm-header-title">New Purchase &amp; Stock Inward</h3>
+                      <span className="pbm-badge-live">
+                        <span className="pbm-live-dot"></span> Live Audit
+                      </span>
+                    </div>
+                    <div className="pbm-header-sub">
+                      Record supplier bill faithfully • Stock in on save • Input Tax Credit (ITC) recorded
+                    </div>
                   </div>
                 </div>
                 <button
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.3rem', cursor: 'pointer' }}
+                  type="button"
+                  className="pbm-btn-close"
                   onClick={handleDismissPurchase}
+                  title="Close (Esc)"
+                  aria-label="Close"
                 >
-                  ✕
+                  <XIcon size={16} />
                 </button>
               </div>
 
-              <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '1.25rem' }}>
-                {/* Supplier Zone */}
-                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                        <label className="form-label" style={{ margin: 0 }}>Supplier / Vendor *</label>
+              {/* 2. Modal Bento Body */}
+              <div className="pbm-body">
+                {/* Bento Tile 1: Supplier & Invoice Credentials */}
+                <div className="pbm-bento-tile">
+                  <div className="pbm-tile-heading">
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Building2Icon size={14} color="#6d4aff" /> Supplier &amp; Invoice Credentials
+                    </span>
+                    <span style={{ fontSize: '0.68rem', color: '#6d4aff', fontWeight: 700 }}>Section 1</span>
+                  </div>
+
+                  <div className="pbm-grid-credentials">
+                    {/* Supplier / Vendor */}
+                    <div className="pbm-form-field">
+                      <div className="pbm-label-row">
+                        <label>Supplier / Vendor *</label>
                         <button
                           type="button"
-                          style={{ background: 'none', border: 'none', color: '#6d4aff', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#6d4aff',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            padding: 0,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                          }}
                           onClick={() => openAddPartyModal('supplier')}
                         >
-                          ＋ New Supplier
+                          <PlusIcon size={12} /> New Supplier
                         </button>
                       </div>
                       <select
-                        className="form-input"
+                        className="pbm-select"
                         required
                         value={purSupplierId}
                         onChange={(e) => setPurSupplierId(e.target.value)}
@@ -15580,39 +15616,45 @@ export function App() {
                         ))}
                       </select>
                       {selectedSupplier && !selectedSupplier.gstin && (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '0.35rem 0.5rem', borderRadius: '4px', marginTop: '4px' }}>
-                          ℹ️ This supplier has no GSTIN recorded — no GST / ITC on this purchase.
+                        <div style={{ fontSize: '0.74rem', color: '#64748b', background: '#f1f5f9', padding: '0.35rem 0.55rem', borderRadius: '6px', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <InfoIcon size={12} /> No GSTIN recorded — no GST / ITC on this purchase.
                         </div>
                       )}
                       {selectedSupplier?.gstin && (
-                        <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '3px' }}>
-                          ✓ GSTIN: {selectedSupplier.gstin} {selectedSupplier.stateCode ? `• State ${selectedSupplier.stateCode}` : ''}
+                        <div style={{ fontSize: '0.74rem', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', fontWeight: 600 }}>
+                          <CheckCircleIcon size={12} color="#10b981" /> GSTIN: {selectedSupplier.gstin} {selectedSupplier.stateCode ? `• State ${selectedSupplier.stateCode}` : ''}
                         </div>
                       )}
                     </div>
 
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Supplier Invoice Number *</label>
+                    {/* Supplier Invoice # */}
+                    <div className="pbm-form-field">
+                      <div className="pbm-label-row">
+                        <label>Supplier Invoice Number *</label>
+                      </div>
                       <input
                         type="text"
-                        className={`form-input ${isDuplicateInvoice ? 'form-input-error' : ''}`}
+                        className={`pbm-input ${isDuplicateInvoice ? 'pbm-input-error' : ''}`}
                         placeholder="e.g. SLT-2841"
                         required
                         value={purSupplierInvoiceNumber}
                         onChange={(e) => setPurSupplierInvoiceNumber(e.target.value)}
                       />
                       {isDuplicateInvoice && (
-                        <div style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, marginTop: '3px' }}>
-                          ⚠️ Duplicate: Invoice "{purSupplierInvoiceNumber.trim()}" is already recorded for this supplier.
+                        <div style={{ color: '#ef4444', fontSize: '0.74rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                          <AlertTriangleIcon size={12} /> Duplicate: Invoice "{purSupplierInvoiceNumber.trim()}" already recorded.
                         </div>
                       )}
                     </div>
 
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Supplier Invoice Date *</label>
+                    {/* Supplier Invoice Date */}
+                    <div className="pbm-form-field">
+                      <div className="pbm-label-row">
+                        <label>Supplier Invoice Date *</label>
+                      </div>
                       <input
                         type="date"
-                        className="form-input"
+                        className="pbm-input"
                         required
                         max={new Date().toISOString().slice(0, 10)}
                         value={purSupplierInvoiceDate}
@@ -15620,11 +15662,14 @@ export function App() {
                       />
                     </div>
 
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Purchase (Inward) Date</label>
+                    {/* Purchase (Inward) Date */}
+                    <div className="pbm-form-field">
+                      <div className="pbm-label-row">
+                        <label>Purchase (Inward) Date</label>
+                      </div>
                       <input
                         type="date"
-                        className="form-input"
+                        className="pbm-input"
                         value={purPurchaseDate}
                         min={purSupplierInvoiceDate}
                         onChange={(e) => setPurPurchaseDate(e.target.value)}
@@ -15633,20 +15678,21 @@ export function App() {
                   </div>
 
                   {/* Supplier Bill Document Attachment Zone */}
-                  <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #cbd5e1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                      <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: purAttachmentData ? '#ecfdf5' : '#eff6ff', color: purAttachmentData ? '#059669' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
-                        {purAttachmentData ? '✓' : '📎'}
+                  <div className="pbm-attach-strip">
+                    <div className="pbm-attach-left">
+                      <div className={`pbm-attach-icon ${purAttachmentData ? 'attached' : ''}`}>
+                        {purAttachmentData ? <CheckCircleIcon size={18} /> : <FileTextIcon size={18} />}
                       </div>
                       <div>
                         <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#1e293b' }}>
                           {purAttachmentData ? 'Supplier Bill Attached' : 'Attach Supplier Bill (Photo / PDF)'}
                         </div>
-                        <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
-                          {purAttachmentName ? `${purAttachmentName}` : 'Upload physical invoice photo or PDF for audit proof (Max 5MB)'}
+                        <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                          {purAttachmentName ? purAttachmentName : 'Upload physical invoice photo or PDF for audit proof (Max 5MB)'}
                         </div>
                       </div>
                     </div>
+
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                       {purAttachmentData ? (
                         <>
@@ -15654,27 +15700,24 @@ export function App() {
                             <img
                               src={purAttachmentData}
                               alt="Bill Preview"
-                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                              style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                             />
                           )}
                           <button
                             type="button"
-                            className="btn btn-secondary"
-                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: '#fca5a5' }}
+                            className="pbm-pill-btn"
+                            style={{ color: '#ef4444', borderColor: '#fca5a5' }}
                             onClick={() => {
                               setPurAttachmentName('');
                               setPurAttachmentData('');
                             }}
                           >
-                            ✕ Remove File
+                            <Trash2Icon size={12} /> Remove File
                           </button>
                         </>
                       ) : (
-                        <label
-                          className="btn btn-secondary"
-                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: '#ffffff', borderColor: '#2563eb', color: '#2563eb', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
-                        >
-                          <span>📷 Upload Bill File / Photo</span>
+                        <label className="pbm-upload-label">
+                          <UploadCloudIcon size={14} /> Upload Invoice PDF / Photo
                           <input
                             type="file"
                             accept="image/*,.pdf"
@@ -15687,20 +15730,19 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Fast Reorder & Bulk Tools */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.65rem 0.95rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>⚡</span>
+                {/* Bento Tile 2: Fast Reorder & Bulk Tools */}
+                <div className="pbm-quick-strip">
+                  <div className="pbm-quick-left">
+                    <div className="pbm-quick-icon-box">
+                      <ZapIcon size={16} />
+                    </div>
                     <div>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', display: 'block' }}>
-                        Quick Reorder & Bulk Inward:
-                      </span>
-                      <span style={{ fontSize: '0.72rem', color: '#15803d' }}>
-                        Skip entering products one-by-one when restocked from this supplier
-                      </span>
+                      <h4 className="pbm-quick-title">Quick Reorder &amp; Bulk Inward</h4>
+                      <p className="pbm-quick-sub">Skip entering products one-by-one when restocked from this supplier</p>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+
+                  <div className="pbm-quick-actions">
                     {/* Copy Last Bill */}
                     {(() => {
                       const supplierPastPurchases = purchases.filter((p) => p.supplierId === purSupplierId && p.status !== 'voided');
@@ -15709,12 +15751,11 @@ export function App() {
                       return (
                         <button
                           type="button"
-                          className="btn btn-secondary"
-                          style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#16a34a', color: '#166534', fontWeight: 600 }}
+                          className="pbm-pill-btn green"
                           onClick={() => handleRepeatPreviousPurchase(lastPurchase)}
                           title={`Load all products from last invoice #${lastPurchase.supplierInvoiceNumber || lastPurchase.billNo || lastPurchase.purchaseNumber}`}
                         >
-                          🔄 Copy Last Bill Items
+                          <RotateCcwIcon size={12} /> Copy Last Bill Items
                         </button>
                       );
                     })()}
@@ -15722,21 +15763,20 @@ export function App() {
                     {/* Load Out-of-Stock / Reorder Items */}
                     <button
                       type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#0284c7', color: '#0369a1', fontWeight: 600 }}
+                      className="pbm-pill-btn blue"
                       onClick={handleLoadLowStockForSupplier}
                       title="Automatically load all products with 0 stock or below minimum stock"
                     >
-                      📦 Load Finished / Low Stock Items
+                      <PackageIcon size={12} /> Load Finished / Low Stock Items
                     </button>
 
                     {/* Import CSV */}
                     <label
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#9333ea', color: '#7e22ce', fontWeight: 600, cursor: 'pointer', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                      className="pbm-pill-btn purple"
+                      style={{ cursor: 'pointer', margin: 0 }}
                       title="Upload items list from Excel / CSV"
                     >
-                      📥 Import CSV
+                      <DownloadIcon size={12} /> Import CSV
                       <input
                         type="file"
                         accept=".csv,.txt"
@@ -15748,50 +15788,52 @@ export function App() {
                     {/* CSV Template */}
                     <button
                       type="button"
-                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.74rem', textDecoration: 'underline', cursor: 'pointer', padding: '0 4px' }}
+                      className="pbm-pill-btn"
+                      style={{ background: 'transparent', border: 'none', color: '#6d4aff', textDecoration: 'underline' }}
                       onClick={handleDownloadPurchaseCsvTemplate}
                       title="Download sample CSV template"
                     >
-                      CSV Template
+                      <FileSpreadsheetIcon size={12} /> CSV Template
                     </button>
                   </div>
                 </div>
 
-                {/* Lines Table Zone */}
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e1b4b' }}>
+                {/* Bento Tile 3: Lines Table Zone */}
+                <div className="pbm-lines-card">
+                  <div className="pbm-lines-header">
+                    <div className="pbm-lines-title-group">
+                      <LayersIcon size={17} color="#6d4aff" />
+                      <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
                         Purchase Lines ({purLines.length})
-                      </h4>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                        Short-supply rule: stock, money & ITC calculated on Received Qty
+                      </span>
+                      <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                        • Short-supply rule: stock, money &amp; ITC calculated on Received Qty
                       </span>
                     </div>
+
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                        className="pbm-pill-btn"
                         onClick={openAddItemModal}
                       >
-                        ＋ New Item
+                        <PlusIcon size={12} /> New Item
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', background: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe' }}
+                        className="pbm-pill-btn purple"
+                        style={{ background: '#f5f3ff', color: '#6d4aff', borderColor: '#ddd6fe' }}
                         onClick={handleAddPurLine}
                       >
-                        ＋ Add Line
+                        <PlusIcon size={12} /> Add Line
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                    <table className="data-table" style={{ margin: 0 }}>
+                  <div className="pbm-table-wrap">
+                    <table className="pbm-data-table">
                       <thead>
-                        <tr style={{ background: '#f8fafc' }}>
+                        <tr>
                           <th style={{ minWidth: '180px' }}>Item</th>
                           <th style={{ width: '90px' }}>Qty Recv *</th>
                           <th style={{ width: '90px' }}>Billed Qty</th>
@@ -15819,8 +15861,8 @@ export function App() {
                               <tr>
                                 <td>
                                   <select
-                                    className="form-input"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem' }}
+                                    className="pbm-select"
+                                    style={{ height: '32px', fontSize: '0.82rem', padding: '0 0.5rem' }}
                                     value={line.itemId}
                                     onChange={(e) => handlePurLineChange(idx, 'itemId', e.target.value)}
                                   >
@@ -15837,8 +15879,8 @@ export function App() {
                                     step="any"
                                     min="0.001"
                                     required
-                                    className="form-input mono"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem', fontWeight: 600 }}
+                                    className="pbm-input"
+                                    style={{ height: '32px', fontSize: '0.82rem', fontWeight: 700, padding: '0 0.5rem' }}
                                     value={line.receivedQty}
                                     onChange={(e) => handlePurLineChange(idx, 'receivedQty', e.target.value)}
                                   />
@@ -15848,8 +15890,8 @@ export function App() {
                                     type="number"
                                     step="any"
                                     min="0.001"
-                                    className="form-input mono"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem' }}
+                                    className="pbm-input"
+                                    style={{ height: '32px', fontSize: '0.82rem', padding: '0 0.5rem' }}
                                     value={line.billedQty}
                                     onChange={(e) => handlePurLineChange(idx, 'billedQty', parseFloat(e.target.value) || 0)}
                                   />
@@ -15860,8 +15902,8 @@ export function App() {
                                     step="0.01"
                                     min="0"
                                     required
-                                    className="form-input mono"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem' }}
+                                    className="pbm-input"
+                                    style={{ height: '32px', fontSize: '0.82rem', padding: '0 0.5rem' }}
                                     value={line.costRupees}
                                     onChange={(e) => handlePurLineChange(idx, 'costRupees', parseFloat(e.target.value) || 0)}
                                   />
@@ -15871,16 +15913,16 @@ export function App() {
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    className="form-input mono"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem' }}
+                                    className="pbm-input"
+                                    style={{ height: '32px', fontSize: '0.82rem', padding: '0 0.5rem' }}
                                     value={line.discountRupees}
                                     onChange={(e) => handlePurLineChange(idx, 'discountRupees', parseFloat(e.target.value) || 0)}
                                   />
                                 </td>
                                 <td>
                                   <select
-                                    className="form-input mono"
-                                    style={{ padding: '0.3rem 0.4rem', fontSize: '0.85rem' }}
+                                    className="pbm-select"
+                                    style={{ height: '32px', fontSize: '0.82rem', padding: '0 0.5rem' }}
                                     value={line.taxRateBp}
                                     onChange={(e) => handlePurLineChange(idx, 'taxRateBp', parseInt(e.target.value, 10))}
                                   >
@@ -15898,8 +15940,8 @@ export function App() {
                                         type="text"
                                         placeholder="Batch *"
                                         required
-                                        className="form-input"
-                                        style={{ padding: '0.2rem 0.35rem', fontSize: '0.75rem' }}
+                                        className="pbm-input"
+                                        style={{ height: '26px', fontSize: '0.72rem', padding: '0 0.35rem' }}
                                         value={line.batchNo}
                                         onChange={(e) => handlePurLineChange(idx, 'batchNo', e.target.value)}
                                       />
@@ -15907,8 +15949,8 @@ export function App() {
                                         type="date"
                                         placeholder="Exp *"
                                         required
-                                        className="form-input"
-                                        style={{ padding: '0.2rem 0.35rem', fontSize: '0.75rem' }}
+                                        className="pbm-input"
+                                        style={{ height: '26px', fontSize: '0.72rem', padding: '0 0.35rem' }}
                                         value={line.expiry}
                                         onChange={(e) => handlePurLineChange(idx, 'expiry', e.target.value)}
                                       />
@@ -15917,14 +15959,14 @@ export function App() {
                                     <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
                                   )}
                                 </td>
-                                <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b', fontSize: '0.85rem' }}>
+                                <td style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.86rem' }}>
                                   ₹{lineTotalRupees.toFixed(2)}
                                 </td>
                                 <td>
-                                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                  <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
                                     Sell: ₹{currentSellingRupees.toFixed(2)}
                                     {marginPct !== null && (
-                                      <span style={{ color: marginPct >= 0 ? '#10b981' : '#ef4444', fontWeight: 600, display: 'block' }}>
+                                      <span style={{ color: marginPct >= 0 ? '#10b981' : '#ef4444', fontWeight: 700, display: 'block' }}>
                                         {marginPct}% margin
                                       </span>
                                     )}
@@ -15933,18 +15975,21 @@ export function App() {
                                 <td>
                                   <button
                                     type="button"
-                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem', padding: '0 4px' }}
+                                    className="pbm-btn-remove-line"
                                     onClick={() => handleRemovePurLine(idx)}
                                     title="Remove Line"
                                   >
-                                    🗑️
+                                    <Trash2Icon size={14} />
                                   </button>
                                 </td>
                               </tr>
                               {hasShortSupply && (
                                 <tr>
-                                  <td colSpan={10} style={{ background: '#fffbeb', color: '#b45309', padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
-                                    ⚠️ Short Supply: Billed {line.billedQty}, received {line.receivedQty} — this purchase records {line.receivedQty}. Record the balance when the supplier bills it.
+                                  <td colSpan={10} style={{ background: '#fffdf5', color: '#b45309', padding: '0.4rem 0.75rem', fontSize: '0.74rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                      <AlertTriangleIcon size={13} color="#f59e0b" />
+                                      Short Supply: Billed {line.billedQty}, received {line.receivedQty} — this purchase records {line.receivedQty}. Record the balance when the supplier bills it.
+                                    </div>
                                   </td>
                                 </tr>
                               )}
@@ -15953,7 +15998,7 @@ export function App() {
                         })}
                         {purLines.length === 0 && (
                           <tr>
-                            <td colSpan={10} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
+                            <td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
                               No products added yet. Click "+ Add Line" above.
                             </td>
                           </tr>
@@ -15963,164 +16008,190 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Other Charges Zone */}
-                <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', marginBottom: '0.5rem' }}>
-                    OTHER CHARGES (OPTIONAL)
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Transport / Freight / Loading"
-                      value={purOtherChargesLabel}
-                      onChange={(e) => setPurOtherChargesLabel(e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="form-input mono"
-                      placeholder="Amount (₹)"
-                      value={purOtherChargesRupees}
-                      onChange={(e) => setPurOtherChargesRupees(e.target.value)}
-                    />
-                    <select
-                      className="form-input mono"
-                      value={purOtherChargesGstBp}
-                      onChange={(e) => setPurOtherChargesGstBp(parseInt(e.target.value, 10))}
-                    >
-                      <option value={0}>No GST (0%)</option>
-                      <option value={500}>GST 5%</option>
-                      <option value={1200}>GST 12%</option>
-                      <option value={1800}>GST 18%</option>
-                      <option value={2800}>GST 28%</option>
-                    </select>
-                  </div>
-                </div>
+                {/* Bento Tile 4: Dual Bottom Grid (Left: Charges & Payment, Right: Summary) */}
+                <div className="pbm-bottom-grid">
+                  {/* Left: Charges & Payment */}
+                  <div className="pbm-payment-tile">
+                    {/* Other Charges */}
+                    <div>
+                      <div className="pbm-tile-heading">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <TruckIcon size={14} color="#6d4aff" /> Other Charges (Optional)
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.65rem', marginTop: '0.6rem' }}>
+                        <input
+                          type="text"
+                          className="pbm-input"
+                          placeholder="e.g. Freight / Transport"
+                          value={purOtherChargesLabel}
+                          onChange={(e) => setPurOtherChargesLabel(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="pbm-input"
+                          placeholder="Amount (₹)"
+                          value={purOtherChargesRupees}
+                          onChange={(e) => setPurOtherChargesRupees(e.target.value)}
+                        />
+                        <select
+                          className="pbm-select"
+                          value={purOtherChargesGstBp}
+                          onChange={(e) => setPurOtherChargesGstBp(parseInt(e.target.value, 10))}
+                        >
+                          <option value={0}>No GST (0%)</option>
+                          <option value={500}>GST 5%</option>
+                          <option value={1200}>GST 12%</option>
+                          <option value={1800}>GST 18%</option>
+                          <option value={2800}>GST 28%</option>
+                        </select>
+                      </div>
+                    </div>
 
-                {/* Totals & Payment Zone (Section 6.6 & 7.1) */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
-                  {/* Payment Zone */}
-                  <div className="card" style={{ padding: '1rem', background: '#f8fafc', margin: 0 }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e1b4b', marginBottom: '0.75rem' }}>
-                      PAYMENT AT PURCHASE TIME
-                    </div>
-                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                      <label className="form-label">Amount Paid Right Now (₹)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-input mono"
-                        value={purPaidAmount}
-                        onChange={(e) => setPurPaidAmount(e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    {purPaidMinor > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                        <div className="form-group" style={{ margin: 0 }}>
-                          <label className="form-label">Mode *</label>
-                          <select
-                            className="form-input"
-                            value={purPaymentMethod}
-                            onChange={(e) => setPurPaymentMethod(e.target.value as any)}
-                          >
-                            <option value="bank">🏦 Bank / Transfer</option>
-                            <option value="upi">📱 UPI</option>
-                            <option value="cash">💵 Cash</option>
-                            <option value="cheque">📝 Cheque</option>
-                          </select>
+                    {/* Payment at Purchase Time */}
+                    <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                      <div className="pbm-tile-heading">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <WalletIcon size={14} color="#6d4aff" /> Payment at Purchase Time
+                        </span>
+                      </div>
+                      <div style={{ marginTop: '0.6rem' }}>
+                        <div className="pbm-form-field">
+                          <label className="pbm-label-row">Amount Paid Right Now (₹)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="pbm-input"
+                            value={purPaidAmount}
+                            onChange={(e) => setPurPaidAmount(e.target.value)}
+                            placeholder="0.00"
+                          />
                         </div>
-                        <div className="form-group" style={{ margin: 0 }}>
-                          <label className="form-label">Reference #</label>
+
+                        {purPaidMinor > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginTop: '0.65rem' }}>
+                            <div className="pbm-form-field">
+                              <label className="pbm-label-row">Payment Mode *</label>
+                              <select
+                                className="pbm-select"
+                                value={purPaymentMethod}
+                                onChange={(e) => setPurPaymentMethod(e.target.value as any)}
+                              >
+                                <option value="bank">Bank / Transfer / NEFT</option>
+                                <option value="upi">UPI / QR Payment</option>
+                                <option value="cash">Cash Payment</option>
+                                <option value="cheque">Cheque</option>
+                              </select>
+                            </div>
+                            <div className="pbm-form-field">
+                              <label className="pbm-label-row">Reference / UTR #</label>
+                              <input
+                                type="text"
+                                className="pbm-input"
+                                placeholder="e.g. UTR / Cheque #"
+                                value={purPaymentRef}
+                                onChange={(e) => setPurPaymentRef(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pbm-form-field" style={{ marginTop: '0.65rem' }}>
+                          <label className="pbm-label-row">Note / Purchase Remarks</label>
                           <input
                             type="text"
-                            className="form-input"
-                            placeholder="e.g. UTR / Cheque #"
-                            value={purPaymentRef}
-                            onChange={(e) => setPurPaymentRef(e.target.value)}
+                            className="pbm-input"
+                            placeholder="e.g. LR #4928 via Gati"
+                            value={purNote}
+                            onChange={(e) => setPurNote(e.target.value)}
                           />
                         </div>
                       </div>
-                    )}
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Note / Purchase Remarks</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. LR #4928 via Gati"
-                        value={purNote}
-                        onChange={(e) => setPurNote(e.target.value)}
-                      />
                     </div>
                   </div>
 
-                  {/* Live Totals Zone */}
-                  <div className="card" style={{ padding: '1rem', background: '#f8fafc', margin: 0 }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e1b4b', marginBottom: '0.75rem' }}>
-                      PURCHASE TOTALS (SECTION 6.6)
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                      <span style={{ color: '#64748b' }}>Taxable Value:</span>
-                      <span className="mono">{formatRupees(calcResult.taxableMinor)}</span>
-                    </div>
-                    {calcResult.discountMinor > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem', color: '#10b981' }}>
-                        <span>Line Discounts:</span>
-                        <span className="mono">-{formatRupees(calcResult.discountMinor)}</span>
+                  {/* Right: Summary */}
+                  <div className="pbm-summary-tile">
+                    <div>
+                      <div className="pbm-tile-heading">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <ReceiptIcon size={14} color="#6d4aff" /> Purchase Financial Summary
+                        </span>
                       </div>
-                    )}
-                    {calcResult.otherChargesMinor > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#64748b' }}>Other Charges ({purOtherChargesLabel}):</span>
-                        <span className="mono">{formatRupees(calcResult.otherChargesMinor)}</span>
+
+                      <div style={{ marginTop: '0.65rem' }}>
+                        <div className="pbm-summary-row">
+                          <span>Taxable Value:</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatRupees(calcResult.taxableMinor)}</span>
+                        </div>
+                        {calcResult.discountMinor > 0 && (
+                          <div className="pbm-summary-row" style={{ color: '#059669' }}>
+                            <span>Line Discounts:</span>
+                            <span style={{ fontWeight: 700 }}>-{formatRupees(calcResult.discountMinor)}</span>
+                          </div>
+                        )}
+                        {calcResult.otherChargesMinor > 0 && (
+                          <div className="pbm-summary-row">
+                            <span>Other Charges ({purOtherChargesLabel}):</span>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatRupees(calcResult.otherChargesMinor)}</span>
+                          </div>
+                        )}
+                        <div className="pbm-summary-row">
+                          <span>
+                            GST (Input Tax Credit){calcResult.isIntraState ? ' (CGST+SGST)' : ' (IGST)'}:
+                          </span>
+                          <span style={{ color: '#6d4aff', fontWeight: 800 }}>
+                            {formatRupees(calcResult.itcMinor)}
+                          </span>
+                        </div>
+                        {calcResult.roundOffMinor !== 0 && (
+                          <div className="pbm-summary-row">
+                            <span>Round-off:</span>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatRupees(calcResult.roundOffMinor)}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                      <span style={{ color: '#64748b' }}>
-                        GST (Input Tax Credit){calcResult.isIntraState ? ' (CGST+SGST)' : ' (IGST)'}:
-                      </span>
-                      <span className="mono" style={{ color: '#6366f1', fontWeight: 600 }}>
-                        {formatRupees(calcResult.itcMinor)}
-                      </span>
                     </div>
-                    {calcResult.roundOffMinor !== 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#64748b' }}>Round-off:</span>
-                        <span className="mono">{formatRupees(calcResult.roundOffMinor)}</span>
+
+                    {/* Grand Total Box */}
+                    <div className="pbm-grand-total-box">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Purchase Total
+                        </span>
+                        <span className="pbm-grand-total-val">{formatRupees(purGrandTotalMinor)}</span>
                       </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid #e2e8f0', fontSize: '1.1rem', fontWeight: 700 }}>
-                      <span>Purchase Total:</span>
-                      <span className="mono" style={{ color: '#1e1b4b' }}>{formatRupees(purGrandTotalMinor)}</span>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.45rem', fontSize: '0.82rem' }}>
+                        <span style={{ color: '#059669', fontWeight: 600 }}>Paid Right Now:</span>
+                        <span style={{ color: '#059669', fontWeight: 800 }}>{formatRupees(purPaidMinor)}</span>
+                      </div>
+
+                      {purBalanceMinor > 0 ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.35rem', fontSize: '0.86rem', color: '#ef4444', fontWeight: 800, borderTop: '1px dashed #e2e8f0', paddingTop: '0.35rem' }}>
+                          <span>Balance Due to Vendor:</span>
+                          <span>{formatRupees(purBalanceMinor)}</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.35rem', fontSize: '0.82rem', color: '#059669', fontWeight: 700, borderTop: '1px dashed #e2e8f0', paddingTop: '0.35rem' }}>
+                          <span>Status:</span>
+                          <span style={{ background: '#ecfdf5', padding: '0.15rem 0.5rem', borderRadius: '9999px', border: '1px solid #a7f3d0' }}>Fully Settled</span>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', fontSize: '0.85rem' }}>
-                      <span style={{ color: '#10b981' }}>Paid Right Now:</span>
-                      <span className="mono" style={{ color: '#10b981', fontWeight: 600 }}>{formatRupees(purPaidMinor)}</span>
-                    </div>
-                    {purBalanceMinor > 0 ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', fontSize: '0.9rem', color: '#ef4444', fontWeight: 700 }}>
-                        <span>Balance Payable to Supplier:</span>
-                        <span className="mono">{formatRupees(purBalanceMinor)}</span>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>
-                        <span>Status:</span>
-                        <span>Fully Paid</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
                 {/* Validation Errors Box */}
                 {!isValid && (
-                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem 1rem', marginTop: '1.25rem' }}>
-                    <div style={{ color: '#b91c1c', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                      Please correct the following before saving:
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '0.75rem 1rem' }}>
+                    <div style={{ color: '#b91c1c', fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <AlertTriangleIcon size={14} color="#dc2626" /> Please correct the following before saving:
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#b91c1c', fontSize: '0.8rem' }}>
+                    <ul style={{ margin: 0, paddingLeft: '1.4rem', color: '#b91c1c', fontSize: '0.78rem', lineHeight: 1.5 }}>
                       {validationErrors.map((err, i) => (
                         <li key={i}>{err}</li>
                       ))}
@@ -16129,24 +16200,25 @@ export function App() {
                 )}
               </div>
 
-              {/* Modal Actions Footer */}
-              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              {/* 3. Modal Actions Footer */}
+              <div className="pbm-footer">
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="pbm-pill-btn"
                   onClick={handleDismissPurchase}
                 >
                   Cancel
                 </button>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <div className="pbm-footer-actions">
                   <button
                     type="button"
-                    className="btn btn-primary"
-                    style={{ minWidth: '220px', padding: '0.6rem 1.25rem' }}
+                    className="pbm-btn-primary"
+                    style={{ minWidth: '240px', padding: '0.65rem 1.4rem', fontSize: '0.84rem', justifyContent: 'center' }}
                     disabled={!isValid || isSubmittingPurchase}
                     onClick={handleSavePurchase}
                     title={!isValid ? 'Fill all required fields to save' : 'Save purchase and receive stock into ledger'}
                   >
+                    <CheckCircleIcon size={16} />
                     {isSubmittingPurchase ? 'Processing...' : 'Save Purchase & Receive Stock'}
                   </button>
                 </div>
