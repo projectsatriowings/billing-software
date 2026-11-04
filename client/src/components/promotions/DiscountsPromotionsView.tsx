@@ -14,6 +14,7 @@ import {
 } from '../../api';
 import { ProductCategoryModal } from './ProductCategoryModal';
 import { PromotionReportsModal } from './PromotionReportsModal';
+import { BentoHeaderCard, StatCard, StatusPill, TypeChip } from '../common/BentoUI';
 import './promotions.css';
 
 interface DiscountsPromotionsViewProps {
@@ -1435,102 +1436,130 @@ export function DiscountsPromotionsView({
   // RENDER: SCREEN 1 - PROMOTIONS LIST
   // =========================================================================
   return (
-    <main className="promo-page-wrapper">
+    <div className="promo-page-wrapper">
       <div className="promo-container">
-        {/* 1. Header row */}
-        <header className="promo-header-row">
-          <div className="promo-header-titles">
-            <p style={{ margin: 0 }}>Create and manage offers across your branches and counters.</p>
-          </div>
+        {/* 1. Bento Intro Card (Matching Category Management Top Card) */}
+        <BentoHeaderCard
+          icon={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+              <line x1="7" y1="7" x2="7.01" y2="7"></line>
+            </svg>
+          }
+          badgeText="Live"
+          badgeTooltip="Synchronized live across all branches & counters"
+          subtitle="Create and manage offers across your branches and counters."
+          actions={
+            <>
+              <button
+                type="button"
+                className="cat-btn-outline"
+                onClick={() => setShowReportsModal(true)}
+                aria-label="View promotions analytics reports"
+                title="View promotions analytics reports"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Reports
+              </button>
 
-          <div className="promo-header-actions">
-            <button
-              type="button"
-              className="promo-btn-base promo-btn-secondary"
-              onClick={() => setShowReportsModal(true)}
-              aria-label="View promotions analytics reports"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10"></line>
-                <line x1="12" y1="20" x2="12" y2="4"></line>
-                <line x1="6" y1="20" x2="6" y2="14"></line>
+              <button
+                type="button"
+                className="cat-btn-primary"
+                onClick={handleOpenCreate}
+                aria-label="Create new promotion"
+                title="Create new promotion"
+              >
+                + New promotion
+              </button>
+            </>
+          }
+        />
+
+        {/* 2. Stat Cards (Active / Scheduled / Expired / Drafts & paused) */}
+        <div className="cat-bento-kpi-grid" aria-label="Promotion Status Filters">
+          <StatCard
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 14 14"></polyline>
               </svg>
-              Reports
-            </button>
-
-            <button
-              type="button"
-              className="promo-btn-base promo-btn-primary"
-              onClick={handleOpenCreate}
-              aria-label="Create new promotion"
-            >
-              + New promotion
-            </button>
-          </div>
-        </header>
-
-        {/* 2. Status Summary Cards (4 Equal Clickable Filter Cards) */}
-        <section className="promo-status-cards-grid" aria-label="Promotion Status Filters">
-          {/* Active Card */}
-          <button
-            type="button"
-            className={`promo-status-card ${statusFilter === 'active' ? 'selected' : ''}`}
+            }
+            iconVariant="green"
+            label="ACTIVE"
+            statusPill={{ text: "Running", variant: "active" }}
+            count={counts.active}
+            countColor="#15803D"
+            hint="Running now"
+            isSelected={statusFilter === 'active'}
             onClick={() => setStatusFilter('active')}
-            aria-pressed={statusFilter === 'active'}
-          >
-            <div className="promo-card-dot-row">
-              <span className="promo-status-dot active"></span>
-              <span>Active</span>
-            </div>
-            <div className="promo-card-count">{counts.active}</div>
-            <div className="promo-card-hint">Running now</div>
-          </button>
+            title="Filter active promotions"
+            cardVariant="bento-cat-kpi-active-promo"
+          />
 
-          {/* Scheduled Card */}
-          <button
-            type="button"
-            className={`promo-status-card ${statusFilter === 'scheduled' ? 'selected' : ''}`}
+          <StatCard
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            }
+            iconVariant="amber"
+            label="SCHEDULED"
+            statusPill={{ text: "Upcoming", variant: "scheduled" }}
+            count={counts.scheduled}
+            countColor="#B45309"
+            hint="Starts later"
+            isSelected={statusFilter === 'scheduled'}
             onClick={() => setStatusFilter('scheduled')}
-            aria-pressed={statusFilter === 'scheduled'}
-          >
-            <div className="promo-card-dot-row">
-              <span className="promo-status-dot scheduled"></span>
-              <span>Scheduled</span>
-            </div>
-            <div className="promo-card-count">{counts.scheduled}</div>
-            <div className="promo-card-hint">Starts later</div>
-          </button>
+            title="Filter scheduled promotions"
+            cardVariant="bento-cat-kpi-sched-promo"
+          />
 
-          {/* Expired Card */}
-          <button
-            type="button"
-            className={`promo-status-card ${statusFilter === 'expired' ? 'selected' : ''}`}
+          <StatCard
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            }
+            iconVariant="red"
+            label="EXPIRED"
+            statusPill={{ text: "Ended", variant: "expired" }}
+            count={counts.expired}
+            countColor="#B91C1C"
+            hint="Ended"
+            isSelected={statusFilter === 'expired'}
             onClick={() => setStatusFilter('expired')}
-            aria-pressed={statusFilter === 'expired'}
-          >
-            <div className="promo-card-dot-row">
-              <span className="promo-status-dot expired"></span>
-              <span>Expired</span>
-            </div>
-            <div className="promo-card-count">{counts.expired}</div>
-            <div className="promo-card-hint">Ended</div>
-          </button>
+            title="Filter expired promotions"
+            cardVariant="bento-cat-kpi-exp-promo"
+          />
 
-          {/* Drafts & paused Card */}
-          <button
-            type="button"
-            className={`promo-status-card ${statusFilter === 'draft_paused' ? 'selected' : ''}`}
+          <StatCard
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+            }
+            iconVariant="slate"
+            label="DRAFTS & PAUSED"
+            statusPill={{ text: "Not live", variant: "draft" }}
+            count={counts.draftPaused}
+            countColor="#475569"
+            hint="Not live"
+            isSelected={statusFilter === 'draft_paused'}
             onClick={() => setStatusFilter('draft_paused')}
-            aria-pressed={statusFilter === 'draft_paused'}
-          >
-            <div className="promo-card-dot-row">
-              <span className="promo-status-dot draft_paused"></span>
-              <span>Drafts & paused</span>
-            </div>
-            <div className="promo-card-count">{counts.draftPaused}</div>
-            <div className="promo-card-hint">Not live</div>
-          </button>
-        </section>
+            title="Filter drafts and paused promotions"
+            cardVariant="bento-cat-kpi-draft-promo"
+          />
+        </div>
 
         {/* 3. Main White Panel */}
         <section className="promo-main-panel" aria-label="Promotions list and filters">
@@ -1627,7 +1656,7 @@ export function DiscountsPromotionsView({
                       <div className="promo-row-text-group">
                         <div className="promo-row-title-row">
                           <span className="promo-row-name">{p.name}</span>
-                          <span className="promo-type-chip">{chipType}</span>
+                          <TypeChip label={chipType} />
                         </div>
                         <span className="promo-row-subtitle">
                           {productLabel} · {branchLabel}
@@ -1655,9 +1684,7 @@ export function DiscountsPromotionsView({
 
                     {/* Status Pill */}
                     <div>
-                      <span className={`promo-status-pill ${p.status}`}>
-                        ● {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                      </span>
+                      <StatusPill status={p.status} />
                     </div>
 
                     {/* Actions: Edit, Duplicate, Pause/Activate, Delete */}
@@ -1752,6 +1779,6 @@ export function DiscountsPromotionsView({
           branches={branches}
         />
       )}
-    </main>
+    </div>
   );
 }

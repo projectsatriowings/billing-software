@@ -213,132 +213,146 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const topSellers = data?.topSellers || [];
   const topSellerMax = topSellers.length > 0 ? topSellers[0].unitsSold || 1 : 1;
 
-  const totalTracked = summary?.totalTrackedProducts || 1;
-  const fastPct = Math.round(((summary?.fastMovingCount || 0) / totalTracked) * 100);
-  const slowPct = Math.round(((summary?.slowMovingCount || 0) / totalTracked) * 100);
-  const nonPct = Math.round(((summary?.nonMovingCount || 0) / totalTracked) * 100);
-
-  const maxGroupCount = Math.max(
-    1,
-    summary?.fastMovingCount || 0,
-    summary?.slowMovingCount || 0,
-    summary?.nonMovingCount || 0
+  // Data consistency & logic: zero-sales tracked items must count as non-moving
+  const totalTracked = summary?.totalTrackedProducts ?? 0;
+  const fastCount = summary?.fastMovingCount || 0;
+  const slowCount = summary?.slowMovingCount || 0;
+  const nonMovingCount = Math.max(
+    summary?.nonMovingCount ?? 0,
+    totalTracked > 0 ? totalTracked - fastCount - slowCount : 0
   );
 
+  const fastPct = totalTracked > 0 ? Math.round((fastCount / totalTracked) * 100) : 0;
+  const slowPct = totalTracked > 0 ? Math.round((slowCount / totalTracked) * 100) : 0;
+  const nonPct = totalTracked > 0 ? Math.max(0, 100 - fastPct - slowPct) : 0;
+
+  const maxGroupCount = Math.max(1, fastCount, slowCount, nonMovingCount);
+
   return (
-    <div className="product-movement-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* ── HEADER & FILTER BAR ── */}
+    <div className="product-movement-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', boxSizing: 'border-box' }}>
+      {/* ── 1. DATE RANGE CONTROLS ROW ── */}
       <div
+        className="product-movement-toolbar-row"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '12px',
+          width: '100%',
+          marginBottom: '-8px',
         }}
       >
-        <div>
-          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-            Product Movement Analysis
-          </h2>
-          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
-            Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded
-          </p>
-        </div>
+        {/* Date label left-aligned, vertically centered with controls */}
+        {rangeDisplayLabel && (
+          <div style={{ fontSize: '13px', color: '#64748B', fontWeight: 500 }}>
+            {rangeDisplayLabel}
+          </div>
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {/* Date range pills */}
-          <div
+        {/* Date range segmented control right-aligned */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#FFFFFF',
+            border: '1px solid #CBD5E1',
+            borderRadius: '10px',
+            padding: '3px',
+            gap: '2px',
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+            marginLeft: 'auto',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedRange('7d')}
             style={{
-              display: 'inline-flex',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
               borderRadius: '8px',
-              padding: '2px',
-              gap: '2px',
+              border: 'none',
+              cursor: 'pointer',
+              background: selectedRange === '7d' ? '#5B4CF5' : 'transparent',
+              color: selectedRange === '7d' ? '#FFFFFF' : '#475569',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
             }}
           >
-            <button
-              type="button"
-              onClick={() => setSelectedRange('7d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '7d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '7d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Last 7 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRange('30d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '30d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '30d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Last 30 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRange('90d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '90d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '90d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Last 90 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedRange('custom');
-                setShowCustomPicker(!showCustomPicker);
-              }}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === 'custom' ? '#6d4aff' : 'transparent',
-                color: selectedRange === 'custom' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <CalendarIcon size={14} /> Custom Range
-            </button>
-          </div>
-
-          {rangeDisplayLabel && (
-            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-              {rangeDisplayLabel}
-            </span>
-          )}
+            Last 7 Days
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedRange('30d')}
+            style={{
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              background: selectedRange === '30d' ? '#5B4CF5' : 'transparent',
+              color: selectedRange === '30d' ? '#FFFFFF' : '#475569',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Last 30 Days
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedRange('90d')}
+            style={{
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              background: selectedRange === '90d' ? '#5B4CF5' : 'transparent',
+              color: selectedRange === '90d' ? '#FFFFFF' : '#475569',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Last 90 Days
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedRange('custom');
+              setShowCustomPicker(!showCustomPicker);
+            }}
+            style={{
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              background: selectedRange === 'custom' ? '#5B4CF5' : 'transparent',
+              color: selectedRange === 'custom' ? '#FFFFFF' : '#475569',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <CalendarIcon size={14} style={{ display: 'inline-block', flexShrink: 0 }} />
+            <span>Custom Range</span>
+          </button>
         </div>
       </div>
 
@@ -350,31 +364,31 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             display: 'flex',
             alignItems: 'center',
             gap: '0.75rem',
-            background: '#f8fafc',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            padding: '0.75rem 1rem',
+            background: '#F8FAFC',
+            border: '1px solid #CBD5E1',
+            borderRadius: '12px',
+            padding: '1rem 1.25rem',
             flexWrap: 'wrap',
           }}
         >
           <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>Custom Date Range:</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>From:</label>
+            <label style={{ fontSize: '0.75rem', color: '#64748B' }}>From:</label>
             <input
               type="date"
               className="form-input"
-              style={{ width: '140px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+              style={{ width: '140px', padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderRadius: '8px' }}
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               required
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>To:</label>
+            <label style={{ fontSize: '0.75rem', color: '#64748B' }}>To:</label>
             <input
               type="date"
               className="form-input"
-              style={{ width: '140px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+              style={{ width: '140px', padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderRadius: '8px' }}
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
               required
@@ -383,14 +397,14 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
           <button
             type="submit"
             className="btn btn-primary"
-            style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+            style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', borderRadius: '8px' }}
           >
             Apply Range
           </button>
           <button
             type="button"
             className="btn btn-secondary"
-            style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+            style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem', borderRadius: '8px' }}
             onClick={() => setShowCustomPicker(false)}
           >
             Close
@@ -400,7 +414,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
       {/* Loading & Error States */}
       {loading && !data && (
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
           <p style={{ margin: 0, fontWeight: 500 }}>Analyzing product sales and movement patterns...</p>
         </div>
@@ -410,10 +424,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         <div
           style={{
             padding: '1rem 1.25rem',
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
-            color: '#b91c1c',
+            background: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '12px',
+            color: '#B91C1C',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -433,225 +447,232 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         </div>
       )}
 
-      {/* ── 4 SUMMARY METRIC CARDS ── */}
+      {/* ── 2. 4 SUMMARY KPI CARDS ── */}
       {summary && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '0.85rem',
-          }}
-        >
+        <div className="product-movement-kpi-grid">
           {/* Card 1: Fast-Moving */}
           <div
+            className="product-movement-kpi-card"
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #f59e0b',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <ZapIcon size={14} color="#f59e0b" /> FAST-MOVING PRODUCTS
-            </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#10b981',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.fastMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              ≥ {summary.fastMinUnits} units sold or ≥ {summary.fastMinTxns} bills in period
+            <div style={{ height: '4px', width: '100%', background: '#F59E0B' }} />
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ZapIcon size={15} color="#F59E0B" />
+                </span>
+                <span>FAST-MOVING PRODUCTS</span>
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  fontSize: '32px',
+                  fontWeight: 600,
+                  color: '#10B981',
+                  fontVariantNumeric: 'tabular-nums',
+                  margin: '12px 0 8px',
+                  lineHeight: 1.15,
+                }}
+              >
+                {fastCount}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.35 }}>
+                ≥ {summary.fastMinUnits} units sold or ≥ {summary.fastMinTxns} bills in period
+              </div>
             </div>
           </div>
 
           {/* Card 2: Slow-Moving */}
           <div
+            className="product-movement-kpi-card"
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #f97316',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <HourglassIcon size={14} color="#f97316" /> SLOW-MOVING PRODUCTS
-            </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#f59e0b',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.slowMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Sold, but below fast-moving threshold
+            <div style={{ height: '4px', width: '100%', background: '#F97316' }} />
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <HourglassIcon size={15} color="#F97316" />
+                </span>
+                <span>SLOW-MOVING PRODUCTS</span>
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  fontSize: '32px',
+                  fontWeight: 600,
+                  color: '#F59E0B',
+                  fontVariantNumeric: 'tabular-nums',
+                  margin: '12px 0 8px',
+                  lineHeight: 1.15,
+                }}
+              >
+                {slowCount}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.35 }}>
+                Sold, but below fast-moving threshold
+              </div>
             </div>
           </div>
 
           {/* Card 3: Non-Moving */}
           <div
+            className="product-movement-kpi-card"
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #ef4444',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <AlertOctagonIcon size={14} color="#ef4444" /> NON-MOVING PRODUCTS
-            </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#ef4444',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.nonMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Zero sales in the last {summary.rangeDays} days
+            <div style={{ height: '4px', width: '100%', background: '#EF4444' }} />
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <AlertOctagonIcon size={15} color="#EF4444" />
+                </span>
+                <span>NON-MOVING PRODUCTS</span>
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  fontSize: '32px',
+                  fontWeight: 600,
+                  color: '#EF4444',
+                  fontVariantNumeric: 'tabular-nums',
+                  margin: '12px 0 8px',
+                  lineHeight: 1.15,
+                }}
+              >
+                {nonMovingCount}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.35 }}>
+                Zero sales in the last {summary.rangeDays} days
+              </div>
             </div>
           </div>
 
           {/* Card 4: Total Units Sold */}
           <div
+            className="product-movement-kpi-card"
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #6366f1',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <PackageIcon size={14} color="#6366f1" /> TOTAL UNITS SOLD
-            </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#6d4aff',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.totalUnitsSold.toLocaleString('en-IN')}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Across {summary.totalSalesBills} bills · pcs, kg &amp; ltr
+            <div style={{ height: '4px', width: '100%', background: '#5B4CF5' }} />
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <PackageIcon size={15} color="#5B4CF5" />
+                </span>
+                <span>TOTAL UNITS SOLD</span>
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  fontSize: '32px',
+                  fontWeight: 600,
+                  color: '#5B4CF5',
+                  fontVariantNumeric: 'tabular-nums',
+                  margin: '12px 0 8px',
+                  lineHeight: 1.15,
+                }}
+              >
+                {summary.totalUnitsSold.toLocaleString('en-IN')}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.35 }}>
+                Across {summary.totalSalesBills} bills · pcs, kg &amp; ltr
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── CHARTS & INSIGHTS ROW (3 COLUMNS) ── */}
+      {/* ── 3. BOTTOM ROW: 3-COLUMN ANALYTICS & INSIGHTS GRID ── */}
       {data && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          {/* Box 1: Top 10 Best-Selling Products */}
+        <div className="product-movement-analytics-grid">
+          {/* Card 1: Top 10 Best-Selling Products */}
           <div
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Top 10 Best-Selling Products
-            </h3>
-            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              By quantity sold · {rangeDisplayLabel || 'period'}
-            </p>
+            <div style={{ padding: '20px 24px 16px 24px', borderBottom: '1px solid #F1F5F9' }}>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                Top 10 Best-Selling Products
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                By quantity sold · {rangeDisplayLabel || 'period'}
+              </p>
+            </div>
 
             {topSellers.length === 0 ? (
-              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                No completed sales recorded during this date period.
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '32px 24px',
+                  textAlign: 'center',
+                  color: '#94A3B8',
+                  minHeight: '220px',
+                }}
+              >
+                <TrophyIcon size={36} color="#CBD5E1" style={{ marginBottom: '12px', strokeWidth: 1.5 }} />
+                <span style={{ fontSize: '14px', maxWidth: '240px', lineHeight: 1.5 }}>
+                  No completed sales recorded during this date period.
+                </span>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1 }}>
                 {topSellers.map((item, idx) => {
                   const pct = Math.max(5, Math.min(100, (item.unitsSold / topSellerMax) * 100));
                   return (
                     <div
                       key={item.id || idx}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.78rem' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.8rem' }}
                     >
                       <span
                         style={{
@@ -671,7 +692,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                         style={{
                           flex: 1,
                           height: '14px',
-                          background: '#ede9fe',
+                          background: '#EDE9FE',
                           borderRadius: '999px',
                           overflow: 'hidden',
                         }}
@@ -680,7 +701,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                           style={{
                             width: `${pct}%`,
                             height: '100%',
-                            background: '#6d4aff',
+                            background: '#5B4CF5',
                             borderRadius: '999px',
                             transition: 'width 0.3s ease',
                           }}
@@ -690,9 +711,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                         style={{
                           minWidth: '55px',
                           textAlign: 'right',
-                          fontFamily: 'monospace',
+                          fontVariantNumeric: 'tabular-nums',
                           fontWeight: 700,
-                          color: '#0f172a',
+                          color: '#0F172A',
                         }}
                       >
                         {item.unitsSold} {item.unit}
@@ -704,129 +725,289 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             )}
           </div>
 
-          {/* Box 2: Movement Classification */}
+          {/* Card 2: Movement Classification */}
           <div
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Movement Classification
-            </h3>
-            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              Number of products in each group
-            </p>
+            <div style={{ padding: '20px 24px 16px 24px', borderBottom: '1px solid #F1F5F9' }}>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                Movement Classification
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                Number of products in each group
+              </p>
+            </div>
 
-            {/* Vertical Bar Chart */}
+            {/* Vertical Bar Chart (Clean Flex Flow, No Absolute Labels) */}
             <div
               style={{
+                padding: '24px',
                 flex: 1,
                 display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'space-around',
-                height: '150px',
-                padding: '0.5rem 0',
-                borderBottom: '1px solid #e2e8f0',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                boxSizing: 'border-box',
               }}
             >
-              {/* Fast-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.fastMovingCount || 0}
-                </span>
+              {/* 1. Bar Chart Area: fixed height ~180px */}
+              <div
+                style={{
+                  height: '180px',
+                  display: 'flex',
+                  justifyContent: 'space-around',
+                  alignItems: 'flex-end',
+                  padding: '0 12px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {/* Fast-Moving Column */}
                 <div
                   style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.fastMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#10b981',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    width: '33.33%',
+                    height: '100%',
                   }}
-                />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Fast-moving</span>
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      color: '#0F172A',
+                      marginBottom: '6px',
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {fastCount}
+                  </span>
+                  <div
+                    style={{
+                      width: '56px',
+                      maxWidth: '85%',
+                      height: `${maxGroupCount > 0 ? Math.max(4, Math.round((fastCount / maxGroupCount) * 140)) : 4}px`,
+                      background: '#10B981',
+                      borderRadius: '6px 6px 0 0',
+                      transition: 'height 0.3s ease',
+                    }}
+                  />
+                </div>
+
+                {/* Slow-Moving Column */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    width: '33.33%',
+                    height: '100%',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      color: '#0F172A',
+                      marginBottom: '6px',
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {slowCount}
+                  </span>
+                  <div
+                    style={{
+                      width: '56px',
+                      maxWidth: '85%',
+                      height: `${maxGroupCount > 0 ? Math.max(4, Math.round((slowCount / maxGroupCount) * 140)) : 4}px`,
+                      background: '#F59E0B',
+                      borderRadius: '6px 6px 0 0',
+                      transition: 'height 0.3s ease',
+                    }}
+                  />
+                </div>
+
+                {/* Non-Moving Column */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    width: '33.33%',
+                    height: '100%',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      color: '#0F172A',
+                      marginBottom: '6px',
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {nonMovingCount}
+                  </span>
+                  <div
+                    style={{
+                      width: '56px',
+                      maxWidth: '85%',
+                      height: `${maxGroupCount > 0 ? Math.max(4, Math.round((nonMovingCount / maxGroupCount) * 140)) : 4}px`,
+                      background: '#EF4444',
+                      borderRadius: '6px 6px 0 0',
+                      transition: 'height 0.3s ease',
+                    }}
+                  />
+                </div>
               </div>
 
-              {/* Slow-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.slowMovingCount || 0}
-                </span>
-                <div
-                  style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.slowMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#f59e0b',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
-                  }}
-                />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Slow-moving</span>
-              </div>
+              {/* 2. Baseline: 1px light-gray line directly under the bottoms of the bars */}
+              <div
+                style={{
+                  width: '100%',
+                  height: '1px',
+                  background: '#E2E8F0',
+                }}
+              />
 
-              {/* Non-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.nonMovingCount || 0}
-                </span>
-                <div
-                  style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.nonMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#ef4444',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
-                  }}
-                />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Non-moving</span>
+              {/* 3. Category Labels Row */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-around',
+                  alignItems: 'center',
+                  marginTop: '10px',
+                  padding: '0 12px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{ width: '33.33%', textAlign: 'center' }}>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: '#64748B',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Fast-moving
+                  </span>
+                </div>
+                <div style={{ width: '33.33%', textAlign: 'center' }}>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: '#64748B',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Slow-moving
+                  </span>
+                </div>
+                <div style={{ width: '33.33%', textAlign: 'center' }}>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: '#64748B',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Non-moving
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', marginTop: '0.85rem' }}>
-              {totalTracked} tracked products · {fastPct}% fast · {slowPct}% slow · {nonPct}% non-moving
+            {/* Separated Footer Line with Top Border */}
+            <div
+              style={{
+                borderTop: '1px solid #F1F5F9',
+                padding: '16px 24px',
+                textAlign: 'center',
+                fontSize: '13px',
+                color: '#64748B',
+                marginTop: 'auto',
+                lineHeight: 1.5,
+              }}
+            >
+              <span style={{ whiteSpace: 'nowrap' }}>
+                {totalTracked} tracked {totalTracked === 1 ? 'product' : 'products'}
+              </span>
+              {' · '}
+              <span style={{ whiteSpace: 'nowrap' }}>{fastPct}% fast</span>
+              {' · '}
+              <span style={{ whiteSpace: 'nowrap' }}>{slowPct}% slow</span>
+              {' · '}
+              <span style={{ whiteSpace: 'nowrap' }}>{nonPct}% non&#8209;moving</span>
             </div>
           </div>
 
-          {/* Box 3: Insights */}
+          {/* Card 3: Insights */}
           <div
             style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              border: '1px solid #ECECF5',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(91,76,245,0.06)',
+              overflow: 'hidden',
+              height: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Insights
-            </h3>
-            <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              Updated with the date range
-            </p>
+            <div style={{ padding: '20px 24px 16px 24px', borderBottom: '1px solid #F1F5F9' }}>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                Insights
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                Updated with the date range
+              </p>
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, justifyContent: 'space-between' }}>
-              {/* Insight 1: Best seller */}
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, justifyContent: 'space-between' }}>
+              {/* Alert 1: Best seller */}
               {data.insights.bestSeller ? (
                 <div
                   style={{
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.8rem',
+                    background: '#FFFBEB',
+                    border: '1px solid #FDE68A',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TrophyIcon size={15} color="#b45309" /> Best seller: {data.insights.bestSeller.name}
+                  <div style={{ fontWeight: 700, color: '#92400E', fontSize: '13px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <span style={{ marginTop: '2px', flexShrink: 0 }}>
+                      <TrophyIcon size={16} color="#B45309" />
+                    </span>
+                    <span>Best seller: {data.insights.bestSeller.name}</span>
                   </div>
-                  <div style={{ color: '#78350f', fontSize: '0.76rem', lineHeight: 1.35 }}>
+                  <div style={{ color: '#78350F', fontSize: '12px', lineHeight: 1.4, paddingLeft: '24px' }}>
                     {data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit} in {data.insights.bestSeller.salesTxns} bills.
                     {data.insights.bestSeller.currentStockUnits !== undefined && (
                       <span>
@@ -841,68 +1022,98 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               ) : (
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.78rem',
-                    color: '#64748b',
+                    background: '#F8FAFC',
+                    border: '1px solid #ECECF5',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    fontSize: '13px',
+                    color: '#64748B',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  No top seller data available for this period.
+                  <span style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <TrophyIcon size={16} color="#94A3B8" />
+                  </span>
+                  <span>No top seller data available for this period.</span>
                 </div>
               )}
 
-              {/* Insight 2: Slowing / Attention */}
+              {/* Alert 2: Slowing / Bottlenecks */}
               {data.insights.slowingProduct ? (
                 <div
                   style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.8rem',
+                    background: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TrendingDownIcon size={15} color="#1e40af" /> {data.insights.slowingProduct.name}
+                  <div style={{ fontWeight: 700, color: '#1E40AF', fontSize: '13px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <span style={{ marginTop: '2px', flexShrink: 0 }}>
+                      <TrendingDownIcon size={16} color="#1E40AF" />
+                    </span>
+                    <span>{data.insights.slowingProduct.name}</span>
                   </div>
-                  <div style={{ color: '#1e3a8a', fontSize: '0.76rem', lineHeight: 1.35 }}>
+                  <div style={{ color: '#1E3A8A', fontSize: '12px', lineHeight: 1.4, paddingLeft: '24px' }}>
                     {data.insights.slowingProduct.message}
                   </div>
                 </div>
               ) : (
                 <div
                   style={{
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.78rem',
-                    color: '#15803d',
+                    background: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    color: '#15803D',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    width: '100%',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <CheckIcon size={14} color="#15803d" /> No severe slow-moving inventory bottlenecks detected.
+                  <span style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <CheckIcon size={16} color="#15803D" />
+                  </span>
+                  <span style={{ fontSize: '13px', lineHeight: 1.4 }}>
+                    No severe slow-moving inventory bottlenecks detected.
+                  </span>
                 </div>
               )}
 
-              {/* Insight 3: Non-moving products */}
+              {/* Alert 3: Non-moving products */}
               <div
                 style={{
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: '8px',
-                  padding: '0.65rem 0.85rem',
-                  fontSize: '0.8rem',
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  width: '100%',
+                  boxSizing: 'border-box',
                 }}
               >
-                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PackageIcon size={15} color="#991b1b" /> {data.insights.nonMovingSummary.count} products haven&apos;t sold in {data.insights.nonMovingSummary.days} days
+                <div style={{ fontWeight: 700, color: '#991B1B', fontSize: '13px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <span style={{ marginTop: '2px', flexShrink: 0 }}>
+                    <PackageIcon size={16} color="#991B1B" />
+                  </span>
+                  <span>
+                    {nonMovingCount} {nonMovingCount === 1 ? "product hasn't" : "products haven't"} sold in {data.insights.nonMovingSummary.days} days
+                  </span>
                 </div>
-                <div style={{ color: '#7f1d1d', fontSize: '0.76rem', lineHeight: 1.35 }}>
+                <div style={{ color: '#7F1D1D', fontSize: '12px', lineHeight: 1.4, paddingLeft: '24px' }}>
                   {data.insights.nonMovingSummary.tiedCapitalMinor > 0 ? (
                     <span>
                       ₹{(data.insights.nonMovingSummary.tiedCapitalMinor / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} at cost sitting on shelves. Review before the next purchase order.
@@ -921,8 +1132,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
       <div
         style={{
           background: '#ffffff',
-          borderRadius: '10px',
-          border: '1px solid #e2e8f0',
+          borderRadius: '16px',
+          border: '1px solid #ECECF5',
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           overflow: 'hidden',
           display: 'flex',

@@ -1,0 +1,115 @@
+/* ==========================================================================
+   SHARED BRANCH SELECTOR COMPONENT STYLES
+   ========================================================================== */
+
+.top-branch-selector-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 0 6px 0 14px;
+  background: #ffffff;
+  border: 1px solid #E2E0EF;
+  border-radius: 12px;
+  box-sizing: border-box;
+  font-size: 14px;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.top-branch-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.top-branch-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #5F6275;
+  white-space: nowrap;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.top-branch-select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.top-branch-select {
+  height: 32px;
+  padding: 0 32px 0 10px;
+  border: none;
+  background: #F3F2FA;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1838;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  outline: none;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: outline 0.15s ease;
+}
+
+.top-branch-select:focus {
+  outline: 2px solid #5B4FE9;
+  outline-offset: 2px;
+}
+
+.top-branch-chevron {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: #5F6275;
+  flex-shrink: 0;
+}
+
+.top-branch-count-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4F46E5;
+  background: #EEEDFD;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .top-branch-selector-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .top-branch-select-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .top-branch-select {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .top-branch-count-pill {
+    flex-shrink: 0;
+  }
+}
+

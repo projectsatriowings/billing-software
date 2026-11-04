@@ -7,12 +7,12 @@ import {
   fetchInventoryInsights,
   can,
 } from '../../api.ts';
+import { StatCard } from '../common/BentoUI.tsx';
 import { StockLedgerView } from './StockLedgerView.tsx';
 import { StockAdjustmentModal } from './StockAdjustmentModal.tsx';
 import { PhysicalStockCountView } from './PhysicalStockCountView.tsx';
 import { ReorderConfigModal } from './ReorderConfigModal.tsx';
 import {
-  WarehouseIcon,
   TagIcon,
   SlidersIcon,
   PackageIcon,
@@ -42,6 +42,7 @@ import {
 } from './InventoryIcons.tsx';
 
 interface InventoryDashboardProps {
+  shop?: any;
   items: Item[];
   categories: string[];
   categoriesList?: Category[];
@@ -58,6 +59,7 @@ interface InventoryDashboardProps {
 }
 
 export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
+  shop,
   items,
   categories,
   categoriesList = [],
@@ -200,70 +202,12 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const inStockCount = stats?.inStockCount || 0;
   const lowStockCount = stats?.lowStockCount || 0;
   const outOfStockCount = stats?.outOfStockCount || 0;
-  const inStockPct = totalProducts > 0 ? Math.round((inStockCount / totalProducts) * 100) : 100;
+  const inStockPct = totalProducts > 0 ? Math.round((inStockCount / totalProducts) * 100) : 0;
   const lowStockPct = totalProducts > 0 ? Math.round((lowStockCount / totalProducts) * 100) : 0;
   const outOfStockPct = totalProducts > 0 ? Math.max(0, 100 - inStockPct - lowStockPct) : 0;
 
   return (
     <div className="inventory-module-wrapper">
-      {/* Module Title Bar */}
-      <div className="inventory-title-bar">
-        <div className="title-left">
-          <div className="title-row">
-            <div className="title-icon-box">
-              <WarehouseIcon size={20} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                <h1 className="inventory-heading">Inventory Hub</h1>
-                <span className="badge-live-sync" title="Connected to PostgreSQL stock ledger">
-                  <span className="live-indicator-dot"></span>
-                  Neon PostgreSQL Live
-                </span>
-                <span className="inventory-title-subtitle">
-                  • Real-time stock audit, replenishment & physical counts
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="title-actions">
-          {onNavigateToCategories && (
-            <button
-              type="button"
-              className="btn-inv-header-outline"
-              onClick={onNavigateToCategories}
-              title="Open Category Management Module"
-            >
-              <TagIcon size={14} /> Categories ({categories.length})
-            </button>
-          )}
-          {onNavigateToProductAnalysis && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#6d4aff', borderColor: '#c4b5fd', background: '#f5f3ff' }}
-              onClick={onNavigateToProductAnalysis}
-              title="Open Product Movement Analysis"
-            >
-              <span>🚀</span> Product Analysis
-            </button>
-          )}
-          {isOwnerOrManager && (
-            <button
-              type="button"
-              className="btn-inv-header-primary"
-              onClick={() => {
-                setAdjustmentTargetItem(null);
-                setShowAdjustmentModal(true);
-              }}
-            >
-              <SlidersIcon size={14} /> Stock Adjustment
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Service Business Banner */}
       {isServiceBusiness && (
@@ -276,11 +220,11 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         </div>
       )}
 
-      {/* BENTO STYLE LAYOUT (2-Tier Balanced Bento Grid) */}
-      <div className="inventory-bento-grid">
-        {/* BENTO HERO TILE 1: Portfolio Valuation & Health Monitor */}
+      {/* 2. Portfolio Valuation & Restock Status Hero Cards */}
+      <div className="inventory-hero-grid">
+        {/* HERO CARD 1: Portfolio Valuation */}
         <div
-          className="bento-card bento-hero-valuation"
+          className="bento-hero-card"
           style={{ cursor: isAuthorizedForCost ? 'pointer' : 'default' }}
           onClick={() => {
             if (isAuthorizedForCost) {
@@ -296,93 +240,155 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               : 'Restricted to owner/manager/accountant'
           }
         >
-          <div className="bento-card-header">
-            <div className="bento-header-left">
-              <div className="bento-icon-badge indigo">
-                <RupeeIcon size={15} />
+          <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
+            <div className="cat-kpi-header-left">
+              <div className="cat-icon-badge indigo">
+                <RupeeIcon size={16} />
               </div>
               <div>
-                <span className="bento-card-title">Portfolio Valuation</span>
-                <span className="bento-card-subtitle">Real-time inventory worth</span>
+                <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
+                  PORTFOLIO VALUATION
+                </span>
+                <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
+                  Real-time inventory worth
+                </span>
               </div>
             </div>
-            <span className="badge-live-sync-pill" title="Neon PostgreSQL Live Sync">
-              <span className="live-indicator-dot-sm"></span>
+            <span className="kpi-sub-badge green" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }}></span>
               Live Sync
             </span>
           </div>
 
-          <div className="bento-hero-val-num">
+          <div
+            style={{
+              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              fontSize: '32px',
+              fontWeight: 700,
+              color: '#0F172A',
+              lineHeight: 1.2,
+              fontVariantNumeric: 'tabular-nums',
+              margin: '0.25rem 0 1rem',
+            }}
+          >
             {isAuthorizedForCost ? (
-              <>₹{((stats?.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</>
+              ((stats?.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
             ) : (
-              <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>Restricted (Staff)</span>
+              <span style={{ fontSize: '1rem', color: '#64748B' }}>Restricted (Staff)</span>
             )}
           </div>
 
-          <div className="bento-health-section">
-            <div className="bento-health-bar">
+          <div className="bento-health-section" style={{ marginTop: 'auto' }}>
+            {totalProducts === 0 ? (
               <div
-                className="health-seg green"
-                style={{ width: `${inStockPct}%` }}
-                title={`In-Stock: ${inStockCount} (${inStockPct}%)`}
+                style={{
+                  height: '8px',
+                  borderRadius: '9999px',
+                  backgroundColor: '#E5E7F0',
+                  width: '100%',
+                  marginBottom: '10px',
+                }}
+                title="No items in inventory"
               />
+            ) : (
               <div
-                className="health-seg amber"
-                style={{ width: `${lowStockPct}%` }}
-                title={`Low Stock: ${lowStockCount} (${lowStockPct}%)`}
-              />
-              <div
-                className="health-seg rose"
-                style={{ width: `${outOfStockPct}%` }}
-                title={`Out of Stock: ${outOfStockCount} (${outOfStockPct}%)`}
-              />
-            </div>
-            <div className="bento-health-legend">
-              <span className="legend-tag">
-                <span className="legend-dot green"></span>
-                In-Stock: <strong className="text-green">{inStockPct}%</strong> ({inStockCount})
+                style={{
+                  display: 'flex',
+                  height: '8px',
+                  borderRadius: '9999px',
+                  overflow: 'hidden',
+                  backgroundColor: '#F1F5F9',
+                  gap: '2px',
+                  marginBottom: '10px',
+                }}
+              >
+                {inStockPct > 0 && (
+                  <div
+                    style={{ width: `${inStockPct}%`, background: '#22C55E', transition: 'width 0.4s ease' }}
+                    title={`In-Stock: ${inStockCount} (${inStockPct}%)`}
+                  />
+                )}
+                {lowStockPct > 0 && (
+                  <div
+                    style={{ width: `${lowStockPct}%`, background: '#F59E0B', transition: 'width 0.4s ease' }}
+                    title={`Low Stock: ${lowStockCount} (${lowStockPct}%)`}
+                  />
+                )}
+                {outOfStockPct > 0 && (
+                  <div
+                    style={{ width: `${outOfStockPct}%`, background: '#EF4444', transition: 'width 0.4s ease' }}
+                    title={`Out of Stock: ${outOfStockCount} (${outOfStockPct}%)`}
+                  />
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#64748B' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }}></span>
+                In-Stock: <strong style={{ color: totalProducts > 0 && inStockCount > 0 ? '#15803D' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? inStockPct : 0}%</strong> ({inStockCount})
               </span>
-              <span className="legend-tag">
-                <span className="legend-dot amber"></span>
-                Low: <strong className="text-amber">{lowStockPct}%</strong> ({lowStockCount})
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B' }}></span>
+                Low: <strong style={{ color: totalProducts > 0 && lowStockCount > 0 ? '#B45309' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? lowStockPct : 0}%</strong> ({lowStockCount})
               </span>
-              <span className="legend-tag">
-                <span className="legend-dot rose"></span>
-                Out: <strong className="text-red">{outOfStockPct}%</strong> ({outOfStockCount})
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }}></span>
+                Out: <strong style={{ color: totalProducts > 0 && outOfStockCount > 0 ? '#B91C1C' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? outOfStockPct : 0}%</strong> ({outOfStockCount})
               </span>
             </div>
           </div>
         </div>
 
-        {/* BENTO HERO TILE 2: Restock Action Center */}
+        {/* HERO CARD 2: Restock Status */}
         {stats && (stats.outOfStockCount > 0 || stats.lowStockCount > 0) ? (
-          <div className={`bento-card bento-hero-alert ${stats.outOfStockCount > 0 ? 'alert-critical' : 'alert-warning'}`}>
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className={`bento-icon-badge ${stats.outOfStockCount > 0 ? 'pulse-red' : 'pulse-amber'}`}>
+          <div className="bento-hero-card">
+            <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
+              <div className="cat-kpi-header-left">
+                <div className={`cat-icon-badge ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}>
                   {stats.outOfStockCount > 0 ? <AlertOctagonIcon size={16} /> : <AlertTriangleIcon size={16} />}
                 </div>
                 <div>
-                  <span className="bento-card-title">Restock Operations</span>
-                  <span className="bento-card-subtitle">Supply replenishment required</span>
+                  <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
+                    RESTOCK OPERATIONS
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
+                    Supply replenishment required
+                  </span>
                 </div>
               </div>
-              <span className={`bento-alert-badge ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}>
+              <span className={`kpi-sub-badge ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}>
                 {stats.outOfStockCount > 0 ? 'Critical' : 'Low Buffer'}
               </span>
             </div>
 
-            <div className="bento-alert-headline">
-              {stats.outOfStockCount > 0 && <span className="text-red"><strong>{stats.outOfStockCount}</strong> Out of Stock</span>}
-              {stats.outOfStockCount > 0 && stats.lowStockCount > 0 && <span className="alert-sep">•</span>}
-              {stats.lowStockCount > 0 && <span className="text-amber"><strong>{stats.lowStockCount}</strong> Low Buffer</span>}
+            <div style={{ fontSize: '18px', fontWeight: 700, margin: '0.25rem 0 1rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {stats.outOfStockCount > 0 && (
+                <span style={{ color: '#B91C1C' }}>
+                  <strong>{stats.outOfStockCount}</strong> Out of Stock
+                </span>
+              )}
+              {stats.outOfStockCount > 0 && stats.lowStockCount > 0 && (
+                <span style={{ color: '#CBD5E1' }}>•</span>
+              )}
+              {stats.lowStockCount > 0 && (
+                <span style={{ color: '#B45309' }}>
+                  <strong>{stats.lowStockCount}</strong> Low Buffer
+                </span>
+              )}
             </div>
 
-            <div className="bento-alert-actions">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: 'auto', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className={`bento-btn-action ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}
+                className="cat-btn-primary"
+                style={{
+                  height: '36px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  background: stats.outOfStockCount > 0 ? '#DC2626' : '#D97706',
+                  boxShadow: 'none',
+                }}
                 onClick={() => {
                   setActiveSubTab('overview');
                   setStatusFilter(stats.outOfStockCount > 0 ? 'out_of_stock' : 'low_stock');
@@ -394,7 +400,15 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               {stats.replenishmentNeeded.length > 0 && (
                 <button
                   type="button"
-                  className="bento-btn-action secondary"
+                  className="cat-btn-outline"
+                  style={{
+                    height: '36px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    borderColor: '#ECECF5',
+                    background: '#FFFFFF',
+                  }}
                   onClick={() => setActiveSubTab('replenish')}
                 >
                   Plan ({stats.replenishmentNeeded.length})
@@ -403,29 +417,59 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bento-card bento-hero-alert alert-healthy">
-            <div className="bento-card-header">
-              <div className="bento-header-left">
-                <div className="bento-icon-badge green">
+          <div className="bento-hero-card">
+            <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge green">
                   <CheckCircleIcon size={16} />
                 </div>
                 <div>
-                  <span className="bento-card-title">Restock Status</span>
-                  <span className="bento-card-subtitle">Healthy inventory posture</span>
+                  <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
+                    RESTOCK STATUS
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
+                    Healthy inventory posture
+                  </span>
                 </div>
               </div>
-              <span className="bento-alert-badge green">Healthy</span>
+              <span className="kpi-sub-badge green">Healthy</span>
             </div>
-            <div className="bento-alert-headline text-green">All Shelves Sufficient</div>
-            <div className="bento-card-footer">
-              <span>Zero critical stockout alerts across catalog</span>
+
+            <div
+              style={{
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                fontSize: '22px',
+                fontWeight: 700,
+                color: '#0F172A',
+                lineHeight: 1.2,
+                margin: '0.25rem 0 0.5rem',
+              }}
+            >
+              All Shelves Sufficient
+            </div>
+
+            <div className="cat-kpi-footer" style={{ marginTop: 'auto', borderTop: 'none', paddingTop: 0 }}>
+              <span style={{ color: '#64748B', fontSize: '13px' }}>
+                Zero critical stockout alerts across catalog
+              </span>
             </div>
           </div>
         )}
+      </div>
 
-        {/* BENTO CARD 3: Active Items */}
-        <div
-          className={`bento-card bento-stat-card ${statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? 'bento-filter-active active-purple' : ''}`}
+      {/* 3. Stat Cards Row (4 Bento KPI Cards) */}
+      <div className="inventory-stat-cards-grid">
+        {/* Stat Card 1: Active Items */}
+        <StatCard
+          icon={<PackageIcon size={16} />}
+          iconVariant="purple"
+          label="ACTIVE ITEMS"
+          statusPill={{ text: `${categories.length} Cats`, variant: 'purple' }}
+          count={statsLoading ? '--' : stats?.totalActiveProducts ?? 0}
+          countColor="#0F172A"
+          hint={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? '✓ Showing all items' : 'In product master'}
+          isSelected={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery}
+          useSansFont={true}
           onClick={() => {
             setActiveSubTab('overview');
             setStatusFilter('all');
@@ -434,129 +478,104 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             setPage(1);
           }}
           title="Click to view all active catalog items"
-        >
-          <div className="bento-card-header">
-            <div className="bento-header-left">
-              <div className="bento-icon-badge purple">
-                <PackageIcon size={15} />
-              </div>
-              <span className="bento-card-title">Active Items</span>
-            </div>
-            <span className="kpi-sub-badge purple" title={`${categories.length} Categories`}>
-              {categories.length} Cats
-            </span>
-          </div>
-          <div className="bento-stat-num mono">
-            {statsLoading ? '--' : stats?.totalActiveProducts ?? 0}
-          </div>
-          <div className="bento-card-footer">
-            <span>{statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? '✓ Showing all items' : 'In product master'}</span>
-            <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
-          </div>
-        </div>
+        />
 
-        {/* BENTO CARD 4: In-Stock */}
-        <div
-          className={`bento-card bento-stat-card ${statusFilter === 'in_stock' ? 'bento-filter-active active-green' : ''}`}
+        {/* Stat Card 2: In-Stock */}
+        <StatCard
+          icon={<CheckCircleIcon size={16} />}
+          iconVariant="green"
+          label="IN-STOCK"
+          statusPill={{ text: `${inStockPct}%`, variant: 'green' }}
+          count={statsLoading ? '--' : stats?.inStockCount ?? 0}
+          countColor={(stats?.inStockCount || 0) > 0 ? '#15803D' : '#0F172A'}
+          hint={statusFilter === 'in_stock' ? '✓ Filter active (Click to reset)' : 'Sufficient shelf stock'}
+          isSelected={statusFilter === 'in_stock'}
+          useSansFont={true}
           onClick={() => {
             setActiveSubTab('overview');
             setStatusFilter((prev) => (prev === 'in_stock' ? 'all' : 'in_stock'));
             setPage(1);
           }}
-          title={statusFilter === 'in_stock' ? "Click to clear in-stock filter" : "Click to filter in-stock items"}
-        >
-          <div className="bento-card-header">
-            <div className="bento-header-left">
-              <div className="bento-icon-badge green">
-                <CheckCircleIcon size={15} />
-              </div>
-              <span className="bento-card-title">In-Stock</span>
-            </div>
-            <span className="kpi-sub-badge green">{inStockPct}%</span>
-          </div>
-          <div className="bento-stat-num mono text-green">
-            {statsLoading ? '--' : stats?.inStockCount ?? 0}
-          </div>
-          <div className="bento-card-footer">
-            <span>{statusFilter === 'in_stock' ? '✓ Filter active (Click to reset)' : 'Sufficient shelf stock'}</span>
-            <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
-          </div>
-        </div>
+          title={statusFilter === 'in_stock' ? 'Click to clear in-stock filter' : 'Click to filter in-stock items'}
+        />
 
-        {/* BENTO CARD 5: Low Stock */}
-        <div
-          className={`bento-card bento-stat-card ${statusFilter === 'low_stock' ? 'bento-filter-active active-amber' : ''}`}
+        {/* Stat Card 3: Low Stock */}
+        <StatCard
+          icon={<AlertTriangleIcon size={16} />}
+          iconVariant="amber"
+          label="LOW STOCK"
+          statusPill={(stats?.lowStockCount || 0) > 0 ? { text: 'Alert', variant: 'amber' } : { text: 'OK', variant: 'green' }}
+          count={statsLoading ? '--' : stats?.lowStockCount ?? 0}
+          countColor={(stats?.lowStockCount || 0) > 0 ? '#B45309' : '#0F172A'}
+          hint={statusFilter === 'low_stock' ? '✓ Filter active (Click to reset)' : 'At or below reorder'}
+          isSelected={statusFilter === 'low_stock'}
+          useSansFont={true}
           onClick={() => {
             setActiveSubTab('overview');
             setStatusFilter((prev) => (prev === 'low_stock' ? 'all' : 'low_stock'));
             setPage(1);
           }}
-          title={statusFilter === 'low_stock' ? "Click to clear low stock filter" : "Click to filter low stock items"}
-        >
-          <div className="bento-card-header">
-            <div className="bento-header-left">
-              <div className="bento-icon-badge amber">
-                <AlertTriangleIcon size={15} />
-              </div>
-              <span className="bento-card-title">Low Stock</span>
-            </div>
-            {stats && stats.lowStockCount > 0 ? (
-              <span className="kpi-sub-badge amber">Alert</span>
-            ) : (
-              <span className="kpi-sub-badge green">OK</span>
-            )}
-          </div>
-          <div className="bento-stat-num mono text-amber">
-            {statsLoading ? '--' : stats?.lowStockCount ?? 0}
-          </div>
-          <div className="bento-card-footer">
-            <span>{statusFilter === 'low_stock' ? '✓ Filter active (Click to reset)' : 'At or below reorder'}</span>
-            <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
-          </div>
-        </div>
+          title={statusFilter === 'low_stock' ? 'Click to clear low stock filter' : 'Click to filter low stock items'}
+        />
 
-        {/* BENTO CARD 6: Out of Stock */}
-        <div
-          className={`bento-card bento-stat-card ${statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock' ? 'bento-filter-active active-red' : ''}`}
+        {/* Stat Card 4: Out of Stock */}
+        <StatCard
+          icon={<AlertOctagonIcon size={16} />}
+          iconVariant="red"
+          label="OUT OF STOCK"
+          statusPill={
+            (stats?.negativeStockCount || 0) > 0
+              ? { text: `${stats?.negativeStockCount} Neg`, variant: 'purple' }
+              : (stats?.outOfStockCount || 0) > 0
+              ? { text: 'Alert', variant: 'red' }
+              : { text: 'OK', variant: 'green' }
+          }
+          count={statsLoading ? '--' : stats?.outOfStockCount ?? 0}
+          countColor={(stats?.outOfStockCount || 0) > 0 ? '#B91C1C' : '#0F172A'}
+          hint={
+            statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'
+              ? '✓ Filter active (Click to reset)'
+              : (stats?.negativeStockCount || 0) > 0
+              ? `Zero: ${stats?.zeroStockCount ?? 0} | Neg: ${stats?.negativeStockCount}`
+              : 'Zero or negative'
+          }
+          isSelected={statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'}
+          useSansFont={true}
           onClick={() => {
             setActiveSubTab('overview');
-            setStatusFilter((prev) => (prev === 'out_of_stock' || prev === 'zero_stock' || prev === 'negative_stock' ? 'all' : 'out_of_stock'));
+            setStatusFilter((prev) =>
+              prev === 'out_of_stock' || prev === 'zero_stock' || prev === 'negative_stock' ? 'all' : 'out_of_stock'
+            );
             setPage(1);
           }}
-          title={statusFilter === 'out_of_stock' ? "Click to clear out of stock filter" : "Click to filter out of stock items"}
-        >
-          <div className="bento-card-header">
-            <div className="bento-header-left">
-              <div className="bento-icon-badge red">
-                <AlertOctagonIcon size={15} />
-              </div>
-              <span className="bento-card-title">Out of Stock</span>
-            </div>
-            {stats && (stats.negativeStockCount || 0) > 0 ? (
-              <span className="kpi-sub-badge purple" title={`${stats.negativeStockCount} items with negative stock`}>
-                {stats.negativeStockCount} Neg
-              </span>
-            ) : stats && stats.outOfStockCount > 0 ? (
-              <span className="kpi-sub-badge red blinking-badge-red">Alert</span>
-            ) : (
-              <span className="kpi-sub-badge green">OK</span>
+          title={statusFilter === 'out_of_stock' ? 'Click to clear out of stock filter' : 'Click to filter out of stock items'}
+        />
+      </div>
+
+      {/* 4. Empty state banner when 0 items */}
+      {totalProducts === 0 && !statsLoading && (
+        <div className="inventory-empty-banner">
+          <div className="inventory-empty-icon-box">
+            <PackageIcon size={28} />
+          </div>
+          <h3 className="inventory-empty-title">No products in this branch yet</h3>
+          <p className="inventory-empty-subtitle">
+            Get started by adding items to your product catalogue or importing a CSV template to manage stock and inventory.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {onNavigateToCategories && (
+              <button
+                type="button"
+                className="cat-btn-primary"
+                onClick={onNavigateToCategories}
+                style={{ height: '40px', borderRadius: '12px', fontSize: '14px', fontWeight: 600, padding: '0 20px' }}
+              >
+                + Add Products
+              </button>
             )}
           </div>
-          <div className="bento-stat-num mono text-red">
-            {statsLoading ? '--' : stats?.outOfStockCount ?? 0}
-          </div>
-          <div className="bento-card-footer">
-            <span>
-              {statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'
-                ? '✓ Filter active (Click to reset)'
-                : stats && (stats.negativeStockCount || 0) > 0
-                ? `Zero: ${stats.zeroStockCount ?? 0} | Neg: ${stats.negativeStockCount}`
-                : 'Zero or negative'}
-            </span>
-            <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Navigation Tabs (Sub-Navigation) */}
       <div className="inventory-nav-tabs-bar">
@@ -649,6 +668,34 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
 
             <div className="inv-filter-group">
+              {isOwnerOrManager && (
+                <button
+                  type="button"
+                  className="cat-btn-primary"
+                  onClick={() => {
+                    setAdjustmentTargetItem(null);
+                    setShowAdjustmentModal(true);
+                  }}
+                  title="Create a manual stock increase, decrease or count discrepancy adjustment"
+                  style={{
+                    height: '38px',
+                    borderRadius: '10px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    padding: '0 16px',
+                    background: '#5B4CF5',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <SlidersIcon size={14} /> Stock Adjustment
+                </button>
+              )}
               {/* Category Filter */}
               <select
                 className="inv-select"
