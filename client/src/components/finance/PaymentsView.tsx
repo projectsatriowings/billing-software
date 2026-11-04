@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { api, type Payment, type SupplierPaymentRecord } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  ArrowRightIcon,
+  ArrowDownLeftIcon,
+  ArrowUpRightIcon,
+  RefreshCwIcon,
+  ReceiptIcon,
+  TruckIcon,
+  CheckCircle2Icon,
+  SearchIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface PaymentsViewProps {
   onOpenCustomerLedger?: (customerId: string) => void;
@@ -153,7 +163,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
               transition: 'all 0.15s ease',
             }}
           >
-            📥 Customer Receipts ({customerPayments.length})
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ArrowDownLeftIcon size={15} style={{ color: activeSubTab === 'customer' ? '#10b981' : '#64748b' }} /> Customer Receipts ({customerPayments.length})</span>
           </button>
           <button
             type="button"
@@ -171,14 +181,14 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
               transition: 'all 0.15s ease',
             }}
           >
-            📤 Supplier Payments ({supplierPayments.length})
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ArrowUpRightIcon size={15} style={{ color: activeSubTab === 'supplier' ? '#ef4444' : '#64748b' }} /> Supplier Payments ({supplierPayments.length})</span>
           </button>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder={activeSubTab === 'customer' ? '🔍 Search customer, receipt #...' : '🔍 Search voucher, ref #...'}
+            placeholder={activeSubTab === 'customer' ? 'Search customer, receipt #...' : 'Search voucher, ref #...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -219,7 +229,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
             className="btn btn-secondary"
             style={{ padding: '0.55rem 0.85rem', fontSize: '0.8rem' }}
           >
-            🔄 Refresh
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RefreshCwIcon size={14} /> Refresh</span>
           </button>
         </div>
       </div>
@@ -239,7 +249,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
         ) : activeSubTab === 'customer' ? (
           filteredCustomerPayments.length === 0 ? (
             <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🧾</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#f8fafc', color: '#64748b', marginBottom: '0.75rem', border: '1px solid #e2e8f0' }}><ReceiptIcon size={28} /></div>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>No customer payment receipts found</div>
               <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
                 Customer receipts recorded via collections will appear here automatically.
@@ -301,7 +311,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
                             className="btn btn-secondary"
                             style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
                           >
-                            View Customer ➔
+                            View Customer
                           </button>
                         )}
                       </td>
@@ -314,7 +324,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
         ) : (
           filteredSupplierPayments.length === 0 ? (
             <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🚚</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#f8fafc', color: '#6366f1', marginBottom: '0.75rem', border: '1px solid #e0e7ff' }}><TruckIcon size={28} /></div>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>No supplier disbursements found</div>
               <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
                 Supplier payouts recorded against purchase orders will appear here automatically.
@@ -384,7 +394,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
                           color: '#16a34a',
                           border: '1px solid #bbf7d0',
                         }}>
-                          ✓ Settled
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2Icon size={13} /> Settled</span>
                         </span>
                       </td>
                       <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
@@ -395,7 +405,7 @@ export function PaymentsView({ onOpenCustomerLedger, onOpenSupplierLedger }: Pay
                             className="btn btn-secondary"
                             style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
                           >
-                            View Ledger ➔
+                            View Ledger
                           </button>
                         )}
                       </td>

@@ -2,6 +2,7 @@ import { requirePerm } from '../auth.ts';
 import { bad, conflict, notFound, forbidden, FileResponse, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import {
   validateGstr2bJson,
   validateGstr2bCsv,
@@ -18,6 +19,7 @@ export function registerGst(r: Router) {
   // --------------------------------------------------------------------------
   r.get('/api/gst/overview', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const period = ctx.query.period || new Date().toISOString().slice(0, 7); // YYYY-MM
     const tenant = await ctx.db.one<{ gstin?: string; name: string }>('SELECT gstin, name FROM tenants WHERE id = ?', [tenantId]);
     const selectedGstin = ctx.query.gstin || tenant?.gstin || '';
@@ -27,6 +29,11 @@ export function registerGst(r: Router) {
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
 
+    const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
     // Outward Supplies: Invoices minus Credit Notes in this period
     const salesAgg = await ctx.db.one<{ taxable: number; cgst: number; sgst: number; igst: number }>(
       `SELECT
@@ -35,8 +42,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(sgst_minor), 0)::bigint AS sgst,
         COALESCE(SUM(igst_minor), 0)::bigint AS igst
        FROM invoices
-       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale' ${invBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const creditAgg = await ctx.db.one<{ taxable: number; cgst: number; sgst: number; igst: number }>(
@@ -46,8 +53,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(sgst_minor), 0)::bigint AS sgst,
         COALESCE(SUM(igst_minor), 0)::bigint AS igst
        FROM invoices
-       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'credit_note'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'credit_note' ${invBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const salesTaxableMinor = Math.max(0, Number(salesAgg?.taxable || 0) - Number(creditAgg?.taxable || 0));
@@ -65,8 +72,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(igst_minor), 0)::bigint AS igst,
         COALESCE(SUM(itc_minor), 0)::bigint AS itc
        FROM purchases
-       WHERE tenant_id = ? AND COALESCE(purchase_date, bdate) >= ? AND COALESCE(purchase_date, bdate) <= ? AND status != 'voided'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND COALESCE(purchase_date, bdate) >= ? AND COALESCE(purchase_date, bdate) <= ? AND status != 'voided' ${purBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
     const purchaseTaxableMinor = Number(purchasesAgg?.taxable || 0);
     const purchaseGstMinor = Number(purchasesAgg?.cgst || 0) + Number(purchasesAgg?.sgst || 0) + Number(purchasesAgg?.igst || 0);
@@ -78,8 +85,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(cgst_minor + sgst_minor + igst_minor), 0)::bigint AS "totalGst",
         COALESCE(SUM(itc_minor), 0)::bigint AS itc
        FROM expenses
-       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided' ${expBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
     const expenseTaxableMinor = Number(expensesAgg?.taxable || 0);
     const expenseGstMinor = Number(expensesAgg?.totalGst || 0);
@@ -159,11 +166,16 @@ export function registerGst(r: Router) {
   // --------------------------------------------------------------------------
   r.get('/api/gst/sales-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const invoices = await ctx.db.query(
       `SELECT
@@ -171,9 +183,9 @@ export function registerGst(r: Router) {
         i.place_state, i.intra, i.taxable_minor, i.cgst_minor, i.sgst_minor, i.igst_minor,
         i.round_off_minor, i.total_minor, i.status
        FROM invoices i
-       WHERE i.tenant_id = ? AND i.bdate >= ? AND i.bdate <= ? AND i.status = 'posted'
+       WHERE i.tenant_id = ? AND i.bdate >= ? AND i.bdate <= ? AND i.status = 'posted' ${invBrClause}
        ORDER BY i.bdate ASC, i.number ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const b2b = invoices.filter((i: any) => {
@@ -228,11 +240,17 @@ export function registerGst(r: Router) {
   // --------------------------------------------------------------------------
   r.get('/api/gst/purchase-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // Goods Purchases
     const purchases = await ctx.db.query(
@@ -243,9 +261,9 @@ export function registerGst(r: Router) {
         p.taxable_minor, p.cgst_minor, p.sgst_minor, p.igst_minor, p.total_minor, p.itc_minor
        FROM purchases p
        LEFT JOIN parties part ON part.id = p.supplier_id AND part.tenant_id = p.tenant_id
-       WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided'
+       WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided' ${purBrClause}
        ORDER BY doc_date ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     // Operational Expenses
@@ -256,9 +274,9 @@ export function registerGst(r: Router) {
         supplier_name, supplier_gstin, category,
         taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor, itc_minor
        FROM expenses
-       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided'
+       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided' ${expBrClause}
        ORDER BY expense_date ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const items = [
@@ -334,11 +352,17 @@ export function registerGst(r: Router) {
   // --------------------------------------------------------------------------
   r.get('/api/gst/itc-register', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // 1. Fetch all book records (purchases with GST and expenses with GST)
     const purchases = await ctx.db.query(
@@ -350,8 +374,8 @@ export function registerGst(r: Router) {
        FROM purchases p
        LEFT JOIN parties part ON part.id = p.supplier_id AND part.tenant_id = p.tenant_id
        WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided'
-         AND (p.cgst_minor + p.sgst_minor + p.igst_minor) > 0`,
-      [tenantId, startDate, endDate],
+         AND (p.cgst_minor + p.sgst_minor + p.igst_minor) > 0 ${purBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const expenses = await ctx.db.query(
@@ -362,8 +386,8 @@ export function registerGst(r: Router) {
         taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor, itc_minor
        FROM expenses
        WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided'
-         AND (cgst_minor + sgst_minor + igst_minor) > 0`,
-      [tenantId, startDate, endDate],
+         AND (cgst_minor + sgst_minor + igst_minor) > 0 ${expBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     // 2. Fetch existing ITC review records
@@ -892,6 +916,7 @@ export function registerGst(r: Router) {
   // --------------------------------------------------------------------------
   r.get('/api/gst/gstr3b', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const period = ctx.query.period || new Date().toISOString().slice(0, 7);
     const tenant = await ctx.db.one<{ gstin?: string }>('SELECT gstin FROM tenants WHERE id = ?', [tenantId]);
     const gstin = ctx.query.gstin || tenant?.gstin || '';
@@ -901,6 +926,9 @@ export function registerGst(r: Router) {
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
 
+    const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
+
     // Table 3.1: Outward supplies from posted sales invoices and credit notes
     const sales = await ctx.db.one<{ taxable: number; cgst: number; sgst: number; igst: number }>(
       `SELECT
@@ -909,8 +937,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(sgst_minor), 0)::bigint AS sgst,
         COALESCE(SUM(igst_minor), 0)::bigint AS igst
        FROM invoices
-       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale' ${invBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const credits = await ctx.db.one<{ taxable: number; cgst: number; sgst: number; igst: number }>(
@@ -920,8 +948,8 @@ export function registerGst(r: Router) {
         COALESCE(SUM(sgst_minor), 0)::bigint AS sgst,
         COALESCE(SUM(igst_minor), 0)::bigint AS igst
        FROM invoices
-       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'credit_note'`,
-      [tenantId, startDate, endDate],
+       WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'credit_note' ${invBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const outTaxable = Math.max(0, Number(sales?.taxable || 0) - Number(credits?.taxable || 0));
@@ -1038,11 +1066,16 @@ export function registerGst(r: Router) {
   // Sales Register CSV Export
   r.get('/api/gst/sales-register/export', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const invoices = await ctx.db.query(
       `SELECT
@@ -1050,9 +1083,9 @@ export function registerGst(r: Router) {
         i.place_state, i.intra, i.taxable_minor, i.cgst_minor, i.sgst_minor, i.igst_minor,
         i.round_off_minor, i.total_minor, i.status
        FROM invoices i
-       WHERE i.tenant_id = ? AND i.bdate >= ? AND i.bdate <= ? AND i.status = 'posted'
+       WHERE i.tenant_id = ? AND i.bdate >= ? AND i.bdate <= ? AND i.status = 'posted' ${invBrClause}
        ORDER BY i.bdate ASC, i.number ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const escapeCsv = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -1105,11 +1138,17 @@ export function registerGst(r: Router) {
   // Purchase Register CSV Export
   r.get('/api/gst/purchase-register/export', requirePerm('gst.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const purchases = await ctx.db.query(
       `SELECT
@@ -1119,9 +1158,9 @@ export function registerGst(r: Router) {
         p.taxable_minor, p.cgst_minor, p.sgst_minor, p.igst_minor, p.total_minor, p.itc_minor
        FROM purchases p
        LEFT JOIN parties part ON part.id = p.supplier_id AND part.tenant_id = p.tenant_id
-       WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided'
+       WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided' ${purBrClause}
        ORDER BY doc_date ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const expenses = await ctx.db.query(
@@ -1131,9 +1170,9 @@ export function registerGst(r: Router) {
         supplier_name, supplier_gstin, category,
         taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor, itc_minor
        FROM expenses
-       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided'
+       WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided' ${expBrClause}
        ORDER BY expense_date ASC`,
-      [tenantId, startDate, endDate],
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     const escapeCsv = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -1216,11 +1255,17 @@ export function registerGst(r: Router) {
   // ITC Reconciliation Report CSV Export
   const exportItcRecon = async (ctx: any) => {
     const tenantId = ctx.user!.tenantId;
-    const period = ctx.query.period || new Date().toISOString().slice(0, 7);
+    const scope = await resolveBranchScope(ctx);
+    const rawPeriod = (typeof ctx.query.period === 'string' ? ctx.query.period.trim() : '');
+    const period = /^\d{4}-\d{2}$/.test(rawPeriod) ? rawPeriod : new Date().toISOString().slice(0, 7);
     const [year, month] = period.split('-').map(Number);
     const startDate = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+    const endDate = `${period}-${String(lastDay || 28).padStart(2, '0')}`;
+
+    const purBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND p.branch_id = ?' : '';
+    const expBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // 1. Purchases with GST
     const purchases = await ctx.db.query(
@@ -1232,8 +1277,8 @@ export function registerGst(r: Router) {
        FROM purchases p
        LEFT JOIN parties part ON part.id = p.supplier_id AND part.tenant_id = p.tenant_id
        WHERE p.tenant_id = ? AND COALESCE(p.purchase_date, p.bdate) >= ? AND COALESCE(p.purchase_date, p.bdate) <= ? AND p.status != 'voided'
-         AND (p.cgst_minor + p.sgst_minor + p.igst_minor) > 0`,
-      [tenantId, startDate, endDate],
+         AND (p.cgst_minor + p.sgst_minor + p.igst_minor) > 0 ${purBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     // 2. Expenses with GST
@@ -1245,8 +1290,8 @@ export function registerGst(r: Router) {
         taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor, itc_minor
        FROM expenses
        WHERE tenant_id = ? AND expense_date >= ? AND expense_date <= ? AND status != 'voided'
-         AND (cgst_minor + sgst_minor + igst_minor) > 0`,
-      [tenantId, startDate, endDate],
+         AND (cgst_minor + sgst_minor + igst_minor) > 0 ${expBrClause}`,
+      [tenantId, startDate, endDate, ...brParams],
     );
 
     // 3. Reviews
@@ -1385,6 +1430,9 @@ export function registerGst(r: Router) {
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${period}-${String(lastDay).padStart(2, '0')}`;
       const tenantId = ctx.user!.tenantId;
+      const scope = await resolveBranchScope(ctx);
+      const invBrClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+      const brParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
       const sales = await ctx.db.one<any>(
         `SELECT
@@ -1393,8 +1441,8 @@ export function registerGst(r: Router) {
           COALESCE(SUM(sgst_minor), 0)::bigint AS sgst,
           COALESCE(SUM(igst_minor), 0)::bigint AS igst
          FROM invoices
-         WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale'`,
-        [tenantId, startDate, endDate],
+         WHERE tenant_id = ? AND bdate >= ? AND bdate <= ? AND status = 'posted' AND kind = 'sale' ${invBrClause}`,
+        [tenantId, startDate, endDate, ...brParams],
       );
 
       const itc = await ctx.db.one<any>(

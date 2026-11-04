@@ -13,7 +13,7 @@ import {
 interface StoreManagerDashboardProps {
   user: User;
   shop: Shop | null;
-  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings') => void;
+  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings' | 'stock-transfer') => void;
 }
 
 const formatRupees = (paise: number = 0) => {
@@ -30,6 +30,7 @@ export function StoreManagerDashboard({
     user.assignedLocation || 'MAIN',
   );
   const [branchSummary, setBranchSummary] = useState<BranchSummary | null>(null);
+  const [incomingTransfers, setIncomingTransfers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Review shift modal
@@ -146,10 +147,17 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
     }
   };
 
-  const loadBranchDetails = async (branchId: string) => {
+  const loadBranchDetails = async (branchId: string, branchCode?: string) => {
     try {
       const sum = await fetchBranchSummary(branchId);
       setBranchSummary(sum);
+      const code = branchCode || selectedBranchCode;
+      try {
+        const trfRes = await api<{ transfers: any[] }>(`/api/stock-transfers?toBranch=${encodeURIComponent(code)}&status=in_transit&limit=5`);
+        setIncomingTransfers(trfRes.transfers || []);
+      } catch {
+        setIncomingTransfers([]);
+      }
     } catch (err) {
       console.error('Failed to load branch summary:', err);
     }
@@ -163,7 +171,7 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
     setSelectedBranchCode(code);
     const b = branches.find((item) => item.code === code);
     if (b) {
-      loadBranchDetails(b.id);
+      loadBranchDetails(b.id, code);
     }
   };
 
@@ -406,29 +414,57 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
         {/* Branch Selector (if manager has multiple branches assigned) */}
         {branches.length > 1 && (
           <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Switch Branch:</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {branches.map((b) => (
-                <button
-                  key={b.code}
-                  type="button"
-                  onClick={() => handleBranchChange(b.code)}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    border: 'none',
-                    background: selectedBranchCode === b.code ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                    color: '#ffffff',
-                    boxShadow: selectedBranchCode === b.code ? '0 2px 8px rgba(59, 130, 246, 0.4)' : 'none',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {b.name} ({b.code})
-                </button>
-              ))}
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Branch:</span>
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{
+                position: 'absolute',
+                left: '10px',
+                pointerEvents: 'none',
+                fontSize: '0.8rem',
+                color: '#93c5fd',
+                zIndex: 1,
+              }}>🏢</span>
+              <select
+                value={selectedBranchCode}
+                onChange={(e) => handleBranchChange(e.target.value)}
+                style={{
+                  paddingLeft: '30px',
+                  paddingRight: '32px',
+                  paddingTop: '6px',
+                  paddingBottom: '6px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: '1px solid rgba(99, 179, 237, 0.5)',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#ffffff',
+                  backdropFilter: 'blur(8px)',
+                  outline: 'none',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  minWidth: '200px',
+                  boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {branches.map((b) => (
+                  <option
+                    key={b.code}
+                    value={b.code}
+                    style={{ background: '#1e3a8a', color: '#ffffff', fontWeight: 700 }}
+                  >
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+              <span style={{
+                position: 'absolute',
+                right: '10px',
+                pointerEvents: 'none',
+                fontSize: '0.65rem',
+                color: '#93c5fd',
+              }}>▼</span>
             </div>
           </div>
         )}
@@ -489,6 +525,113 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
           </div>
         </div>
       </div>
+
+      {/* Incoming Stock Deliveries Alert (Shows when goods are in transit arriving at this branch) */}
+      {incomingTransfers.length > 0 && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+            borderRadius: '16px',
+            padding: '1.25rem 1.5rem',
+            border: '1px solid #a7f3d0',
+            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.12)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: '#16a34a',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 10px rgba(22, 163, 74, 0.25)',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: '1.25rem' }}>🚚</span>
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, color: '#065f46', fontSize: '1.05rem' }}>
+                  {incomingTransfers.length} Incoming Stock Transfer{incomingTransfers.length > 1 ? 's' : ''} in Transit
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#047857', marginTop: '2px' }}>
+                  Goods dispatched to this branch are currently in transit. Click below to inspect physical arrival and receive into stock.
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate?.('stock-transfer')}
+              style={{
+                background: '#16a34a',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.6rem 1.25rem',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+              }}
+            >
+              Receive Stock Transfers ➔
+            </button>
+          </div>
+
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {incomingTransfers.map((t) => (
+              <div
+                key={t.id}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '10px',
+                  padding: '0.75rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}
+              >
+                <div>
+                  <span style={{ fontWeight: 800, color: '#0f172a', marginRight: '8px' }}>
+                    {t.transferNumber}
+                  </span>
+                  <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                    From: <strong style={{ color: '#334155' }}>{t.fromBranchName || t.fromBranch}</strong> ({t.itemsCount || 0} items)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.('stock-transfer')}
+                  style={{
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    border: '1px solid #bbf7d0',
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ● In Transit – Click to Receive
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Active Shifts & Shift Reviews */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>

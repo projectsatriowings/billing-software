@@ -23,6 +23,11 @@ export interface AuthUser {
   assignedLocation?: string;
   assignedCounter?: string;
   allowedLocations?: string[];
+  branchId?: string | null;
+  username?: string | null;
+  counterId?: string | null;
+  mustChangePassword?: boolean;
+  isChangeToken?: boolean;
 }
 export interface Ctx {
   req: http.IncomingMessage;
@@ -72,10 +77,17 @@ const hits = new Map<string, number[]>();
 export function rateLimit(key: string, max: number, windowMs: number) {
   const now = Date.now();
   const arr = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (arr.length >= max) throw new HttpError(429, 'RATE_LIMITED', 'Too many attempts. Please wait a few minutes and try again.');
+  if (arr.length >= max) {
+    const waitMin = Math.max(1, Math.ceil((windowMs - (now - arr[0])) / 60000));
+    throw new HttpError(429, 'RATE_LIMITED', `Too many attempts. Please wait ${waitMin} minute${waitMin > 1 ? 's' : ''} and try again.`);
+  }
   arr.push(now);
   hits.set(key, arr);
   if (hits.size > 5000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > windowMs) hits.delete(k);
+}
+export function clearRateLimit(key?: string) {
+  if (key) hits.delete(key);
+  else hits.clear();
 }
 
 function readBody(req: http.IncomingMessage, limit: number): Promise<Buffer> {
@@ -157,6 +169,12 @@ export function createHandler(opts: ServerOptions): http.RequestListener {
           } else ctx.body = {};
         }
         ctx.user = await opts.authenticate(ctx);
+        if (ctx.user?.mustChangePassword) {
+          const isExcluded = url.pathname === '/api/auth/change-password' || url.pathname === '/api/auth/logout';
+          if (!isExcluded) {
+            throw new HttpError(403, 'PASSWORD_CHANGE_REQUIRED', 'Password change required before accessing other resources.');
+          }
+        }
         let result: unknown;
         for (const h of m.route.handlers) result = await h(ctx);
         if (result instanceof FileResponse) {

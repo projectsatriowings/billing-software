@@ -1,4 +1,5 @@
 import { requirePerm, requireUser } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, notFound, forbidden, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { j } from '../db/index.ts';
@@ -47,6 +48,7 @@ export function registerPromotions(r: Router) {
   r.get('/api/promotions', requirePerm('promotions.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const role = ctx.user!.role;
+    const scope = await resolveBranchScope(ctx);
     const search = (ctx.query.search ?? '').trim().toLowerCase();
     const typeFilter = (ctx.query.type ?? '').trim();
     const statusFilter = (ctx.query.status ?? '').trim().toLowerCase();
@@ -63,12 +65,19 @@ export function registerPromotions(r: Router) {
 
     let sql = 'SELECT * FROM promotions WHERE tenant_id = ?';
     const params: unknown[] = [tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND branch_id = ?';
+      params.push(scope.branchId);
+    }
 
     // Branch authorization for Store Managers
     if (role === 'manager') {
-      const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
+      const allowed = ctx.user!.allowedLocations?.length
+        ? ctx.user!.allowedLocations
+        : [ctx.user!.assignedLocation || 'MAIN'];
       // Manager can see promotions where branches contains 'ALL' or any of their allowed branches
-      sql += ` AND (branches @> '["ALL"]'::jsonb OR branches ?| array[${allowed.map(() => '?').join(', ')}])`;
+      // Use jsonb_exists_any() function to prevent `?` operator collision with `toPgPlaceholders`
+      sql += ` AND (branches @> '["ALL"]'::jsonb OR jsonb_exists_any(branches, ARRAY[${allowed.map(() => '?').join(', ')}]::text[]))`;
       params.push(...allowed);
     }
 
@@ -315,6 +324,9 @@ export function registerPromotions(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const role = ctx.user!.role;
     const b = ctx.body ?? {};
+    const scope = await resolveBranchScope(ctx);
+    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) throw bad('Branch is required for promotion creation', 'BRANCH_REQUIRED');
 
     const name = V.str(b.name, 'Promotion name', { required: true, max: 120 });
     const description = V.optStr(b.description, 'Description', 500);
@@ -366,14 +378,15 @@ export function registerPromotions(r: Router) {
     const id = newId('promo');
     await ctx.db.exec(
       `INSERT INTO promotions (
-        id, tenant_id, name, description, type, status, start_date, end_date,
+        id, tenant_id, branch_id, name, description, type, status, start_date, end_date,
         branches, counters, rules, customer_eligibility_type, eligible_customer_ids,
         max_total_usage, max_usage_per_customer, current_usage_count, show_banner_on_pos,
         allow_stacking, min_bill_amount_minor, max_discount_minor, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?, 0, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?, 0, ?, ?, ?, ?, ?)`,
       [
         id,
         tenantId,
+        branchId,
         name,
         description || null,
         type,

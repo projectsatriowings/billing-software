@@ -1,5 +1,57 @@
 import React, { useState } from 'react';
-import { BUSINESS_TYPES_META, type BusinessTypeMeta } from './businessTypes';
+
+interface RetailFormatItem {
+  id: string;
+  title: string;
+  icon: string;
+  badgeColor: string;
+  shortDesc: string;
+}
+
+const RETAIL_STORE_FORMATS: RetailFormatItem[] = [
+  {
+    id: 'supermarket',
+    title: 'Grocery & Supermarket',
+    icon: '🛒',
+    badgeColor: '#6d4aff',
+    shortDesc: 'Manage products, stock, barcode scanning, and high-speed counter checkout.',
+  },
+  {
+    id: 'kirana',
+    title: 'Kirana & Provision Store',
+    icon: '🌾',
+    badgeColor: '#10b981',
+    shortDesc: 'Loose goods in kg/grams, FMCG barcode billing, and customer credit ledger (khata).',
+  },
+  {
+    id: 'departmental',
+    title: 'Departmental Store',
+    icon: '🏬',
+    badgeColor: '#3b82f6',
+    shortDesc: 'Multi-category retail inventory, shelf management, and automated low-stock alerts.',
+  },
+  {
+    id: 'fruits-veg',
+    title: 'Fruits & Vegetables Mart',
+    icon: '🍎',
+    badgeColor: '#f97316',
+    shortDesc: 'Integrated electronic weighing scale, daily rate updates, and touch speed keys.',
+  },
+  {
+    id: 'minimart',
+    title: 'Mini Mart & Convenience Store',
+    icon: '🛍️',
+    badgeColor: '#8b5cf6',
+    shortDesc: 'Rapid barcode lookup, dynamic UPI QR payments, and instant printed receipts.',
+  },
+  {
+    id: 'retail-pos',
+    title: 'Retail POS Counter',
+    icon: '🏪',
+    badgeColor: '#db2777',
+    shortDesc: 'Multi-counter cashier billing, custom barcode label printing, and day-end shift reports.',
+  },
+];
 
 interface LandingPageProps {
   onNavigateLogin: () => void;
@@ -31,20 +83,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const faqs = [
     {
-      q: 'Can I use Adaptive Billing for both retail counter and wholesale distribution?',
-      a: 'Yes! Adaptive Billing seamlessly adapts to both. For retail, enjoy fast barcode counter billing with thermal receipts. For wholesale, switch to A4 GST invoices with customer credit limits and vehicle numbers.',
+      q: 'Can I use this billing software for both small retail shops and large supermarkets?',
+      a: 'Yes! It seamlessly scales from a single-counter kirana store to multi-counter supermarkets with barcode scanners, electronic weighing scale integration, and thermal receipt printing.',
     },
     {
       q: 'Do I need special hardware or barcode scanners?',
       a: 'No special hardware is required. It runs in any web browser and supports standard USB/Bluetooth barcode scanners, thermal receipt printers (58mm and 80mm), standard laser/inkjet printers, and weighing scales.',
     },
     {
-      q: 'Is my business data isolated and secure from other businesses?',
-      a: 'Absolutely. Every business runs in a strictly partitioned tenant container with encrypted authentication and role-based permissions. No business can ever view, query, or modify another store’s data.',
+      q: 'Does it support loose items sold by weight (kg, grams, litres)?',
+      a: 'Yes! You can connect an electronic weighing scale directly or enter weights manually. The billing system calculates rates per kg/gram instantly with exact tax splits.',
     },
     {
-      q: 'Can cashiers access accounting or owner reports?',
-      a: 'No. The built-in permission system restricts cashiers to counter billing and customer quick-add, preventing price modifications or viewing business financial summaries without manager or owner credentials.',
+      q: 'Can cashiers access profit margins or sensitive reports?',
+      a: 'No. The built-in permission system restricts cashiers to counter billing, barcode scanning, and receipt printing, preventing unauthorized price modifications or viewing business profit summaries.',
     },
     {
       q: 'Does it support offline billing if the internet drops?',
@@ -65,13 +117,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="landing-brand" onClick={() => scrollToSection('hero')} style={{ cursor: 'pointer' }}>
             <span className="landing-brand-icon">⚡</span>
             <span className="landing-brand-name">Adaptive Billing</span>
-            <span className="landing-brand-badge">SaaS OS 2.0</span>
+            <span className="landing-brand-badge">Retail & Supermarket</span>
           </div>
 
           <nav className="landing-nav-links">
             <button type="button" onClick={() => scrollToSection('hero')} className="nav-link-btn">Home</button>
             <button type="button" onClick={() => scrollToSection('features')} className="nav-link-btn">Features</button>
-            <button type="button" onClick={() => scrollToSection('business-types')} className="nav-link-btn">Business Types</button>
+            <button type="button" onClick={() => scrollToSection('business-types')} className="nav-link-btn">Store Formats</button>
             <button type="button" onClick={() => scrollToSection('pricing')} className="nav-link-btn">Pricing</button>
             <button type="button" onClick={() => scrollToSection('faq')} className="nav-link-btn">FAQ</button>
           </nav>
@@ -89,7 +141,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={() => onNavigateRegister('grocery')}
               className="landing-btn-register"
             >
-              Register Your Business
+              Register Your Store
             </button>
           </div>
         </div>
@@ -101,16 +153,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="hero-text-content">
             <div className="hero-badge">
               <span className="hero-badge-star">✨</span>
-              <span>Smart Billing for Growing Businesses</span>
+              <span>Fast POS & Billing for Retail & Supermarkets</span>
             </div>
 
             <h1 className="hero-headline">
-              One Billing Platform <br />
-              for <span className="hero-highlight">Every Business</span>
+              High-Speed Billing for <br />
+              <span className="hero-highlight">Retail & Supermarkets</span>
             </h1>
 
             <p className="hero-subtext">
-              Manage your sales, products, inventory, customers, and reports — all in one powerful, easy-to-use platform. Built for shops, stores, restaurants, pharmacies, and more.
+              Accelerate counter checkout with instant barcode scanning, weighing scale integration, live inventory tracking, customer khata, and GST reports. Built specifically for retail shops, grocery stores, and supermarkets.
             </p>
 
             <div className="hero-cta-group">
@@ -119,7 +171,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={() => onNavigateRegister('grocery')}
                 className="hero-btn-primary"
               >
-                <span>Register Your Business</span>
+                <span>Register Your Store</span>
                 <span className="btn-arrow">→</span>
               </button>
               <button
@@ -138,19 +190,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="hero-trust-row">
               <div className="trust-item">
                 <span className="trust-check-bubble">✓</span>
-                <span>Secure & Reliable</span>
+                <span>Sub-Second Barcode POS</span>
               </div>
               <div className="trust-item">
                 <span className="trust-check-bubble">✓</span>
-                <span>Easy to Use</span>
+                <span>Weighing Scale Ready</span>
               </div>
               <div className="trust-item">
                 <span className="trust-check-bubble">✓</span>
-                <span>Multi-Business Support</span>
+                <span>Loose & Packaged Goods</span>
               </div>
               <div className="trust-item">
                 <span className="trust-check-bubble">✓</span>
-                <span>24/7 Support</span>
+                <span>100% Integer GST Calculation</span>
               </div>
             </div>
           </div>
@@ -167,7 +219,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <polygon points="12 2 2 22 22 22" fill="#6D4AFF" />
                       <polygon points="12 6 5 20 19 20" fill="#312E81" />
                     </svg>
-                    <span>Adaptive Billing</span>
+                    <span>Retail POS</span>
                   </div>
                   <div className="mockup-nav-item active">
                     <span>📊</span>
@@ -175,7 +227,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="mockup-nav-item">
                     <span>🛒</span>
-                    <span>Sales</span>
+                    <span>POS Billing</span>
                   </div>
                   <div className="mockup-nav-item">
                     <span>📦</span>
@@ -208,13 +260,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <circle cx="11" cy="11" r="8"/>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                       </svg>
-                      <span>Search...</span>
+                      <span>Search barcode or item...</span>
                     </div>
                     <div className="mockup-user-fake">
                       <div className="mockup-avatar-circle">JD</div>
                       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 800 }}>John Doe</span>
-                        <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Owner / User</span>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800 }}>Store Owner</span>
+                        <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Supermarket Manager</span>
                       </div>
                       <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>▼</span>
                     </div>
@@ -223,11 +275,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   {/* Greeting & Date */}
                   <div className="mockup-greeting-row">
                     <div className="mockup-greeting-text">
-                      <h4>Good Morning, John!</h4>
-                      <p>Here's what's happening with your business today.</p>
+                      <h4>Good Morning, Store Manager!</h4>
+                      <p>Here's your live retail counter performance today.</p>
                     </div>
                     <div className="mockup-date-pill">
-                      <span>Today, 14 Apr 2025</span>
+                      <span>Today, Live</span>
                       <span style={{ fontSize: '0.6rem', marginLeft: '4px' }}>▼</span>
                     </div>
                   </div>
@@ -240,7 +292,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <span style={{ color: '#6d4aff', fontSize: '0.8rem' }}>📊</span>
                       </div>
                       <div className="metric-val">₹45,720</div>
-                      <div className="metric-badge">↑ 12% from last week</div>
+                      <div className="metric-badge">↑ 12% from yesterday</div>
                     </div>
 
                     <div className="mockup-metric-card">
@@ -248,17 +300,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <span>Total Invoices</span>
                         <span style={{ color: '#a78bfa', fontSize: '0.8rem' }}>🧾</span>
                       </div>
-                      <div className="metric-val">24</div>
-                      <div className="metric-badge">↑ 8% from last week</div>
+                      <div className="metric-val">124</div>
+                      <div className="metric-badge">↑ 8% counter speed</div>
                     </div>
 
                     <div className="mockup-metric-card">
                       <div className="metric-header">
-                        <span>Total Customers</span>
-                        <span style={{ color: '#10b981', fontSize: '0.8rem' }}>👥</span>
+                        <span>Items Scanned</span>
+                        <span style={{ color: '#10b981', fontSize: '0.8rem' }}>📦</span>
                       </div>
-                      <div className="metric-val">120</div>
-                      <div className="metric-badge">↑ 15% from last week</div>
+                      <div className="metric-val">840</div>
+                      <div className="metric-badge">0 barcode errors</div>
                     </div>
                   </div>
 
@@ -267,8 +319,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     {/* Sales Overview Chart */}
                     <div className="mockup-chart-card">
                       <div className="card-mini-title">
-                        <span>Sales Overview</span>
-                        <span style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 600 }}>Last 7 days ▼</span>
+                        <span>Hourly Counter Velocity</span>
+                        <span style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 600 }}>Today ▼</span>
                       </div>
                       <div className="mockup-svg-chart-wrapper" style={{ position: 'relative', height: '110px' }}>
                         <svg viewBox="0 0 280 110" width="100%" height="100%" preserveAspectRatio="none">
@@ -311,7 +363,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           <circle cx="250" cy="28" r="3" fill="#ffffff" stroke="#6D4AFF" strokeWidth="2"/>
                         </svg>
                         <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '25px', fontSize: '0.55rem', color: '#94a3b8', marginTop: '2px' }}>
-                          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                          <span>9 AM</span><span>11 AM</span><span>1 PM</span><span>3 PM</span><span>5 PM</span><span>7 PM</span><span>9 PM</span>
                         </div>
                       </div>
                     </div>
@@ -319,35 +371,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     {/* Recent Activities */}
                     <div className="mockup-activity-card">
                       <div className="card-mini-title">
-                        <span>Recent Activities</span>
+                        <span>Live Counter Feed</span>
                       </div>
                       <div className="mockup-activity-list">
                         <div className="activity-item">
                           <span className="act-icon-circle green">🛒</span>
                           <div>
-                            <strong>New sale #INV-1008</strong>
-                            <div><span>₹2,400 • 2 hours ago</span></div>
+                            <strong>Counter 1: Bill #1084</strong>
+                            <div><span>₹1,450 • 1 min ago • Cash</span></div>
                           </div>
                         </div>
                         <div className="activity-item">
-                          <span className="act-icon-circle amber">📦</span>
+                          <span className="act-icon-circle amber">⚖️</span>
                           <div>
-                            <strong>Product added</strong>
-                            <div><span>Organic Rice • 3 hours ago</span></div>
+                            <strong>Weighed item added</strong>
+                            <div><span>Onion 2.5 kg @ ₹40/kg</span></div>
                           </div>
                         </div>
                         <div className="activity-item">
-                          <span className="act-icon-circle blue">👤</span>
+                          <span className="act-icon-circle blue">📱</span>
                           <div>
-                            <strong>Customer registered</strong>
-                            <div><span>Ramesh Kumar • 4 hours ago</span></div>
+                            <strong>UPI QR Payment</strong>
+                            <div><span>₹860 • Counter 2 • Settled</span></div>
                           </div>
                         </div>
                         <div className="activity-item">
                           <span className="act-icon-circle rose">⚠️</span>
                           <div>
-                            <strong>Stock alert</strong>
-                            <div><span>Milk Powder • Low stock</span></div>
+                            <strong>Low stock alert</strong>
+                            <div><span>Aashirvaad Atta 5kg • 3 units left</span></div>
                           </div>
                         </div>
                       </div>
@@ -356,41 +408,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               </div>
 
-              {/* Bottom Category Quick Strip */}
+              {/* Bottom Category Quick Strip (Supermarket & Retail Formats) */}
               <div className="mockup-category-strip">
                 <div className="category-mini-chip" onClick={() => onNavigateRegister('grocery')}>
-                  <div className="category-mini-chip-icon" style={{ background: '#fdf2f8', color: '#db2777' }}>🏪</div>
+                  <div className="category-mini-chip-icon" style={{ background: '#eef2ff', color: '#4f46e5' }}>🛒</div>
                   <div>
-                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Retail Shop</strong>
-                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>POS & Billing</span>
+                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Supermarket</strong>
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Express Checkout</span>
                   </div>
                 </div>
-                <div className="category-mini-chip" onClick={() => onNavigateRegister('pharmacy')}>
-                  <div className="category-mini-chip-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>➕</div>
+                <div className="category-mini-chip" onClick={() => onNavigateRegister('grocery')}>
+                  <div className="category-mini-chip-icon" style={{ background: '#ecfdf5', color: '#059669' }}>🌾</div>
                   <div>
-                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Pharmacy</strong>
-                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Medicine & Health</span>
+                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Grocery & Kirana</strong>
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Loose & FMCG</span>
                   </div>
                 </div>
-                <div className="category-mini-chip" onClick={() => onNavigateRegister('restaurant')}>
-                  <div className="category-mini-chip-icon" style={{ background: '#fff7ed', color: '#ea580c' }}>🍴</div>
+                <div className="category-mini-chip" onClick={() => onNavigateRegister('grocery')}>
+                  <div className="category-mini-chip-icon" style={{ background: '#fff7ed', color: '#ea580c' }}>🍎</div>
                   <div>
-                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Restaurant</strong>
-                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Dine In & Takeaway</span>
+                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Fruits & Veggies</strong>
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Weighing Scale</span>
                   </div>
                 </div>
-                <div className="category-mini-chip" onClick={() => onNavigateRegister('clothing')}>
-                  <div className="category-mini-chip-icon" style={{ background: '#fdf2f8', color: '#c026d3' }}>👗</div>
+                <div className="category-mini-chip" onClick={() => onNavigateRegister('grocery')}>
+                  <div className="category-mini-chip-icon" style={{ background: '#fdf2f8', color: '#db2777' }}>🏬</div>
                   <div>
-                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Clothing</strong>
-                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Fashion & Apparel</span>
+                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Departmental</strong>
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Multi-SKU Stock</span>
                   </div>
                 </div>
-                <div className="category-mini-chip" onClick={() => onNavigateRegister('electronics')}>
-                  <div className="category-mini-chip-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}>💻</div>
+                <div className="category-mini-chip" onClick={() => onNavigateRegister('grocery')}>
+                  <div className="category-mini-chip-icon" style={{ background: '#f5f3ff', color: '#7c3aed' }}>⚡</div>
                   <div>
-                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Electronics</strong>
-                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Gadgets & More</span>
+                    <strong style={{ display: 'block', fontSize: '0.68rem', color: '#1e1b4b' }}>Express Mart</strong>
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>Quick Barcode POS</span>
                   </div>
                 </div>
               </div>
@@ -399,14 +451,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Business Types Section from Image 1 */}
+      {/* Retail Store Formats Section (Replaces unwanted industries) */}
       <section id="business-types" className="landing-business-types-section">
         <div className="section-header-top-row">
           <div>
-            <span className="section-badge-pill">Choose Your Business Type</span>
-            <h2 className="section-main-heading">Explore Business Types</h2>
+            <span className="section-badge-pill">Retail & Supermarket Solutions</span>
+            <h2 className="section-main-heading">Tailored for Every Retail Store Format</h2>
             <p className="section-subtext">
-              Select your business type and get started with the right features, fields and modules tailored for your needs.
+              Engineered specifically for grocery stores, supermarkets, hypermarkets, and retail counters with barcode scanning and weighing scales.
             </p>
           </div>
           <button
@@ -414,17 +466,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             className="view-all-link"
             onClick={() => onNavigateRegister('grocery')}
           >
-            <span>View All Business Types</span>
+            <span>Register Your Store</span>
             <span style={{ marginLeft: '4px' }}>→</span>
           </button>
         </div>
 
         <div className="business-cards-grid">
-          {BUSINESS_TYPES_META.map((b: BusinessTypeMeta) => (
+          {RETAIL_STORE_FORMATS.map((b: RetailFormatItem) => (
             <div
               key={b.id}
               className="business-type-card"
-              onClick={() => onNavigateRegister(b.id)}
+              onClick={() => onNavigateRegister('grocery')}
             >
               <div className="card-top-header">
                 <div className="card-icon-squircle" style={{ background: `linear-gradient(135deg, ${b.badgeColor}18, ${b.badgeColor}30)` }}>
@@ -446,12 +498,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* 3 Pillars of Adaptive Billing */}
+      {/* 3 Pillars of Retail & Supermarket POS */}
       <section className="landing-pillars-section">
         <div className="section-header-centered">
           <span className="section-badge-pill">Enterprise Grade Foundation</span>
-          <h2 className="section-main-heading">The 3 Pillars of Adaptive Billing</h2>
-          <p className="section-subtext">Built specifically to solve the biggest challenges in Indian retail & multi-trade SaaS.</p>
+          <h2 className="section-main-heading">The 3 Pillars of Supermarket POS</h2>
+          <p className="section-subtext">Built specifically to solve the biggest challenges in Indian retail counters & supermarket chains.</p>
         </div>
 
         <div className="pillars-container">
@@ -469,16 +521,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="pillar-icon-box">🛡️</div>
             <h3 className="pillar-title">Strict Multi-Tenant Isolation</h3>
             <p className="pillar-desc">
-              Each registered store is isolated in a cryptographically scoped database container. Even with hundreds of stores, a business cannot see, query, or affect another store’s catalog, invoices, or revenue.
+              Each registered store is isolated in a cryptographically scoped database container. Even across multiple supermarket branches, data, cash registers, invoices, and customer khata stay strictly secure.
             </p>
           </div>
 
           <div className="pillar-item">
             <div className="pillar-num-badge">03</div>
             <div className="pillar-icon-box">⚡</div>
-            <h3 className="pillar-title">Context-Adaptive POS Interface</h3>
+            <h3 className="pillar-title">High-Speed Retail Billing Engine</h3>
             <p className="pillar-desc">
-              One shared engine that adapts dynamically: Pharmacy gets Batch/Expiry/Prescriptions, Restaurant gets KOT/Tables, Apparel gets Size/Colour variants, and Wholesale gets Bulk Sacks and B2B Invoicing.
+              Sub-second barcode scanning, loose items weighed live via electronic scale, fast item hotkeys, automated FEFO expiry alerts for dairy/FMCG, and instant thermal receipt printing.
             </p>
           </div>
         </div>
@@ -488,7 +540,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="features" className="landing-features-showcase-section">
         <div className="section-header-centered">
           <span className="section-badge-pill">Powering Thousands of Counters</span>
-          <h2 className="section-main-heading">Everything You Need to Run Your Store</h2>
+          <h2 className="section-main-heading">Everything You Need to Run Your Retail Store</h2>
           <p className="section-subtext">From barcode checkout to GSTR-1 reports, everything is integrated into one fast dashboard.</p>
         </div>
 
@@ -502,13 +554,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="feature-card">
             <div className="feat-icon-bubble">📦</div>
             <h4 className="feat-title">Smart Batch & Expiry Tracking</h4>
-            <p className="feat-desc">FEFO (First-Expiry-First-Out) inventory dispatching with automated alerts for near-expiry medicines, FMCG, and packaged items.</p>
+            <p className="feat-desc">FEFO (First-Expiry-First-Out) inventory dispatching with automated alerts for near-expiry dairy, packaged food, beverages, and FMCG items.</p>
           </div>
 
           <div className="feature-card">
             <div className="feat-icon-bubble">👥</div>
-            <h4 className="feat-title">Customer Directory & Accounts</h4>
-            <p className="feat-desc">Track customer balances, payment receipts, send instant WhatsApp bills, and manage wholesale buyers.</p>
+            <h4 className="feat-title">Customer Directory & Khata</h4>
+            <p className="feat-desc">Track regular customer credit balances, payment receipts, send instant WhatsApp bills, and reward repeat supermarket shoppers.</p>
           </div>
 
           <div className="feature-card">
@@ -519,8 +571,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <div className="feature-card">
             <div className="feat-icon-bubble">🏢</div>
-            <h4 className="feat-title">Multi-Store & Chain Management</h4>
-            <p className="feat-desc">Own a grocery shop, pharmacy, and restaurant? Switch seamlessly between all your businesses from one unified login with zero cross-tenant contamination.</p>
+            <h4 className="feat-title">Multi-Counter & Multi-Store</h4>
+            <p className="feat-desc">Run multiple checkout counters in a supermarket or manage several grocery branches from one unified login with centralized inventory.</p>
           </div>
 
           <div className="feature-card">
@@ -535,7 +587,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="pricing" className="landing-pricing-section">
         <div className="section-header-centered">
           <span className="section-badge-pill">Simple & Transparent</span>
-          <h2 className="section-main-heading">Transparent Pricing for Growing Businesses</h2>
+          <h2 className="section-main-heading">Transparent Pricing for Retail Stores</h2>
           <p className="section-subtext">No hidden fees, no per-transaction commissions. Upgrade as your store network expands.</p>
         </div>
 
@@ -568,12 +620,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <strong className="price-amount">999</strong>
               <span className="price-duration">/month</span>
             </div>
-            <p className="pricing-desc">Ideal for busy supermarkets, pharmacies, apparel stores & restaurants.</p>
+            <p className="pricing-desc">Ideal for busy supermarkets, grocery marts & high-volume retail stores.</p>
             <ul className="pricing-feature-list">
               <li>✓ Unlimited Counters & Devices</li>
               <li>✓ Unlimited Items & Barcodes</li>
               <li>✓ Batch & Expiry FEFO Tracking</li>
-              <li>✓ Table Management & KOT Dispatch</li>
+              <li>✓ Weighing Scale & Thermal Printing</li>
               <li>✓ Automated WhatsApp Invoicing</li>
               <li>✓ GSTR-1 Excel / CSV Reports</li>
               <li>✓ Cashier Role Permissions</li>
@@ -590,16 +642,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <strong className="price-amount">2,499</strong>
               <span className="price-duration">/month</span>
             </div>
-            <p className="pricing-desc">For retail chains, wholesale distributors & multi-brand store owners.</p>
+            <p className="pricing-desc">For supermarket chains, multi-counter retail outlets & hypermarkets.</p>
             <ul className="pricing-feature-list">
               <li>✓ Up to 10 Stores / Outlets</li>
-              <li>✓ Multi-Tenant Switcher Included</li>
+              <li>✓ Multi-Branch Switcher Included</li>
               <li>✓ Centralized Master Catalog</li>
               <li>✓ Inter-Store Stock Movement</li>
               <li>✓ Custom Invoice Branding</li>
               <li>✓ Priority Phone & On-Site Support</li>
             </ul>
-            <button type="button" onClick={() => onNavigateRegister('wholesale')} className="pricing-cta-btn secondary">
+            <button type="button" onClick={() => onNavigateRegister('grocery')} className="pricing-cta-btn secondary">
               Contact Sales
             </button>
           </div>
@@ -611,7 +663,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="section-header-centered">
           <span className="section-badge-pill">Common Questions</span>
           <h2 className="section-main-heading">Frequently Asked Questions</h2>
-          <p className="section-subtext">Everything you need to know about our multi-trade billing platform.</p>
+          <p className="section-subtext">Everything you need to know about our retail & supermarket billing platform.</p>
         </div>
 
         <div className="faq-accordion-list">
@@ -646,8 +698,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               🏪
             </div>
             <div className="cta-banner-text">
-              <h2>Ready to Grow Your Business?</h2>
-              <p>Join thousands of business owners who trust Adaptive Billing.</p>
+              <h2>Ready to Grow Your Store?</h2>
+              <p>Join thousands of supermarket and retail store owners who trust Adaptive Billing.</p>
             </div>
           </div>
 
@@ -657,7 +709,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={() => onNavigateRegister('grocery')}
               className="banner-btn-primary"
             >
-              Register Your Business →
+              Register Your Store →
             </button>
             <button
               type="button"
@@ -671,11 +723,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="cta-banner-stats">
             <div className="cta-stat-item">
               <span className="cta-stat-num">10K+</span>
-              <span className="cta-stat-lbl">Happy Businesses</span>
+              <span className="cta-stat-lbl">Active Retail Counters</span>
             </div>
             <div className="cta-stat-item">
               <span className="cta-stat-num">50K+</span>
-              <span className="cta-stat-lbl">Daily Transactions</span>
+              <span className="cta-stat-lbl">Daily Barcode Scans</span>
             </div>
             <div className="cta-stat-item">
               <span className="cta-stat-num">99.9%</span>
@@ -694,7 +746,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="footer-brand-title">Adaptive Billing</span>
             </div>
             <p className="footer-brand-tagline">
-              India-first cloud POS and billing operating system for retail, healthcare, hospitality, and wholesale businesses.
+              India-first cloud POS and billing software built exclusively for retail stores, grocery shops, and supermarkets.
             </p>
             <div className="footer-status-indicator">
               <span className="status-dot green" />
@@ -703,13 +755,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="footer-links-col">
-            <h5 className="footer-col-heading">Business Types</h5>
+            <h5 className="footer-col-heading">Store Formats</h5>
             <ul className="footer-list">
               <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Grocery & Supermarket</button></li>
-              <li><button type="button" onClick={() => onNavigateRegister('pharmacy')}>Pharmacy & Medicals</button></li>
-              <li><button type="button" onClick={() => onNavigateRegister('clothing')}>Clothing & Textiles</button></li>
-              <li><button type="button" onClick={() => onNavigateRegister('restaurant')}>Restaurant & Cafe</button></li>
-              <li><button type="button" onClick={() => onNavigateRegister('wholesale')}>Wholesale & Distribution</button></li>
+              <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Kirana & Provision Stores</button></li>
+              <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Departmental Stores</button></li>
+              <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Fruits & Vegetables Marts</button></li>
+              <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Mini Marts & Express POS</button></li>
             </ul>
           </div>
 
@@ -720,7 +772,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <li><button type="button" onClick={() => scrollToSection('pricing')}>Pricing Plans</button></li>
               <li><button type="button" onClick={() => scrollToSection('faq')}>Help & FAQ</button></li>
               <li><button type="button" onClick={onNavigateLogin}>Merchant Sign In</button></li>
-              <li><button type="button" onClick={() => onNavigateRegister('other')}>Other Trade Registration</button></li>
+              <li><button type="button" onClick={() => onNavigateRegister('grocery')}>Start Free Trial</button></li>
             </ul>
           </div>
 

@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstr3b, saveGstr3b, downloadFile, type Gstr3bSummary } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  FileTextIcon,
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  SpinnerIcon,
+  CheckIcon,
+  CheckCircleIcon,
+  AlertTriangleIcon,
+  GstBuildingIcon,
+  ArrowRightIcon,
+} from './GstIcons.tsx';
 
 interface Gstr3bViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -91,7 +104,7 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
       <div className="gstr3b-header-card">
         <div className="gstr3b-header-left">
           <h1 className="gstr3b-header-title">
-            <span>📄</span> GSTR-3B Preparation &amp; Filing Worksheets
+            <span className="inline-flex items-center text-indigo-600"><FileTextIcon className="h-6 w-6" /></span> GSTR-3B Preparation &amp; Filing Worksheets
           </h1>
           <p className="gstr3b-header-subtitle">
             Monthly summary return computation based on authorized sales invoices and reviewed eligible Input Tax Credit for {periodLabel}.
@@ -108,7 +121,7 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
               onClick={() => changeMonth(-1)}
               title="Previous Month"
             >
-              ◀
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
             </button>
             <input
               type="month"
@@ -122,7 +135,7 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
               onClick={() => changeMonth(1)}
               title="Next Month"
             >
-              ▶
+              <ChevronRightIcon className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -132,7 +145,8 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             className="gst-pill-btn"
             title="Jump to current return month"
           >
-            📅 Current
+            <CalendarIcon className="h-3.5 w-3.5" />
+            <span>Current</span>
           </button>
 
           <button
@@ -154,7 +168,7 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             className="gst-pill-btn"
             title="Download filing summary in JSON / CSV format"
           >
-            <span>{exporting ? '⏳' : '📥'}</span>
+            {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <DownloadIcon className="h-4 w-4 text-slate-600" />}
             <span>{exporting ? 'Exporting...' : 'Export JSON / CSV'}</span>
           </button>
 
@@ -165,15 +179,16 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             className="gst-pill-btn success"
             title="Lock return after reviewing all ITC decisions"
           >
-            <span>{saving ? '⏳' : '✓'}</span>
+            {saving ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <CheckIcon className="h-4 w-4" />}
             <span>{saving ? 'Locking...' : 'Mark Reviewed & Lock'}</span>
           </button>
         </div>
       </div>
 
       {saveSuccessMsg && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 shadow-sm">
-          ✓ {saveSuccessMsg}
+        <div className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800 shadow-sm">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{saveSuccessMsg}</span>
         </div>
       )}
 
@@ -181,7 +196,9 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
       {gstr3b && (gstr3b.unreviewedRecordsCount > 0 || gstr3b.unresolvedMismatchesCount > 0) && (
         <div className="gstr3b-alert-banner">
           <div className="gstr3b-alert-content">
-            <span className="gstr3b-alert-icon">⚠️</span>
+            <span className="gstr3b-alert-icon">
+              <AlertTriangleIcon className="h-5 w-5 text-amber-600" />
+            </span>
             <div className="gstr3b-alert-text">
               <div className="gstr3b-alert-title">
                 Draft Status Alert — Audit Review Pending
@@ -205,20 +222,21 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             onClick={() => onNavigate && onNavigate('gst-itc-reconciliation')}
             className="gstr3b-alert-btn"
           >
-            <span>Open ITC Register ➔</span>
+            <span className="inline-flex items-center gap-1">Open ITC Register <ArrowRightIcon className="h-3.5 w-3.5" /></span>
           </button>
         </div>
       )}
 
       {loading ? (
         <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
-          <div className="text-2xl animate-spin">⏳</div>
+          <SpinnerIcon className="h-8 w-8 text-indigo-600 animate-spin" />
           <div className="font-semibold text-slate-700">Computing GSTR-3B table summaries for {periodLabel}...</div>
           <div className="text-xs text-slate-400">Balancing Table 3.1 outward liabilities with Table 4 eligible input credit</div>
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-700 shadow-sm">
-          ⚠️ {error}
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-700 shadow-sm">
+          <AlertTriangleIcon className="h-5 w-5 text-rose-600 shrink-0" />
+          <span>{error}</span>
         </div>
       ) : gstr3b ? (
         <div className="space-y-6">
@@ -227,7 +245,7 @@ export const Gstr3bView: React.FC<Gstr3bViewProps> = ({ onNavigate }) => {
             <div className="gstr3b-hero-layout">
               <div className="gstr3b-hero-left">
                 <div className="gstr3b-hero-badge">
-                  <span>🏛️</span>
+                  <GstBuildingIcon className="h-3.5 w-3.5 text-indigo-200" />
                   <span>ESTIMATED NET TAX PAYABLE (AFTER ELIGIBLE ITC)</span>
                 </div>
                 <div className="gstr3b-hero-amount">

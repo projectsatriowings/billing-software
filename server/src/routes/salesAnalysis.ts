@@ -1,4 +1,5 @@
 import { requireUser } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { type Router } from '../http.ts';
 import type {
   SalesAnalysisData,
@@ -71,6 +72,7 @@ export function registerSalesAnalysis(r: Router) {
   r.get('/api/sales-analysis', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const userRole = ctx.user!.role;
+    const scope = await resolveBranchScope(ctx);
 
     // 1. Resolve Date Range Filters (default: Last 30 Days in Asia/Kolkata)
     const now = new Date();
@@ -114,6 +116,11 @@ export function registerSalesAnalysis(r: Router) {
     const buildFilterClauses = (alias: string) => {
       const clauses: string[] = [];
       const params: any[] = [];
+
+      if (!scope.isSuperAdminAll && scope.branchId) {
+        clauses.push(`${alias}.branch_id = ?`);
+        params.push(scope.branchId);
+      }
 
       if (userFilter && userFilter !== 'ALL') {
         clauses.push(`${alias}.created_by = ?`);

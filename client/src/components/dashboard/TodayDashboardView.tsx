@@ -11,6 +11,7 @@ import {
 import { OpenShiftModal } from '../shifts/OpenShiftModal.tsx';
 import { CashMovementModal } from '../shifts/CashMovementModal.tsx';
 import { CloseShiftModal } from '../shifts/CloseShiftModal.tsx';
+import { BranchSwitcher } from './BranchSwitcher.tsx';
 import {
   SparklesIcon,
   DownloadIcon,
@@ -26,6 +27,7 @@ import {
   ShoppingCartIcon,
   RefreshCwIcon,
   CheckCircleIcon,
+  LockIcon,
 } from '../inventory/InventoryIcons.tsx';
 
 interface TodayDashboardViewProps {
@@ -38,6 +40,9 @@ interface TodayDashboardViewProps {
   onNavigateToPurchases: () => void;
   onOpenAddProductModal: () => void;
   showToast?: (msg: string) => void;
+  onManageBranches?: () => void;
+  selectedBranch?: string;
+  onBranchChange?: (branch: string) => void;
 }
 
 type ChartMetric = 'sales' | 'bills' | 'profit';
@@ -292,6 +297,9 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   onNavigateToPurchases,
   onOpenAddProductModal,
   showToast,
+  onManageBranches,
+  selectedBranch,
+  onBranchChange,
 }) => {
   // SWR: Initialize state immediately from cache if available (0ms instant render!)
   const [data, setData] = useState<TodayDashboardData | null>(() => cachedTodayDashboard);
@@ -352,22 +360,31 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     }
   }, [chartMetric]);
 
-  const [selectedBranchCode, setSelectedBranchCode] = useState<string>(
-    user.assignedLocation || 'MAIN'
-  );
-  const selectedBranchCodeRef = useRef<string>(user.assignedLocation || 'MAIN');
+  const isOwnerOrManager = ['owner', 'manager'].includes(user.role);
+  const isSuperAdmin = Boolean(user && (user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN'));
+  const firstName = user.name ? user.name.split(' ')[0] : 'User';
+
+  const initialBranchCode = isSuperAdmin
+    ? (localStorage.getItem('sa_selected_branch') || 'all')
+    : (user.assignedLocation || user.branchId || 'MAIN');
+
+  const [selectedBranchCode, setSelectedBranchCode] = useState<string>(initialBranchCode);
+  const selectedBranchCodeRef = useRef<string>(initialBranchCode);
 
   useEffect(() => {
     selectedBranchCodeRef.current = selectedBranchCode;
   }, [selectedBranchCode]);
 
+  useEffect(() => {
+    if (selectedBranch && selectedBranch !== selectedBranchCodeRef.current) {
+      handleBranchChange(selectedBranch);
+    }
+  }, [selectedBranch]);
+
   // Modals state for cashier shift actions
   const [showOpenShiftModal, setShowOpenShiftModal] = useState<boolean>(false);
   const [showCashMovementModal, setShowCashMovementModal] = useState<boolean>(false);
   const [showCloseShiftModal, setShowCloseShiftModal] = useState<boolean>(false);
-
-  const isOwnerOrManager = ['owner', 'manager'].includes(user.role);
-  const firstName = user.name ? user.name.split(' ')[0] : 'User';
 
   // Greeting by time of day
   const greeting = useMemo(() => {
@@ -380,7 +397,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   // Load dashboard data with SWR (Stale-While-Revalidate): background revalidation never blocks the UI
   const loadDashboard = useCallback(
     async (branchOrInitial?: string | boolean, isInitialParam = false) => {
-      let branchToLoad: string = selectedBranchCodeRef.current;
+      let branchToLoad: string = isSuperAdmin ? selectedBranchCodeRef.current : (user.assignedLocation || user.branchId || 'MAIN');
       let isInitial = isInitialParam;
 
       if (typeof branchOrInitial === 'boolean') {
@@ -407,7 +424,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           branchDataMap.set(res.selectedBranch.code.toUpperCase(), res);
         }
         setData(res);
-        if (res.selectedBranch?.code) {
+        if (!isSuperAdmin) {
+          const enforcedCode = res.selectedBranch?.code || user.assignedLocation || 'MAIN';
+          setSelectedBranchCode(enforcedCode);
+          selectedBranchCodeRef.current = enforcedCode;
+        } else if (res.selectedBranch?.code) {
           setSelectedBranchCode(res.selectedBranch.code);
           selectedBranchCodeRef.current = res.selectedBranch.code;
         }
@@ -424,6 +445,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   );
 
   const handleBranchChange = (newBranchCode: string) => {
+    if (isSuperAdmin) {
+      try {
+        localStorage.setItem('sa_selected_branch', newBranchCode);
+      } catch {}
+    }
     if (newBranchCode === selectedBranchCode) return;
     setSelectedBranchCode(newBranchCode);
     selectedBranchCodeRef.current = newBranchCode;
@@ -800,7 +826,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           <div className="error-icon"><AlertTriangleIcon size={32} /></div>
           <h3>Failed to load Today's Overview</h3>
           <p>{error}</p>
-          <button className="btn btn-primary" onClick={() => loadDashboard(true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <button className="btn btn-primary" onClick={() => loadDashboard(selectedBranchCodeRef.current || 'all', true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
             <RefreshCwIcon size={15} />
             <span>Retry</span>
           </button>
@@ -874,25 +900,35 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
-          {data?.branches && data.branches.length > 1 && (
+          {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
+            <div className="dashboard-branch-selector">
+              <span className="branch-selector-label">Branch:</span>
+              <BranchSwitcher
+                branches={data.branches}
+                selectedBranchCode={selectedBranchCode}
+                onSelectBranch={handleBranchChange}
+                user={user}
+                onManageBranches={onManageBranches}
+              />
+            </div>
+          ) : (
             <div className="dashboard-branch-selector">
               <span className="branch-selector-label">Branch:</span>
               <div className="branch-selector-pills">
-                {data.branches.map((b) => {
-                  const isActive = (selectedBranchCode || '').toUpperCase() === (b.code || '').toUpperCase();
-                  return (
-                    <button
-                      key={b.id || b.code}
-                      type="button"
-                      className={`dashboard-branch-pill ${isActive ? 'active' : ''}`}
-                      onClick={() => handleBranchChange(b.code)}
-                      title={`Switch to ${b.name || b.code}`}
-                    >
-                      <Building2Icon size={13} className="branch-icon" style={{ marginRight: "4px" }} />
-                      <span>{b.name || b.code}</span>
-                    </button>
-                  );
-                })}
+                <div
+                  className="dashboard-branch-pill active read-only-branch-pill"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    cursor: 'default',
+                    userSelect: 'none',
+                  }}
+                  title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
+                >
+                  <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
+                  <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
+                  <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
+                </div>
               </div>
             </div>
           )}
@@ -1787,7 +1823,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           userName={user.name}
           userRole={user.role}
           defaultLocation={selectedBranchCode}
-          defaultCounter="COUNTER-1"
+          defaultCounter={user.assignedCounter || "COUNTER-1"}
+          branches={data?.branches}
         />
       )}
 

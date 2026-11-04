@@ -44,6 +44,9 @@ export function makeAuthenticator(secret: string) {
       assignedLocation,
       assignedCounter,
       allowedLocations,
+      branchId: u.branchId || u.branch_id || null,
+      username: u.username || null,
+      counterId: u.counterId || u.counter_id || null,
     };
   };
 }

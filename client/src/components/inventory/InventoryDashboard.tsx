@@ -1,3 +1,4 @@
+import { handleProductImageError } from '../../imageUtils';
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights, Category } from '../../api.ts';
 import {
@@ -37,6 +38,7 @@ import {
   ArrowRightIcon,
   BrainIcon,
   ImageIcon,
+  RefreshCwIcon,
 } from './InventoryIcons.tsx';
 
 interface InventoryDashboardProps {
@@ -47,6 +49,7 @@ interface InventoryDashboardProps {
   userRole?: Role;
   businessType?: string;
   allowNegativeStock?: boolean;
+  initialTab?: 'overview' | 'ledger' | 'counts' | 'replenish' | 'insights';
   onNavigateToPurchases?: (supplierId?: string, itemId?: string) => void;
   onNavigateToCategories?: () => void;
   onNavigateToProductAnalysis?: () => void;
@@ -62,13 +65,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   userRole,
   businessType = 'retail',
   allowNegativeStock = false,
+  initialTab = 'overview',
   onNavigateToPurchases,
   onNavigateToCategories,
   onNavigateToProductAnalysis,
   showToast,
   onReloadItems,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ledger' | 'counts' | 'replenish' | 'insights'>(initialTab);
   const [stats, setStats] = useState<InventoryDashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState<boolean>(true);
   const [insights, setInsights] = useState<InventoryInsights | null>(null);
@@ -83,7 +87,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<string>('name_asc');
   const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(8);
+  const [pageSize, setPageSize] = useState<number>(15);
 
   // Modals state
   const [adjustmentTargetItem, setAdjustmentTargetItem] = useState<Item | null>(null);
@@ -142,7 +146,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     } finally {
       setItemsLoading(false);
     }
-  }, [searchQuery, categoryFilter, statusFilter, sortField, page]);
+  }, [searchQuery, categoryFilter, statusFilter, sortField, page, pageSize]);
 
   useEffect(() => {
     loadDashboardStats();
@@ -156,6 +160,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       loadInsights();
     }
   }, [activeSubTab, loadTableItems, loadInsights]);
+
+  // When products are added, imported, or updated in the catalog, refresh stats and table
+  useEffect(() => {
+    loadDashboardStats();
+    if (activeSubTab === 'overview') {
+      loadTableItems();
+    }
+  }, [items?.length, loadDashboardStats, loadTableItems, activeSubTab]);
 
   const handleRefreshAll = () => {
     loadDashboardStats();
@@ -413,11 +425,12 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
         {/* BENTO CARD 3: Active Items */}
         <div
-          className="bento-card bento-stat-card"
+          className={`bento-card bento-stat-card ${statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? 'bento-filter-active active-purple' : ''}`}
           onClick={() => {
             setActiveSubTab('overview');
             setStatusFilter('all');
             setCategoryFilter('ALL');
+            setSearchQuery('');
             setPage(1);
           }}
           title="Click to view all active catalog items"
@@ -437,20 +450,20 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             {statsLoading ? '--' : stats?.totalActiveProducts ?? 0}
           </div>
           <div className="bento-card-footer">
-            <span>In product master</span>
+            <span>{statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? '✓ Showing all items' : 'In product master'}</span>
             <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
           </div>
         </div>
 
         {/* BENTO CARD 4: In-Stock */}
         <div
-          className="bento-card bento-stat-card"
+          className={`bento-card bento-stat-card ${statusFilter === 'in_stock' ? 'bento-filter-active active-green' : ''}`}
           onClick={() => {
             setActiveSubTab('overview');
-            setStatusFilter('in_stock');
+            setStatusFilter((prev) => (prev === 'in_stock' ? 'all' : 'in_stock'));
             setPage(1);
           }}
-          title="Click to filter in-stock items"
+          title={statusFilter === 'in_stock' ? "Click to clear in-stock filter" : "Click to filter in-stock items"}
         >
           <div className="bento-card-header">
             <div className="bento-header-left">
@@ -465,20 +478,20 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             {statsLoading ? '--' : stats?.inStockCount ?? 0}
           </div>
           <div className="bento-card-footer">
-            <span>Sufficient shelf stock</span>
+            <span>{statusFilter === 'in_stock' ? '✓ Filter active (Click to reset)' : 'Sufficient shelf stock'}</span>
             <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
           </div>
         </div>
 
         {/* BENTO CARD 5: Low Stock */}
         <div
-          className="bento-card bento-stat-card"
+          className={`bento-card bento-stat-card ${statusFilter === 'low_stock' ? 'bento-filter-active active-amber' : ''}`}
           onClick={() => {
             setActiveSubTab('overview');
-            setStatusFilter('low_stock');
+            setStatusFilter((prev) => (prev === 'low_stock' ? 'all' : 'low_stock'));
             setPage(1);
           }}
-          title="Click to filter low stock items"
+          title={statusFilter === 'low_stock' ? "Click to clear low stock filter" : "Click to filter low stock items"}
         >
           <div className="bento-card-header">
             <div className="bento-header-left">
@@ -497,20 +510,20 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             {statsLoading ? '--' : stats?.lowStockCount ?? 0}
           </div>
           <div className="bento-card-footer">
-            <span>At or below reorder</span>
+            <span>{statusFilter === 'low_stock' ? '✓ Filter active (Click to reset)' : 'At or below reorder'}</span>
             <span className="bento-link-arrow"><ArrowRightIcon size={12} /></span>
           </div>
         </div>
 
         {/* BENTO CARD 6: Out of Stock */}
         <div
-          className="bento-card bento-stat-card"
+          className={`bento-card bento-stat-card ${statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock' ? 'bento-filter-active active-red' : ''}`}
           onClick={() => {
             setActiveSubTab('overview');
-            setStatusFilter('out_of_stock');
+            setStatusFilter((prev) => (prev === 'out_of_stock' || prev === 'zero_stock' || prev === 'negative_stock' ? 'all' : 'out_of_stock'));
             setPage(1);
           }}
-          title="Click to filter out of stock items"
+          title={statusFilter === 'out_of_stock' ? "Click to clear out of stock filter" : "Click to filter out of stock items"}
         >
           <div className="bento-card-header">
             <div className="bento-header-left">
@@ -525,14 +538,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               </span>
             ) : stats && stats.outOfStockCount > 0 ? (
               <span className="kpi-sub-badge red blinking-badge-red">Alert</span>
-            ) : null}
+            ) : (
+              <span className="kpi-sub-badge green">OK</span>
+            )}
           </div>
           <div className="bento-stat-num mono text-red">
             {statsLoading ? '--' : stats?.outOfStockCount ?? 0}
           </div>
           <div className="bento-card-footer">
             <span>
-              {stats && (stats.negativeStockCount || 0) > 0
+              {statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'
+                ? '✓ Filter active (Click to reset)'
+                : stats && (stats.negativeStockCount || 0) > 0
                 ? `Zero: ${stats.zeroStockCount ?? 0} | Neg: ${stats.negativeStockCount}`
                 : 'Zero or negative'}
             </span>
@@ -702,9 +719,40 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               </div>
             ) : tableItems.length === 0 ? (
               <div className="table-empty-state">
-                <PackageIcon size={48} style={{ color: 'var(--text-dim)', marginBottom: '0.75rem' }} />
-                <h3>No Items Found</h3>
-                <p>No inventory items matched your current filter criteria.</p>
+                <div className="table-empty-icon-wrap">
+                  <PackageIcon size={32} />
+                </div>
+                <h3>
+                  {statusFilter === 'out_of_stock'
+                    ? 'No Out of Stock Items'
+                    : statusFilter === 'low_stock'
+                    ? 'No Low Stock Items'
+                    : statusFilter !== 'all' || categoryFilter !== 'ALL' || searchQuery
+                    ? 'No Matching Items Found'
+                    : 'No Items in Inventory'}
+                </h3>
+                <p>
+                  {statusFilter === 'out_of_stock'
+                    ? 'Great news! All products in your catalog are currently in stock. None are out of stock or negative.'
+                    : statusFilter === 'low_stock'
+                    ? 'All inventory items are currently above their minimum reorder levels.'
+                    : 'No inventory items matched your current search or filter criteria.'}
+                </p>
+                {(statusFilter !== 'all' || categoryFilter !== 'ALL' || searchQuery) && (
+                  <button
+                    type="button"
+                    className="reset-filter-btn"
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setCategoryFilter('ALL');
+                      setSearchQuery('');
+                      setPage(1);
+                    }}
+                  >
+                    <RefreshCwIcon size={15} />
+                    <span>Clear Filters & Show All Products ({stats?.totalActiveProducts ?? items.length})</span>
+                  </button>
+                )}
               </div>
             ) : (
               <table className="inventory-data-table">
@@ -742,12 +790,9 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                   <img
                                     src={imgUrl}
                                     alt={item.name}
+                                    referrerPolicy="no-referrer"
                                     className="product-thumb-img"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                      if (placeholder) placeholder.style.display = 'inline-flex';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, imgUrl)}
                                   />
                                 ) : null}
                                 <div
@@ -925,11 +970,11 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   }}
                   style={{ padding: '0.12rem 0.35rem', fontSize: '0.74rem', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-card)' }}
                 >
-                  <option value={6}>6</option>
                   <option value={8}>8</option>
                   <option value={10}>10</option>
                   <option value={15}>15</option>
                   <option value={20}>20</option>
+                  <option value={50}>50</option>
                 </select>
               </span>
             </div>
@@ -1042,12 +1087,9 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                   <img
                                     src={imgUrl}
                                     alt={r.name}
+                                    referrerPolicy="no-referrer"
                                     className="product-thumb-img"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                      const placeholder = e.currentTarget.parentElement?.querySelector('.product-thumb-placeholder') as HTMLElement;
-                                      if (placeholder) placeholder.style.display = 'inline-flex';
-                                    }}
+                                    onError={(e) => handleProductImageError(e, imgUrl)}
                                   />
                                 ) : null}
                                 <div

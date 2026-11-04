@@ -1,4 +1,5 @@
 import { requirePerm } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, conflict, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
@@ -93,7 +94,14 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
   const sku = toStr(raw.sku);
   if (sku && sku.length > 60) errors.push('SKU is too long (max 60 characters)');
 
-  const barcode = toStr(raw.barcode);
+  let barcode = toStr(raw.barcode);
+  let imageUrl = toStr(raw.imageUrl);
+
+  // If barcode is a Drive link or web URL, move it to imageUrl and clear barcode
+  if (barcode && (/^https?:\/\//i.test(barcode) || /drive\.google\.com/i.test(barcode) || /googleusercontent\.com/i.test(barcode))) {
+    if (!imageUrl) imageUrl = barcode;
+    barcode = null;
+  }
   if (barcode && barcode.length > 60) errors.push('Barcode is too long (max 60 characters)');
 
   const rawBarcodeType = toStr(raw.barcodeType);
@@ -171,6 +179,7 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
       isRestock,
       matchedItemId,
       updatePrices: Boolean(raw.updatePrices),
+      imageUrl: imageUrl || null,
     },
   };
 }
@@ -193,6 +202,9 @@ export function registerItemsBulk(r: Router) {
   r.post('/api/items/bulk-import', requirePerm('items.write'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = (typeof b.branchId === 'string' && b.branchId.trim()) ? b.branchId.trim() : scope.branchId;
+    if (!branchId) throw bad('Branch is required for bulk product import', 'BRANCH_REQUIRED');
 
     if (!Array.isArray(b.rows)) throw bad('rows must be an array', 'VALIDATION', { field: 'rows' });
     if (b.rows.length === 0) throw bad('rows array is empty', 'VALIDATION', { field: 'rows' });
@@ -243,11 +255,11 @@ export function registerItemsBulk(r: Router) {
 
     // Verify all restock matched items belong to this tenant
     const matchedItemIds = [...new Set(restockRows.map((r) => r.matchedItemId!))];
-    const existingMatchedItems = new Map<string, { id: string; name: string; sku: string | null; barcode: string | null }>();
+    const existingMatchedItems = new Map<string, { id: string; name: string; sku: string | null; barcode: string | null; hsn: string | null }>();
     if (matchedItemIds.length > 0) {
       const placeholders = matchedItemIds.map(() => '?').join(', ');
-      const rows = await ctx.db.query<{ id: string; name: string; sku: string | null; barcode: string | null }>(
-        `SELECT id, name, sku, barcode FROM items WHERE tenant_id = ? AND id IN (${placeholders})`,
+      const rows = await ctx.db.query<{ id: string; name: string; sku: string | null; barcode: string | null; hsn: string | null }>(
+        `SELECT id, name, sku, barcode, hsn FROM items WHERE tenant_id = ? AND id IN (${placeholders})`,
         [tenantId, ...matchedItemIds],
       );
       for (const item of rows) {
@@ -518,29 +530,51 @@ export function registerItemsBulk(r: Router) {
           // If incoming stock > 0, record inventory stock-in movement
           if ((row.openingQtyMilli ?? 0) > 0) {
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, 'purchase', 'import', ?, ?, 'Bulk import restock shipment', ?)`,
-              [newId('sm'), tenantId, itemId, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
-            );
-          }
-
-          // If price updates requested, update product pricing
-          if (row.imageUrl) {
-          await q.exec(
-            'UPDATE items SET image_url = COALESCE(NULLIF(?, \'\'), image_url) WHERE id = ? AND tenant_id = ?',
-            [row.imageUrl, row.matchedItemId, tenantId],
-          );
-        }
-        if (row.updatePrices) {
-            await q.exec(
-              `UPDATE items
-               SET price_minor = ?, cost_minor = ?, tax_rate_bp = ?, tax_inclusive = ?, hsn = COALESCE(?, hsn), updated_at = now()
-               WHERE id = ? AND tenant_id = ?`,
-              [row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true, row.hsn || null, itemId, tenantId],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'purchase', 'import', ?, ?, 'Bulk import restock shipment', ?)`,
+              [newId('sm'), tenantId, branchId, itemId, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
             );
           }
 
           const matchedItemInfo = existingMatchedItems.get(itemId);
+
+          // Synchronize SKU: use provided SKU, or retain existing, or generate short SKU if missing
+          let finalRestockSku = row.sku && row.sku.trim() ? row.sku.trim() : (matchedItemInfo?.sku || null);
+          if (!finalRestockSku) {
+            finalRestockSku = generateUniqueShortSku(row.name, allTenantSkus, seenImportSkus);
+          }
+          if (finalRestockSku) {
+            allTenantSkus.add(finalRestockSku.toLowerCase());
+            seenImportSkus.add(finalRestockSku);
+          }
+
+          const finalRestockHsn = row.hsn && row.hsn.trim() ? row.hsn.trim() : (matchedItemInfo?.hsn || null);
+          const finalRestockCategory = row.category && row.category.trim() ? row.category.trim() : null;
+          const finalRestockImageUrl = row.imageUrl && row.imageUrl.trim() ? row.imageUrl.trim() : null;
+
+          // Always persist product metadata (SKU, HSN, Category, Image)
+          await q.exec(
+            `UPDATE items
+             SET sku = COALESCE(NULLIF(?, ''), sku),
+                 hsn = COALESCE(NULLIF(?, ''), hsn),
+                 category = COALESCE(NULLIF(?, ''), category),
+                 image_url = COALESCE(NULLIF(?, ''), image_url),
+                 updated_at = now()
+             WHERE id = ? AND tenant_id = ?`,
+            [finalRestockSku, finalRestockHsn, finalRestockCategory, finalRestockImageUrl, itemId, tenantId],
+          );
+
+          // If price updates requested, update product pricing
+          if (row.updatePrices) {
+            await q.exec(
+              `UPDATE items
+               SET price_minor = ?, cost_minor = ?, tax_rate_bp = ?, tax_inclusive = ?, updated_at = now()
+               WHERE id = ? AND tenant_id = ?`,
+              [row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true, itemId, tenantId],
+            );
+          }
+
+          // matchedItemInfo already fetched above
           const oldPrimaryBarcode = matchedItemInfo?.barcode || null;
           const newBarcodeTrim = row.barcode ? row.barcode.trim() : null;
 
@@ -669,24 +703,25 @@ export function registerItemsBulk(r: Router) {
           // Insert item
           await q.exec(
             `INSERT INTO items (
-              id, tenant_id, name, sku, barcode, hsn, unit, category,
+              id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-              reorder_milli, min_stock_milli, favorite, custom, active, import_id, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?, ?)`,
+              reorder_milli, min_stock_milli, favorite, custom, active, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
             [
-              id, tenantId, row.name, finalSku, finalBarcode, row.hsn || null,
+              id, tenantId, branchId, row.name, finalSku, finalBarcode, row.hsn || null,
               row.unit || 'pcs', row.category || null,
               row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true,
-              importId, row.imageUrl || null,
+                          row.imageUrl || null,
             ],
           );
 
           // Insert into product_barcodes table (if barcode mapping fails, rolls back item creation)
           if (finalBarcode) {
             await q.exec(
-              `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-               VALUES (?, ?, ?, ?, ?)`,
-              [newId('bc'), tenantId, id, finalBarcode, barcodeType],
+              `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT (tenant_id, branch_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
+              [newId('bc'), tenantId, branchId, id, finalBarcode, barcodeType],
             );
             barcodesSaved++;
           }
@@ -697,10 +732,10 @@ export function registerItemsBulk(r: Router) {
               if (abTrim && abTrim !== finalBarcode) {
                 const abType = ab.barcodeType || (abTrim.startsWith('20') && abTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
                 await q.exec(
-                  `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT (tenant_id, barcode) DO NOTHING`,
-                  [newId('bc'), tenantId, id, abTrim, abType],
+                  `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT (tenant_id, branch_id, barcode) DO NOTHING`,
+                  [newId('bc'), tenantId, branchId, id, abTrim, abType],
                 );
                 barcodesSaved++;
                 seenImportBarcodes.add(abTrim);
@@ -711,9 +746,9 @@ export function registerItemsBulk(r: Router) {
           // Record opening stock if provided
           if ((row.openingQtyMilli ?? 0) > 0) {
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, 'opening', 'import', ?, ?, 'Bulk import opening stock', ?)`,
-              [newId('sm'), tenantId, id, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'opening', 'import', ?, ?, 'Bulk import opening stock', ?)`,
+              [newId('sm'), tenantId, branchId, id, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
             );
           }
 
@@ -722,11 +757,12 @@ export function registerItemsBulk(r: Router) {
           created++;
         } catch (err: any) {
           await q.exec('ROLLBACK TO SAVEPOINT sp_bulk_row');
+          console.error(`[bulk-import] Insertion failed for row ${row._rowIndex} (${row.name}):`, err?.message || err);
           results.push({
             rowIndex: row._rowIndex,
             status: 'skipped',
             name: row.name,
-            reason: err?.message?.includes('product_barcodes') || err?.code === '23505'
+            reason: err?.code === '23505'
               ? 'Product code or barcode conflict occurred during insertion'
               : (err?.message || 'Insertion failed'),
           });

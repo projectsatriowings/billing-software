@@ -12,7 +12,8 @@ export interface SupplierDirectoryProps {
   onEditSupplier: (supplier: Party) => void;
   onPaySupplier: (supplier: Party) => void;
   onOpenLedger: (supplierId: string) => void;
-  onNewPurchase: (supplierId: string) => void;
+  onNewPurchase: (supplierId?: string) => void;
+  onRepeatPurchase?: (purchase: Purchase) => void;
   onToggleActive: (supplier: Party) => void;
   onRefresh?: () => void;
 }
@@ -91,6 +92,7 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
   onPaySupplier,
   onOpenLedger,
   onNewPurchase,
+  onRepeatPurchase,
   onToggleActive,
   onRefresh,
 }) => {
@@ -342,11 +344,7 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="header-title">
-                Supplier Master &amp; Vendors ({filteredSuppliers.length}{' '}
-                {filteredSuppliers.length === suppliersList.length ? 'total' : `of ${suppliersList.length}`})
-              </h2>
-              <p className="header-subtitle">
+              <p className="header-subtitle" style={{ margin: 0 }}>
                 Purchase distributors, stock inward management, GSTIN verification &amp; payable settlements
               </p>
             </div>
@@ -366,6 +364,23 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
               </svg>
               <span>Export CSV</span>
             </button>
+
+            {canManagePurchases && (
+              <button
+                type="button"
+                className="btn-add-bill"
+                onClick={() => onNewPurchase()}
+                title="Record a new purchase bill / stock inward from any supplier"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <span>+ Add Supplier Bill</span>
+              </button>
+            )}
 
             <button type="button" className="supplier-primary-add-btn" onClick={onAddSupplier}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -615,14 +630,14 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                             type="button"
                             className="btn-action-inward"
                             onClick={() => onNewPurchase(s.id)}
-                            title="Receive stock / create purchase inward for this supplier"
+                            title="Record supplier bill / stock inward for this vendor"
                           >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                               <polyline points="7 10 12 15 17 10"></polyline>
                               <line x1="12" y1="15" x2="12" y2="3"></line>
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             </svg>
-                            <span>+ Inward</span>
+                            <span>+ Inward Bill</span>
                           </button>
                         )}
 
@@ -644,6 +659,19 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                                 onClick={() => setActionMenuOpenId(null)}
                               />
                               <div className="action-dropdown-menu">
+                                {canManagePurchases && (
+                                  <button
+                                    type="button"
+                                    className="dropdown-item"
+                                    onClick={() => {
+                                      setActionMenuOpenId(null);
+                                      onNewPurchase(s.id);
+                                    }}
+                                  >
+                                    <span>📥 + Add Supplier Bill</span>
+                                  </button>
+                                )}
+
                                 {canManagePurchases && (
                                   <button
                                     type="button"
@@ -911,6 +939,21 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                               <span className={`pur-paid-badge ${(pur.balanceMinor || 0) > 0 ? 'due' : 'paid'}`}>
                                 {(pur.balanceMinor || 0) > 0 ? `Due: ${formatRupees(pur.balanceMinor)}` : 'Fully Paid'}
                               </span>
+                              {onRepeatPurchase && (
+                                <button
+                                  type="button"
+                                  className="btn-reorder-mini"
+                                  style={{ marginTop: '4px', padding: '3px 8px', fontSize: '0.72rem', background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe', borderRadius: '5px', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRepeatPurchase(pur);
+                                    setSelectedSupplier(null);
+                                  }}
+                                  title="Reorder all products from this past bill"
+                                >
+                                  <span>🔄 Reorder</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))

@@ -1,4 +1,5 @@
 import { requirePerm } from '../auth.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import { bad, conflict, notFound, forbidden, FileResponse, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
@@ -10,6 +11,7 @@ function formatExpense(r: any) {
   return {
     id: r.id,
     tenantId: r.tenantId ?? r.tenant_id,
+    branchId: r.branchId ?? r.branch_id,
     expenseNumber: r.expenseNumber ?? r.expense_number,
     expenseDate: r.expenseDate ?? r.expense_date,
     category: r.category,
@@ -54,6 +56,7 @@ export function registerExpenses(r: Router) {
   // 2. List Expenses with filtering, search, and pagination
   r.get('/api/expenses', requirePerm('expenses'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const { from, to, category, paymentStatus, gstTreatment, itcEligibility, supplierId, q, location } = ctx.query;
     const page = Math.max(1, parseInt(ctx.query.page || '1', 10));
     const limit = Math.min(100, Math.max(10, parseInt(ctx.query.limit || '50', 10)));
@@ -61,6 +64,10 @@ export function registerExpenses(r: Router) {
 
     const where: string[] = ['tenant_id = ?'];
     const params: any[] = [tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      where.push('branch_id = ?');
+      params.push(scope.branchId);
+    }
 
     if (from) {
       where.push('expense_date >= ?');
@@ -153,6 +160,16 @@ export function registerExpenses(r: Router) {
   r.post('/api/expenses', requirePerm('expenses.write'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const b = ctx.body ?? {};
+    const scope = await resolveBranchScope(ctx);
+    let branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) {
+      const mainBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? ORDER BY code = 'MAIN' DESC LIMIT 1",
+        [tenantId],
+      );
+      branchId = mainBr?.id || null;
+    }
+    if (!branchId) throw bad('Branch is required for expenses', 'BRANCH_REQUIRED');
 
     // 1. Idempotency Check
     const idempotencyKey = V.optStr(b.idempotencyKey, 'Idempotency key', 128);
@@ -289,20 +306,20 @@ export function registerExpenses(r: Router) {
 
       savedExpense = await q.one(
         `INSERT INTO expenses (
-          id, tenant_id, expense_number, expense_date, category, description, notes,
+          id, tenant_id, branch_id, expense_number, expense_date, category, description, notes,
           supplier_id, supplier_name, supplier_gstin, supplier_invoice_number, supplier_invoice_date,
           tax_inclusive, tax_rate_bp, taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor,
           payment_method, payment_status, paid_minor, balance_minor, gst_treatment, itc_eligibility,
           itc_minor, location, status, idempotency_key, created_by, created_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, 'posted', ?, ?, now(), now()
         ) RETURNING *`,
         [
-          expenseId, tenantId, expenseNumber, expenseDate, category, description, notes,
+          expenseId, tenantId, branchId, expenseNumber, expenseDate, category, description, notes,
           supplierId, supplierName, supplierGstin, supplierInvoiceNumber, supplierInvoiceDate,
           taxInclusive, taxRateBp, calc.taxableMinor, calc.cgstMinor, calc.sgstMinor, calc.igstMinor, totalMinor,
           paymentMethod, paymentStatus, paidMinor, balanceMinor, gstTreatment, itcEligibility,

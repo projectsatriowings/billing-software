@@ -217,6 +217,35 @@
   box-shadow: 0 5px 14px rgba(37, 99, 235, 0.4) !important;
 }
 
+.btn-add-bill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  padding: 0.55rem 1.15rem !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border: 1px solid transparent !important;
+  color: #ffffff !important;
+  border-radius: 9px !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.28) !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+  width: auto !important;
+  min-width: fit-content !important;
+  height: auto !important;
+  min-height: 38px !important;
+  flex-shrink: 0 !important;
+  line-height: 1 !important;
+}
+
+.btn-add-bill:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 5px 14px rgba(16, 185, 129, 0.45) !important;
+}
+
 /* FILTER STRIP */
 .supplier-filter-strip {
   padding: 0.85rem 1.4rem;

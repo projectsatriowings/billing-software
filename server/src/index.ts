@@ -5,6 +5,7 @@ import selfsigned from 'selfsigned';
 import { env } from './env.ts'; // must be first: it loads .env before anything reads process.env
 import { connectDb, migrate } from './db/index.ts';
 import { createApp } from './app.ts';
+import { verifyMailer } from './services/mailer.ts';
 
 // Guard process against unhandled socket resets (e.g. ECONNRESET on idle postgres connection drops)
 process.on('uncaughtException', (err: any) => {
@@ -30,6 +31,7 @@ async function main() {
   server.keepAliveTimeout = 65_000;
   server.listen(env.port, () => {
     console.log(JSON.stringify({ level: 'info', msg: 'billing server started', port: env.port, driver: db.driver, serving: staticDir ? 'api + web app' : 'api only' }));
+    verifyMailer().catch((err) => console.error('[Mailer] Startup check error:', err));
   });
 
   let httpsServer: https.Server | undefined;

@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { fetchFinancePayables } from '../../api.ts';
 import { fmtMoney } from '../../../../shared/money.ts';
+import {
+  ArrowRightIcon,
+  RefreshCwIcon,
+  CheckCircle2Icon,
+  SearchIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface PayablesViewProps {
   onPaySupplier?: (supplierId: string) => void;
@@ -98,7 +104,7 @@ export function PayablesView({ onPaySupplier }: PayablesViewProps) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <input
           type="text"
-          placeholder="🔍 Search vendor by name or GSTIN..."
+          placeholder="Search vendor by name or GSTIN..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
@@ -119,7 +125,7 @@ export function PayablesView({ onPaySupplier }: PayablesViewProps) {
           className="btn btn-secondary"
           style={{ padding: '0.55rem 0.9rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
         >
-          🔄 Refresh Payables
+          <RefreshCwIcon size={14} /> Refresh Payables
         </button>
       </div>
 
@@ -137,7 +143,7 @@ export function PayablesView({ onPaySupplier }: PayablesViewProps) {
           </div>
         ) : suppliers.length === 0 ? (
           <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎉</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#ecfdf5', color: '#10b981', marginBottom: '0.75rem', border: '1px solid #a7f3d0' }}><CheckCircle2Icon size={28} /></div>
             <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>
               All supplier bills are fully settled!
             </div>
@@ -198,7 +204,7 @@ export function PayablesView({ onPaySupplier }: PayablesViewProps) {
                         className="btn btn-primary"
                         style={{ padding: '0.35rem 0.8rem', fontSize: '0.78rem', borderRadius: '8px' }}
                       >
-                        Settle Bills ➔
+                        Settle Bills
                       </button>
                     </td>
                   </tr>

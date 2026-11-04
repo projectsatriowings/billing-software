@@ -1425,7 +1425,7 @@ export function DiscountsPromotionsView({
           categories={categories}
           mode="single-product"
           onConfirm={handleProductSelected}
-          title="Select Product"
+          title="Select product"
         />
       </main>
     );
@@ -1440,8 +1440,7 @@ export function DiscountsPromotionsView({
         {/* 1. Header row */}
         <header className="promo-header-row">
           <div className="promo-header-titles">
-            <h1>Discounts & Promotions</h1>
-            <p>Create and manage offers across your branches and counters.</p>
+            <p style={{ margin: 0 }}>Create and manage offers across your branches and counters.</p>
           </div>
 
           <div className="promo-header-actions">

@@ -2,6 +2,7 @@ import { requirePerm } from '../auth.ts';
 import { bad, notFound, forbidden, V, type Router, type Ctx } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
+import { resolveBranchScope } from '../branchScope.ts';
 import type { Queryable } from '../db/index.ts';
 import { DEFAULT_CONFIG, can, type Rules, type StockAdjustmentReason } from '../../../shared/types.ts';
 import { PACKS } from '../../../shared/packs.ts';
@@ -28,7 +29,10 @@ export function registerInventory(r: Router) {
   // 1. Inventory Dashboard Summary Stats
   r.get('/api/inventory/dashboard', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const branchClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // Products breakdown
     const counts = await ctx.db.one<{
@@ -46,7 +50,7 @@ export function registerInventory(r: Router) {
           i.reorder_milli,
           COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
           i.cost_minor,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
         FROM items i
         WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
       )
@@ -65,7 +69,7 @@ export function registerInventory(r: Router) {
         COUNT(CASE WHEN (reorder_milli = 0 AND min_stock_milli = 0) THEN 1 END)::int AS unconfigured,
         COALESCE(SUM(CASE WHEN stock_milli > 0 THEN (stock_milli * cost_minor / 1000) ELSE 0 END), 0)::bigint AS total_stock_value_minor
       FROM item_stock`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     // Category breakdown
@@ -78,10 +82,10 @@ export function registerInventory(r: Router) {
       `WITH item_stock AS (
         SELECT 
           COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorized') AS category,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli,
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
           i.cost_minor
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
       )
       SELECT 
         category,
@@ -91,7 +95,7 @@ export function registerInventory(r: Router) {
       FROM item_stock
       GROUP BY category
       ORDER BY total_stock_milli DESC`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     // Recent Stock Movements (top 10)
@@ -104,17 +108,17 @@ export function registerInventory(r: Router) {
         u.name AS user_name,
         COALESCE(inv.number, pur.purchase_number, pur.supplier_invoice_number, cn.number, adj.adjustment_number, sc.count_number, sm.ref_id) AS ref_number
        FROM stock_moves sm
-       JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id
+       JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id AND i.branch_id = sm.branch_id
        LEFT JOIN users u ON u.id = sm.user_id
        LEFT JOIN invoices inv ON inv.id = sm.ref_id AND sm.ref_type = 'invoice'
        LEFT JOIN purchases pur ON pur.id = sm.ref_id AND sm.ref_type = 'purchase'
        LEFT JOIN invoices cn ON cn.id = sm.ref_id AND sm.ref_type = 'credit_note'
        LEFT JOIN stock_adjustments adj ON adj.id = sm.ref_id AND sm.ref_type = 'adjustment'
        LEFT JOIN stock_counts sc ON sc.id = sm.ref_id AND sm.ref_type = 'stock_count'
-       WHERE sm.tenant_id = ?
+       WHERE sm.tenant_id = ? ${!scope.isSuperAdminAll && scope.branchId ? 'AND sm.branch_id = ?' : ''}
        ORDER BY sm.created_at DESC, sm.seq DESC
        LIMIT 10`,
-      [tenantId],
+      (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
 
     // Replenishment items needing reorder
@@ -130,9 +134,9 @@ export function registerInventory(r: Router) {
           i.reorder_milli,
           COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
           i.preferred_supplier_id,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
           AND (i.reorder_milli > 0 OR COALESCE(i.min_stock_milli, 0) > 0)
       )
       SELECT 
@@ -150,11 +154,11 @@ export function registerInventory(r: Router) {
         p.phone AS supplier_phone,
         GREATEST(1000, (GREATEST(s.reorder_milli, s.min_stock_milli) * 2 - s.stock_milli)) AS suggested_order_qty_milli
       FROM item_stock s
-      LEFT JOIN parties p ON p.id = s.preferred_supplier_id AND p.tenant_id = ?
+      LEFT JOIN parties p ON p.id = s.preferred_supplier_id AND p.tenant_id = ? ${(!scope.isSuperAdminAll && scope.branchId) ? 'AND p.branch_id = ?' : ''}
       WHERE s.stock_milli <= GREATEST(s.reorder_milli, s.min_stock_milli)
       ORDER BY (s.stock_milli - GREATEST(s.reorder_milli, s.min_stock_milli)) ASC
       LIMIT 15`,
-      [tenantId, tenantId],
+      [tenantId, ...branchParams, tenantId, ...branchParams],
     );
 
     return {
@@ -233,6 +237,7 @@ export function registerInventory(r: Router) {
   // 2. Filterable Inventory Item List
   r.get('/api/inventory/items', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
     const q = (ctx.query.q ?? '').trim().toLowerCase();
     const category = (ctx.query.category ?? '').trim();
@@ -243,6 +248,11 @@ export function registerInventory(r: Router) {
 
     let whereSql = `WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true`;
     const params: unknown[] = [tenantId];
+
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      whereSql += ` AND i.branch_id = ?`;
+      params.push(scope.branchId);
+    }
 
     if (category && category !== 'ALL') {
       whereSql += ` AND i.category = ?`;
@@ -295,14 +305,14 @@ export function registerInventory(r: Router) {
           i.preferred_supplier_id,
           p.name AS preferred_supplier_name,
           p.phone AS preferred_supplier_phone,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli,
-          COALESCE(CASE WHEN (SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id) > 0 
-                   THEN ((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id) * i.cost_minor / 1000) 
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
+          COALESCE(CASE WHEN (SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id) > 0 
+                   THEN ((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id) * i.cost_minor / 1000) 
                    ELSE 0 END, 0)::bigint AS stock_value_minor,
           i.created_at,
           i.updated_at
         FROM items i
-        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id
+        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND p.branch_id = i.branch_id
         ${whereSql}
       )
     `;
@@ -340,6 +350,7 @@ export function registerInventory(r: Router) {
           name: r.name,
           sku: r.sku ?? null,
           barcode: r.barcode ?? null,
+          imageUrl: r.imageUrl ?? r.image_url ?? null,
           hsn: r.hsn ?? null,
           unit: r.unit,
           category: r.category ?? null,
@@ -364,6 +375,7 @@ export function registerInventory(r: Router) {
   // 3. Stock Ledger with running balances
   r.get('/api/inventory/ledger', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
     const itemId = (ctx.query.itemId ?? '').trim();
     const kind = (ctx.query.kind ?? '').trim();
@@ -376,6 +388,10 @@ export function registerInventory(r: Router) {
     let filterConditions = '';
     const filterParams: unknown[] = [];
 
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      filterConditions += ' AND sm.branch_id = ?';
+      filterParams.push(scope.branchId);
+    }
     if (itemId) {
       filterConditions += ' AND sm.item_id = ?';
       filterParams.push(itemId);
@@ -437,11 +453,11 @@ export function registerInventory(r: Router) {
           u.name AS user_name,
           COALESCE(inv.number, pur.purchase_number, pur.supplier_invoice_number, cn.number, adj.adjustment_number, sc.count_number, sm.ref_id) AS ref_number,
           SUM(sm.qty_milli) OVER (
-            PARTITION BY sm.item_id 
+            PARTITION BY sm.branch_id, sm.item_id 
             ORDER BY sm.created_at ASC, sm.seq ASC
           )::bigint AS resulting_balance_milli
         FROM stock_moves sm
-        JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id
+        JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id AND i.branch_id = sm.branch_id
         LEFT JOIN users u ON u.id = sm.user_id
         LEFT JOIN invoices inv ON inv.id = sm.ref_id AND sm.ref_type = 'invoice'
         LEFT JOIN purchases pur ON pur.id = sm.ref_id AND sm.ref_type = 'purchase'
@@ -525,7 +541,7 @@ export function registerInventory(r: Router) {
     return ctx.db.tx(async (q) => {
       // 1. Lock item row for atomic concurrency safety
       const item = await q.one<any>(
-        `SELECT id, name, sku, barcode, cost_minor, track_stock 
+        `SELECT id, branch_id, name, sku, barcode, cost_minor, track_stock 
          FROM items 
          WHERE id = ? AND tenant_id = ? FOR UPDATE`,
         [itemId, tenantId],
@@ -535,11 +551,12 @@ export function registerInventory(r: Router) {
       if (!trackStock) throw bad(`Stock tracking is disabled for item "${item.name}".`);
 
       // 2. Compute current stock inside the transaction lock
+      const itemBranchId = item.branch_id || item.branchId;
       const currentStockRow = await q.one<any>(
         `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS current_stock_milli 
          FROM stock_moves 
-         WHERE item_id = ? AND tenant_id = ?`,
-        [itemId, tenantId],
+         WHERE item_id = ? AND tenant_id = ? AND branch_id = ?`,
+        [itemId, tenantId, itemBranchId],
       );
       const currentStockMilli = Number(currentStockRow?.currentStockMilli ?? currentStockRow?.current_stock_milli ?? 0);
 
@@ -571,27 +588,27 @@ export function registerInventory(r: Router) {
 
       // 5. Generate sequential adjustment number (ADJ-1001)
       const seriesRow = await q.one<any>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, 'ADJ', 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+        `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+         VALUES (?, ?, 'ADJ', 2)
+         ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
          RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId],
+        [tenantId, itemBranchId],
       );
       let seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
       let adjustmentNumber = `ADJ-${1000 + seqNo}`;
 
-      const existingAdj = await q.one('SELECT id FROM stock_adjustments WHERE tenant_id = ? AND adjustment_number = ?', [tenantId, adjustmentNumber]);
+      const existingAdj = await q.one('SELECT id FROM stock_adjustments WHERE tenant_id = ? AND branch_id = ? AND adjustment_number = ?', [tenantId, itemBranchId, adjustmentNumber]);
       if (existingAdj) {
         const maxRow = await q.one<any>(
-          `SELECT adjustment_number FROM stock_adjustments WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1`,
-          [tenantId],
+          `SELECT adjustment_number FROM stock_adjustments WHERE tenant_id = ? AND branch_id = ? ORDER BY created_at DESC LIMIT 1`,
+          [tenantId, itemBranchId],
         );
         const match = (maxRow?.adjustmentNumber ?? maxRow?.adjustment_number ?? '').match(/ADJ-(\d+)/);
         const nextNum = match ? parseInt(match[1], 10) + 1 : 1000 + seqNo + 1;
         adjustmentNumber = `ADJ-${nextNum}`;
         await q.exec(
-          `INSERT INTO number_series (tenant_id, series, next_no) VALUES (?, 'ADJ', ?) ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
-          [tenantId, nextNum - 1000 + 1, nextNum - 1000 + 1],
+          `INSERT INTO number_series (tenant_id, branch_id, series, next_no) VALUES (?, ?, 'ADJ', ?) ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
+          [tenantId, itemBranchId, nextNum - 1000 + 1, nextNum - 1000 + 1],
         );
       }
 
@@ -603,13 +620,14 @@ export function registerInventory(r: Router) {
       // 6. Record audit header in stock_adjustments
       await q.exec(
         `INSERT INTO stock_adjustments (
-          id, tenant_id, adjustment_number, item_id, location, adjustment_type,
+          id, tenant_id, branch_id, adjustment_number, item_id, location, adjustment_type,
           reason, old_qty_milli, new_qty_milli, change_qty_milli, unit_cost_minor,
           notes, created_by, created_at
-        ) VALUES (?, ?, ?, ?, 'MAIN', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, 'MAIN', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           adjId,
           tenantId,
+          itemBranchId,
           adjustmentNumber,
           itemId,
           adjustmentType,
@@ -627,12 +645,13 @@ export function registerInventory(r: Router) {
       // 7. Record immutable stock move
       await q.exec(
         `INSERT INTO stock_moves (
-          id, tenant_id, item_id, location, qty_milli, kind,
+          id, tenant_id, branch_id, item_id, location, qty_milli, kind,
           ref_type, ref_id, unit_cost_minor, reason, notes, user_id, created_at
-        ) VALUES (?, ?, ?, 'MAIN', ?, 'adjust', 'adjustment', ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'adjust', 'adjustment', ?, ?, ?, ?, ?, ?)`,
         [
           moveId,
           tenantId,
+          itemBranchId,
           itemId,
           deltaMilli,
           adjId,
@@ -682,6 +701,9 @@ export function registerInventory(r: Router) {
   // List count sessions
   r.get('/api/inventory/counts', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND sc.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
     const rows = await ctx.db.query(
       `SELECT 
         sc.*,
@@ -695,10 +717,10 @@ export function registerInventory(r: Router) {
        LEFT JOIN users u ON u.id = sc.created_by
        LEFT JOIN users fu ON fu.id = sc.finalized_by
        LEFT JOIN stock_count_lines scl ON scl.count_id = sc.id
-       WHERE sc.tenant_id = ?
+       WHERE sc.tenant_id = ?${branchFilter}
        GROUP BY sc.id, u.name, fu.name
        ORDER BY sc.created_at DESC`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     return {
@@ -729,6 +751,9 @@ export function registerInventory(r: Router) {
   r.post('/api/inventory/counts', requirePerm('stock.adjust'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || scope.branchId;
+    if (!branchId) throw bad('Branch is required for stock count session', 'BRANCH_REQUIRED');
 
     const name = V.str(b.name, 'Session name', { required: true, max: 120 });
     const category = V.optStr(b.category, 'Category filter', 60);
@@ -737,27 +762,27 @@ export function registerInventory(r: Router) {
     return ctx.db.tx(async (q) => {
       // 1. Generate count number STC-1001
       const seriesRow = await q.one<any>(
-        `INSERT INTO number_series (tenant_id, series, next_no)
-         VALUES (?, 'STC', 2)
-         ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+        `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+         VALUES (?, ?, 'STC', 2)
+         ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
          RETURNING (next_no - 1) AS assigned_no`,
-        [tenantId],
+        [tenantId, branchId],
       );
       let seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
       let countNumber = `STC-${1000 + seqNo}`;
 
-      const existing = await q.one('SELECT id FROM stock_counts WHERE tenant_id = ? AND count_number = ?', [tenantId, countNumber]);
+      const existing = await q.one('SELECT id FROM stock_counts WHERE tenant_id = ? AND branch_id = ? AND count_number = ?', [tenantId, branchId, countNumber]);
       if (existing) {
         const maxRow = await q.one<any>(
-          `SELECT count_number FROM stock_counts WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1`,
-          [tenantId],
+          `SELECT count_number FROM stock_counts WHERE tenant_id = ? AND branch_id = ? ORDER BY created_at DESC LIMIT 1`,
+          [tenantId, branchId],
         );
         const match = (maxRow?.countNumber ?? maxRow?.count_number ?? '').match(/STC-(\d+)/);
         const nextNum = match ? parseInt(match[1], 10) + 1 : 1000 + seqNo + 1;
         countNumber = `STC-${nextNum}`;
         await q.exec(
-          `INSERT INTO number_series (tenant_id, series, next_no) VALUES (?, 'STC', ?) ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
-          [tenantId, nextNum - 1000 + 1, nextNum - 1000 + 1],
+          `INSERT INTO number_series (tenant_id, branch_id, series, next_no) VALUES (?, ?, 'STC', ?) ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
+          [tenantId, branchId, nextNum - 1000 + 1, nextNum - 1000 + 1],
         );
       }
       const countId = newId('stc');
@@ -765,9 +790,9 @@ export function registerInventory(r: Router) {
       // 2. Insert count header
       await q.exec(
         `INSERT INTO stock_counts (
-          id, tenant_id, count_number, name, status, category, location, notes, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'in_progress', ?, 'MAIN', ?, ?, now(), now())`,
-        [countId, tenantId, countNumber, name, category || null, notes, ctx.user!.id],
+          id, tenant_id, branch_id, count_number, name, status, category, location, notes, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'in_progress', ?, 'MAIN', ?, ?, now(), now())`,
+        [countId, tenantId, branchId, countNumber, name, category || null, notes, ctx.user!.id],
       );
 
       // 3. Snapshot items into stock_count_lines
@@ -782,9 +807,9 @@ export function registerInventory(r: Router) {
           i.cost_minor,
           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS current_stock_milli
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? AND i.branch_id = ? AND i.active = true AND i.track_stock = true
       `;
-      const itemParams: unknown[] = [tenantId];
+      const itemParams: unknown[] = [tenantId, branchId];
       if (category && category !== 'ALL') {
         itemsSql += ` AND i.category = ?`;
         itemParams.push(category);
@@ -801,9 +826,9 @@ export function registerInventory(r: Router) {
         const systemQtyMilli = Number(item.currentStockMilli ?? item.current_stock_milli ?? 0);
         await q.exec(
           `INSERT INTO stock_count_lines (
-            id, tenant_id, count_id, item_id, system_qty_milli, unit_cost_minor, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, now(), now())`,
-          [lineId, tenantId, countId, item.id, systemQtyMilli, Number(item.costMinor ?? item.cost_minor ?? 0)],
+            id, tenant_id, branch_id, count_id, item_id, system_qty_milli, unit_cost_minor, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, now(), now())`,
+          [lineId, tenantId, branchId, countId, item.id, systemQtyMilli, Number(item.costMinor ?? item.cost_minor ?? 0)],
         );
       }
 
@@ -831,7 +856,10 @@ export function registerInventory(r: Router) {
   // Get count session details and item lines
   r.get('/api/inventory/counts/:id', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND sc.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const count = await ctx.db.one(
       `SELECT 
@@ -841,8 +869,8 @@ export function registerInventory(r: Router) {
        FROM stock_counts sc
        LEFT JOIN users u ON u.id = sc.created_by
        LEFT JOIN users fu ON fu.id = sc.finalized_by
-       WHERE sc.id = ? AND sc.tenant_id = ?`,
-      [ctx.params.id, tenantId],
+       WHERE sc.id = ? AND sc.tenant_id = ?${branchFilter}`,
+      [ctx.params.id, tenantId, ...branchParams],
     );
     if (!count) throw notFound('Stock Count Session');
 
@@ -898,10 +926,13 @@ export function registerInventory(r: Router) {
   r.patch('/api/inventory/counts/:id/lines', requirePerm('stock.adjust'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
     const linesInput = V.arr(b.lines, 'Counted lines', { min: 1 });
 
     return ctx.db.tx(async (q) => {
-      const count = await q.one('SELECT id, status FROM stock_counts WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+      const count = await q.one(`SELECT id, branch_id, status FROM stock_counts WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
       if (!count) throw notFound('Stock Count Session');
       if (count.status !== 'in_progress') {
         throw bad(`Cannot edit lines in a ${count.status} session.`);
@@ -963,12 +994,15 @@ export function registerInventory(r: Router) {
   // Finalize stock count: generate adjustments and update stock moves safely reconciling interim movements
   r.post('/api/inventory/counts/:id/finalize', requirePerm('stock.adjust'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     return ctx.db.tx(async (q) => {
       // 1. Row-lock stock_counts header to serialize concurrent finalization and prevent duplicate adjustments
       const count = await q.one<any>(
-        'SELECT id, count_number, status, name, created_at, location FROM stock_counts WHERE id = ? AND tenant_id = ? FOR UPDATE',
-        [ctx.params.id, tenantId],
+        `SELECT id, branch_id, count_number, status, name, created_at, location FROM stock_counts WHERE id = ? AND tenant_id = ?${branchFilter} FOR UPDATE`,
+        [ctx.params.id, tenantId, ...branchParams],
       );
       if (!count) throw notFound('Stock Count Session');
       const countStatus = count.status;
@@ -1007,11 +1041,12 @@ export function registerInventory(r: Router) {
         const lineCountedAt = line.updatedAt ?? line.updated_at ?? line.createdAt ?? line.created_at ?? countCreatedAt;
 
         // 2. Query live stock right now from authoritative stock_moves
+        const countBranchId = count.branch_id || count.branchId;
         const currentLiveRow = await q.one<any>(
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS current_stock_milli
            FROM stock_moves
-           WHERE tenant_id = ? AND item_id = ? AND location = ?`,
-          [tenantId, lineItemId, countLocation],
+           WHERE tenant_id = ? AND branch_id = ? AND item_id = ?`,
+          [tenantId, countBranchId, lineItemId],
         );
         const currentLiveStockMilli = Number(currentLiveRow?.currentStockMilli ?? currentLiveRow?.current_stock_milli ?? 0);
 
@@ -1020,12 +1055,12 @@ export function registerInventory(r: Router) {
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS prior_delta_milli
            FROM stock_moves
            WHERE tenant_id = ? 
+             AND branch_id = ?
              AND item_id = ? 
-             AND location = ? 
              AND created_at >= ? 
              AND created_at < ?
              AND (ref_type IS NULL OR ref_type != 'stock_count')`,
-          [tenantId, lineItemId, countLocation, countCreatedAt, lineCountedAt],
+          [tenantId, countBranchId, lineItemId, countCreatedAt, lineCountedAt],
         );
         const priorDeltaMilli = Number(priorMovesRow?.priorDeltaMilli ?? priorMovesRow?.prior_delta_milli ?? 0);
 
@@ -1060,27 +1095,27 @@ export function registerInventory(r: Router) {
 
         // 5. Generate adjustment number
         const seriesRow = await q.one<any>(
-          `INSERT INTO number_series (tenant_id, series, next_no)
-           VALUES (?, 'ADJ', 2)
-           ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+          `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+           VALUES (?, ?, 'ADJ', 2)
+           ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
            RETURNING (next_no - 1) AS assigned_no`,
-          [tenantId],
+          [tenantId, countBranchId],
         );
         let seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
         let adjustmentNumber = `ADJ-${1000 + seqNo}`;
 
-        const existingAdj = await q.one('SELECT id FROM stock_adjustments WHERE tenant_id = ? AND adjustment_number = ?', [tenantId, adjustmentNumber]);
+        const existingAdj = await q.one('SELECT id FROM stock_adjustments WHERE tenant_id = ? AND branch_id = ? AND adjustment_number = ?', [tenantId, countBranchId, adjustmentNumber]);
         if (existingAdj) {
           const maxRow = await q.one<any>(
-            `SELECT adjustment_number FROM stock_adjustments WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1`,
-            [tenantId],
+            `SELECT adjustment_number FROM stock_adjustments WHERE tenant_id = ? AND branch_id = ? ORDER BY created_at DESC LIMIT 1`,
+            [tenantId, countBranchId],
           );
           const match = (maxRow?.adjustmentNumber ?? maxRow?.adjustment_number ?? '').match(/ADJ-(\d+)/);
           const nextNum = match ? parseInt(match[1], 10) + 1 : 1000 + seqNo + 1;
           adjustmentNumber = `ADJ-${nextNum}`;
           await q.exec(
-            `INSERT INTO number_series (tenant_id, series, next_no) VALUES (?, 'ADJ', ?) ON CONFLICT (tenant_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
-            [tenantId, nextNum - 1000 + 1, nextNum - 1000 + 1],
+            `INSERT INTO number_series (tenant_id, branch_id, series, next_no) VALUES (?, ?, 'ADJ', ?) ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = GREATEST(number_series.next_no, ?)`,
+            [tenantId, countBranchId, nextNum - 1000 + 1, nextNum - 1000 + 1],
           );
         }
 
@@ -1091,13 +1126,14 @@ export function registerInventory(r: Router) {
         // 6. Record stock_adjustment audit record
         await q.exec(
           `INSERT INTO stock_adjustments (
-            id, tenant_id, adjustment_number, item_id, location, adjustment_type,
+            id, tenant_id, branch_id, adjustment_number, item_id, location, adjustment_type,
             reason, old_qty_milli, new_qty_milli, change_qty_milli, unit_cost_minor,
             notes, created_by, created_at
-          ) VALUES (?, ?, ?, ?, ?, 'physical_count', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, 'physical_count', ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             adjId,
             tenantId,
+            countBranchId,
             adjustmentNumber,
             lineItemId,
             countLocation,
@@ -1115,12 +1151,13 @@ export function registerInventory(r: Router) {
         // 7. Record authoritative stock_move correction
         await q.exec(
           `INSERT INTO stock_moves (
-            id, tenant_id, item_id, location, qty_milli, kind,
+            id, tenant_id, branch_id, item_id, location, qty_milli, kind,
             ref_type, ref_id, ref_line_id, unit_cost_minor, reason, notes, user_id, created_at
-          ) VALUES (?, ?, ?, ?, ?, 'adjust', 'stock_count', ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, 'adjust', 'stock_count', ?, ?, ?, ?, ?, ?, ?)`,
           [
             moveId,
             tenantId,
+            countBranchId,
             lineItemId,
             countLocation,
             reconciledDiffMilli,
@@ -1171,10 +1208,13 @@ export function registerInventory(r: Router) {
   // Cancel stock count session
   r.post('/api/inventory/counts/:id/cancel', requirePerm('stock.adjust'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
     return ctx.db.tx(async (q) => {
-      const count = await q.one<{ id: string; status: string; count_number: string }>(
-        'SELECT id, status, count_number FROM stock_counts WHERE id = ? AND tenant_id = ? FOR UPDATE',
-        [ctx.params.id, tenantId],
+      const count = await q.one<{ id: string; branch_id: string; status: string; count_number: string }>(
+        `SELECT id, branch_id, status, count_number FROM stock_counts WHERE id = ? AND tenant_id = ?${branchFilter} FOR UPDATE`,
+        [ctx.params.id, tenantId, ...branchParams],
       );
       if (!count) throw notFound('Stock Count Session');
       if (count.status === 'completed') {
@@ -1201,8 +1241,11 @@ export function registerInventory(r: Router) {
   r.patch('/api/inventory/items/:id/reorder', requirePerm('stock.adjust'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
-    const item = await ctx.db.one('SELECT id, name FROM items WHERE id = ? AND tenant_id = ?', [ctx.params.id, tenantId]);
+    const item = await ctx.db.one(`SELECT id, name FROM items WHERE id = ? AND tenant_id = ?${branchFilter}`, [ctx.params.id, tenantId, ...branchParams]);
     if (!item) throw notFound('Item');
 
     const reorderMilli = V.int(b.reorderMilli ?? b.reorderLevelMilli ?? 0, 'Reorder quantity', { min: 0 });
@@ -1230,7 +1273,7 @@ export function registerInventory(r: Router) {
 
     const updated = await ctx.db.one(
       `SELECT i.*,
-              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0) AS current_stock_milli
+              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
        FROM items i
        WHERE i.id = ? AND i.tenant_id = ?`,
       [item.id, tenantId],
@@ -1252,7 +1295,11 @@ export function registerInventory(r: Router) {
   // 7. Real-Data Inventory Insights & Risk Intelligence (Phase 3)
   r.get('/api/inventory/insights', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND sm.branch_id = ?' : '';
+    const itemBranchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     // 1. Stockout Risks with explainable velocity & days of runway
     const stockoutRiskRows = await ctx.db.query(
@@ -1263,7 +1310,7 @@ export function registerInventory(r: Router) {
           COUNT(DISTINCT sm.ref_id)::int AS orders_count
         FROM stock_moves sm
         LEFT JOIN invoices inv ON inv.id = sm.ref_id AND sm.ref_type = 'invoice'
-        WHERE sm.tenant_id = ? 
+        WHERE sm.tenant_id = ? ${branchFilter}
           AND sm.kind = 'sale' 
           AND (inv.id IS NULL OR inv.status = 'posted')
           AND sm.created_at >= (now() - interval '30 days')
@@ -1275,7 +1322,7 @@ export function registerInventory(r: Router) {
           COALESCE(SUM(sm.qty_milli), 0)::bigint AS returned_milli
         FROM stock_moves sm
         LEFT JOIN invoices cn ON cn.id = sm.ref_id AND sm.ref_type = 'credit_note'
-        WHERE sm.tenant_id = ? 
+        WHERE sm.tenant_id = ? ${branchFilter}
           AND sm.kind = 'return' 
           AND (cn.id IS NULL OR cn.status = 'posted')
           AND sm.created_at >= (now() - interval '30 days')
@@ -1296,10 +1343,10 @@ export function registerInventory(r: Router) {
           p.name AS preferred_supplier_name,
           i.created_at,
           GREATEST(1, LEAST(30, EXTRACT(DAY FROM (now() - i.created_at))::int)) AS days_active,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
         FROM items i
-        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND p.branch_id = i.branch_id
+        WHERE i.tenant_id = ? ${itemBranchFilter} AND i.active = true AND i.track_stock = true
       )
       SELECT 
         s.*,
@@ -1319,7 +1366,7 @@ export function registerInventory(r: Router) {
           ELSE 999 
         END ASC
       LIMIT 20`,
-      [tenantId, tenantId, tenantId],
+      [tenantId, ...branchParams, tenantId, ...branchParams, tenantId, ...branchParams],
     );
 
     const stockoutRisks = stockoutRiskRows.map((r: any) => {
@@ -1389,7 +1436,7 @@ export function registerInventory(r: Router) {
           MAX(sm.created_at) AS last_sale_at,
           COALESCE(SUM(ABS(sm.qty_milli)), 0)::bigint AS sold_60d_milli
         FROM stock_moves sm
-        WHERE sm.tenant_id = ? 
+        WHERE sm.tenant_id = ? ${branchFilter}
           AND sm.kind = 'sale' 
           AND sm.created_at >= (now() - interval '60 days')
         GROUP BY sm.item_id
@@ -1403,10 +1450,10 @@ export function registerInventory(r: Router) {
           i.unit,
           i.category,
           i.cost_minor,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS stock_milli,
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
           i.created_at
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? ${itemBranchFilter} AND i.active = true AND i.track_stock = true
       )
       SELECT 
         s.*,
@@ -1417,7 +1464,7 @@ export function registerInventory(r: Router) {
       WHERE s.stock_milli > 0 AND COALESCE(sl.sold_60d_milli, 0) = 0
       ORDER BY (s.stock_milli * s.cost_minor) DESC
       LIMIT 15`,
-      [tenantId, tenantId],
+      [tenantId, ...branchParams, tenantId, ...branchParams],
     );
 
     const slowMovingItems = deadStockRows.map((r: any) => {
@@ -1497,11 +1544,11 @@ export function registerInventory(r: Router) {
         COALESCE(SUM(scl.diff_qty_milli * scl.unit_cost_minor / 1000), 0)::bigint AS net_variance_value_minor
       FROM stock_counts sc
       JOIN stock_count_lines scl ON scl.count_id = sc.id
-      WHERE sc.tenant_id = ? AND sc.status = 'completed'
+      WHERE sc.tenant_id = ? ${!scope.isSuperAdminAll && scope.branchId ? 'AND sc.branch_id = ?' : ''} AND sc.status = 'completed'
       GROUP BY sc.id, sc.count_number, sc.name, sc.finalized_at
       ORDER BY sc.finalized_at DESC
       LIMIT 5`,
-      [tenantId],
+      (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
 
     const adjustmentReasonBreakdown = await ctx.db.query(
@@ -1511,10 +1558,10 @@ export function registerInventory(r: Router) {
         COALESCE(SUM(change_qty_milli), 0)::bigint AS net_change_milli,
         COALESCE(SUM(ABS(change_qty_milli)), 0)::bigint AS abs_change_milli
       FROM stock_adjustments
-      WHERE tenant_id = ? AND created_at >= (now() - interval '90 days')
+      WHERE tenant_id = ? ${!scope.isSuperAdminAll && scope.branchId ? 'AND branch_id = ?' : ''} AND created_at >= (now() - interval '90 days')
       GROUP BY reason
       ORDER BY count DESC`,
-      [tenantId],
+      (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
 
     // 5. Inward Batches Near Expiry (Perishable stock received)
@@ -1527,8 +1574,8 @@ export function registerInventory(r: Router) {
         sm.expiry,
         COALESCE(SUM(sm.qty_milli), 0)::bigint AS inward_qty_milli
       FROM stock_moves sm
-      JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id
-      WHERE sm.tenant_id = ? 
+      JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id AND i.branch_id = sm.branch_id
+      WHERE sm.tenant_id = ? ${branchFilter}
         AND sm.batch_no IS NOT NULL 
         AND TRIM(sm.batch_no) != ''
         AND sm.expiry IS NOT NULL 
@@ -1537,7 +1584,7 @@ export function registerInventory(r: Router) {
       HAVING SUM(sm.qty_milli) > 0
       ORDER BY sm.expiry ASC
       LIMIT 15`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -1608,7 +1655,13 @@ export function registerInventory(r: Router) {
   // 8. Product Movement Analysis (Fast, Slow, and Non-Moving Products)
   r.get('/api/inventory/movement-analysis', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
     const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const branchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND inv.branch_id = ?' : '';
+    const cnBranchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND cn.branch_id = ?' : '';
+    const invAllBranchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND inv_all.branch_id = ?' : '';
+    const itemBranchFilter = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
     const range = (ctx.query.range ?? '30d').trim().toLowerCase();
     const fromStr = (ctx.query.from ?? '').trim();
@@ -1655,11 +1708,12 @@ export function registerInventory(r: Router) {
       `SELECT COUNT(DISTINCT inv.id)::int AS total_bills
        FROM invoices inv
        WHERE inv.tenant_id = ?
+         ${branchFilter}
          AND inv.kind = 'sale'
          AND inv.status = 'posted'
          AND inv.created_at >= ?::timestamptz
          AND inv.created_at <= ?::timestamptz`,
-      [tenantId, startDate.toISOString(), endDate.toISOString()],
+      [tenantId, ...branchParams, startDate.toISOString(), endDate.toISOString()],
     );
     const totalSalesBills = Number(totalBillsRow?.total_bills ?? totalBillsRow?.totalBills ?? 0);
 
@@ -1674,6 +1728,7 @@ export function registerInventory(r: Router) {
          FROM invoice_lines il
          JOIN invoices inv ON inv.id = il.invoice_id AND inv.tenant_id = il.tenant_id
          WHERE il.tenant_id = ?
+           ${branchFilter}
            AND inv.kind = 'sale'
            AND inv.status = 'posted'
            AND inv.created_at >= ?::timestamptz
@@ -1688,6 +1743,7 @@ export function registerInventory(r: Router) {
          FROM invoice_lines cl
          JOIN invoices cn ON cn.id = cl.invoice_id AND cn.tenant_id = cl.tenant_id
          WHERE cl.tenant_id = ?
+           ${cnBranchFilter}
            AND cn.kind = 'credit_note'
            AND cn.status = 'posted'
            AND cn.created_at >= ?::timestamptz
@@ -1702,6 +1758,7 @@ export function registerInventory(r: Router) {
          FROM invoice_lines il_all
          JOIN invoices inv_all ON inv_all.id = il_all.invoice_id AND inv_all.tenant_id = il_all.tenant_id
          WHERE il_all.tenant_id = ?
+           ${invAllBranchFilter}
            AND inv_all.kind = 'sale'
            AND inv_all.status = 'posted'
            AND il_all.item_id IS NOT NULL
@@ -1717,9 +1774,9 @@ export function registerInventory(r: Router) {
            i.unit,
            i.cost_minor,
            i.price_minor,
-           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id), 0)::bigint AS current_stock_milli
+           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS current_stock_milli
          FROM items i
-         WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+         WHERE i.tenant_id = ? ${itemBranchFilter} AND i.active = true AND i.track_stock = true
        )
        SELECT
          s.id,
@@ -1742,10 +1799,10 @@ export function registerInventory(r: Router) {
        LEFT JOIN all_time_last_sold atl ON atl.item_id = s.id
        ORDER BY net_sold_milli DESC, txns_count DESC, s.name ASC`,
       [
-        tenantId, startDate.toISOString(), endDate.toISOString(),
-        tenantId, startDate.toISOString(), endDate.toISOString(),
-        tenantId,
-        tenantId,
+        tenantId, ...branchParams, startDate.toISOString(), endDate.toISOString(),
+        tenantId, ...branchParams, startDate.toISOString(), endDate.toISOString(),
+        tenantId, ...branchParams,
+        tenantId, ...branchParams,
       ],
     );
 

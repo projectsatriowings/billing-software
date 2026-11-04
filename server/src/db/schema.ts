@@ -25,6 +25,7 @@ export const MIGRATIONS: Migration[] = [
         loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10,
         loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10,
         loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10,
+        owner_email TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE TABLE users (
@@ -707,16 +708,7 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
-    version: 19,
-    statements: [
-      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_enabled BOOLEAN NOT NULL DEFAULT TRUE`,
-      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10`,
-      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10`,
-      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10`,
-    ],
-  },
-  {
-    version: 15,
+    version: 17,
     statements: [
       `CREATE INDEX IF NOT EXISTS invoices_sales_analysis ON invoices (tenant_id, status, kind, bdate)`,
       `CREATE INDEX IF NOT EXISTS invoices_user_date ON invoices (tenant_id, created_by, bdate)`,
@@ -724,12 +716,21 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
-    version: 16,
+    version: 18,
     statements: [
       `CREATE INDEX IF NOT EXISTS invoices_today_covering ON invoices (tenant_id, bdate, status, kind, created_at)`,
     ],
   },
+  
   {
+    version: 19,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_enabled BOOLEAN NOT NULL DEFAULT TRUE`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_points_per_100 INTEGER NOT NULL DEFAULT 10`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10`,
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10`,
+    ],
+  },{
     version: 20,
     statements: [
       `CREATE TABLE IF NOT EXISTS shop_payment_settings (
@@ -1004,6 +1005,419 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS promo_usage_customer ON promotion_usage (tenant_id, party_id, promotion_id)`,
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS applied_promotions JSONB NOT NULL DEFAULT '[]'::jsonb`,
       `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS promotion_discount_minor BIGINT NOT NULL DEFAULT 0`,
+    ],
+  },
+  {
+    version: 36,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS stock_transfers (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        transfer_number TEXT NOT NULL,
+        from_branch TEXT NOT NULL,
+        to_branch TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'requested', 'approved', 'in_transit', 'partially_received', 'received', 'completed', 'rejected', 'cancelled')),
+        transfer_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        requested_by TEXT NOT NULL REFERENCES users(id),
+        approved_by TEXT REFERENCES users(id),
+        approved_at TIMESTAMPTZ,
+        dispatched_by TEXT REFERENCES users(id),
+        dispatched_at TIMESTAMPTZ,
+        received_by TEXT REFERENCES users(id),
+        received_at TIMESTAMPTZ,
+        notes TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS stock_transfers_number_uq ON stock_transfers (tenant_id, transfer_number)`,
+      `CREATE INDEX IF NOT EXISTS stock_transfers_tenant_status ON stock_transfers (tenant_id, status)`,
+      `CREATE INDEX IF NOT EXISTS stock_transfers_from_branch ON stock_transfers (tenant_id, from_branch)`,
+      `CREATE INDEX IF NOT EXISTS stock_transfers_to_branch ON stock_transfers (tenant_id, to_branch)`,
+      `CREATE TABLE IF NOT EXISTS stock_transfer_lines (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        transfer_id TEXT NOT NULL REFERENCES stock_transfers(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL REFERENCES items(id),
+        qty_milli BIGINT NOT NULL CHECK (qty_milli > 0),
+        received_qty_milli BIGINT NOT NULL DEFAULT 0 CHECK (received_qty_milli >= 0),
+        discrepancy_milli BIGINT NOT NULL DEFAULT 0,
+        discrepancy_reason TEXT,
+        unit TEXT NOT NULL DEFAULT 'pcs',
+        batch_no TEXT,
+        expiry TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS stock_transfer_lines_transfer_id ON stock_transfer_lines (tenant_id, transfer_id)`,
+      `CREATE INDEX IF NOT EXISTS stock_transfer_lines_item_id ON stock_transfer_lines (tenant_id, item_id)`,
+    ],
+  },
+  {
+    version: 37,
+    statements: [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      `ALTER TABLE users ALTER COLUMN email DROP NOT NULL`,
+      `ALTER TABLE branches ADD COLUMN IF NOT EXISTS gstin TEXT`,
+      `ALTER TABLE branches ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_uq ON users (lower(username)) WHERE username IS NOT NULL`,
+      `CREATE TABLE IF NOT EXISTS counters (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        login_username TEXT,
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (tenant_id, code)
+      )`,
+      `CREATE INDEX IF NOT EXISTS counters_tenant_branch ON counters (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS counters_tenant_status ON counters (tenant_id, status)`,
+    ],
+  },
+  {
+    version: 38,
+    statements: [
+      `ALTER TABLE counters ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ`,
+      `ALTER TABLE counters ADD COLUMN IF NOT EXISTS created_by TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS counter_id TEXT REFERENCES counters(id) ON DELETE SET NULL`,
+      `CREATE INDEX IF NOT EXISTS users_counter_id_idx ON users (counter_id)`,
+    ],
+  },
+  {
+    version: 39,
+    statements: [
+      `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`,
+      `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('owner','manager','cashier','accountant','counter'))`,
+    ],
+  },
+  {
+    version: 40,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS email_logs (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        to_email TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND')),
+        status TEXT NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED','SENT','FAILED')),
+        error_message TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        sent_at TIMESTAMPTZ,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS email_logs_tenant_user ON email_logs (tenant_id, user_id)`,
+      `CREATE INDEX IF NOT EXISTS email_logs_tenant_status ON email_logs (tenant_id, status)`,
+      `CREATE INDEX IF NOT EXISTS email_logs_to_email ON email_logs (to_email)`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS branch_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counter_name_snapshot TEXT`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cashier_name_snapshot TEXT`,
+    ],
+  },
+  {
+    version: 41,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS owner_email TEXT`,
+      `ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_type_check`,
+      `ALTER TABLE email_logs ADD CONSTRAINT email_logs_type_check CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND','DELETION_ALERT'))`,
+    ],
+  },
+  {
+    version: 42,
+    statements: [
+      `ALTER TABLE product_barcodes ADD COLUMN IF NOT EXISTS barcode_type TEXT NOT NULL DEFAULT 'INTERNAL'`,
+      `DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'product_barcodes_barcode_type_check') THEN
+          ALTER TABLE product_barcodes ADD CONSTRAINT product_barcodes_barcode_type_check CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER'));
+        END IF;
+      END $$;`,
+      `ALTER TABLE product_barcodes ALTER COLUMN is_primary DROP NOT NULL`,
+      `ALTER TABLE product_barcodes ALTER COLUMN is_primary SET DEFAULT false`,
+    ],
+  },
+  {
+    version: 43,
+    statements: [
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_number TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_date TEXT DEFAULT CURRENT_DATE::text`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS notes TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_id TEXT REFERENCES parties(id)`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_name TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_gstin TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_invoice_number TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_invoice_date TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS tax_inclusive BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS tax_rate_bp INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS taxable_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS cgst_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS sgst_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS igst_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash'`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'paid'`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS balance_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS gst_treatment TEXT NOT NULL DEFAULT 'exempt'`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS itc_eligibility TEXT NOT NULL DEFAULT 'ineligible'`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS itc_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'posted'`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS void_reason TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS voided_by TEXT REFERENCES users(id)`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS expenses_tenant_num_uq ON expenses (tenant_id, expense_number) WHERE expense_number IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS expenses_tenant_date ON expenses (tenant_id, expense_date DESC)`,
+      `CREATE INDEX IF NOT EXISTS expenses_tenant_category ON expenses (tenant_id, category)`,
+      `CREATE INDEX IF NOT EXISTS expenses_tenant_supplier ON expenses (tenant_id, supplier_id)`,
+    ],
+  },
+  {
+    version: 44,
+    statements: [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ`,
+      `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS password_reset_tokens_hash_idx ON password_reset_tokens (token_hash)`,
+      `CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens (user_id)`,
+      `ALTER TABLE email_logs DROP CONSTRAINT IF EXISTS email_logs_type_check`,
+      `ALTER TABLE email_logs ADD CONSTRAINT email_logs_type_check CHECK (type IN ('WELCOME','RESET_PASSWORD','RESEND','DELETION_ALERT','FORGOT_PASSWORD'))`,
+    ],
+  },
+  {
+    version: 45,
+    statements: [
+      `UPDATE branches b
+       SET manager_id = u.id, updated_at = now()
+       FROM users u
+       WHERE u.branch_id = b.id
+         AND lower(u.role) IN ('manager', 'store_manager')
+         AND u.tenant_id = b.tenant_id
+         AND u.deleted_at IS NULL
+         AND (b.manager_id IS NULL OR b.manager_id != u.id)`,
+      `UPDATE users u
+       SET branch_id = b.id, updated_at = now()
+       FROM branches b
+       WHERE b.manager_id = u.id
+         AND lower(u.role) IN ('manager', 'store_manager')
+         AND b.tenant_id = u.tenant_id
+         AND b.deleted_at IS NULL
+         AND (u.branch_id IS NULL OR u.branch_id != b.id)`,
+      `UPDATE users u
+       SET branch_id = b.id
+       FROM branches b
+       WHERE b.code = 'SKS_POR'
+         AND (lower(u.email) LIKE '%srishakram%' OR lower(u.name) LIKE '%sri%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE branches b
+       SET manager_id = u.id
+       FROM users u
+       WHERE b.code = 'SKS_POR'
+         AND (lower(u.email) LIKE '%srishakram%' OR lower(u.name) LIKE '%sri%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE users u
+       SET branch_id = b.id
+       FROM branches b
+       WHERE b.code = 'MAIN'
+         AND (lower(u.email) LIKE '%manager@billing.local%' OR lower(u.name) LIKE '%kavitha%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+      `UPDATE branches b
+       SET manager_id = u.id
+       FROM users u
+       WHERE b.code = 'MAIN'
+         AND (lower(u.email) LIKE '%manager@billing.local%' OR lower(u.name) LIKE '%kavitha%')
+         AND u.tenant_id = b.tenant_id
+         AND lower(u.role) IN ('manager', 'store_manager')`,
+    ],
+  },
+  {
+    version: 46,
+    statements: [
+      // 1. Drop unused branch_inventory table and view
+      `DROP VIEW IF EXISTS v_branch_inventory CASCADE`,
+      `DROP TABLE IF EXISTS branch_inventory CASCADE`,
+
+      // 2. Ensure branch_id exists on all branch-scoped tables
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE parties ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE stock_moves ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE cash_movements ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE categories ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE promotions ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE product_barcodes ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE stock_adjustments ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE stock_counts ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE stock_count_lines ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE payment_allocations ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE credit_allocations ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE supplier_payment_allocations ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE purchase_lines ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+      `ALTER TABLE number_series ADD COLUMN IF NOT EXISTS branch_id TEXT REFERENCES branches(id)`,
+
+      // 3. Backfill branch_id from relationships or MAIN branch if rows exist
+      `UPDATE items SET branch_id = (SELECT id FROM branches WHERE tenant_id = items.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE parties SET branch_id = (SELECT id FROM branches WHERE tenant_id = parties.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE invoices SET branch_id = (SELECT id FROM branches WHERE tenant_id = invoices.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE payments SET branch_id = (SELECT id FROM branches WHERE tenant_id = payments.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE shifts SET branch_id = (SELECT id FROM branches WHERE tenant_id = shifts.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE stock_moves SET branch_id = (SELECT id FROM branches WHERE tenant_id = stock_moves.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE purchases SET branch_id = (SELECT id FROM branches WHERE tenant_id = purchases.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE expenses SET branch_id = (SELECT id FROM branches WHERE tenant_id = expenses.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE cash_movements SET branch_id = (SELECT id FROM branches WHERE tenant_id = cash_movements.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE categories SET branch_id = (SELECT id FROM branches WHERE tenant_id = categories.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE promotions SET branch_id = (SELECT id FROM branches WHERE tenant_id = promotions.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE product_barcodes pb SET branch_id = i.branch_id FROM items i WHERE pb.product_id = i.id AND pb.branch_id IS NULL`,
+      `UPDATE product_barcodes SET branch_id = (SELECT id FROM branches WHERE tenant_id = product_barcodes.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE stock_adjustments SET branch_id = (SELECT id FROM branches WHERE tenant_id = stock_adjustments.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE stock_counts SET branch_id = (SELECT id FROM branches WHERE tenant_id = stock_counts.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE stock_count_lines scl SET branch_id = sc.branch_id FROM stock_counts sc WHERE scl.count_id = sc.id AND scl.branch_id IS NULL`,
+      `UPDATE stock_count_lines SET branch_id = (SELECT id FROM branches WHERE tenant_id = stock_count_lines.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE payment_allocations pa SET branch_id = p.branch_id FROM payments p WHERE pa.payment_id = p.id AND pa.branch_id IS NULL`,
+      `UPDATE payment_allocations SET branch_id = (SELECT id FROM branches WHERE tenant_id = payment_allocations.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE credit_allocations ca SET branch_id = inv.branch_id FROM invoices inv WHERE ca.credit_note_id = inv.id AND ca.branch_id IS NULL`,
+      `UPDATE credit_allocations SET branch_id = (SELECT id FROM branches WHERE tenant_id = credit_allocations.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE supplier_payment_allocations spa SET branch_id = p.branch_id FROM payments p WHERE spa.payment_id = p.id AND spa.branch_id IS NULL`,
+      `UPDATE supplier_payment_allocations SET branch_id = (SELECT id FROM branches WHERE tenant_id = supplier_payment_allocations.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE invoice_lines il SET branch_id = inv.branch_id FROM invoices inv WHERE il.invoice_id = inv.id AND il.branch_id IS NULL`,
+      `UPDATE invoice_lines SET branch_id = (SELECT id FROM branches WHERE tenant_id = invoice_lines.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE purchase_lines pl SET branch_id = p.branch_id FROM purchases p WHERE pl.purchase_id = p.id AND pl.branch_id IS NULL`,
+      `UPDATE purchase_lines SET branch_id = (SELECT id FROM branches WHERE tenant_id = purchase_lines.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+      `UPDATE number_series SET branch_id = (SELECT id FROM branches WHERE tenant_id = number_series.tenant_id ORDER BY code = 'MAIN' DESC LIMIT 1) WHERE branch_id IS NULL`,
+
+      // 4. Set NOT NULL on all branch_id columns
+      `ALTER TABLE items ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE parties ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE invoices ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE payments ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE shifts ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE stock_moves ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE purchases ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE expenses ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE cash_movements ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE categories ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE promotions ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE product_barcodes ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE stock_adjustments ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE stock_counts ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE stock_count_lines ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE payment_allocations ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE credit_allocations ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE supplier_payment_allocations ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE invoice_lines ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE purchase_lines ALTER COLUMN branch_id SET NOT NULL`,
+      `ALTER TABLE number_series ALTER COLUMN branch_id SET NOT NULL`,
+
+      // 5. Update number_series primary key
+      `ALTER TABLE number_series DROP CONSTRAINT IF EXISTS number_series_pkey`,
+      `ALTER TABLE number_series ADD PRIMARY KEY (tenant_id, branch_id, series)`,
+
+      // 6. Replace company-wide unique indexes with branch-scoped unique indexes
+      `DROP INDEX IF EXISTS categories_name_uq`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS categories_branch_name_uq ON categories (tenant_id, branch_id, lower(name))`,
+
+      `DROP INDEX IF EXISTS items_barcode_uq`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS items_branch_barcode_uq ON items (tenant_id, branch_id, barcode) WHERE barcode IS NOT NULL AND barcode <> ''`,
+
+      `DROP INDEX IF EXISTS product_barcodes_uq`,
+      `DROP INDEX IF EXISTS product_barcodes_tenant_id_barcode_key`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_barcodes_branch_barcode_uq ON product_barcodes (tenant_id, branch_id, barcode)`,
+
+      `DROP INDEX IF EXISTS items_sku`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS items_branch_sku_uq ON items (tenant_id, branch_id, sku) WHERE sku IS NOT NULL AND sku <> ''`,
+
+      `DROP INDEX IF EXISTS idx_parties_phone`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS parties_branch_phone_customer_uq ON parties (tenant_id, branch_id, phone) WHERE type = 'customer' AND phone IS NOT NULL AND phone <> ''`,
+
+      `CREATE UNIQUE INDEX IF NOT EXISTS parties_branch_gstin_supplier_uq ON parties (tenant_id, branch_id, gstin) WHERE type = 'supplier' AND gstin IS NOT NULL AND gstin <> ''`,
+
+      // 7. Composite indexes on (tenant_id, branch_id) for every branch-scoped table
+      `CREATE INDEX IF NOT EXISTS idx_categories_tenant_branch ON categories (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_items_tenant_branch ON items (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_parties_tenant_branch ON parties (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_invoices_tenant_branch ON invoices (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payments_tenant_branch ON payments (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shifts_tenant_branch ON shifts (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_stock_moves_tenant_branch ON stock_moves (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchases_tenant_branch ON purchases (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_tenant_branch ON expenses (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_movements_tenant_branch ON cash_movements (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_promotions_tenant_branch ON promotions (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_product_barcodes_tenant_branch ON product_barcodes (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_stock_adjustments_tenant_branch ON stock_adjustments (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_stock_counts_tenant_branch ON stock_counts (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_allocations_tenant_branch ON payment_allocations (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_credit_allocations_tenant_branch ON credit_allocations (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_supplier_payment_allocations_tenant_branch ON supplier_payment_allocations (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_number_series_tenant_branch ON number_series (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_invoice_lines_tenant_branch ON invoice_lines (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_purchase_lines_tenant_branch ON purchase_lines (tenant_id, branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_stock_count_lines_tenant_branch ON stock_count_lines (tenant_id, branch_id)`,
+    ],
+  },
+  {
+    version: 47,
+    statements: [
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_name TEXT`,
+      `ALTER TABLE purchases ADD COLUMN IF NOT EXISTS attachment_data TEXT`,
+    ],
+  },
+  {
+    version: 48,
+    statements: [
+      `ALTER TABLE purchase_lines ALTER COLUMN item_id DROP NOT NULL`,
+      `ALTER TABLE stock_transfer_lines ALTER COLUMN item_id DROP NOT NULL`,
+      `ALTER TABLE items ALTER COLUMN branch_id DROP NOT NULL`,
+    ],
+  },
+  {
+    version: 49,
+    statements: [
+      `ALTER TABLE product_barcodes ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_moves ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE categories ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE parties ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_adjustments ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_count_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE stock_counts ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE purchase_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE purchases ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE invoice_lines ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE invoices ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE payments ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE expenses ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE shifts ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE cash_movements ALTER COLUMN branch_id DROP NOT NULL`,
+      `ALTER TABLE terminal_transactions ALTER COLUMN branch_id DROP NOT NULL`,
     ],
   },
 ];

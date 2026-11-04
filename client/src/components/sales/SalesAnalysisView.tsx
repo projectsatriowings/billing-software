@@ -1254,34 +1254,134 @@ const AlertTriangleIcon = () => (
   </svg>
 );
 
-/** Smart category icon and color avatar mapper */
-function getCategoryIcon(catName: string): { emoji: string; bg: string; color: string } {
+// ── Category SVG Vector Icons (No Emojis) ───────────────────────────────────
+
+const CategoryProduceIcon = ({ color = '#ef4444', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+  </svg>
+);
+
+const CategoryGrainsIcon = ({ color = '#d97706', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 22 16 8" />
+    <path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+    <path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+    <path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+    <path d="m20 2-3 3 1.5 1.5L20 5l1.5 1.5L23 5l-3-3Z" />
+  </svg>
+);
+
+const CategoryDairyIcon = ({ color = '#3b82f6', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 2h8v3H8z" />
+    <path d="M9 5v3l-3 4v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8l-3-4V5" />
+    <line x1="6" y1="14" x2="18" y2="14" />
+  </svg>
+);
+
+const CategoryPersonalCareIcon = ({ color = '#0ea5e9', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    <path d="M5 3v4" />
+    <path d="M19 17v4" />
+    <path d="M3 5h4" />
+    <path d="M17 19h4" />
+  </svg>
+);
+
+const CategorySnacksIcon = ({ color = '#10b981', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" />
+    <path d="M8.5 8.5v.01" />
+    <path d="M16 15.5v.01" />
+    <path d="M12 12v.01" />
+    <path d="M11 17v.01" />
+    <path d="M7 14v.01" />
+  </svg>
+);
+
+const CategoryOilsIcon = ({ color = '#ec4899', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+    <path d="M9 14a3 3 0 0 0 6 0" />
+  </svg>
+);
+
+const CategoryBeverageIcon = ({ color = '#a855f7', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+    <line x1="6" y1="2" x2="6" y2="4" />
+    <line x1="10" y1="2" x2="10" y2="4" />
+    <line x1="14" y1="2" x2="14" y2="4" />
+  </svg>
+);
+
+const CategoryGroceryIcon = ({ color = '#f59e0b', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="21" r="1" />
+    <circle cx="19" cy="21" r="1" />
+    <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+  </svg>
+);
+
+const CategoryDefaultIcon = ({ color = '#64748b', size = 18 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m7.5 4.27 9 5.15" />
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+    <path d="m3.3 7 8.7 5 8.7-5" />
+    <path d="M12 22V12" />
+  </svg>
+);
+
+const AwardMedalIcon = ({ color = '#d97706', size = 13 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="6" />
+    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+  </svg>
+);
+
+const TrophyStarIcon = ({ color = '#d97706', size = 16 }: { color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+    <path d="M4 22h16" />
+    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+  </svg>
+);
+
+/** Smart category vector icon and color avatar mapper (No Emojis) */
+function getCategoryIcon(catName: string): { icon: React.ReactNode; bg: string; color: string } {
   const lower = (catName || '').toLowerCase();
-  if (lower.includes('fruit') || lower.includes('apple') || lower.includes('mango')) {
-    return { emoji: '🍎', bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' };
+  if (lower.includes('fruit') || lower.includes('apple') || lower.includes('mango') || lower.includes('vegetable')) {
+    return { icon: <CategoryProduceIcon color="#ef4444" size={17} />, bg: 'rgba(239, 68, 68, 0.12)', color: '#ef4444' };
   }
-  if (lower.includes('grain') || lower.includes('staple') || lower.includes('rice') || lower.includes('atta') || lower.includes('wheat') || lower.includes('flour')) {
-    return { emoji: '🌾', bg: 'rgba(217, 119, 6, 0.1)', color: '#d97706' };
+  if (lower.includes('grain') || lower.includes('staple') || lower.includes('rice') || lower.includes('atta') || lower.includes('wheat') || lower.includes('flour') || lower.includes('dal') || lower.includes('pulse')) {
+    return { icon: <CategoryGrainsIcon color="#d97706" size={17} />, bg: 'rgba(217, 119, 6, 0.12)', color: '#d97706' };
   }
   if (lower.includes('dairy') || lower.includes('milk') || lower.includes('butter') || lower.includes('paneer') || lower.includes('cheese') || lower.includes('curd')) {
-    return { emoji: '🥛', bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' };
+    return { icon: <CategoryDairyIcon color="#3b82f6" size={17} />, bg: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' };
   }
   if (lower.includes('personal') || lower.includes('care') || lower.includes('soap') || lower.includes('shampoo') || lower.includes('beauty')) {
-    return { emoji: '🧴', bg: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9' };
+    return { icon: <CategoryPersonalCareIcon color="#0ea5e9" size={17} />, bg: 'rgba(14, 165, 233, 0.12)', color: '#0ea5e9' };
   }
   if (lower.includes('snack') || lower.includes('biscuit') || lower.includes('chips') || lower.includes('namkeen') || lower.includes('sweet') || lower.includes('bakery')) {
-    return { emoji: '🍿', bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981' };
+    return { icon: <CategorySnacksIcon color="#10b981" size={17} />, bg: 'rgba(16, 185, 129, 0.12)', color: '#10b981' };
   }
   if (lower.includes('oil') || lower.includes('ghee') || lower.includes('edible')) {
-    return { emoji: '🫒', bg: 'rgba(236, 72, 153, 0.1)', color: '#ec4899' };
+    return { icon: <CategoryOilsIcon color="#ec4899" size={17} />, bg: 'rgba(236, 72, 153, 0.12)', color: '#ec4899' };
   }
   if (lower.includes('beverage') || lower.includes('drink') || lower.includes('juice') || lower.includes('tea') || lower.includes('coffee') || lower.includes('soda')) {
-    return { emoji: '☕', bg: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' };
+    return { icon: <CategoryBeverageIcon color="#a855f7" size={17} />, bg: 'rgba(168, 85, 247, 0.12)', color: '#a855f7' };
   }
   if (lower.includes('grocery') || lower.includes('kirana') || lower.includes('general')) {
-    return { emoji: '🛒', bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' };
+    return { icon: <CategoryGroceryIcon color="#f59e0b" size={17} />, bg: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' };
   }
-  return { emoji: '📦', bg: 'rgba(100, 116, 139, 0.1)', color: '#64748b' };
+  return { icon: <CategoryDefaultIcon color="#64748b" size={17} />, bg: 'rgba(100, 116, 139, 0.12)', color: '#64748b' };
 }
 
 /** Render modern vector SVG icon for insights */
@@ -2424,7 +2524,9 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                     {/* Top Driver Callout Pill */}
                     {data.categories[0] && (
                       <div className="cat-top-driver-callout">
-                        <span className="driver-star">🏆</span>
+                        <span className="driver-star" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <TrophyStarIcon color="#d97706" size={16} />
+                        </span>
                         <span>
                           Top Revenue Driver: <strong>{data.categories[0].category}</strong> represents{' '}
                           <strong>{data.categories[0].sharePct}%</strong> of store sales ({formatRupees(data.categories[0].netSalesMinor)})
@@ -2440,7 +2542,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                     {data.categories.map((cat, idx) => {
                       const iconMeta = getCategoryIcon(cat.category);
                       const isTop3 = idx < 3;
-                      const rankMedal = idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`;
                       const isHovered = hoveredCatIdx === idx;
                       const avgTicket = Math.round(cat.netSalesMinor / Math.max(1, cat.billsCount));
 
@@ -2456,8 +2557,11 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           }}
                         >
                           <div className="cat-bento-card-top">
-                            <span className={`cat-rank-pill rank-${idx + 1}`}>
-                              {rankMedal}
+                            <span className={`cat-rank-pill rank-${idx + 1}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              {idx === 0 && <AwardMedalIcon color="#b45309" size={12} />}
+                              {idx === 1 && <AwardMedalIcon color="#475569" size={12} />}
+                              {idx === 2 && <AwardMedalIcon color="#92400e" size={12} />}
+                              <span>#{idx + 1}</span>
                             </span>
                             <span className="cat-share-pill" style={{ color: cat.color, backgroundColor: `${cat.color}15`, borderColor: `${cat.color}35` }}>
                               {cat.sharePct}% share
@@ -2465,8 +2569,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           </div>
 
                           <div className="cat-bento-card-main">
-                            <div className="cat-avatar-box" style={{ background: iconMeta.bg }}>
-                              <span className="cat-avatar-emoji">{iconMeta.emoji}</span>
+                            <div className="cat-avatar-box" style={{ background: iconMeta.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {iconMeta.icon}
                             </div>
                             <div className="cat-info-block">
                               <span className="cat-bento-title" title={cat.category}>{cat.category}</span>
@@ -2511,11 +2615,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           onClick={() => setSelectedCategory(cat.category)}
                         >
                           <div className="cat-leaderboard-rank-col">
-                            <span className={`cat-lead-rank-badge rank-${idx + 1}`}>
-                              {idx < 3 ? (idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉') : `#${idx + 1}`}
+                            <span className={`cat-lead-rank-badge rank-${idx + 1}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                              {idx === 0 ? <AwardMedalIcon color="#b45309" size={13} /> :
+                               idx === 1 ? <AwardMedalIcon color="#475569" size={13} /> :
+                               idx === 2 ? <AwardMedalIcon color="#92400e" size={13} /> :
+                               `#${idx + 1}`}
                             </span>
-                            <div className="cat-lead-avatar" style={{ background: iconMeta.bg }}>
-                              <span>{iconMeta.emoji}</span>
+                            <div className="cat-lead-avatar" style={{ background: iconMeta.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {iconMeta.icon}
                             </div>
                             <div className="cat-lead-name-box">
                               <span className="cat-lead-title">{cat.category}</span>
