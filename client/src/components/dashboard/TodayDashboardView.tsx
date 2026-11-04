@@ -23,6 +23,7 @@ import {
   ShieldCheckIcon,
   PackageIcon,
   RotateCcwIcon,
+  TrendingUpIcon,
   AlertTriangleIcon,
   ShoppingCartIcon,
   RefreshCwIcon,
@@ -844,65 +845,15 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     <div className="today-dash-root">
       {/* 1. TOP HEADER (Greeting, Shop GSTIN, Shift Pill, Actions) */}
       <header className="today-dash-header">
-        <div className="header-main-row">
-          <div className="header-greeting-area">
-            <h1 className="header-greeting-title">
-              <span>{greeting}, {firstName}</span>
-              <SparklesIcon size={18} style={{ color: '#6366f1', marginLeft: '6px', verticalAlign: 'middle' }} />
-            </h1>
-            <div className="header-shop-subtitle">
-              <span>{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
-              <span className="dot-sep">·</span>
-              <span className="mono">GSTIN {shop?.gstin || '33AAAAA0000A1Z5'}</span>
-            </div>
-          </div>
-
-          <div className="header-actions-area">
-            {/* Inward Purchase Button */}
-            <button
-              type="button"
-              className="btn-dash-action"
-              onClick={onNavigateToPurchases}
-              title="Record supplier purchase invoice & inward goods"
-            >
-              <DownloadIcon size={16} />
-              <span>Purchase Inward</span>
-            </button>
-
-            {/* Add Product Button */}
-            <button
-              type="button"
-              className="btn-dash-action"
-              onClick={onOpenAddProductModal}
-              title="Add new item to catalog"
-            >
-              <PlusIcon size={16} />
-              <span>Add Product</span>
-            </button>
-
-            {/* Primary New Bill (F1) Button */}
-            <button
-              type="button"
-              className="btn-dash-primary"
-              onClick={onNavigateToPos}
-              title="Open POS billing terminal (Hot key: F1)"
-            >
-              <ReceiptIcon size={16} />
-              <span>New Bill (F1)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Subheader: Today pill & Branch Switcher */}
         <div className="header-meta-row">
           <div className="header-today-pill">
-            <CalendarIcon size={14} style={{ marginRight: "4px" }} />
+            <CalendarIcon size={14} className="today-pill-icon" />
             <span>Today · {nowKolkata.formattedDate}</span>
           </div>
 
-          {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
-            <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">Branch:</span>
+          <div className="dashboard-branch-selector">
+            <span className="branch-selector-label">Branch:</span>
+            {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
               <BranchSwitcher
                 branches={data.branches}
                 selectedBranchCode={selectedBranchCode}
@@ -910,28 +861,19 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                 user={user}
                 onManageBranches={onManageBranches}
               />
-            </div>
-          ) : (
-            <div className="dashboard-branch-selector">
-              <span className="branch-selector-label">Branch:</span>
+            ) : (
               <div className="branch-selector-pills">
                 <div
                   className="dashboard-branch-pill active read-only-branch-pill"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    cursor: 'default',
-                    userSelect: 'none',
-                  }}
                   title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
                 >
-                  <Building2Icon size={13} className="branch-icon" style={{ marginRight: "5px" }} />
+                  <Building2Icon size={13} className="branch-icon" />
                   <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
-                  <LockIcon size={11} style={{ marginLeft: "6px", opacity: 0.85 }} />
+                  <LockIcon size={11} className="branch-lock-icon" />
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
@@ -957,6 +899,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         <div className="today-kpi-card purple-highlight">
           <div className="kpi-card-header">
             <span className="kpi-label">TODAY'S SALES</span>
+            <span className="kpi-icon-badge purple"><TrendingUpIcon size={15} style={{ color: "#ffffff" }} /></span>
           </div>
           <div className="kpi-value-row">
             <span className="kpi-value mono">
@@ -1012,7 +955,7 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           </div>
           <div className="kpi-value-row">
             <span className="kpi-value mono">
-              <AnimatedCounter value={cards.avgBillValue.avgBillMinor} isRupees={true} decimals={2} animKey={chartAnimKey} />
+              <AnimatedCounter value={cards.avgBillValue.avgBillMinor} isRupees={true} decimals={cards.avgBillValue.avgBillMinor % 100 !== 0 ? 2 : 0} animKey={chartAnimKey} />
             </span>
           </div>
           <div className="kpi-footer-row">
@@ -1589,10 +1532,13 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
         </div>
       </section>
 
-      {/* 4. BOTTOM SECTION (THREE CARDS: Top Sellers, Stock Alerts, Cash Drawer) */}
-      <section className="today-bottom-grid">
-        {/* CARD 1: TOP SELLERS TODAY */}
-        <div className="today-section-card bento-card-3d bento-card-top-sellers">
+      {/* 4. BOTTOM SECTION (Top Sellers, Stock Alerts, Cash Drawer) */}
+      <section className={`today-bottom-grid ${isSuperAdmin ? 'has-single-card' : ''}`}>
+        {/* CARDS 1 & 2: TOP SELLERS & STOCK ATTENTION (Hidden for Super Admin, Visible for Store Manager & other roles) */}
+        {!isSuperAdmin && (
+          <>
+            {/* CARD 1: TOP SELLERS TODAY */}
+            <div className="today-section-card bento-card-3d bento-card-top-sellers">
           <div className="section-card-header">
             <div className="section-title-group">
               <div className="section-title-icon-box sellers-icon-box">
@@ -1736,6 +1682,8 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
             )}
           </div>
         </div>
+          </>
+        )}
 
         {/* CARD 3: COUNTERS TODAY */}
         <div className="today-section-card bento-card-3d bento-card-counters counters-today-card">

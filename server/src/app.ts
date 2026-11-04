@@ -34,6 +34,7 @@ import { registerPromotions } from './routes/promotions.ts';
 import { registerUserManagement } from './routes/userManagement.ts';
 import { registerBranchUsers } from './routes/branchUsers.ts';
 import { registerDriveProxy } from './routes/driveProxy.ts';
+import { registerSms } from './routes/sms.ts';
 
 /** Every module adds one `registerXxx(r)` line here. Nothing else in the server needs to change. */
 export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Router {
@@ -70,6 +71,7 @@ export function buildRouter(tokens: { secret: string; ttlSeconds: number }): Rou
   registerUserManagement(r);
   registerBranchUsers(r);
   registerDriveProxy(r);
+  registerSms(r);
   return r;
 }
 

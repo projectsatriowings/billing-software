@@ -2245,3 +2245,113 @@ export const deleteCashier = (id: string, isBranchScope = false) =>
     isBranchScope ? `/api/branch/cashiers/${id}` : `/api/cashiers/${id}`,
     { method: 'DELETE' },
   );
+
+// ==========================================
+// SMS Integration & Free Trial Types and APIs
+// ==========================================
+
+export interface SmsTrialStatus {
+  status: 'inactive' | 'active' | 'expired' | 'exhausted';
+  totalCredits: number;
+  creditsUsed: number;
+  remainingCredits: number;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  activatedBy: string | null;
+  canActivate: boolean;
+  canSend: boolean;
+  provider: string;
+  providerType: string;
+  isConfigured: boolean;
+  autoSendEnabled?: boolean;
+}
+
+export interface SmsSettings {
+  provider: 'msg91' | 'smslocal' | 'fast2sms' | 'twilio' | 'generic' | 'simulator';
+  senderId: string;
+  templateId: string;
+  autoSendEnabled: boolean;
+  hasApiKey: boolean;
+  apiKeyMasked: string;
+  isConfigured: boolean;
+  authStatus?: 'valid' | 'invalid' | 'unconfigured';
+  walletBalance?: string | null;
+  apiRouteUnlocked?: boolean;
+  statusMessage?: string;
+  providerNotice?: string | null;
+}
+
+export interface SmsHistoryItem {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  branchName?: string;
+  branchCode?: string;
+  customerId?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  customerName?: string;
+  mobileNumber: string;
+  messageText: string;
+  status: 'pending' | 'sent' | 'failed' | 'delivered';
+  creditType: 'trial' | 'paid';
+  gatewayProvider: string;
+  gatewayMessageId?: string;
+  gatewayResponse?: any;
+  errorMessage?: string;
+  retryCount: number;
+  sentAt?: string;
+  createdAt: string;
+}
+
+export interface SmsHistoryResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  history: SmsHistoryItem[];
+}
+
+export const getSmsTrialStatus = () => api<SmsTrialStatus>('/api/sms/trial-status');
+
+export const getSmsSettings = () => api<SmsSettings>('/api/sms/settings');
+
+export const updateSmsSettings = (data: {
+  provider: string;
+  apiKey?: string;
+  senderId?: string;
+  templateId?: string;
+  autoSendEnabled?: boolean;
+}) =>
+  api<{ ok: boolean; settings: SmsSettings }>('/api/sms/settings', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const activateSmsTrial = () =>
+  api<{ ok: boolean; status: SmsTrialStatus }>('/api/sms/trial/activate', { method: 'POST' });
+
+export const sendTestSms = (mobileNumber: string, message?: string) =>
+  api<{ ok: boolean; messageId?: string; logId?: string; remainingCredits?: number; error?: string }>(
+    '/api/sms/test',
+    {
+      method: 'POST',
+      body: JSON.stringify({ mobileNumber, message }),
+    }
+  );
+
+export const getSmsHistory = (params: { limit?: number; offset?: number; q?: string; status?: string; branchId?: string } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.limit) qp.set('limit', String(params.limit));
+  if (params.offset) qp.set('offset', String(params.offset));
+  if (params.q) qp.set('q', params.q);
+  if (params.status) qp.set('status', params.status);
+  if (params.branchId) qp.set('branchId', params.branchId);
+  return api<SmsHistoryResponse>(`/api/sms/history?${qp.toString()}`);
+};
+
+export const retrySms = (id: string) =>
+  api<{ ok: boolean; status: string; error?: string; remainingCredits?: number }>(
+    `/api/sms/retry/${id}`,
+    { method: 'POST' }
+  );
+
