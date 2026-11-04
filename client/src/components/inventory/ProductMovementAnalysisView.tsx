@@ -29,6 +29,8 @@ import {
   TrendingUpIcon,
   RotateCcwIcon,
   ShoppingCartIcon,
+  ClockIcon,
+  EyeIcon,
 } from './InventoryIcons.tsx';
 import './StockReportBentoView.css';
 
@@ -152,9 +154,22 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
 
-  // Load analytics from API
+  // Export feedback state
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportSuccess, setExportSuccess] = useState<boolean>(false);
+
+  // Load analytics from API with explicit range parameter
   const loadAnalysis = useCallback(
-    async (isRefresh = false) => {
+    async (
+      rangeOverride?: '7d' | '30d' | '90d' | 'custom',
+      fromOverride?: string,
+      toOverride?: string,
+      isRefresh = false
+    ) => {
+      const activeRange = rangeOverride || selectedRange;
+      const activeFrom = fromOverride !== undefined ? fromOverride : customFrom;
+      const activeTo = toOverride !== undefined ? toOverride : customTo;
+
       if (isRefresh) {
         setIsRefreshing(true);
       } else {
@@ -164,15 +179,21 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
       try {
         const [res, statsRes] = await Promise.allSettled([
           fetchProductMovementAnalysis({
-            range: selectedRange,
-            from: selectedRange === 'custom' ? customFrom : undefined,
-            to: selectedRange === 'custom' ? customTo : undefined,
+            range: activeRange,
+            from: activeRange === 'custom' ? activeFrom : undefined,
+            to: activeRange === 'custom' ? activeTo : undefined,
           }),
           fetchInventoryDashboard(),
         ]);
 
         if (res.status === 'fulfilled') {
           setData(res.value);
+          // Trigger animations on every fresh data arrival
+          setAnimateIn(false);
+          setTimeout(() => {
+            setAnimateIn(true);
+            setAnimationKey((k) => k + 1);
+          }, 40);
         } else {
           throw res.reason;
         }
@@ -191,18 +212,40 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
     [selectedRange, customFrom, customTo]
   );
 
+  // Initial load on mount
   useEffect(() => {
-    if (selectedRange !== 'custom') {
-      loadAnalysis();
+    loadAnalysis('30d');
+  }, []);
+
+  const handleRangeSelect = (range: '7d' | '30d' | '90d' | 'custom') => {
+    setSelectedRange(range);
+    setPage(1);
+
+    if (range === 'custom') {
+      if (!customFrom || !customTo) {
+        const today = new Date().toISOString().slice(0, 10);
+        const past14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+        setCustomFrom(past14);
+        setCustomTo(today);
+      }
+      setShowCustomPicker(true);
+    } else {
+      setShowCustomPicker(false);
+      loadAnalysis(range);
     }
-  }, [selectedRange, loadAnalysis]);
+  };
 
   const handleApplyCustomRange = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customFrom || !customTo) return;
     setShowCustomPicker(false);
+    setSelectedRange('custom');
     setPage(1);
-    loadAnalysis();
+    loadAnalysis('custom', customFrom, customTo);
+  };
+
+  const handleRefresh = () => {
+    loadAnalysis(selectedRange, customFrom, customTo, true);
   };
 
   // Human-readable date range label
@@ -320,51 +363,63 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   }, [filteredProducts, page, pageSize]);
 
   // Export to CSV
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
     if (!data?.products || data.products.length === 0) return;
+    setIsExporting(true);
+    try {
+      const headers = [
+        'Product Name',
+        'Category',
+        'SKU / Code',
+        'Current Stock',
+        'Unit',
+        'Units Sold',
+        'Sales Transactions',
+        'Last Sold Date',
+        'Movement Status',
+        'Suggested Action',
+      ];
 
-    const headers = [
-      'Product Name',
-      'Category',
-      'SKU / Code',
-      'Current Stock',
-      'Unit',
-      'Units Sold',
-      'Sales Transactions',
-      'Last Sold Date',
-      'Movement Status',
-      'Suggested Action',
-    ];
+      const exportList = filteredProducts.length > 0 ? filteredProducts : data.products;
 
-    const rows = filteredProducts.map((p) => [
-      `"${p.name.replace(/"/g, '""')}"`,
-      `"${(p.category || 'General').replace(/"/g, '""')}"`,
-      `"${(p.sku || '—').replace(/"/g, '""')}"`,
-      p.currentStockUnits,
-      `"${p.unit}"`,
-      p.unitsSold,
-      p.salesTxns,
-      `"${formatLastSold(p.lastSoldAt)}"`,
-      `"${
-        p.movementStatus === 'fast_moving'
-          ? 'Fast-moving'
-          : p.movementStatus === 'slow_moving'
-          ? 'Slow-moving'
-          : 'Non-moving'
-      }"`,
-      `"${p.suggestedAction}"`,
-    ]);
+      const rows = exportList.map((p) => [
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${(p.category || 'General').replace(/"/g, '""')}"`,
+        `"${(p.sku || '—').replace(/"/g, '""')}"`,
+        p.currentStockUnits,
+        `"${p.unit}"`,
+        p.unitsSold,
+        p.salesTxns,
+        `"${formatLastSold(p.lastSoldAt)}"`,
+        `"${
+          p.movementStatus === 'fast_moving'
+            ? 'Fast-moving'
+            : p.movementStatus === 'slow_moving'
+            ? 'Slow-moving'
+            : 'Non-moving'
+        }"`,
+        `"${p.suggestedAction}"`,
+      ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `stock-movement-report-${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute(
+        'download',
+        `stock-movement-report-${selectedRange}-${new Date().toISOString().slice(0, 10)}.csv`
+      );
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 2200);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const summary = data?.summary;
@@ -422,60 +477,54 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             <button
               type="button"
               className={`srb-range-btn ${selectedRange === '7d' ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedRange('7d');
-                setShowCustomPicker(false);
-                setPage(1);
-              }}
+              onClick={() => handleRangeSelect('7d')}
+              title="Show last 7 days movement"
             >
               7 Days
             </button>
             <button
               type="button"
               className={`srb-range-btn ${selectedRange === '30d' ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedRange('30d');
-                setShowCustomPicker(false);
-                setPage(1);
-              }}
+              onClick={() => handleRangeSelect('30d')}
+              title="Show last 30 days movement"
             >
               30 Days
             </button>
             <button
               type="button"
               className={`srb-range-btn ${selectedRange === '90d' ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedRange('90d');
-                setShowCustomPicker(false);
-                setPage(1);
-              }}
+              onClick={() => handleRangeSelect('90d')}
+              title="Show last 90 days movement"
             >
               90 Days
             </button>
             <button
               type="button"
               className={`srb-range-btn ${selectedRange === 'custom' ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedRange('custom');
-                setShowCustomPicker(!showCustomPicker);
-              }}
+              onClick={() => handleRangeSelect('custom')}
+              title="Choose custom date range"
             >
               <CalendarIcon size={13} /> Custom
             </button>
           </div>
 
           {rangeDisplayLabel && (
-            <span className="srb-date-label-pill">
+            <button
+              type="button"
+              className="srb-date-label-btn"
+              onClick={() => handleRangeSelect('custom')}
+              title="Click to change custom date range"
+            >
               <CalendarIcon size={12} color="#6d4aff" /> {rangeDisplayLabel}
-            </span>
+            </button>
           )}
 
           <button
             type="button"
             className="srb-btn-outline"
-            onClick={() => loadAnalysis(true)}
+            onClick={handleRefresh}
             disabled={isRefreshing || loading}
-            title="Refresh Data"
+            title="Refresh Stock Movement Data"
           >
             <RefreshCwIcon size={13} className={isRefreshing ? 'animate-spin' : ''} />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -485,27 +534,35 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             type="button"
             className="srb-btn-primary"
             onClick={handleExportCsv}
-            disabled={!data || data.products.length === 0}
+            disabled={!data || data.products.length === 0 || isExporting}
             title="Export to CSV"
           >
-            <DownloadIcon size={13} /> Export CSV
+            {exportSuccess ? (
+              <>
+                <CheckCircleIcon size={13} /> Exported!
+              </>
+            ) : (
+              <>
+                <DownloadIcon size={13} /> {isExporting ? 'Exporting...' : 'Export CSV'}
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* Custom Date Range Popover */}
-      {showCustomPicker && selectedRange === 'custom' && (
+      {showCustomPicker && (
         <form onSubmit={handleApplyCustomRange} className="srb-custom-popover">
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
-            Custom Date Range:
+          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <CalendarIcon size={14} color="#6d4aff" /> Custom Date Range:
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>From:</label>
             <input
               type="date"
-              className="srb-search-input"
-              style={{ width: '145px', height: '34px', padding: '0 0.5rem' }}
+              className="srb-input-date"
               value={customFrom}
+              max={customTo || new Date().toISOString().slice(0, 10)}
               onChange={(e) => setCustomFrom(e.target.value)}
               required
             />
@@ -514,9 +571,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>To:</label>
             <input
               type="date"
-              className="srb-search-input"
-              style={{ width: '145px', height: '34px', padding: '0 0.5rem' }}
+              className="srb-input-date"
               value={customTo}
+              min={customFrom}
+              max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setCustomTo(e.target.value)}
               required
             />
@@ -940,10 +998,22 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
           {/* Panel 1: Top 10 Best Sellers (Span 7) */}
           <div className="srb-bento-box srb-panel-sellers">
             <div className="srb-deck-header">
-              <h2 className="srb-deck-title">
-                <TrophyIcon size={18} color="#d97706" /> Top 10 High-Velocity Best-Sellers
-              </h2>
-              <span className="srb-tile-pill purple">By Quantity Sold</span>
+              <div className="srb-deck-title-group">
+                <div className="srb-icon-squircle amber">
+                  <TrophyIcon size={18} />
+                </div>
+                <div>
+                  <h2 className="srb-deck-title">Top 10 High-Velocity Best-Sellers</h2>
+                  <span className="srb-deck-subtitle">
+                    Leaderboard ranked by volume dispatched in selected date range
+                  </span>
+                </div>
+              </div>
+              <div className="srb-deck-badge-group">
+                <span className="srb-tile-pill purple">
+                  <TrendingUpIcon size={11} /> Top Volume: {topSellerMax} {topSellers[0]?.unit || 'units'}
+                </span>
+              </div>
             </div>
 
             {topSellers.length === 0 ? (
@@ -958,7 +1028,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 No completed sales recorded during this date window.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div className="srb-leader-list">
                 {topSellers.map((item, idx) => {
                   const pct = Math.max(8, Math.min(100, (item.unitsSold / topSellerMax) * 100));
                   const rankClass =
@@ -970,31 +1040,59 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                       ? 'bronze'
                       : 'standard';
 
-                  const itemCat =
-                    data?.products.find((p) => p.id === item.id)?.category || 'Top Velocity SKU';
+                  const itemDetails = data?.products.find((p) => p.id === item.id);
+                  const itemCat = itemDetails?.category || 'General';
+                  const itemSku = itemDetails?.sku;
+                  const itemTxns = itemDetails?.salesTxns;
 
                   return (
-                    <div key={item.id || idx} className="srb-leader-row">
-                      <div className={`srb-rank-pill ${rankClass}`}>#{idx + 1}</div>
-                      <div className="srb-leader-info">
-                        <span className="srb-leader-name" title={item.name}>
+                    <div key={item.id || idx} className="srb-leader-cardlet">
+                      {/* Rank badge */}
+                      <div className={`srb-rank-squircle ${rankClass}`}>
+                        {idx === 0 ? (
+                          <span className="srb-rank-num gold">
+                            <TrophyIcon size={11} /> 1
+                          </span>
+                        ) : (
+                          <span className="srb-rank-num">#{idx + 1}</span>
+                        )}
+                      </div>
+
+                      {/* Product Meta */}
+                      <div className="srb-leader-meta">
+                        <span className="srb-leader-product-name" title={item.name}>
                           {item.name}
                         </span>
-                        <span className="srb-leader-cat">{itemCat}</span>
+                        <div className="srb-leader-meta-tags">
+                          <span className="srb-micro-pill cat">{itemCat}</span>
+                          {itemSku && <span className="srb-micro-pill sku">SKU: {itemSku}</span>}
+                          {itemTxns !== undefined && (
+                            <span className="srb-micro-pill txns">{itemTxns} bills</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="srb-leader-track">
-                        <div
-                          className="srb-leader-bar-fill"
-                          style={{
-                            width: animateIn ? `${pct}%` : '0%',
-                            transitionDelay: `${idx * 55}ms`,
-                          }}
-                        />
+
+                      {/* Visual Progress Track */}
+                      <div className="srb-leader-progress-block">
+                        <div className="srb-leader-track-capsule">
+                          <div
+                            className="srb-leader-bar-fill-gradient"
+                            style={{
+                              width: animateIn ? `${pct}%` : '0%',
+                              transitionDelay: `${idx * 45}ms`,
+                            }}
+                          />
+                        </div>
+                        <span className="srb-leader-pct-label">{Math.round(pct)}% of top volume</span>
                       </div>
-                      <span className="srb-leader-qty">
-                        <AnimatedCounter value={item.unitsSold} triggerKey={animationKey} />{' '}
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{item.unit}</span>
-                      </span>
+
+                      {/* Quantity and units metric */}
+                      <div className="srb-leader-volume-box">
+                        <div className="srb-leader-volume-val">
+                          <AnimatedCounter value={item.unitsSold} triggerKey={animationKey} />
+                          <span className="srb-leader-unit-tag">{item.unit}</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -1005,94 +1103,217 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
           {/* Panel 2: Grounded Risk Intelligence (Span 5) */}
           <div className="srb-bento-box srb-panel-intelligence">
             <div className="srb-deck-header">
-              <h2 className="srb-deck-title">
-                <BrainIcon size={18} color="#6d4aff" /> Grounded Risk Intelligence
-              </h2>
-              <span className="srb-badge-live">PostgreSQL Live</span>
+              <div className="srb-deck-title-group">
+                <div className="srb-icon-squircle purple">
+                  <BrainIcon size={18} />
+                </div>
+                <div>
+                  <h2 className="srb-deck-title">Grounded Risk Intelligence</h2>
+                  <span className="srb-deck-subtitle">PostgreSQL turnover heuristics & capital alerts</span>
+                </div>
+              </div>
+              <span className="srb-badge-live">
+                <span className="srb-pulse-dot green" /> Live Sync
+              </span>
             </div>
 
-            {/* Box 1: Best Seller Runway */}
-            {data.insights.bestSeller ? (
-              <div className="srb-risk-layer-card gold">
-                <div className="srb-risk-title-bar">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <TrophyIcon size={14} color="#b45309" />
-                    Top Seller: {data.insights.bestSeller.name}
-                  </span>
-                  <span className="srb-tile-pill amber" style={{ fontSize: '0.68rem' }}>
+            <div className="srb-intel-cards-container">
+              {/* Card 1: Velocity Champion & Runway */}
+              {data.insights.bestSeller && (
+                <div className="srb-intel-card amber-theme">
+                  <div className="srb-intel-card-header">
+                    <div className="srb-intel-tag-group">
+                      <div className="srb-intel-mini-icon amber">
+                        <TrophyIcon size={13} />
+                      </div>
+                      <span className="srb-intel-kicker amber">Velocity Champion</span>
+                    </div>
                     {data.insights.bestSeller.runwayDays !== null &&
-                    data.insights.bestSeller.runwayDays !== undefined
-                      ? `~${data.insights.bestSeller.runwayDays}d Runway`
-                      : 'Active Seller'}
-                  </span>
+                    data.insights.bestSeller.runwayDays !== undefined ? (
+                      <span className="srb-runway-badge amber">
+                        <ClockIcon size={11} /> ~{data.insights.bestSeller.runwayDays}d Runway
+                      </span>
+                    ) : (
+                      <span className="srb-runway-badge amber">Active Seller</span>
+                    )}
+                  </div>
+
+                  <div className="srb-intel-item-title" title={data.insights.bestSeller.name}>
+                    {data.insights.bestSeller.name}
+                  </div>
+
+                  <div className="srb-intel-stats-row">
+                    <div className="srb-intel-stat-chip">
+                      <span className="srb-stat-chip-label">Dispatched</span>
+                      <span className="srb-stat-chip-val">
+                        <AnimatedCounter value={data.insights.bestSeller.unitsSold} triggerKey={animationKey} />{' '}
+                        <span className="srb-stat-unit">{data.insights.bestSeller.unit}</span>
+                      </span>
+                    </div>
+
+                    <div className="srb-intel-stat-chip">
+                      <span className="srb-stat-chip-label">Invoices</span>
+                      <span className="srb-stat-chip-val">
+                        <AnimatedCounter value={data.insights.bestSeller.salesTxns} triggerKey={animationKey} />{' '}
+                        <span className="srb-stat-unit">bills</span>
+                      </span>
+                    </div>
+
+                    {data.insights.bestSeller.currentStockUnits !== undefined && (
+                      <div className="srb-intel-stat-chip">
+                        <span className="srb-stat-chip-label">Shelf Balance</span>
+                        <span className="srb-stat-chip-val">
+                          <AnimatedCounter
+                            value={data.insights.bestSeller.currentStockUnits}
+                            triggerKey={animationKey}
+                          />{' '}
+                          <span className="srb-stat-unit">{data.insights.bestSeller.unit}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {data.insights.bestSeller.runwayDays !== null &&
+                    data.insights.bestSeller.runwayDays !== undefined && (
+                      <div className="srb-intel-runway-footer">
+                        <div className="srb-runway-track">
+                          <div
+                            className="srb-runway-fill amber"
+                            style={{
+                              width: animateIn
+                                ? `${Math.min(100, Math.max(15, (data.insights.bestSeller.runwayDays / 365) * 100))}%`
+                                : '0%',
+                            }}
+                          />
+                        </div>
+                        <span className="srb-runway-note">
+                          Stock balance provides ~{data.insights.bestSeller.runwayDays} days of buffer at current churn.
+                        </span>
+                      </div>
+                    )}
                 </div>
-                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
-                  Dispatched <b>{data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit}</b>{' '}
-                  across <b>{data.insights.bestSeller.salesTxns}</b> bills.
-                  {data.insights.bestSeller.currentStockUnits !== undefined && (
-                    <span>
-                      {' '}
-                      Only {data.insights.bestSeller.currentStockUnits}{' '}
-                      {data.insights.bestSeller.unit} left on shelf.
+              )}
+
+              {/* Card 2: Demand Velocity Alert */}
+              {data.insights.slowingProduct ? (
+                <div className="srb-intel-card blue-theme">
+                  <div className="srb-intel-card-header">
+                    <div className="srb-intel-tag-group">
+                      <div className="srb-intel-mini-icon blue">
+                        <ZapIcon size={13} />
+                      </div>
+                      <span className="srb-intel-kicker blue">Demand Velocity Alert</span>
+                    </div>
+                    <span className="srb-runway-badge blue">
+                      <AlertTriangleIcon size={11} /> Slowing
                     </span>
-                  )}
-                </div>
-              </div>
-            ) : null}
+                  </div>
 
-            {/* Box 2: Slowing Demand */}
-            {data.insights.slowingProduct ? (
-              <div className="srb-risk-layer-card blue">
-                <div className="srb-risk-title-bar">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <ZapIcon size={14} color="#1d4ed8" />
-                    Demand Warning: {data.insights.slowingProduct.name}
+                  <div className="srb-intel-item-title" title={data.insights.slowingProduct.name}>
+                    {data.insights.slowingProduct.name}
+                  </div>
+
+                  <div className="srb-intel-stats-row">
+                    <div className="srb-intel-stat-chip">
+                      <span className="srb-stat-chip-label">Recent Sold</span>
+                      <span className="srb-stat-chip-val">
+                        <AnimatedCounter
+                          value={data.insights.slowingProduct.unitsSold}
+                          triggerKey={animationKey}
+                        />{' '}
+                        <span className="srb-stat-unit">{data.insights.slowingProduct.unit}</span>
+                      </span>
+                    </div>
+
+                    <div className="srb-intel-stat-chip">
+                      <span className="srb-stat-chip-label">Stock Sitting</span>
+                      <span className="srb-stat-chip-val blue">
+                        <AnimatedCounter
+                          value={data.insights.slowingProduct.currentStockUnits}
+                          triggerKey={animationKey}
+                        />{' '}
+                        <span className="srb-stat-unit">{data.insights.slowingProduct.unit}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="srb-intel-insight-text">
+                    {data.insights.slowingProduct.message}
+                  </div>
+                </div>
+              ) : (
+                <div className="srb-intel-card green-theme">
+                  <div className="srb-intel-card-header">
+                    <div className="srb-intel-tag-group">
+                      <div className="srb-intel-mini-icon green">
+                        <CheckCircleIcon size={13} />
+                      </div>
+                      <span className="srb-intel-kicker green">Velocity Health</span>
+                    </div>
+                    <span className="srb-runway-badge green">Pristine Flow</span>
+                  </div>
+                  <div className="srb-intel-item-title">Smooth Circulation Across Catalogue</div>
+                  <div className="srb-intel-insight-text">
+                    No critical velocity drop-offs or bottlenecked products detected in this period. All active items are circulating within normal thresholds.
+                  </div>
+                </div>
+              )}
+
+              {/* Card 3: Capital Exposure & Dormant Stock */}
+              <div className="srb-intel-card red-theme">
+                <div className="srb-intel-card-header">
+                  <div className="srb-intel-tag-group">
+                    <div className="srb-intel-mini-icon red">
+                      <AlertOctagonIcon size={13} />
+                    </div>
+                    <span className="srb-intel-kicker red">Capital Lockup Radar</span>
+                  </div>
+                  <span className="srb-runway-badge red">
+                    <span className="srb-pulse-dot red" /> 0 Sales ({data.insights.nonMovingSummary.days}d)
                   </span>
-                  <span
-                    className="srb-tile-pill"
-                    style={{ background: '#dbeafe', color: '#1d4ed8' }}
+                </div>
+
+                <div className="srb-dormant-hero-block">
+                  <div className="srb-dormant-val-col">
+                    <span className="srb-dormant-val-label">Capital Stalled On Shelves</span>
+                    <div className="srb-dormant-amount red">
+                      <AnimatedCounter
+                        value={data.insights.nonMovingSummary.tiedCapitalMinor}
+                        formatter={formatCurrency}
+                        triggerKey={animationKey}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="srb-dormant-skus-badge">
+                    <span className="srb-dormant-skus-count">
+                      <AnimatedCounter
+                        value={data.insights.nonMovingSummary.count}
+                        triggerKey={animationKey}
+                      />
+                    </span>
+                    <span className="srb-dormant-skus-tag">Idle SKUs</span>
+                  </div>
+                </div>
+
+                <div className="srb-dormant-action-row">
+                  <span className="srb-dormant-subtext">
+                    Zero customer orders in past {data.insights.nonMovingSummary.days} days. Review reorder policy before buying new stock.
+                  </span>
+                  <button
+                    type="button"
+                    className="srb-intel-action-pill red"
+                    onClick={() => {
+                      setStatusFilter('non_moving');
+                      setPage(1);
+                      const el = document.getElementById('srb-ledger-table-section');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    title="Filter ledger to dormant products"
                   >
-                    Slowing
-                  </span>
+                    <EyeIcon size={12} /> Review {data.insights.nonMovingSummary.count} SKUs <ArrowRightIcon size={11} />
+                  </button>
                 </div>
-                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
-                  {data.insights.slowingProduct.message}
-                </div>
-              </div>
-            ) : (
-              <div className="srb-risk-layer-card green">
-                <div className="srb-risk-title-bar">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <CheckCircleIcon size={14} color="#10b981" />
-                    Smooth Circulation
-                  </span>
-                  <span className="srb-tile-pill green">Healthy</span>
-                </div>
-                <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
-                  No critical velocity drop-offs or bottlenecked products detected in this period.
-                </div>
-              </div>
-            )}
-
-            {/* Box 3: Dormant Capital */}
-            <div className="srb-risk-layer-card red">
-              <div className="srb-risk-title-bar">
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <AlertOctagonIcon size={14} color="#dc2626" />
-                  Dormant Capital:{' '}
-                  <AnimatedCounter value={data.insights.nonMovingSummary.count} triggerKey={animationKey} /> SKUs
-                </span>
-                <span className="srb-tile-pill red" style={{ fontWeight: 700 }}>
-                  <AnimatedCounter
-                    value={data.insights.nonMovingSummary.tiedCapitalMinor}
-                    formatter={formatCurrency}
-                    triggerKey={animationKey}
-                  />
-                </span>
-              </div>
-              <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>
-                Zero sales recorded in the past {data.insights.nonMovingSummary.days} days. Review
-                shelf demand before ordering more from vendors.
               </div>
             </div>
           </div>
@@ -1100,7 +1321,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
       )}
 
       {/* ── 5. MASTER STOCK LEDGER TABLE & FILTERS BENTO CARD ── */}
-      <div className="srb-table-bento-card">
+      <div className="srb-table-bento-card" id="srb-ledger-table-section">
         {/* Table Filters Bar */}
         <div className="srb-table-toolbar">
           <div className="srb-toolbar-left">
