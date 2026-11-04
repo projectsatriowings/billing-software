@@ -38,6 +38,76 @@ interface ProductMovementAnalysisViewProps {
   userRole?: string;
 }
 
+interface AnimatedCounterProps {
+  value: number;
+  duration?: number;
+  formatter?: (val: number) => string;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+  className?: string;
+  triggerKey?: any;
+}
+
+export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
+  value,
+  duration = 900,
+  formatter,
+  prefix = '',
+  suffix = '',
+  decimals = 0,
+  className,
+  triggerKey,
+}) => {
+  const [displayValue, setDisplayValue] = useState<number>(0);
+
+  useEffect(() => {
+    let startTime: number | null = null;
+    let animationFrameId: number;
+    const startValue = 0;
+    const endValue = typeof value === 'number' && !isNaN(value) ? value : 0;
+
+    if (endValue === 0) {
+      setDisplayValue(0);
+      return;
+    }
+
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const current = startValue + (endValue - startValue) * easeProgress;
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(step);
+      } else {
+        setDisplayValue(endValue);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [value, duration, triggerKey]);
+
+  let formatted = '';
+  if (formatter) {
+    formatted = formatter(displayValue);
+  } else if (decimals > 0) {
+    formatted = displayValue.toFixed(decimals);
+  } else {
+    formatted = Math.round(displayValue).toLocaleString('en-IN');
+  }
+
+  return (
+    <span className={className}>
+      {prefix}{formatted}{suffix}
+    </span>
+  );
+};
+
 export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewProps> = ({
   categories,
   onNavigateToPurchases,
@@ -54,6 +124,21 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const [loading, setLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Animation state for page entry & data transitions
+  const [animateIn, setAnimateIn] = useState<boolean>(false);
+  const [animationKey, setAnimationKey] = useState<number>(0);
+
+  useEffect(() => {
+    if (data?.summary) {
+      setAnimateIn(false);
+      const timer = setTimeout(() => {
+        setAnimateIn(true);
+        setAnimationKey((k) => k + 1);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [data]);
 
   // Table filters & sorting
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -515,11 +600,13 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   className="srb-arc-fill"
                   d="M 27,85 A 58,58 0 0,1 143,85"
                   strokeDasharray={arcDasharray}
-                  strokeDashoffset={arcDashoffset}
+                  strokeDashoffset={animateIn ? arcDashoffset : arcDasharray}
                 />
               </svg>
               <div className="srb-arc-center-text">
-                <span className="srb-arc-pct">{circPct}%</span>
+                <span className="srb-arc-pct">
+                  <AnimatedCounter value={circPct} suffix="%" triggerKey={animationKey} />
+                </span>
                 <span className="srb-arc-sub">IN MOTION</span>
               </div>
             </div>
@@ -529,24 +616,30 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               <div className="srb-segmented-meter">
                 <div
                   className="srb-seg-block green"
-                  style={{ width: `${fastPct}%` }}
+                  style={{ width: animateIn ? `${fastPct}%` : '0%' }}
                   title={`Fast: ${fastPct}%`}
                 />
                 <div
                   className="srb-seg-block amber"
-                  style={{ width: `${slowPct}%` }}
+                  style={{ width: animateIn ? `${slowPct}%` : '0%' }}
                   title={`Slow: ${slowPct}%`}
                 />
                 <div
                   className="srb-seg-block red"
-                  style={{ width: `${nonPct}%` }}
+                  style={{ width: animateIn ? `${nonPct}%` : '0%' }}
                   title={`Dormant: ${nonPct}%`}
                 />
               </div>
               <div className="srb-circ-legend-row">
-                <span style={{ color: '#059669', fontWeight: 700 }}>● Fast {fastPct}%</span>
-                <span style={{ color: '#d97706', fontWeight: 700 }}>● Slow {slowPct}%</span>
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>● Dormant {nonPct}%</span>
+                <span style={{ color: '#059669', fontWeight: 700 }}>
+                  ● Fast <AnimatedCounter value={fastPct} suffix="%" triggerKey={animationKey} />
+                </span>
+                <span style={{ color: '#d97706', fontWeight: 700 }}>
+                  ● Slow <AnimatedCounter value={slowPct} suffix="%" triggerKey={animationKey} />
+                </span>
+                <span style={{ color: '#dc2626', fontWeight: 700 }}>
+                  ● Dormant <AnimatedCounter value={nonPct} suffix="%" triggerKey={animationKey} />
+                </span>
               </div>
             </div>
           </div>
@@ -582,13 +675,13 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
             <div style={{ marginTop: '0.5rem' }}>
               <div className="srb-pulse-num">
-                {summary.totalUnitsSold.toLocaleString('en-IN')}
+                <AnimatedCounter value={summary.totalUnitsSold} triggerKey={animationKey} />
                 <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>
                   units
                 </span>
               </div>
               <div className="srb-pulse-sub">
-                Total stock dispatched across {summary.totalSalesBills} bills
+                Total stock dispatched across <AnimatedCounter value={summary.totalSalesBills} triggerKey={animationKey} /> bills
               </div>
             </div>
 
@@ -596,18 +689,28 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             <div className="srb-pillar-bars-chart">
               {pillarHeights.map((h, i) => (
                 <div key={i} className="srb-pillar-col" title={`Interval volume index: ${h}%`}>
-                  <div className="srb-pillar-fill" style={{ height: `${h}%` }} />
+                  <div
+                    className="srb-pillar-fill"
+                    style={{
+                      height: animateIn ? `${h}%` : '0%',
+                      transitionDelay: `${i * 65}ms`,
+                    }}
+                  />
                 </div>
               ))}
             </div>
 
             <div className="srb-pulse-footer">
-              <span>{summary.totalTrackedProducts} Catalogue Items</span>
+              <span>
+                <AnimatedCounter value={summary.totalTrackedProducts} triggerKey={animationKey} /> Catalogue Items
+              </span>
               {invStats?.totalStockValueMinor != null && (
                 <span style={{ color: '#6d4aff', fontWeight: 700 }}>
-                  ₹{((invStats.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', {
-                    maximumFractionDigits: 0,
-                  })}{' '}
+                  <AnimatedCounter
+                    value={invStats.totalStockValueMinor}
+                    formatter={formatCurrency}
+                    triggerKey={animationKey}
+                  />{' '}
                   Value
                 </span>
               )}
@@ -640,10 +743,14 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               <div className="srb-radar-row alert-red">
                 <div>
                   <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#991b1b' }}>
-                    {summary.nonMovingCount} Dormant SKUs
+                    <AnimatedCounter value={summary.nonMovingCount} triggerKey={animationKey} /> Dormant SKUs
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#b91c1c' }}>
-                    {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)} tied up
+                    <AnimatedCounter
+                      value={data?.insights.nonMovingSummary.tiedCapitalMinor || 0}
+                      formatter={formatCurrency}
+                      triggerKey={animationKey}
+                    /> tied up
                   </div>
                 </div>
                 <button
@@ -662,7 +769,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               <div className="srb-radar-row alert-amber">
                 <div>
                   <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#92400e' }}>
-                    {summary.slowMovingCount} Slow Buffer
+                    <AnimatedCounter value={summary.slowMovingCount} triggerKey={animationKey} /> Slow Buffer
                   </div>
                   <div style={{ fontSize: '0.72rem', color: '#b45309' }}>
                     1–{summary.fastMinUnits - 1} units moving
@@ -721,10 +828,12 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 <span className="srb-tile-label">Fast-Moving</span>
               </div>
               <span className="srb-tile-pill green">
-                <ZapIcon size={11} /> {fastPct}%
+                <ZapIcon size={11} /> <AnimatedCounter value={fastPct} suffix="%" triggerKey={animationKey} />
               </span>
             </div>
-            <div className="srb-tile-big-num green">{summary.fastMovingCount}</div>
+            <div className="srb-tile-big-num green">
+              <AnimatedCounter value={summary.fastMovingCount} triggerKey={animationKey} />
+            </div>
             <div className="srb-tile-footer">
               <span>≥ {summary.fastMinUnits} units or ≥ {summary.fastMinTxns} bills</span>
               <ArrowRightIcon size={12} color="#059669" />
@@ -747,10 +856,12 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 <span className="srb-tile-label">Slow-Moving</span>
               </div>
               <span className="srb-tile-pill amber">
-                <HourglassIcon size={11} /> {slowPct}%
+                <HourglassIcon size={11} /> <AnimatedCounter value={slowPct} suffix="%" triggerKey={animationKey} />
               </span>
             </div>
-            <div className="srb-tile-big-num amber">{summary.slowMovingCount}</div>
+            <div className="srb-tile-big-num amber">
+              <AnimatedCounter value={summary.slowMovingCount} triggerKey={animationKey} />
+            </div>
             <div className="srb-tile-footer">
               <span>1–{summary.fastMinUnits - 1} units sold in period</span>
               <ArrowRightIcon size={12} color="#d97706" />
@@ -776,7 +887,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 <AlertOctagonIcon size={11} /> 0 Sales
               </span>
             </div>
-            <div className="srb-tile-big-num red">{summary.nonMovingCount}</div>
+            <div className="srb-tile-big-num red">
+              <AnimatedCounter value={summary.nonMovingCount} triggerKey={animationKey} />
+            </div>
             <div className="srb-tile-footer">
               <span>Zero sales in past {summary.rangeDays} days</span>
               <ArrowRightIcon size={12} color="#dc2626" />
@@ -805,10 +918,16 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               <span className="srb-tile-pill purple">{categories.length} Categories</span>
             </div>
             <div className="srb-tile-big-num purple" style={{ fontSize: '1.45rem' }}>
-              {formatCurrency(data?.insights.nonMovingSummary.tiedCapitalMinor || 0)}
+              <AnimatedCounter
+                value={data?.insights.nonMovingSummary.tiedCapitalMinor || 0}
+                formatter={formatCurrency}
+                triggerKey={animationKey}
+              />
             </div>
             <div className="srb-tile-footer">
-              <span>{summary.totalTrackedProducts} catalogue SKUs</span>
+              <span>
+                <AnimatedCounter value={summary.totalTrackedProducts} triggerKey={animationKey} /> catalogue SKUs
+              </span>
               <ArrowRightIcon size={12} color="#6d4aff" />
             </div>
           </div>
@@ -864,10 +983,16 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                         <span className="srb-leader-cat">{itemCat}</span>
                       </div>
                       <div className="srb-leader-track">
-                        <div className="srb-leader-bar-fill" style={{ width: `${pct}%` }} />
+                        <div
+                          className="srb-leader-bar-fill"
+                          style={{
+                            width: animateIn ? `${pct}%` : '0%',
+                            transitionDelay: `${idx * 55}ms`,
+                          }}
+                        />
                       </div>
                       <span className="srb-leader-qty">
-                        {item.unitsSold.toLocaleString('en-IN')}{' '}
+                        <AnimatedCounter value={item.unitsSold} triggerKey={animationKey} />{' '}
                         <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{item.unit}</span>
                       </span>
                     </div>
@@ -954,10 +1079,15 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               <div className="srb-risk-title-bar">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <AlertOctagonIcon size={14} color="#dc2626" />
-                  Dormant Capital: {data.insights.nonMovingSummary.count} SKUs
+                  Dormant Capital:{' '}
+                  <AnimatedCounter value={data.insights.nonMovingSummary.count} triggerKey={animationKey} /> SKUs
                 </span>
                 <span className="srb-tile-pill red" style={{ fontWeight: 700 }}>
-                  {formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}
+                  <AnimatedCounter
+                    value={data.insights.nonMovingSummary.tiedCapitalMinor}
+                    formatter={formatCurrency}
+                    triggerKey={animationKey}
+                  />
                 </span>
               </div>
               <div style={{ lineHeight: 1.45, fontSize: '0.78rem' }}>

@@ -233,11 +233,23 @@
    Card 2: Movement Pulse (Light Purple Card - Span 4)
    Card 3: Action Radar & Risk Buffer (Span 4)
    ========================================================================== */
+@keyframes srbCardCascade {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .srb-hero-bento-grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 1.15rem;
   width: 100%;
+  animation: srbCardCascade 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .srb-hero-col-4 {
@@ -305,7 +317,7 @@
   stroke: url(#srbGaugeGrad);
   stroke-width: 11;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .srb-arc-center-text {
@@ -357,7 +369,7 @@
 .srb-seg-block {
   height: 100%;
   border-radius: 9999px;
-  transition: width 0.4s ease;
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .srb-seg-block.green { background: #10b981; }
@@ -450,12 +462,18 @@
   position: relative;
 }
 
+@keyframes srbPulseShimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.14); }
+}
+
 .srb-pillar-fill {
   width: 100%;
   border-radius: 9999px;
   background: linear-gradient(180deg, #a78bfa 0%, #6d4aff 100%);
   box-shadow: 0 2px 6px rgba(109, 74, 255, 0.2);
-  transition: height 0.4s ease;
+  transition: height 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: srbPulseShimmer 3s ease-in-out infinite alternate;
 }
 
 .srb-pillar-col:hover .srb-pillar-fill {
@@ -554,6 +572,7 @@
   grid-template-columns: repeat(12, 1fr);
   gap: 1.15rem;
   width: 100%;
+  animation: srbCardCascade 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
 }
 
 .srb-metric-tile {
@@ -719,6 +738,7 @@
   grid-template-columns: repeat(12, 1fr);
   gap: 1.15rem;
   width: 100%;
+  animation: srbCardCascade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
 }
 
 .srb-panel-sellers {
@@ -842,7 +862,7 @@
   height: 100%;
   border-radius: 9999px;
   background: linear-gradient(90deg, #6d4aff 0%, #8b5cf6 100%);
-  transition: width 0.4s ease;
+  transition: width 0.95s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 1px 4px rgba(109, 74, 255, 0.3);
 }
 
@@ -907,6 +927,7 @@
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 20px;
+  animation: srbCardCascade 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.22s both;
   box-shadow: 0 10px 30px -5px rgba(49, 46, 129, 0.04), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
   overflow: hidden;
   display: flex;
