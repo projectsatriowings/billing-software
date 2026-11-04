@@ -1,8 +1,8 @@
 /* ==========================================================================
    STOCK REPORT BENTO VIEW STYLES
-   Ultra-Modern Dribbble 3D Bento Dashboard Layout
-   Features: Layered 3D Inset Cards, Obsidian Contrast Tile, Arc Speedometer Gauge,
-   Pastel Micro-Metrics, Pill Progress Bars, and Master Stock Ledger Table.
+   Unified Plus Jakarta Sans Design System (Light Theme Only)
+   Features: Layered 3D Inset Cards, Light Theme Movement Pulse, Arc Gauge,
+   Pastel Micro-Metrics, Crisp SVG Icons (No Emojis), and Master Stock Ledger.
    ========================================================================== */
 
 /* ── 0. ROOT CONTAINER & AMBIENT CANVAS ── */
@@ -13,8 +13,8 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-  color: #1e293b;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #1e1b4b;
   padding: 0.25rem 0 2rem 0;
 }
 
@@ -24,7 +24,7 @@
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 20px;
   padding: 1.1rem 1.4rem;
-  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  box-shadow: 0 10px 30px -5px rgba(49, 46, 129, 0.04), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -116,7 +116,7 @@
   flex-wrap: wrap;
 }
 
-/* Range Switcher Pills (Neumorphic Segmented Control) */
+/* Range Switcher Pills (Light Segmented Control) */
 .srb-range-pills {
   display: inline-flex;
   align-items: center;
@@ -140,6 +140,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  font-family: inherit;
 }
 
 .srb-range-btn:hover:not(.active) {
@@ -181,6 +182,7 @@
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  font-family: inherit;
 }
 
 .srb-btn-outline:hover {
@@ -203,6 +205,7 @@
   cursor: pointer;
   transition: all 0.18s ease;
   box-shadow: 0 3px 10px rgba(109, 74, 255, 0.28);
+  font-family: inherit;
 }
 
 .srb-btn-primary:hover {
@@ -225,9 +228,9 @@
 }
 
 /* ==========================================================================
-   2. TOP ASYMMETRIC HERO BENTO DECK (12 Columns)
+   2. TOP ASYMMETRIC HERO BENTO DECK (12 Columns - ALL LIGHT THEME)
    Card 1: Circulation Arc Gauge (Span 4)
-   Card 2: Obsidian Movement Pulse (Span 4)
+   Card 2: Movement Pulse (Light Purple Card - Span 4)
    Card 3: Action Radar & Risk Buffer (Span 4)
    ========================================================================== */
 .srb-hero-bento-grid {
@@ -253,7 +256,7 @@
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 20px;
   padding: 1.25rem 1.35rem;
-  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  box-shadow: 0 10px 30px -5px rgba(49, 46, 129, 0.04), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -265,7 +268,7 @@
 
 .srb-bento-box:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 16px 36px -6px rgba(49, 46, 129, 0.08), 0 4px 10px -2px rgba(49, 46, 129, 0.03);
   border-color: #cbd5e1;
 }
 
@@ -317,9 +320,8 @@
 .srb-arc-pct {
   font-size: 1.85rem;
   font-weight: 800;
-  font-family: 'JetBrains Mono', monospace;
   color: #0f172a;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 
@@ -370,24 +372,24 @@
   color: #64748b;
 }
 
-/* ── Hero Card 2: Obsidian Movement Pulse (Dribbble Dark Tile) ── */
-.srb-box-obsidian {
-  background: linear-gradient(145deg, #181926 0%, #12131e 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  box-shadow: 0 14px 34px -6px rgba(18, 19, 30, 0.35);
+/* ── Hero Card 2: Movement Pulse (Light Theme Card - NO DARK THEME) ── */
+.srb-box-pulse {
+  background: linear-gradient(145deg, #ffffff 0%, #faf8ff 60%, #f4f0ff 100%);
+  border: 1px solid #e2d9fc;
+  color: #0f172a;
+  box-shadow: 0 10px 30px -5px rgba(49, 46, 129, 0.05), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
 }
 
-.srb-box-obsidian:hover {
+.srb-box-pulse:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 40px -4px rgba(18, 19, 30, 0.45);
-  border-color: rgba(109, 74, 255, 0.35);
+  box-shadow: 0 16px 36px -6px rgba(49, 46, 129, 0.08), 0 4px 10px -2px rgba(49, 46, 129, 0.03);
+  border-color: #c7bbf9;
 }
 
-.srb-obsidian-badge {
-  background: rgba(255, 255, 255, 0.1);
-  color: #a5b4fc;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+.srb-pulse-badge {
+  background: #f5f3ff;
+  color: #6d4aff;
+  border: 1px solid #ddd6fe;
   font-size: 0.68rem;
   font-weight: 700;
   padding: 0.18rem 0.55rem;
@@ -397,19 +399,18 @@
   gap: 0.35rem;
 }
 
-.srb-obsidian-dot {
+.srb-pulse-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #818cf8;
-  box-shadow: 0 0 6px #818cf8;
+  background: #6d4aff;
+  box-shadow: 0 0 6px rgba(109, 74, 255, 0.4);
 }
 
-.srb-obsidian-num {
+.srb-pulse-num {
   font-size: 2.3rem;
   font-weight: 800;
-  font-family: 'JetBrains Mono', monospace;
-  color: #ffffff;
+  color: #0f172a;
   letter-spacing: -0.03em;
   line-height: 1.1;
   margin: 0.35rem 0 0.1rem 0;
@@ -418,13 +419,13 @@
   gap: 0.45rem;
 }
 
-.srb-obsidian-sub {
+.srb-pulse-sub {
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: #64748b;
   font-weight: 500;
 }
 
-/* Rounded Pillar Bars (Image 2 & Image 4 Inspiration) */
+/* Rounded Pillar Bars (Light Theme) */
 .srb-pillar-bars-chart {
   display: flex;
   align-items: flex-end;
@@ -432,10 +433,11 @@
   gap: 7px;
   height: 52px;
   padding: 0.45rem 0.65rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e2e8f0;
   margin: 0.85rem 0;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .srb-pillar-col {
@@ -451,22 +453,22 @@
 .srb-pillar-fill {
   width: 100%;
   border-radius: 9999px;
-  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  background: linear-gradient(180deg, #a78bfa 0%, #6d4aff 100%);
+  box-shadow: 0 2px 6px rgba(109, 74, 255, 0.2);
   transition: height 0.4s ease;
 }
 
 .srb-pillar-col:hover .srb-pillar-fill {
-  background: linear-gradient(180deg, #a5b4fc 0%, #818cf8 100%);
+  background: linear-gradient(180deg, #c4b5fd 0%, #7c3aed 100%);
 }
 
-.srb-obsidian-footer {
+.srb-pulse-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 0.74rem;
-  color: #cbd5e1;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  border-top: 1px solid #f1f5f9;
   padding-top: 0.55rem;
 }
 
@@ -521,6 +523,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  font-family: inherit;
 }
 
 .srb-radar-btn.red {
@@ -545,7 +548,6 @@
 
 /* ==========================================================================
    3. FOUR MODULAR BENTO METRIC TILES (Row 2, Span 3 each)
-   Inspired by Image 2 (Mint, Amber, Red, Violet Pastel Tiles)
    ========================================================================== */
 .srb-metric-tiles-grid {
   display: grid;
@@ -566,12 +568,12 @@
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 22px -4px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  box-shadow: 0 8px 22px -4px rgba(49, 46, 129, 0.04), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
 }
 
 .srb-metric-tile:hover {
   transform: translateY(-3px);
-  box-shadow: 0 16px 32px -4px rgba(15, 23, 42, 0.09);
+  box-shadow: 0 16px 32px -4px rgba(49, 46, 129, 0.09);
 }
 
 @media (max-width: 1100px) {
@@ -669,11 +671,12 @@
 .srb-tile-pill {
   font-size: 0.68rem;
   font-weight: 700;
-  padding: 0.16rem 0.55rem;
+  padding: 0.18rem 0.55rem;
   border-radius: 9999px;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
+  font-family: inherit;
 }
 
 .srb-tile-pill.green { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
@@ -684,7 +687,6 @@
 .srb-tile-big-num {
   font-size: 1.85rem;
   font-weight: 800;
-  font-family: 'JetBrains Mono', monospace;
   color: #0f172a;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -711,7 +713,7 @@
    4. VISUAL INTELLIGENCE & LEADERBOARD BENTO DECK (12 Columns)
    Panel A: Top 10 Best Sellers (Span 7)
    Panel B: Grounded Risk Intelligence (Span 5)
-   ========================================================================= */
+   ========================================================================== */
 .srb-visual-deck-grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -774,7 +776,6 @@
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  font-family: 'JetBrains Mono', monospace;
   font-weight: 800;
   font-size: 0.75rem;
   display: flex;
@@ -848,7 +849,6 @@
 .srb-leader-qty {
   min-width: 75px;
   text-align: right;
-  font-family: 'JetBrains Mono', monospace;
   font-weight: 800;
   color: #0f172a;
 }
@@ -907,7 +907,7 @@
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 20px;
-  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  box-shadow: 0 10px 30px -5px rgba(49, 46, 129, 0.04), 0 2px 6px -1px rgba(49, 46, 129, 0.02);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -952,6 +952,7 @@
   outline: none;
   transition: all 0.18s ease;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
 .srb-search-input:focus {
@@ -972,6 +973,7 @@
   outline: none;
   transition: all 0.15s ease;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
 .srb-select:focus {
@@ -998,6 +1000,7 @@
   color: #64748b;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .srb-filter-pill-btn.active {
@@ -1048,7 +1051,6 @@
   font-size: 0.72rem;
   color: #64748b;
   margin-top: 2px;
-  font-family: 'JetBrains Mono', monospace;
 }
 
 .srb-stock-pill {
@@ -1057,7 +1059,6 @@
   gap: 0.4rem;
   padding: 0.22rem 0.65rem;
   border-radius: 9999px;
-  font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   font-size: 0.8rem;
 }
@@ -1122,6 +1123,7 @@
   color: #6d4aff;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .srb-btn-restock-action:hover {
@@ -1160,6 +1162,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .srb-page-btn:hover:not(:disabled) {

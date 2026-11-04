@@ -473,7 +473,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         </div>
       )}
 
-      {/* ── 2. ASYMMETRIC HERO BENTO DECK (Gauge + Obsidian Pulse + Action Radar) ── */}
+      {/* ── 2. ASYMMETRIC HERO BENTO DECK (Gauge + Movement Pulse + Action Radar) ── */}
       {summary && (
         <div className="srb-hero-bento-grid">
           {/* Card 1: Circulation Arc Gauge */}
@@ -551,23 +551,11 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             </div>
           </div>
 
-          {/* Card 2: Executive Movement Pulse (Obsidian Dark Glass Card) */}
-          <div className="srb-hero-col-4 srb-bento-box srb-box-obsidian">
+          {/* Card 2: Executive Movement Pulse (Light Theme Card - NO DARK THEME) */}
+          <div className="srb-hero-col-4 srb-bento-box srb-box-pulse">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    border: '1px solid rgba(129, 140, 248, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#818cf8',
-                  }}
-                >
+                <div className="srb-tile-icon-box purple">
                   <ZapIcon size={16} />
                 </div>
                 <div>
@@ -575,31 +563,31 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     style={{
                       fontSize: '0.72rem',
                       fontWeight: 800,
-                      color: '#94a3b8',
-                      letterSpacing: '0.06em',
+                      color: '#64748b',
+                      letterSpacing: '0.04em',
                       textTransform: 'uppercase',
                     }}
                   >
                     MOVEMENT PULSE
                   </span>
-                  <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block' }}>
                     Real-time Dispatch Stream
                   </span>
                 </div>
               </div>
-              <span className="srb-obsidian-badge">
-                <span className="srb-obsidian-dot"></span> Live Sync
+              <span className="srb-pulse-badge">
+                <span className="srb-pulse-dot"></span> Live Sync
               </span>
             </div>
 
             <div style={{ marginTop: '0.5rem' }}>
-              <div className="srb-obsidian-num">
+              <div className="srb-pulse-num">
                 {summary.totalUnitsSold.toLocaleString('en-IN')}
-                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#94a3b8' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>
                   units
                 </span>
               </div>
-              <div className="srb-obsidian-sub">
+              <div className="srb-pulse-sub">
                 Total stock dispatched across {summary.totalSalesBills} bills
               </div>
             </div>
@@ -613,10 +601,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
               ))}
             </div>
 
-            <div className="srb-obsidian-footer">
+            <div className="srb-pulse-footer">
               <span>{summary.totalTrackedProducts} Catalogue Items</span>
               {invStats?.totalStockValueMinor != null && (
-                <span style={{ color: '#818cf8', fontWeight: 700 }}>
+                <span style={{ color: '#6d4aff', fontWeight: 700 }}>
                   ₹{((invStats.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', {
                     maximumFractionDigits: 0,
                   })}{' '}
@@ -732,7 +720,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 </div>
                 <span className="srb-tile-label">Fast-Moving</span>
               </div>
-              <span className="srb-tile-pill green">⚡ {fastPct}%</span>
+              <span className="srb-tile-pill green">
+                <ZapIcon size={11} /> {fastPct}%
+              </span>
             </div>
             <div className="srb-tile-big-num green">{summary.fastMovingCount}</div>
             <div className="srb-tile-footer">
@@ -756,7 +746,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 </div>
                 <span className="srb-tile-label">Slow-Moving</span>
               </div>
-              <span className="srb-tile-pill amber">⏳ {slowPct}%</span>
+              <span className="srb-tile-pill amber">
+                <HourglassIcon size={11} /> {slowPct}%
+              </span>
             </div>
             <div className="srb-tile-big-num amber">{summary.slowMovingCount}</div>
             <div className="srb-tile-footer">
@@ -780,7 +772,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                 </div>
                 <span className="srb-tile-label">Dead Stock</span>
               </div>
-              <span className="srb-tile-pill red">🛑 0 Sales</span>
+              <span className="srb-tile-pill red">
+                <AlertOctagonIcon size={11} /> 0 Sales
+              </span>
             </div>
             <div className="srb-tile-big-num red">{summary.nonMovingCount}</div>
             <div className="srb-tile-footer">
@@ -962,7 +956,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   <AlertOctagonIcon size={14} color="#dc2626" />
                   Dormant Capital: {data.insights.nonMovingSummary.count} SKUs
                 </span>
-                <span className="srb-tile-pill red" style={{ fontFamily: 'monospace' }}>
+                <span className="srb-tile-pill red" style={{ fontWeight: 700 }}>
                   {formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}
                 </span>
               </div>
@@ -1060,8 +1054,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   setStatusFilter('fast_moving');
                   setPage(1);
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
               >
-                ⚡ Fast
+                <ZapIcon size={12} /> Fast
               </button>
               <button
                 type="button"
@@ -1070,8 +1065,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   setStatusFilter('slow_moving');
                   setPage(1);
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
               >
-                ⏳ Slow
+                <HourglassIcon size={12} /> Slow
               </button>
               <button
                 type="button"
@@ -1080,8 +1076,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                   setStatusFilter('non_moving');
                   setPage(1);
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
               >
-                🛑 Dormant
+                <AlertOctagonIcon size={12} /> Dormant
               </button>
             </div>
 
@@ -1174,7 +1171,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     colSpan={8}
                     style={{ textAlign: 'center', padding: '3.5rem', color: '#94a3b8' }}
                   >
-                    <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>🔍</div>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem', color: '#94a3b8' }}>
+                      <SearchIcon size={32} />
+                    </div>
                     <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#475569' }}>
                       No matching products found
                     </div>
@@ -1225,7 +1224,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
                       {/* Invoice Bills */}
                       <td>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                        <span style={{ fontWeight: 700, color: '#334155' }}>
                           {p.salesTxns} bills
                         </span>
                       </td>
