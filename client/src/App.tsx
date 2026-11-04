@@ -121,6 +121,15 @@ import {
   FileTextIcon,
   TrendingUpIcon,
   WalletIcon,
+  PrinterIcon,
+  EyeIcon,
+  PhoneIcon,
+  ClockIcon,
+  XCircleIcon,
+  CheckIcon,
+  PaperclipIcon,
+  CameraIcon,
+  RotateCcwIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
 import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
@@ -3070,11 +3079,11 @@ export function App() {
       handleSplitFiftyFifty();
     }
     const labels: Record<string, string> = {
-      cash: '💵 Payment: Cash',
-      upi: '📱 Payment: Dynamic UPI QR',
-      card: '💳 Payment: Card',
-      bank: '🏦 Payment: Bank Transfer',
-      split: '⚖️ Payment: Split Payment',
+      cash: 'Payment: Cash',
+      upi: 'Payment: Dynamic UPI QR',
+      card: 'Payment: Card',
+      bank: 'Payment: Bank Transfer',
+      split: 'Payment: Split Payment',
     };
     showToast(labels[nextMode] || nextMode);
   };
@@ -9371,9 +9380,9 @@ export function App() {
                             </td>
                             <td className="col-nowrap">
                               {i.active !== false ? (
-                                <span className="badge badge-emerald">Active</span>
+                                <span className="badge badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Active</span>
                               ) : (
-                                <span className="badge badge-amber">Inactive</span>
+                                <span className="badge badge-amber" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Inactive</span>
                               )}
                             </td>
                             <td className="col-nowrap" style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.4rem 0.5rem' }}>
@@ -10639,7 +10648,7 @@ export function App() {
                             onClick={() => openInvoiceDetail(inv.id)}
                             title="View bill lines and linked returns"
                           >
-                            👁️ View
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
                           </button>
                           <a
                             href={inv.kind === 'credit_note' ? `/api/credit-notes/${inv.id}/print?paper=thermal80&autoprint=true` : `/api/invoices/${inv.id}/print?paper=thermal80&autoprint=true`}
@@ -11037,7 +11046,7 @@ export function App() {
                               )}
                               {p.supplierPhone && (
                                 <div className="mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                  📞 {p.supplierPhone}
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {p.supplierPhone}</span>
                                 </div>
                               )}
                             </td>
@@ -11048,19 +11057,19 @@ export function App() {
                                   style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
                                   title={p.voidReason ? `Voided: ${p.voidReason}` : 'Voided'}
                                 >
-                                  ✕ Voided
+                                  <XCircleIcon size={12} /> Voided
                                 </span>
                               ) : isPaid ? (
                                 <span className="badge badge-emerald">
-                                  ✓ Paid
+                                  <CheckCircleIcon size={12} /> Paid
                                 </span>
                               ) : isPartPaid ? (
                                 <span className="badge badge-amber">
-                                  ⏳ Part-Paid
+                                  <ClockIcon size={12} /> Part-Paid
                                 </span>
                               ) : (
                                 <span className="badge" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}>
-                                  ⚠️ Unpaid
+                                  <AlertTriangleIcon size={12} /> Unpaid
                                 </span>
                               )}
                             </td>
@@ -11089,7 +11098,7 @@ export function App() {
                                   style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                                   onClick={() => handleViewPurchaseDetails(p.id)}
                                 >
-                                  👁️ View
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
                                 </button>
                                 <button
                                   type="button"
@@ -11098,7 +11107,7 @@ export function App() {
                                   onClick={() => window.open(`/api/purchases/${p.id}/print?format=a4`, '_blank')}
                                   title="Print A4 Purchase Document"
                                 >
-                                  📄 Print
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span>
                                 </button>
                                 {!isVoided && (p.balanceMinor || 0) > 0 && can(user?.role as any, 'purchases.pay') && (
                                   <button
@@ -11123,7 +11132,7 @@ export function App() {
                                     }}
                                     title="Pay supplier balance"
                                   >
-                                    💳 Pay
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CreditCardIcon size={13} /> Pay</span>
                                   </button>
                                 )}
                                 {!isVoided && can(user?.role as any, 'purchases.void') && (
@@ -11134,7 +11143,7 @@ export function App() {
                                     onClick={() => handleOpenVoidPurchase(p)}
                                     title="Void this purchase and reverse stock inward"
                                   >
-                                    🗑️ Void
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
                                   </button>
                                 )}
                               </div>
@@ -11144,16 +11153,39 @@ export function App() {
                       })}
                       {filteredPurchases.length === 0 && (
                         <tr>
-                          <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#94a3b8' }}>
-                            <div>📥 No purchase bills found matching your filter.</div>
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              style={{ marginTop: '0.75rem' }}
-                              onClick={() => openNewPurchaseModal()}
-                            >
-                              + Record Your First Purchase Bill
-                            </button>
+                          <td colSpan={9} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#94a3b8' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                              <div
+                                style={{
+                                  width: '54px',
+                                  height: '54px',
+                                  borderRadius: '14px',
+                                  background: 'rgba(99, 102, 241, 0.08)',
+                                  color: '#6366f1',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)',
+                                }}
+                              >
+                                <InboxIcon size={28} />
+                              </div>
+                              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
+                                No purchase bills found matching your filter
+                              </div>
+                              <div style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '380px', lineHeight: 1.5 }}>
+                                Record supplier invoices to inward products into your stock ledger and track input GST credit.
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                style={{ marginTop: '0.4rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', fontWeight: 600 }}
+                                onClick={() => openNewPurchaseModal()}
+                              >
+                                <PlusIcon size={16} />
+                                Record Your First Purchase Bill
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -15537,7 +15569,7 @@ export function App() {
               <div className="modal-header">
                 <div>
                   <h3 className="card-title" style={{ margin: 0 }}>
-                    📥 New Purchase & Stock Inward
+                    New Purchase & Stock Inward
                   </h3>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
                     Record supplier bill faithfully • Stock in on save • Input Tax Credit (ITC) recorded
@@ -15586,7 +15618,7 @@ export function App() {
                       )}
                       {selectedSupplier?.gstin && (
                         <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '3px' }}>
-                          ✓ GSTIN: {selectedSupplier.gstin} {selectedSupplier.stateCode ? `• State ${selectedSupplier.stateCode}` : ''}
+                          GSTIN: {selectedSupplier.gstin} {selectedSupplier.stateCode ? `• State ${selectedSupplier.stateCode}` : ''}
                         </div>
                       )}
                     </div>
@@ -15636,7 +15668,7 @@ export function App() {
                   <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #cbd5e1', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: purAttachmentData ? '#ecfdf5' : '#eff6ff', color: purAttachmentData ? '#059669' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
-                        {purAttachmentData ? '✓' : '📎'}
+                        {purAttachmentData ? <CheckIcon size={18} /> : <PaperclipIcon size={18} />}
                       </div>
                       <div>
                         <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#1e293b' }}>
@@ -15674,7 +15706,7 @@ export function App() {
                           className="btn btn-secondary"
                           style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: '#ffffff', borderColor: '#2563eb', color: '#2563eb', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
                         >
-                          <span>📷 Upload Bill File / Photo</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CameraIcon size={15} /> Upload Bill File / Photo</span>
                           <input
                             type="file"
                             accept="image/*,.pdf"
@@ -15690,7 +15722,7 @@ export function App() {
                 {/* Fast Reorder & Bulk Tools */}
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.65rem 0.95rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>⚡</span>
+                    <ZapIcon size={18} color="#16a34a" />
                     <div>
                       <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', display: 'block' }}>
                         Quick Reorder & Bulk Inward:
@@ -15714,7 +15746,7 @@ export function App() {
                           onClick={() => handleRepeatPreviousPurchase(lastPurchase)}
                           title={`Load all products from last invoice #${lastPurchase.supplierInvoiceNumber || lastPurchase.billNo || lastPurchase.purchaseNumber}`}
                         >
-                          🔄 Copy Last Bill Items
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RotateCcwIcon size={13} /> Copy Last Bill Items</span>
                         </button>
                       );
                     })()}
@@ -15727,7 +15759,7 @@ export function App() {
                       onClick={handleLoadLowStockForSupplier}
                       title="Automatically load all products with 0 stock or below minimum stock"
                     >
-                      📦 Load Finished / Low Stock Items
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PackageIcon size={13} /> Load Finished / Low Stock Items</span>
                     </button>
 
                     {/* Import CSV */}
@@ -15736,7 +15768,7 @@ export function App() {
                       style={{ padding: '0.3rem 0.65rem', fontSize: '0.76rem', background: '#ffffff', borderColor: '#9333ea', color: '#7e22ce', fontWeight: 600, cursor: 'pointer', margin: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                       title="Upload items list from Excel / CSV"
                     >
-                      📥 Import CSV
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UploadCloudIcon size={13} /> Import CSV</span>
                       <input
                         type="file"
                         accept=".csv,.txt"
@@ -15937,7 +15969,7 @@ export function App() {
                                     onClick={() => handleRemovePurLine(idx)}
                                     title="Remove Line"
                                   >
-                                    🗑️
+                                    <Trash2Icon size={15} />
                                   </button>
                                 </td>
                               </tr>
@@ -16209,14 +16241,14 @@ export function App() {
                 className="btn btn-secondary"
                 onClick={() => window.open(`/api/purchases/${purchaseSuccess.purchase.id}/print?format=a4`, '_blank')}
               >
-                📄 Print A4
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span> A4
               </button>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => window.open(`/api/purchases/${purchaseSuccess.purchase.id}/print?format=thermal`, '_blank')}
               >
-                🧾 Print Thermal
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ReceiptIcon size={14} /> Print Thermal</span>
               </button>
               <button
                 type="button"
@@ -16285,7 +16317,7 @@ export function App() {
                 {/* Voided Warning Notice */}
                 {isVoided && (
                   <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.85rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <strong>⚠️ VOIDED PURCHASE:</strong> This purchase was voided on {pur.voidedAt || '—'} by {pur.voidedBy || 'management'}. Reason: <em>"{pur.voidReason || 'No reason provided'}"</em>. Inward stock and payable have been reversed.
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={14} /> <strong>VOIDED PURCHASE:</strong></span> This purchase was voided on {pur.voidedAt || '—'} by {pur.voidedBy || 'management'}. Reason: <em>"{pur.voidReason || 'No reason provided'}"</em>. Inward stock and payable have been reversed.
                   </div>
                 )}
 
@@ -16294,7 +16326,7 @@ export function App() {
                   <div>
                     <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Supplier</div>
                     <div style={{ fontWeight: 600 }}>{pur.supplierName || '—'}</div>
-                    {pur.supplierPhone && <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>📞 {pur.supplierPhone}</div>}
+                    {pur.supplierPhone && <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {pur.supplierPhone}</div>}
                   </div>
                   <div>
                     <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Supplier GSTIN</div>
@@ -16317,7 +16349,7 @@ export function App() {
                 {pur.attachmentData && (
                   <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                      <span style={{ fontSize: '1.3rem' }}>📎</span>
+                      <PaperclipIcon size={20} color="#2563eb" />
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e40af' }}>
                           Physical Supplier Bill Attached
@@ -16350,7 +16382,7 @@ export function App() {
                         className="btn btn-secondary"
                         style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: '#ffffff', color: '#1d4ed8', borderColor: '#93c5fd', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}
                       >
-                        <span>📥 Download / View Bill</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><DownloadIcon size={14} /> Download / View Bill</span>
                       </a>
                     </div>
                   </div>
@@ -16517,14 +16549,14 @@ export function App() {
                     className="btn btn-secondary"
                     onClick={() => window.open(`/api/purchases/${pur.id}/print?format=a4`, '_blank')}
                   >
-                    📄 Print A4
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span> A4
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => window.open(`/api/purchases/${pur.id}/print?format=thermal`, '_blank')}
                   >
-                    🧾 Print Thermal
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ReceiptIcon size={14} /> Print Thermal</span>
                   </button>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -16550,7 +16582,7 @@ export function App() {
                         }
                       }}
                     >
-                      💳 Pay Supplier
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CreditCardIcon size={14} /> Pay Supplier</span>
                     </button>
                   )}
                   {!isVoided && can(user?.role as any, 'purchases.void') && (
@@ -16560,7 +16592,7 @@ export function App() {
                       style={{ color: '#ef4444' }}
                       onClick={() => handleOpenVoidPurchase(pur)}
                     >
-                      🗑️ Void Purchase
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Trash2Icon size={14} /> Void Purchase</span>
                     </button>
                   )}
                   <button
@@ -16622,7 +16654,7 @@ export function App() {
               <div className="modal-header">
                 <div>
                   <h3 className="card-title" style={{ margin: 0 }}>
-                    💳 Pay Supplier: {paySupplierModal.supplierName}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CreditCardIcon size={14} /> Pay Supplier</span>: {paySupplierModal.supplierName}
                   </h3>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
                     FIFO oldest-purchase first allocation • Reduces payable ledger
@@ -16870,7 +16902,7 @@ export function App() {
                         style={{ marginTop: '0.35rem', fontSize: '0.8rem', padding: '0.35rem 0.75rem', background: '#10b981', borderColor: '#10b981' }}
                         onClick={() => handleOpenPaySupplier(led.supplier)}
                       >
-                        💳 Pay Supplier
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CreditCardIcon size={14} /> Pay Supplier</span>
                       </button>
                     )}
                   </div>
@@ -16947,7 +16979,7 @@ export function App() {
                                   style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                                   onClick={() => handleViewPurchaseDetails(ev.id)}
                                 >
-                                  👁️ View
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
                                 </button>
                               ) : !isVoided && can(user?.role as any, 'purchases.void') ? (
                                 <button
@@ -16962,7 +16994,7 @@ export function App() {
                                   })}
                                   title="Void supplier payment"
                                 >
-                                  🗑️ Void
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
                                 </button>
                               ) : null}
                             </td>
@@ -17000,7 +17032,7 @@ export function App() {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '520px', width: '92%', padding: '1.5rem' }}>
             <h3 style={{ margin: '0 0 0.5rem 0', color: '#b91c1c' }}>
-              🗑️ Void Purchase {voidPurchaseModal.purchaseNumber || voidPurchaseModal.billNo}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Trash2Icon size={14} /> Void Purchase</span> {voidPurchaseModal.purchaseNumber || voidPurchaseModal.billNo}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
               This will remove <strong>{formatRupees(voidPurchaseModal.totalMinor)}</strong> of purchase, take goods back out of stock with reverse stock moves, reduce the payable to {voidPurchaseModal.supplierName || 'supplier'} by <strong>{formatRupees(voidPurchaseModal.balanceMinor)}</strong>, and reverse <strong>{formatRupees(voidPurchaseModal.itcMinor || 0)}</strong> of ITC.
@@ -17046,7 +17078,7 @@ export function App() {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '520px', width: '92%', padding: '1.5rem' }}>
             <h3 style={{ margin: '0 0 0.5rem 0', color: '#b91c1c' }}>
-              🗑️ Void Supplier Payment {voidPaymentModal.number}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Trash2Icon size={14} /> Void Supplier Payment</span> {voidPaymentModal.number}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
               This will restore <strong>{formatRupees(voidPaymentModal.amountMinor)}</strong> to the payable to {voidPaymentModal.supplierName} and re-open the purchases it settled.
