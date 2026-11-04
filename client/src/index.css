@@ -14378,10 +14378,282 @@ body {
   color: #059669;
 }
 
+.bento-trigger-scan-btn.camera-active {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.bento-trigger-scan-btn.camera-active:hover {
+  background: #b91c1c;
+  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.25);
+}
+
 .bento-mobile-scanner-btn.connected:hover {
   background: #d1fae5;
   border-color: #6ee7b7;
   color: #047857;
+}
+
+/* ==========================================================================
+   Embedded Inline POS Camera Viewfinder in Barcode Scanner Card
+   ========================================================================== */
+.pos-inline-camera-container {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  border: 2px solid #6366f1;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+  margin-bottom: 0.65rem;
+  transition: all 0.2s ease;
+  min-height: 175px;
+}
+
+.pos-inline-camera-container.scan-flash {
+  border-color: #10b981;
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.7);
+}
+
+.pos-inline-camera-header {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.pos-cam-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.pos-cam-dot.live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: srbDotPulse 1.5s infinite ease-in-out;
+}
+
+.pos-cam-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.pos-cam-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.pos-cam-ctrl-btn {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.pos-cam-ctrl-btn:hover {
+  background: rgba(99, 102, 241, 0.85);
+  border-color: #818cf8;
+}
+
+.pos-cam-close-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(220, 38, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-cam-close-btn:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+}
+
+.pos-inline-camera-view {
+  width: 100%;
+  min-height: 175px;
+  background: #020617;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pos-inline-camera-view video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 10px;
+}
+
+.pos-inline-camera-view img,
+.pos-inline-camera-view #qr-shaded-region {
+  display: none !important;
+}
+
+.pos-cam-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  background: #0f172a;
+  z-index: 5;
+}
+
+.pos-cam-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.pos-inline-laser-beam {
+  position: absolute;
+  top: 15%;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ef4444 30%, #f43f5e 50%, #ef4444 70%, transparent);
+  box-shadow: 0 0 8px #f43f5e, 0 0 14px rgba(244, 63, 94, 0.8);
+  pointer-events: none;
+  z-index: 6;
+  animation: posLaserSweep 2.2s infinite ease-in-out;
+}
+
+@keyframes posLaserSweep {
+  0% { top: 20%; opacity: 0.8; }
+  50% { top: 75%; opacity: 1; }
+  100% { top: 20%; opacity: 0.8; }
+}
+
+.pos-inline-scan-target {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72%;
+  height: 58%;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.pos-inline-scan-target .corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: #60a5fa;
+  border-style: solid;
+}
+
+.pos-inline-scan-target .corner.top-left {
+  top: 0; left: 0;
+  border-width: 2.5px 0 0 2.5px;
+  border-top-left-radius: 4px;
+}
+
+.pos-inline-scan-target .corner.top-right {
+  top: 0; right: 0;
+  border-width: 2.5px 2.5px 0 0;
+  border-top-right-radius: 4px;
+}
+
+.pos-inline-scan-target .corner.bottom-left {
+  bottom: 0; left: 0;
+  border-width: 0 0 2.5px 2.5px;
+  border-bottom-left-radius: 4px;
+}
+
+.pos-inline-scan-target .corner.bottom-right {
+  bottom: 0; right: 0;
+  border-width: 0 2.5px 2.5px 0;
+  border-bottom-right-radius: 4px;
+}
+
+.pos-inline-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  z-index: 7;
+}
+
+.pos-cam-error-banner {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(185, 28, 28, 0.95);
+  color: #ffffff;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.pos-cam-retry-btn {
+  background: #ffffff;
+  color: #b91c1c;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scanner-ready-dot.pulsing {
+  animation: srbDotPulse 1.2s infinite ease-in-out;
+  box-shadow: 0 0 8px #10b981;
 }
 
 /* Categories Grid */

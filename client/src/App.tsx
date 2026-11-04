@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   api,
@@ -133,6 +133,7 @@ import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashb
 import { CashierDashboard } from './components/dashboards/CashierDashboard';
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
 import { ScanManufacturerBarcodeModal } from './components/ScanManufacturerBarcodeModal.tsx';
@@ -894,6 +895,16 @@ export function App() {
   });
   const [showMobileScannerModal, setShowMobileScannerModal] = useState(false);
   const [isPhoneScannerConnected, setIsPhoneScannerConnected] = useState(false);
+  // Inline POS Camera Scanner States
+  const [isPosCameraActive, setIsPosCameraActive] = useState(false);
+  const [isPosCameraStarting, setIsPosCameraStarting] = useState(false);
+  const [posCameraError, setPosCameraError] = useState<string | null>(null);
+  const [posCameraDevices, setPosCameraDevices] = useState<Array<{ id: string; label: string }>>([]);
+  const [selectedPosCameraId, setSelectedPosCameraId] = useState<string | null>(null);
+  const [cameraScanFlash, setCameraScanFlash] = useState(false);
+  const posHtml5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const isPosCameraStartingRef = useRef(false);
+  const lastCameraScanRef = useRef<{ code: string; time: number } | null>(null);
   const [scannerNetworkInfo, setScannerNetworkInfo] = useState<{ localIp: string; httpPort: number; httpsPort: number; tunnelUrl?: string } | null>(null);
   const [scannerProtocol, setScannerProtocol] = useState<'tunnel' | 'https' | 'http'>('tunnel');
   const [scannerSoundEnabled, setScannerSoundEnabled] = useState(true);
@@ -2593,6 +2604,178 @@ export function App() {
       showToast(`⚠️ Barcode "${rawClean}" not found in catalog`);
     }
   };
+
+  // ── Inline POS Camera Scanner Handlers ──
+  const handleInlineCameraScan = useCallback((decodedText: string) => {
+    const rawClean = (decodedText || '').trim();
+    if (!rawClean) return;
+
+    const now = Date.now();
+    if (lastCameraScanRef.current && lastCameraScanRef.current.code === rawClean && now - lastCameraScanRef.current.time < 2000) {
+      return;
+    }
+    lastCameraScanRef.current = { code: rawClean, time: now };
+
+    setCameraScanFlash(true);
+    setTimeout(() => setCameraScanFlash(false), 350);
+
+    handleBarcodeScanned(rawClean);
+  }, []);
+
+  const stopPosCamera = useCallback(async () => {
+    isPosCameraStartingRef.current = false;
+    setIsPosCameraStarting(false);
+    if (posHtml5QrCodeRef.current) {
+      try {
+        const scanner = posHtml5QrCodeRef.current;
+        posHtml5QrCodeRef.current = null;
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+        scanner.clear();
+      } catch {
+        // ignore errors on stopping
+      }
+    }
+    setIsPosCameraActive(false);
+    setPosCameraError(null);
+  }, []);
+
+  const startPosCamera = useCallback(async (cameraIdToUse?: string) => {
+    if (isPosCameraStartingRef.current) return;
+    isPosCameraStartingRef.current = true;
+    setIsPosCameraStarting(true);
+    setPosCameraError(null);
+
+    try {
+      const isSecure = typeof window !== 'undefined' && (
+        Boolean(window.isSecureContext) ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+      );
+      if (!isSecure) {
+        setPosCameraError('Live camera requires HTTPS or localhost in your browser.');
+        setIsPosCameraStarting(false);
+        isPosCameraStartingRef.current = false;
+        return;
+      }
+
+      const devices = await Html5Qrcode.getCameras();
+      if (!devices || devices.length === 0) {
+        setPosCameraError('No camera found on this device. Please connect a webcam.');
+        setIsPosCameraStarting(false);
+        isPosCameraStartingRef.current = false;
+        return;
+      }
+
+      setPosCameraDevices(devices.map((d) => ({ id: d.id, label: d.label || `Camera ${d.id.slice(0, 5)}` })));
+
+      const chosenId = cameraIdToUse || selectedPosCameraId || (() => {
+        const back = devices.find((d) => /back|rear|environment|external|webcam/i.test(d.label));
+        return back ? back.id : devices[0].id;
+      })();
+      setSelectedPosCameraId(chosenId);
+
+      // Stop existing if any
+      if (posHtml5QrCodeRef.current) {
+        try {
+          if (posHtml5QrCodeRef.current.isScanning) {
+            await posHtml5QrCodeRef.current.stop();
+          }
+          posHtml5QrCodeRef.current.clear();
+        } catch {}
+        posHtml5QrCodeRef.current = null;
+      }
+
+      setIsPosCameraActive(true);
+
+      // Allow container to mount in DOM
+      setTimeout(async () => {
+        const container = document.getElementById('pos-inline-camera-view');
+        if (!container) {
+          setIsPosCameraStarting(false);
+          isPosCameraStartingRef.current = false;
+          return;
+        }
+
+        try {
+          const qrScanner = new Html5Qrcode('pos-inline-camera-view', {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.QR_CODE,
+            ],
+            verbose: false,
+          });
+          posHtml5QrCodeRef.current = qrScanner;
+
+          await qrScanner.start(
+            chosenId,
+            {
+              fps: 16,
+              qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const width = Math.min(320, Math.floor(viewfinderWidth * 0.90));
+                const height = Math.min(160, Math.floor(viewfinderHeight * 0.65));
+                return { width, height };
+              },
+              aspectRatio: 1.777,
+            },
+            (decodedText) => {
+              handleInlineCameraScan(decodedText);
+            },
+            () => {}
+          );
+          setIsPosCameraStarting(false);
+          isPosCameraStartingRef.current = false;
+        } catch (err: any) {
+          setPosCameraError(err?.message || 'Could not start camera stream.');
+          setIsPosCameraStarting(false);
+          isPosCameraStartingRef.current = false;
+        }
+      }, 120);
+    } catch (err: any) {
+      setPosCameraError(err?.message || 'Camera permission denied or camera not accessible.');
+      setIsPosCameraStarting(false);
+      isPosCameraStartingRef.current = false;
+    }
+  }, [selectedPosCameraId, handleInlineCameraScan]);
+
+  const switchPosCamera = useCallback(async () => {
+    if (posCameraDevices.length < 2) return;
+    const currentIndex = posCameraDevices.findIndex((d) => d.id === selectedPosCameraId);
+    const nextIndex = (currentIndex + 1) % posCameraDevices.length;
+    const nextCamera = posCameraDevices[nextIndex];
+    if (nextCamera) {
+      setSelectedPosCameraId(nextCamera.id);
+      await stopPosCamera();
+      startPosCamera(nextCamera.id);
+    }
+  }, [posCameraDevices, selectedPosCameraId, stopPosCamera, startPosCamera]);
+
+  // Clean up camera on tab switch away from POS or on unmount
+  useEffect(() => {
+    if (activeTab !== 'pos' && isPosCameraActive) {
+      stopPosCamera();
+    }
+  }, [activeTab, isPosCameraActive, stopPosCamera]);
+
+  useEffect(() => {
+    return () => {
+      if (posHtml5QrCodeRef.current) {
+        try {
+          if (posHtml5QrCodeRef.current.isScanning) {
+            posHtml5QrCodeRef.current.stop().catch(() => {});
+          }
+          posHtml5QrCodeRef.current.clear();
+        } catch {}
+        posHtml5QrCodeRef.current = null;
+      }
+    };
+  }, []);
 
   // Fetch local LAN network info when opening mobile scanner modal
   useEffect(() => {
@@ -8295,13 +8478,79 @@ export function App() {
                           <span className="bento-card-subtitle">Instant SKU & Barcode Lookup</span>
                         </div>
                       </div>
-                      <span className={`bento-status-pill ${isPhoneScannerConnected ? 'emerald' : 'green'}`}>
-                        <span className="scanner-ready-dot"></span>
-                        {isPhoneScannerConnected ? 'Phone Active' : 'Ready'}
+                      <span className={`bento-status-pill ${isPosCameraActive ? 'emerald' : isPhoneScannerConnected ? 'emerald' : 'green'}`}>
+                        <span className={`scanner-ready-dot ${isPosCameraActive ? 'pulsing' : ''}`}></span>
+                        {isPosCameraActive ? 'Live Camera' : isPhoneScannerConnected ? 'Phone Active' : 'Ready'}
                       </span>
                     </div>
 
                     <div className="bento-scanner-body">
+                      {/* Live In-Place Camera Scanner Viewfinder */}
+                      {isPosCameraActive && (
+                        <div className={`pos-inline-camera-container ${cameraScanFlash ? 'scan-flash' : ''}`}>
+                          <div className="pos-inline-camera-header">
+                            <div className="pos-cam-header-left">
+                              <span className="pos-cam-dot live"></span>
+                              <span className="pos-cam-label">Camera Active</span>
+                            </div>
+                            <div className="pos-cam-header-actions">
+                              {posCameraDevices.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="pos-cam-ctrl-btn"
+                                  onClick={switchPosCamera}
+                                  title="Switch camera (front/back)"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M20 10c0-4.418-3.582-8-8-8s-8 3.582-8 8c0 3.03 1.688 5.67 4.17 7.05M4 14c0 4.418 3.582 8 8 8s8-3.582 8-8c0-3.03-1.688-5.67-4.17-7.05" />
+                                    <polyline points="20 4 20 10 14 10" />
+                                    <polyline points="4 20 4 14 10 14" />
+                                  </svg>
+                                  <span>Switch</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="pos-cam-close-btn"
+                                onClick={stopPosCamera}
+                                title="Close camera"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          <div id="pos-inline-camera-view" className="pos-inline-camera-view">
+                            {isPosCameraStarting && (
+                              <div className="pos-cam-loading">
+                                <div className="pos-cam-spinner"></div>
+                                <span>Starting camera stream...</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {posCameraError && (
+                            <div className="pos-cam-error-banner">
+                              <span>{posCameraError}</span>
+                              <button type="button" onClick={() => startPosCamera()} className="pos-cam-retry-btn">
+                                Retry
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="pos-inline-laser-beam"></div>
+                          <div className="pos-inline-scan-target">
+                            <span className="corner top-left"></span>
+                            <span className="corner top-right"></span>
+                            <span className="corner bottom-left"></span>
+                            <span className="corner bottom-right"></span>
+                          </div>
+                          <div className="pos-inline-hint">
+                            Hold product barcode in front of camera
+                          </div>
+                        </div>
+                      )}
+
                       <div className="scanner-input-container">
                         <span className="scanner-laser-icon">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
@@ -8340,20 +8589,29 @@ export function App() {
                       <div className="scanner-action-row">
                         <button
                           type="button"
-                          className="bento-trigger-scan-btn"
-                          onClick={() => {
-                            const el = document.getElementById('pos-product-search-input');
-                            if (el) el.focus();
-                            showToast('Ready for barcode scanner input');
-                          }}
+                          className={`bento-trigger-scan-btn ${isPosCameraActive ? 'camera-active' : ''}`}
+                          onClick={isPosCameraActive ? stopPosCamera : () => startPosCamera()}
+                          title={isPosCameraActive ? 'Turn off camera stream' : 'Open live camera scanner in this card'}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                            <circle cx="12" cy="13" r="4"></circle>
-                          </svg>
-                          <span>Focus Scanner</span>
+                          {isPosCameraActive ? (
+                            <>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                                <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                              </svg>
+                              <span>Stop Camera</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                              </svg>
+                              <span>Open Camera</span>
+                            </>
+                          )}
                         </button>
-
 
                         <button
                           type="button"
