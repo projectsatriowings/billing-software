@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import type { ProductMovementAnalysisData, ProductMovementItem, ProductMovementStatus } from '../../api.ts';
-import { fetchProductMovementAnalysis } from '../../api.ts';
+import type {
+  ProductMovementAnalysisData,
+  ProductMovementItem,
+  InventoryDashboardStats,
+} from '../../api.ts';
+import {
+  fetchProductMovementAnalysis,
+  fetchInventoryDashboard,
+} from '../../api.ts';
 import {
   CalendarIcon,
   AlertTriangleIcon,
@@ -13,7 +20,10 @@ import {
   CheckIcon,
   SearchIcon,
   DownloadIcon,
+  RefreshCwIcon,
+  WarehouseIcon,
 } from './InventoryIcons.tsx';
+import './StockReportBento.css';
 
 interface ProductMovementAnalysisViewProps {
   categories: string[];
@@ -33,31 +43,52 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
   // Data state
   const [data, setData] = useState<ProductMovementAnalysisData | null>(null);
+  const [invStats, setInvStats] = useState<InventoryDashboardStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Table filters & sorting
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [sortField, setSortField] = useState<'units_desc' | 'units_asc' | 'txns_desc' | 'name_asc' | 'stock_desc' | 'stock_asc'>('units_desc');
+  const [sortField, setSortField] = useState<
+    'units_desc' | 'units_asc' | 'txns_desc' | 'name_asc' | 'stock_desc' | 'stock_asc'
+  >('units_desc');
 
   // Load analytics from API
-  const loadAnalysis = useCallback(async () => {
-    setLoading(true);
+  const loadAnalysis = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const res = await fetchProductMovementAnalysis({
-        range: selectedRange,
-        from: selectedRange === 'custom' ? customFrom : undefined,
-        to: selectedRange === 'custom' ? customTo : undefined,
-      });
-      setData(res);
+      const [res, statsRes] = await Promise.allSettled([
+        fetchProductMovementAnalysis({
+          range: selectedRange,
+          from: selectedRange === 'custom' ? customFrom : undefined,
+          to: selectedRange === 'custom' ? customTo : undefined,
+        }),
+        fetchInventoryDashboard(),
+      ]);
+
+      if (res.status === 'fulfilled') {
+        setData(res.value);
+      } else {
+        throw res.reason;
+      }
+
+      if (statsRes.status === 'fulfilled' && statsRes.value?.stats) {
+        setInvStats(statsRes.value.stats);
+      }
     } catch (err: any) {
       console.error('Failed to load product movement analysis:', err);
       setError(err?.message || 'Failed to load movement analysis');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, [selectedRange, customFrom, customTo]);
 
@@ -81,12 +112,21 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
       const start = new Date(data.summary.startDate);
       const end = new Date(data.summary.endDate);
       const startStr = start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      const endStr = end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const endStr = end.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
       return `${startStr} – ${endStr}`;
     } catch {
       return '';
     }
   }, [data?.summary]);
+
+  // Format currency in Indian Rupees
+  const formatCurrency = (minor: number) => {
+    return `₹${(minor / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  };
 
   // Format last sold date
   const formatLastSold = (iso: string | null) => {
@@ -106,7 +146,11 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         date.getMonth() === yesterday.getMonth() &&
         date.getFullYear() === yesterday.getFullYear();
 
-      const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const timeStr = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
 
       if (isToday) return `Today, ${timeStr}`;
       if (isYesterday) return `Yesterday`;
@@ -193,7 +237,13 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
       p.unitsSold,
       p.salesTxns,
       `"${formatLastSold(p.lastSoldAt)}"`,
-      `"${p.movementStatus === 'fast_moving' ? 'Fast-moving' : p.movementStatus === 'slow_moving' ? 'Slow-moving' : 'Non-moving'}"`,
+      `"${
+        p.movementStatus === 'fast_moving'
+          ? 'Fast-moving'
+          : p.movementStatus === 'slow_moving'
+          ? 'Slow-moving'
+          : 'Non-moving'
+      }"`,
       `"${p.suggestedAction}"`,
     ]);
 
@@ -202,7 +252,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `product-movement-analysis-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `stock-movement-report-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -216,486 +266,364 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const totalTracked = summary?.totalTrackedProducts || 1;
   const fastPct = Math.round(((summary?.fastMovingCount || 0) / totalTracked) * 100);
   const slowPct = Math.round(((summary?.slowMovingCount || 0) / totalTracked) * 100);
-  const nonPct = Math.round(((summary?.nonMovingCount || 0) / totalTracked) * 100);
+  const nonPct = Math.max(0, 100 - fastPct - slowPct);
 
-  const maxGroupCount = Math.max(
-    1,
-    summary?.fastMovingCount || 0,
-    summary?.slowMovingCount || 0,
-    summary?.nonMovingCount || 0
-  );
+  const hasActiveFilters = searchQuery !== '' || categoryFilter !== 'ALL' || statusFilter !== 'ALL';
 
   return (
-    <div className="product-movement-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* ── HEADER & FILTER BAR ── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: '1rem',
-        }}
-      >
-        <div>
-          <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-            Product Movement Analysis
-          </h2>
-          <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748b' }}>
-            Fast, slow and non-moving products from completed bills · returns and cancelled bills excluded
-          </p>
+    <div className="stock-bento-container">
+      {/* ── 1. TOP BENTO COMMAND & CONTROL BAR ── */}
+      <div className="stock-bento-topbar">
+        <div className="stock-bento-title-group">
+          <div className="stock-bento-icon-3d" title="Stock Intelligence Deck">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </div>
+          <div className="stock-bento-title-text">
+            <h1>
+              Stock Movement &amp; Velocity Report
+              <span className="stock-bento-pill-badge">Bento 3D Intelligence</span>
+            </h1>
+            <p>
+              Real-time product turnover analytics, fast/slow velocity classification &amp; dormant stock ledger
+            </p>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {/* Date range pills */}
-          <div
-            style={{
-              display: 'inline-flex',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              padding: '2px',
-              gap: '2px',
-            }}
-          >
+        <div className="stock-bento-controls">
+          {/* 3D Tactile Date Range Switcher */}
+          <div className="stock-bento-range-switcher" role="radiogroup" aria-label="Date Range">
             <button
               type="button"
-              onClick={() => setSelectedRange('7d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '7d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '7d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
+              className={`bento-range-btn ${selectedRange === '7d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('7d');
+                setShowCustomPicker(false);
               }}
             >
-              Last 7 Days
+              7 Days
             </button>
             <button
               type="button"
-              onClick={() => setSelectedRange('30d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '30d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '30d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
+              className={`bento-range-btn ${selectedRange === '30d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('30d');
+                setShowCustomPicker(false);
               }}
             >
-              Last 30 Days
+              30 Days
             </button>
             <button
               type="button"
-              onClick={() => setSelectedRange('90d')}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === '90d' ? '#6d4aff' : 'transparent',
-                color: selectedRange === '90d' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
+              className={`bento-range-btn ${selectedRange === '90d' ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedRange('90d');
+                setShowCustomPicker(false);
               }}
             >
-              Last 90 Days
+              90 Days
             </button>
             <button
               type="button"
+              className={`bento-range-btn ${selectedRange === 'custom' ? 'active' : ''}`}
               onClick={() => {
                 setSelectedRange('custom');
                 setShowCustomPicker(!showCustomPicker);
               }}
-              style={{
-                padding: '0.35rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedRange === 'custom' ? '#6d4aff' : 'transparent',
-                color: selectedRange === 'custom' ? '#ffffff' : '#475569',
-                transition: 'all 0.15s ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
             >
-              <CalendarIcon size={14} /> Custom Range
+              <CalendarIcon size={14} /> Custom
             </button>
           </div>
 
           {rangeDisplayLabel && (
-            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
               {rangeDisplayLabel}
             </span>
           )}
+
+          {/* Refresh Action Button */}
+          <button
+            type="button"
+            className="bento-btn-3d"
+            onClick={() => loadAnalysis(true)}
+            disabled={isRefreshing || loading}
+            title="Refresh Stock Movement Data"
+          >
+            <RefreshCwIcon size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+
+          {/* Export CSV Action Button */}
+          <button
+            type="button"
+            className="bento-btn-3d primary"
+            onClick={handleExportCsv}
+            disabled={!data || data.products.length === 0}
+            title="Export Stock Report to CSV"
+          >
+            <DownloadIcon size={14} /> Export CSV
+          </button>
         </div>
       </div>
 
-      {/* Custom Date Range Picker Dropdown */}
+      {/* Custom Date Range Popover */}
       {showCustomPicker && selectedRange === 'custom' && (
-        <form
-          onSubmit={handleApplyCustomRange}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            background: '#f8fafc',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            padding: '0.75rem 1rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155' }}>Custom Date Range:</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>From:</label>
+        <form onSubmit={handleApplyCustomRange} className="bento-custom-date-popover">
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+            Select Custom Period:
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>From:</label>
             <input
               type="date"
-              className="form-input"
-              style={{ width: '140px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+              className="bento-search-input"
+              style={{ padding: '0.4rem 0.65rem', width: '145px', fontSize: '0.82rem' }}
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               required
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>To:</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>To:</label>
             <input
               type="date"
-              className="form-input"
-              style={{ width: '140px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+              className="bento-search-input"
+              style={{ padding: '0.4rem 0.65rem', width: '145px', fontSize: '0.82rem' }}
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
               required
             />
           </div>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
-          >
-            Apply Range
+          <button type="submit" className="bento-btn-3d primary" style={{ padding: '0.42rem 0.95rem' }}>
+            Apply Filter
           </button>
           <button
             type="button"
-            className="btn btn-secondary"
-            style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+            className="bento-btn-3d"
+            style={{ padding: '0.42rem 0.75rem' }}
             onClick={() => setShowCustomPicker(false)}
           >
-            Close
+            Cancel
           </button>
         </form>
       )}
 
-      {/* Loading & Error States */}
+      {/* Loading Skeleton */}
       {loading && !data && (
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⏳</div>
-          <p style={{ margin: 0, fontWeight: 500 }}>Analyzing product sales and movement patterns...</p>
+        <div
+          className="bento-3d-card"
+          style={{ padding: '4rem 2rem', textAlign: 'center', color: '#64748b' }}
+        >
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.85rem' }}>⏳</div>
+          <h3 style={{ margin: '0 0 0.4rem 0', color: '#0f172a', fontWeight: 800 }}>
+            Synthesizing 3D Stock Movement Model...
+          </h3>
+          <p style={{ margin: 0, fontSize: '0.85rem' }}>
+            Analyzing sales orders, inventory balances, velocity trends, and dead stock capital.
+          </p>
         </div>
       )}
 
+      {/* Error Alert Card */}
       {error && (
         <div
+          className="bento-3d-card"
           style={{
-            padding: '1rem 1.25rem',
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
-            color: '#b91c1c',
+            padding: '1.25rem 1.5rem',
+            background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+            borderColor: '#fca5a5',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '1rem',
           }}
         >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <AlertTriangleIcon size={16} /> {error}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#991b1b' }}>
+            <AlertTriangleIcon size={20} color="#dc2626" />
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{error}</span>
+          </div>
           <button
             type="button"
-            className="btn btn-secondary"
-            style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
-            onClick={loadAnalysis}
+            className="bento-btn-3d"
+            style={{ background: '#ffffff', borderColor: '#f87171', color: '#991b1b' }}
+            onClick={() => loadAnalysis()}
           >
-            Retry
+            Retry Analysis
           </button>
         </div>
       )}
 
-      {/* ── 4 SUMMARY METRIC CARDS ── */}
+      {/* ── 2. ASYMMETRIC BENTO KPI HERO DECK ── */}
       {summary && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '0.85rem',
-          }}
-        >
-          {/* Card 1: Fast-Moving */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #f59e0b',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <ZapIcon size={14} color="#f59e0b" /> FAST-MOVING PRODUCTS
+        <div className="stock-bento-kpi-grid">
+          {/* Bento Hero Card: Total Movement Pulse (Spans 4 columns) */}
+          <div className="bento-3d-card bento-kpi-hero">
+            <div className="bento-3d-sheen" />
+            <div>
+              <div className="bento-card-header-row">
+                <span className="bento-kpi-label">
+                  <PackageIcon size={14} color="#6366f1" /> Movement Pulse
+                </span>
+                <span className="bento-mini-tag indigo">High Turnover</span>
+              </div>
+              <div className="bento-kpi-number indigo">
+                {summary.totalUnitsSold.toLocaleString('en-IN')}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#4338ca', fontWeight: 700, marginTop: '2px' }}>
+                Total Units Dispatched
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#10b981',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.fastMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              ≥ {summary.fastMinUnits} units sold or ≥ {summary.fastMinTxns} bills in period
+            <div className="bento-kpi-footer-sub">
+              Processed across <b>{summary.totalSalesBills.toLocaleString('en-IN')}</b> completed bills ·
+              tracking <b>{summary.totalTrackedProducts}</b> catalogue SKUs
             </div>
           </div>
 
-          {/* Card 2: Slow-Moving */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #f97316',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <HourglassIcon size={14} color="#f97316" /> SLOW-MOVING PRODUCTS
+          {/* Bento Card 2: Fast-Moving Products (Emerald 3D) */}
+          <div className="bento-3d-card bento-kpi-card emerald">
+            <div className="bento-3d-sheen" />
+            <div>
+              <div className="bento-card-header-row">
+                <span className="bento-kpi-label">
+                  <ZapIcon size={13} color="#10b981" /> Fast-Moving
+                </span>
+                <div className="bento-kpi-icon-pill emerald">
+                  <ZapIcon size={16} />
+                </div>
+              </div>
+              <div className="bento-kpi-number emerald">{summary.fastMovingCount}</div>
+              <span className="bento-mini-tag emerald">⚡ High Velocity</span>
             </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#f59e0b',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.slowMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Sold, but below fast-moving threshold
+            <div className="bento-kpi-footer-sub">
+              ≥ {summary.fastMinUnits} units sold or ≥ {summary.fastMinTxns} bills in this period
             </div>
           </div>
 
-          {/* Card 3: Non-Moving */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #ef4444',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <AlertOctagonIcon size={14} color="#ef4444" /> NON-MOVING PRODUCTS
+          {/* Bento Card 3: Slow-Moving Products (Amber 3D) */}
+          <div className="bento-3d-card bento-kpi-card amber">
+            <div className="bento-3d-sheen" />
+            <div>
+              <div className="bento-card-header-row">
+                <span className="bento-kpi-label">
+                  <HourglassIcon size={13} color="#f59e0b" /> Slow-Moving
+                </span>
+                <div className="bento-kpi-icon-pill amber">
+                  <HourglassIcon size={16} />
+                </div>
+              </div>
+              <div className="bento-kpi-number amber">{summary.slowMovingCount}</div>
+              <span className="bento-mini-tag amber">⏳ Moderate Pace</span>
             </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#ef4444',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.nonMovingCount}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Zero sales in the last {summary.rangeDays} days
+            <div className="bento-kpi-footer-sub">
+              Sold items below fast-moving threshold (1–{summary.fastMinUnits - 1} units)
             </div>
           </div>
 
-          {/* Card 4: Total Units Sold */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              borderTop: '3px solid #6366f1',
-              padding: '1rem 1.15rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#334155',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <PackageIcon size={14} color="#6366f1" /> TOTAL UNITS SOLD
+          {/* Bento Card 4: Non-Moving / Dead Stock (Rose 3D) */}
+          <div className="bento-3d-card bento-kpi-card rose">
+            <div className="bento-3d-sheen" />
+            <div>
+              <div className="bento-card-header-row">
+                <span className="bento-kpi-label">
+                  <AlertOctagonIcon size={13} color="#ef4444" /> Dead Stock
+                </span>
+                <div className="bento-kpi-icon-pill rose">
+                  <AlertOctagonIcon size={16} />
+                </div>
+              </div>
+              <div className="bento-kpi-number rose">{summary.nonMovingCount}</div>
+              <span className="bento-mini-tag rose">🛑 0 Sales</span>
             </div>
-            <div
-              style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#6d4aff',
-                fontFamily: 'monospace',
-                marginTop: '0.35rem',
-                lineHeight: 1.1,
-              }}
-            >
-              {summary.totalUnitsSold.toLocaleString('en-IN')}
+            <div className="bento-kpi-footer-sub">
+              Zero units sold in past {summary.rangeDays} days · capital sitting dormant
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
-              Across {summary.totalSalesBills} bills · pcs, kg &amp; ltr
+          </div>
+
+          {/* Bento Card 5: Inventory Valuation / Tied Capital (Purple 3D) */}
+          <div className="bento-3d-card bento-kpi-card purple">
+            <div className="bento-3d-sheen" />
+            <div>
+              <div className="bento-card-header-row">
+                <span className="bento-kpi-label">
+                  <WarehouseIcon size={13} color="#8b5cf6" />
+                  {invStats?.totalStockValueMinor != null ? 'Catalog Asset' : 'Tied Capital'}
+                </span>
+                <div className="bento-kpi-icon-pill purple">
+                  <WarehouseIcon size={16} />
+                </div>
+              </div>
+              <div className="bento-kpi-number purple" style={{ fontSize: '1.75rem' }}>
+                {invStats?.totalStockValueMinor != null
+                  ? formatCurrency(invStats.totalStockValueMinor)
+                  : data?.insights.nonMovingSummary.tiedCapitalMinor
+                  ? formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)
+                  : '₹0'}
+              </div>
+              <span className="bento-mini-tag indigo">
+                {invStats?.totalStockValueMinor != null ? '💎 Live Valuation' : '⚠️ Dormant Asset'}
+              </span>
+            </div>
+            <div className="bento-kpi-footer-sub">
+              {invStats?.totalActiveProducts
+                ? `${invStats.totalActiveProducts} active SKUs · ${invStats.lowStockCount || 0} low stock`
+                : `${data?.insights.nonMovingSummary.count || 0} idle products tied up on shelves`}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── CHARTS & INSIGHTS ROW (3 COLUMNS) ── */}
+      {/* ── 3. VISUAL INTELLIGENCE BENTO GRID (CHARTS & INSIGHTS) ── */}
       {data && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          {/* Box 1: Top 10 Best-Selling Products */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Top 10 Best-Selling Products
-            </h3>
-            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              By quantity sold · {rangeDisplayLabel || 'period'}
-            </p>
+        <div className="stock-bento-visual-grid">
+          {/* Bento Card 1: Top 10 Best Sellers (Spans 7 columns) */}
+          <div className="bento-3d-card bento-chart-card">
+            <div className="bento-3d-sheen" />
+            <div className="bento-section-title">
+              <TrophyIcon size={18} color="#d97706" /> Top 10 High-Velocity Best-Sellers
+            </div>
+            <div className="bento-section-sub">
+              Ranked by quantity sold during {rangeDisplayLabel || 'the active period'}
+            </div>
 
             {topSellers.length === 0 ? (
-              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                No completed sales recorded during this date period.
+              <div style={{ padding: '3rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+                No completed sales recorded during this date window.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+              <div className="bento-velocity-list">
                 {topSellers.map((item, idx) => {
-                  const pct = Math.max(5, Math.min(100, (item.unitsSold / topSellerMax) * 100));
+                  const pct = Math.max(8, Math.min(100, (item.unitsSold / topSellerMax) * 100));
+                  const rankClass =
+                    idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : 'default';
+
                   return (
-                    <div
-                      key={item.id || idx}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.78rem' }}
-                    >
-                      <span
-                        style={{
-                          width: '135px',
-                          minWidth: '135px',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontWeight: 500,
-                          color: '#334155',
-                        }}
-                        title={item.name}
-                      >
+                    <div key={item.id || idx} className="bento-velocity-item">
+                      <div className={`bento-rank-badge ${rankClass}`}>
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                      </div>
+                      <span className="bento-velocity-name" title={item.name}>
                         {item.name}
                       </span>
-                      <div
-                        style={{
-                          flex: 1,
-                          height: '14px',
-                          background: '#ede9fe',
-                          borderRadius: '999px',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: '100%',
-                            background: '#6d4aff',
-                            borderRadius: '999px',
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
+                      <div className="bento-track-3d">
+                        <div className="bento-fill-3d" style={{ width: `${pct}%` }} />
                       </div>
-                      <span
-                        style={{
-                          minWidth: '55px',
-                          textAlign: 'right',
-                          fontFamily: 'monospace',
-                          fontWeight: 700,
-                          color: '#0f172a',
-                        }}
-                      >
-                        {item.unitsSold} {item.unit}
+                      <span className="bento-velocity-qty">
+                        {item.unitsSold.toLocaleString('en-IN')}{' '}
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
+                          {item.unit}
+                        </span>
                       </span>
                     </div>
                   );
@@ -704,546 +632,470 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
             )}
           </div>
 
-          {/* Box 2: Movement Classification */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Movement Classification
-            </h3>
-            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              Number of products in each group
-            </p>
+          {/* Bento Card 2: Inventory Movement Distribution (Spans 5 columns) */}
+          <div className="bento-3d-card bento-health-card">
+            <div className="bento-3d-sheen" />
+            <div className="bento-section-title">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#4f46e5"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+              Inventory Health &amp; Circulation Ratio
+            </div>
+            <div className="bento-section-sub">
+              Proportional distribution across {totalTracked} tracked products
+            </div>
 
-            {/* Vertical Bar Chart */}
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'space-around',
-                height: '150px',
-                padding: '0.5rem 0',
-                borderBottom: '1px solid #e2e8f0',
-              }}
-            >
-              {/* Fast-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.fastMovingCount || 0}
-                </span>
+            {/* 3D Segmented Distribution Gauge */}
+            <div className="bento-gauge-wrapper">
+              <div className="bento-gauge-track-3d">
                 <div
-                  style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.fastMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#10b981',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
-                  }}
+                  className="bento-gauge-segment emerald"
+                  style={{ width: `${Math.max(2, fastPct)}%` }}
+                  title={`Fast-Moving: ${summary?.fastMovingCount} (${fastPct}%)`}
                 />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Fast-moving</span>
-              </div>
-
-              {/* Slow-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.slowMovingCount || 0}
-                </span>
                 <div
-                  style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.slowMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#f59e0b',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
-                  }}
+                  className="bento-gauge-segment amber"
+                  style={{ width: `${Math.max(2, slowPct)}%` }}
+                  title={`Slow-Moving: ${summary?.slowMovingCount} (${slowPct}%)`}
                 />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Slow-moving</span>
-              </div>
-
-              {/* Non-Moving Col */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {summary?.nonMovingCount || 0}
-                </span>
                 <div
-                  style={{
-                    width: '44px',
-                    height: `${Math.max(8, Math.round(((summary?.nonMovingCount || 0) / maxGroupCount) * 110))}px`,
-                    background: '#ef4444',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.3s ease',
-                  }}
+                  className="bento-gauge-segment rose"
+                  style={{ width: `${Math.max(2, nonPct)}%` }}
+                  title={`Non-Moving: ${summary?.nonMovingCount} (${nonPct}%)`}
                 />
-                <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>Non-moving</span>
               </div>
             </div>
 
-            <div style={{ fontSize: '0.78rem', color: '#64748b', textAlign: 'center', marginTop: '0.85rem' }}>
-              {totalTracked} tracked products · {fastPct}% fast · {slowPct}% slow · {nonPct}% non-moving
+            {/* Breakdown List */}
+            <div className="bento-breakdown-list">
+              <div className="bento-breakdown-row">
+                <div className="bento-breakdown-left">
+                  <div className="bento-dot-3d emerald" />
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#065f46' }}>
+                    Fast-Moving Products
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>
+                    {summary?.fastMovingCount || 0}
+                  </span>
+                  <span className="bento-mini-tag emerald">{fastPct}%</span>
+                </div>
+              </div>
+
+              <div className="bento-breakdown-row">
+                <div className="bento-breakdown-left">
+                  <div className="bento-dot-3d amber" />
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#92400e' }}>
+                    Slow-Moving Products
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>
+                    {summary?.slowMovingCount || 0}
+                  </span>
+                  <span className="bento-mini-tag amber">{slowPct}%</span>
+                </div>
+              </div>
+
+              <div className="bento-breakdown-row">
+                <div className="bento-breakdown-left">
+                  <div className="bento-dot-3d rose" />
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#991b1b' }}>
+                    Non-Moving Products
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>
+                    {summary?.nonMovingCount || 0}
+                  </span>
+                  <span className="bento-mini-tag rose">{nonPct}%</span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: '1.25rem',
+                padding: '0.75rem 1rem',
+                background: '#f8fafc',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                fontSize: '0.77rem',
+                color: '#64748b',
+                lineHeight: 1.45,
+              }}
+            >
+              💡 <b>Circulation Index:</b> {fastPct >= 35 ? '🟢 Healthy Circulation' : '🟡 High proportion of idle inventory'}. Aim to keep non-moving items under 15% of your total product line to maximize working capital.
             </div>
           </div>
 
-          {/* Box 3: Insights */}
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              padding: '1.15rem',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-              Insights
-            </h3>
-            <p style={{ margin: '0 0 0.85rem 0', fontSize: '0.78rem', color: '#64748b' }}>
-              Updated with the date range
-            </p>
+          {/* Bento Card 3: Executive Smart Recommendations (Full width 12 columns) */}
+          <div className="bento-3d-card bento-insights-card">
+            <div className="bento-3d-sheen" />
+            <div className="bento-section-title">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#6366f1"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              Smart Movement Insights &amp; Operational Advisories
+            </div>
+            <div className="bento-section-sub">
+              Dynamic algorithm recommendations synchronized with real-time sales transactions
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', flex: 1, justifyContent: 'space-between' }}>
-              {/* Insight 1: Best seller */}
+            <div className="bento-insights-grid">
+              {/* Insight 1: Best Seller Runway */}
               {data.insights.bestSeller ? (
-                <div
-                  style={{
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TrophyIcon size={15} color="#b45309" /> Best seller: {data.insights.bestSeller.name}
+                <div className="bento-insight-box gold">
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrophyIcon size={16} color="#b45309" />
+                    Top Seller: {data.insights.bestSeller.name}
                   </div>
-                  <div style={{ color: '#78350f', fontSize: '0.76rem', lineHeight: 1.35 }}>
-                    {data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit} in {data.insights.bestSeller.salesTxns} bills.
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.8rem', lineHeight: 1.45 }}>
+                    Generated <b>{data.insights.bestSeller.unitsSold} {data.insights.bestSeller.unit}</b> in sales across{' '}
+                    <b>{data.insights.bestSeller.salesTxns}</b> bills.
                     {data.insights.bestSeller.currentStockUnits !== undefined && (
                       <span>
-                        {' '}Only {data.insights.bestSeller.currentStockUnits} {data.insights.bestSeller.unit} left
-                        {data.insights.bestSeller.runwayDays !== null && data.insights.bestSeller.runwayDays !== undefined
-                          ? ` — about ${data.insights.bestSeller.runwayDays} days of stock.`
+                        {' '}Current shelf stock is <b>{data.insights.bestSeller.currentStockUnits} {data.insights.bestSeller.unit}</b>
+                        {data.insights.bestSeller.runwayDays !== null &&
+                        data.insights.bestSeller.runwayDays !== undefined
+                          ? ` (approx. ${data.insights.bestSeller.runwayDays} days of runway).`
                           : '.'}
                       </span>
                     )}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.78rem',
-                    color: '#64748b',
-                  }}
-                >
-                  No top seller data available for this period.
-                </div>
-              )}
-
-              {/* Insight 2: Slowing / Attention */}
-              {data.insights.slowingProduct ? (
-                <div
-                  style={{
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TrendingDownIcon size={15} color="#1e40af" /> {data.insights.slowingProduct.name}
-                  </div>
-                  <div style={{ color: '#1e3a8a', fontSize: '0.76rem', lineHeight: 1.35 }}>
-                    {data.insights.slowingProduct.message}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    fontSize: '0.78rem',
-                    color: '#15803d',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <CheckIcon size={14} color="#15803d" /> No severe slow-moving inventory bottlenecks detected.
-                </div>
-              )}
-
-              {/* Insight 3: Non-moving products */}
-              <div
-                style={{
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: '8px',
-                  padding: '0.65rem 0.85rem',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PackageIcon size={15} color="#991b1b" /> {data.insights.nonMovingSummary.count} products haven&apos;t sold in {data.insights.nonMovingSummary.days} days
-                </div>
-                <div style={{ color: '#7f1d1d', fontSize: '0.76rem', lineHeight: 1.35 }}>
-                  {data.insights.nonMovingSummary.tiedCapitalMinor > 0 ? (
-                    <span>
-                      ₹{(data.insights.nonMovingSummary.tiedCapitalMinor / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} at cost sitting on shelves. Review before the next purchase order.
-                    </span>
-                  ) : (
-                    <span>Review shelf space and catalog demand before purchasing more.</span>
+                  </p>
+                  {onNavigateToPurchases && (
+                    <button
+                      type="button"
+                      className="bento-restock-btn"
+                      onClick={() => onNavigateToPurchases()}
+                      style={{ alignSelf: 'flex-start', marginTop: '0.25rem' }}
+                    >
+                      Restock Product →
+                    </button>
                   )}
                 </div>
+              ) : (
+                <div className="bento-insight-box gold">
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>Top Seller Status</div>
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.8rem' }}>
+                    No significant best seller recorded in this period.
+                  </p>
+                </div>
+              )}
+
+              {/* Insight 2: Slowing Products */}
+              {data.insights.slowingProduct ? (
+                <div className="bento-insight-box blue">
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrendingDownIcon size={16} color="#1d4ed8" />
+                    Demand Warning: {data.insights.slowingProduct.name}
+                  </div>
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.8rem', lineHeight: 1.45 }}>
+                    {data.insights.slowingProduct.message}
+                  </p>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#1e40af' }}>
+                    Recommendation: Review unit pricing or promotional bundling.
+                  </span>
+                </div>
+              ) : (
+                <div className="bento-insight-box blue">
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckIcon size={16} color="#15803d" /> Smooth Movement Velocity
+                  </div>
+                  <p style={{ margin: '0.35rem 0', fontSize: '0.8rem' }}>
+                    No critical velocity drop-offs or bottlenecked items detected.
+                  </p>
+                </div>
+              )}
+
+              {/* Insight 3: Non-moving Tied Capital */}
+              <div className="bento-insight-box red">
+                <div style={{ fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <PackageIcon size={16} color="#b91c1c" />
+                  Dormant Inventory: {data.insights.nonMovingSummary.count} SKUs
+                </div>
+                <p style={{ margin: '0.35rem 0', fontSize: '0.8rem', lineHeight: 1.45 }}>
+                  {data.insights.nonMovingSummary.tiedCapitalMinor > 0 ? (
+                    <span>
+                      <b>{formatCurrency(data.insights.nonMovingSummary.tiedCapitalMinor)}</b> in cost sitting idle with 0 sales over the last {data.insights.nonMovingSummary.days} days.
+                    </span>
+                  ) : (
+                    <span>
+                      Zero sales observed for these items in the last {data.insights.nonMovingSummary.days} days. Review shelf space before restocking.
+                    </span>
+                  )}
+                </p>
+                <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#991b1b' }}>
+                  Recommendation: Hold future POs until dormant stock is cleared.
+                </span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── PRODUCT MOVEMENT DETAILS TABLE ── */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '10px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Table Title & Action Bar */}
-        <div
-          style={{
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-          }}
-        >
-          <div>
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-              Product Movement Details
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
-              Click a column header to sort
-            </p>
+      {/* ── 4. MASTER STOCK REPORT LEDGER (BENTO 3D TABLE) ── */}
+      <div className="bento-3d-card bento-table-card">
+        <div className="bento-3d-sheen" />
+
+        {/* Tactical Search & Filter Controls Toolbar */}
+        <div className="bento-table-toolbar">
+          <div className="bento-toolbar-left">
+            {/* Search Input */}
+            <div className="bento-search-box">
+              <span className="bento-search-icon">
+                <SearchIcon size={15} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search by product name, SKU or category..."
+                className="bento-search-input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Category Filter */}
+            <select
+              className="bento-select-3d"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="ALL">All Categories ▾</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            {/* Movement Status Filter */}
+            <select
+              className="bento-select-3d"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="ALL">All Movement Status ▾</option>
+              <option value="fast_moving">⚡ Fast-Moving</option>
+              <option value="slow_moving">⏳ Slow-Moving</option>
+              <option value="non_moving">🛑 Non-Moving</option>
+            </select>
+
+            {/* Sort Filter */}
+            <select
+              className="bento-select-3d"
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as any)}
+            >
+              <option value="units_desc">Sort: Units Sold (High-Low) ▾</option>
+              <option value="units_asc">Sort: Units Sold (Low-High) ▴</option>
+              <option value="txns_desc">Sort: Invoices / Txns (High-Low) ▾</option>
+              <option value="name_asc">Sort: Product Name (A-Z)</option>
+              <option value="stock_desc">Sort: Current Stock (High-Low)</option>
+              <option value="stock_asc">Sort: Current Stock (Low-High)</option>
+            </select>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="bento-btn-3d"
+                style={{ padding: '0.42rem 0.75rem', fontSize: '0.78rem' }}
+                onClick={() => {
+                  setSearchQuery('');
+                  setCategoryFilter('ALL');
+                  setStatusFilter('ALL');
+                }}
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '0.4rem 0.85rem',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#334155',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <DownloadIcon size={14} /> Export CSV
-          </button>
-        </div>
-
-        {/* Filter Controls Bar */}
-        <div
-          style={{
-            padding: '0.75rem 1.25rem',
-            background: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.65rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Search input */}
-          <div style={{ flex: '1 1 200px', maxWidth: '300px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
-              <SearchIcon size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search by product, SKU or category..."
-              className="form-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                paddingLeft: '28px',
-                paddingTop: '0.38rem',
-                paddingBottom: '0.38rem',
-                fontSize: '0.82rem',
-                borderRadius: '6px',
-              }}
-            />
+          <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+            Showing <b>{filteredProducts.length}</b> of <b>{data?.products.length || 0}</b> items
           </div>
-
-          {/* Category Dropdown */}
-          <select
-            className="form-input"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            style={{ padding: '0.38rem 0.65rem', fontSize: '0.82rem', borderRadius: '6px', width: 'auto' }}
-          >
-            <option value="ALL">All Categories ▾</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-
-          {/* Movement Status Dropdown */}
-          <select
-            className="form-input"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '0.38rem 0.65rem', fontSize: '0.82rem', borderRadius: '6px', width: 'auto' }}
-          >
-            <option value="ALL">All Movement Status ▾</option>
-            <option value="fast_moving">Fast-Moving</option>
-            <option value="slow_moving">Slow-Moving</option>
-            <option value="non_moving">Non-Moving</option>
-          </select>
-
-          {/* Sort Dropdown */}
-          <select
-            className="form-input"
-            value={sortField}
-            onChange={(e) => setSortField(e.target.value as any)}
-            style={{ padding: '0.38rem 0.65rem', fontSize: '0.82rem', borderRadius: '6px', width: 'auto' }}
-          >
-            <option value="units_desc">Sort: Units Sold (High-Low) ▾</option>
-            <option value="units_asc">Sort: Units Sold (Low-High) ▴</option>
-            <option value="txns_desc">Sort: Sales Txns (High-Low) ▾</option>
-            <option value="name_asc">Sort: Product Name (A-Z)</option>
-            <option value="stock_desc">Sort: Current Stock (High-Low)</option>
-            <option value="stock_asc">Sort: Current Stock (Low-High)</option>
-          </select>
         </div>
 
-        {/* Scrollable Data Table */}
+        {/* Responsive Table Scrollport */}
         <div style={{ overflowX: 'auto', width: '100%' }}>
-          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <table className="bento-data-table">
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+              <tr>
                 <th
+                  className="sortable"
                   onClick={() => setSortField(sortField === 'name_asc' ? 'units_desc' : 'name_asc')}
-                  style={{ textAlign: 'left', padding: '0.75rem 0.95rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  PRODUCT NAME {sortField === 'name_asc' ? '▴' : ''}
+                  PRODUCT &amp; IDENTIFIERS {sortField === 'name_asc' ? '▴' : ''}
                 </th>
-                <th style={{ textAlign: 'left', padding: '0.75rem 0.95rem', whiteSpace: 'nowrap' }}>CATEGORY</th>
-                <th style={{ textAlign: 'left', padding: '0.75rem 0.95rem', whiteSpace: 'nowrap' }}>SKU / CODE</th>
+                <th>CATEGORY</th>
                 <th
+                  className="sortable"
                   onClick={() => setSortField(sortField === 'stock_desc' ? 'stock_asc' : 'stock_desc')}
-                  style={{ textAlign: 'left', padding: '0.75rem 0.95rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   CURRENT STOCK {sortField === 'stock_desc' ? '▼' : sortField === 'stock_asc' ? '▲' : ''}
                 </th>
                 <th
+                  className="sortable"
                   onClick={() => setSortField(sortField === 'units_desc' ? 'units_asc' : 'units_desc')}
-                  style={{ textAlign: 'left', padding: '0.75rem 0.95rem', cursor: 'pointer', whiteSpace: 'nowrap', color: '#6d4aff' }}
+                  style={{ color: '#4f46e5' }}
                 >
                   UNITS SOLD {sortField === 'units_desc' ? '▼' : sortField === 'units_asc' ? '▲' : ''}
                 </th>
                 <th
+                  className="sortable"
                   onClick={() => setSortField(sortField === 'txns_desc' ? 'units_desc' : 'txns_desc')}
-                  style={{ textAlign: 'left', padding: '0.75rem 0.95rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  SALES TXNS {sortField === 'txns_desc' ? '▼' : ''}
+                  INVOICE TXNS {sortField === 'txns_desc' ? '▼' : ''}
                 </th>
-                <th style={{ textAlign: 'left', padding: '0.75rem 0.95rem', whiteSpace: 'nowrap' }}>LAST SOLD</th>
-                <th style={{ textAlign: 'left', padding: '0.75rem 0.95rem', whiteSpace: 'nowrap' }}>MOVEMENT STATUS</th>
-                <th style={{ textAlign: 'left', padding: '0.75rem 0.95rem', whiteSpace: 'nowrap' }}>SUGGESTED ACTION</th>
+                <th>LAST SOLD</th>
+                <th>MOVEMENT STATUS</th>
+                <th>SUGGESTED ACTION</th>
               </tr>
             </thead>
             <tbody>
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                    No products matching your search or filters.
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '4rem 1rem', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔍</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#475569' }}>
+                      No matching products found
+                    </div>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.82rem' }}>
+                      Try adjusting your search query, movement filter, or date range.
+                    </p>
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map((p) => {
                   const isNegStock = p.currentStockUnits < 0;
+                  const isLowStock = p.currentStockUnits >= 0 && p.currentStockUnits <= 5;
+                  const stockClass = isNegStock ? 'negative' : isLowStock ? 'low' : 'healthy';
+
                   return (
-                    <tr
-                      key={p.id}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        transition: 'background-color 0.1s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      {/* Product Name */}
-                      <td style={{ padding: '0.65rem 0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                        {p.name}
+                    <tr key={p.id}>
+                      {/* Product Name & SKU */}
+                      <td>
+                        <div className="bento-prod-name">
+                          <span>{p.name}</span>
+                          <span className="bento-sku-cell">
+                            SKU: {p.sku || '—'}{p.barcode ? ` · Barcode: ${p.barcode}` : ''}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Category */}
-                      <td style={{ padding: '0.65rem 0.95rem', whiteSpace: 'nowrap' }}>
-                        <span
-                          style={{
-                            background: '#f1f5f9',
-                            color: '#475569',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '999px',
-                            padding: '2px 8px',
-                            fontSize: '0.74rem',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {p.category || 'General'}
-                        </span>
-                      </td>
-
-                      {/* SKU / Code */}
-                      <td style={{ padding: '0.65rem 0.95rem', fontFamily: 'monospace', color: '#64748b' }}>
-                        {p.sku || '—'}
+                      <td>
+                        <span className="bento-cat-tag">{p.category || 'General'}</span>
                       </td>
 
                       {/* Current Stock */}
-                      <td
-                        style={{
-                          padding: '0.65rem 0.95rem',
-                          fontFamily: 'monospace',
-                          fontWeight: 700,
-                          color: isNegStock ? '#dc2626' : '#1e293b',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {p.currentStockUnits} {p.unit}
+                      <td>
+                        <span className={`bento-stock-badge ${stockClass}`}>
+                          {p.currentStockUnits.toLocaleString('en-IN')} {p.unit}
+                        </span>
                       </td>
 
                       {/* Units Sold */}
-                      <td
-                        style={{
-                          padding: '0.65rem 0.95rem',
-                          fontFamily: 'monospace',
-                          fontWeight: 800,
-                          color: '#6d4aff',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {p.unitsSold} {p.unit}
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span
+                            style={{
+                              fontFamily: 'monospace',
+                              fontWeight: 800,
+                              fontSize: '0.92rem',
+                              color: '#4f46e5',
+                            }}
+                          >
+                            {p.unitsSold.toLocaleString('en-IN')} {p.unit}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Sales Txns */}
-                      <td style={{ padding: '0.65rem 0.95rem', fontFamily: 'monospace', color: '#334155' }}>
-                        {p.salesTxns}
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>
+                          {p.salesTxns} bills
+                        </span>
                       </td>
 
-                      {/* Last Sold */}
-                      <td style={{ padding: '0.65rem 0.95rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                      {/* Last Sold Date */}
+                      <td style={{ color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                         {formatLastSold(p.lastSoldAt)}
                       </td>
 
                       {/* Movement Status Badge */}
-                      <td style={{ padding: '0.65rem 0.95rem', whiteSpace: 'nowrap' }}>
+                      <td>
                         {p.movementStatus === 'fast_moving' && (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              background: '#ecfdf5',
-                              color: '#065f46',
-                              border: '1px solid #a7f3d0',
-                              borderRadius: '999px',
-                              padding: '2px 9px',
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <ZapIcon size={12} color="#065f46" /> Fast-moving
+                          <span className="bento-movement-status fast">
+                            <ZapIcon size={12} color="#047857" /> Fast-Moving
                           </span>
                         )}
                         {p.movementStatus === 'slow_moving' && (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              background: '#fffbeb',
-                              color: '#b45309',
-                              border: '1px solid #fde68a',
-                              borderRadius: '999px',
-                              padding: '2px 9px',
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <HourglassIcon size={12} color="#b45309" /> Slow-moving
+                          <span className="bento-movement-status slow">
+                            <HourglassIcon size={12} color="#b45309" /> Slow-Moving
                           </span>
                         )}
                         {p.movementStatus === 'non_moving' && (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              background: '#fef2f2',
-                              color: '#b91c1c',
-                              border: '1px solid #fecaca',
-                              borderRadius: '999px',
-                              padding: '2px 9px',
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <AlertOctagonIcon size={12} color="#b91c1c" /> Non-moving
+                          <span className="bento-movement-status non">
+                            <AlertOctagonIcon size={12} color="#b91c1c" /> Non-Moving
                           </span>
                         )}
                       </td>
 
                       {/* Suggested Action */}
-                      <td style={{ padding: '0.65rem 0.95rem', whiteSpace: 'nowrap' }}>
-                        {p.movementStatus === 'fast_moving' && (
-                          <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                            Consider restocking
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <span
+                            style={{
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              color:
+                                p.movementStatus === 'fast_moving'
+                                  ? '#059669'
+                                  : p.movementStatus === 'slow_moving'
+                                  ? '#b45309'
+                                  : '#dc2626',
+                            }}
+                          >
+                            {p.movementStatus === 'fast_moving'
+                              ? 'Restock recommended'
+                              : p.movementStatus === 'slow_moving'
+                              ? 'Tune order qty'
+                              : 'Pause reorders'}
                           </span>
-                        )}
-                        {p.movementStatus === 'slow_moving' && (
-                          <span style={{ color: '#b45309', fontWeight: 600 }}>
-                            Review purchase qty &amp; pricing
-                          </span>
-                        )}
-                        {p.movementStatus === 'non_moving' && (
-                          <span style={{ color: '#dc2626', fontWeight: 600 }}>
-                            Review demand before buying
-                          </span>
-                        )}
+
+                          {onNavigateToPurchases &&
+                            (p.movementStatus === 'fast_moving' || isLowStock) && (
+                              <button
+                                type="button"
+                                className="bento-restock-btn"
+                                onClick={() => onNavigateToPurchases(undefined, p.id)}
+                                title={`Generate purchase order for ${p.name}`}
+                              >
+                                + Order
+                              </button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1253,27 +1105,16 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
           </table>
         </div>
 
-        {/* Table Footer */}
+        {/* Table Footer with Operational Details */}
         {summary && (
-          <div
-            style={{
-              padding: '0.75rem 1.25rem',
-              background: '#f8fafc',
-              borderTop: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '0.5rem',
-              fontSize: '0.78rem',
-              color: '#64748b',
-            }}
-          >
+          <div className="bento-table-footer">
             <div>
-              Showing {filteredProducts.length} of {data?.products.length || 0} products
+              Displaying <b>{filteredProducts.length}</b> records out of <b>{summary.totalTrackedProducts}</b> products tracked in this location
             </div>
             <div>
-              Thresholds: Fast ≥ {summary.fastMinUnits} units or ≥ {summary.fastMinTxns} bills · Slow 1–{summary.fastMinUnits - 1} units · Non-moving 0 units (configurable in settings)
+              ⚡ Fast Threshold: ≥ {summary.fastMinUnits} units or ≥ {summary.fastMinTxns} bills ·
+              ⏳ Slow: 1–{summary.fastMinUnits - 1} units ·
+              🛑 Dead Stock: 0 units
             </div>
           </div>
         )}
