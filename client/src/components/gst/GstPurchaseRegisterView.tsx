@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchGstPurchaseRegister, downloadFile } from '../../api.ts';
-import { DownloadIcon, SpinnerIcon, AlertTriangleIcon, RefreshIcon } from './GstIcons.tsx';
+import { DownloadIcon, SpinnerIcon, AlertTriangleIcon } from './GstIcons.tsx';
 
 interface GstPurchaseRegisterViewProps {
   onNavigate?: (tab: string, meta?: any) => void;
@@ -76,17 +76,8 @@ export const GstPurchaseRegisterView: React.FC<GstPurchaseRegisterViewProps> = (
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            GST Purchase & Expense Inward Register
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Combined statutory record of all stock purchase bills and business expense vouchers bearing inward GST.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Return Period Filter & Export Controls */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
             <input
@@ -106,7 +97,6 @@ export const GstPurchaseRegisterView: React.FC<GstPurchaseRegisterViewProps> = (
             {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <DownloadIcon className="h-4 w-4 text-slate-600" />}
             <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
-        </div>
       </div>
 
       {/* Summary Cards */}
@@ -120,7 +110,7 @@ export const GstPurchaseRegisterView: React.FC<GstPurchaseRegisterViewProps> = (
           }}
         >
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Inward Records</div>
+            <h1 className="text-xs font-medium text-slate-500 dark:text-slate-400 m-0">Total Inward Records</h1>
             <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
               {data.summary.totalRecords}
             </div>

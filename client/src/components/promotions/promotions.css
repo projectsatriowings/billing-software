@@ -2,52 +2,96 @@
    Discounts & Promotions Module - Clean, Accessible, Responsive
    Font: "Geist", "Geist Mono"
    Palette: Background #F8F7FF, Cards #FFFFFF, Border #E6E4F0, Radius 16px
-   Accent: Deep Green #0F6B4F, Light Green Tint #E3F2EC (#0B5A42)
+   Accent: Deep Green var(--primary), Light Green Tint var(--primary-soft) (#4338CA)
    ========================================================================== */
 
 :root {
-  --promo-font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --promo-font-mono: "Geist Mono", monospace;
-  --promo-bg-page: #F8F7FF;
-  --promo-bg-card: #FFFFFF;
-  --promo-bg-input: #FCFBFF;
-  --promo-bg-strip: #FCFBFF;
-  --promo-bg-chip: #EFEEF7;
-  --promo-border: #E6E4F0;
-  --promo-border-input: #DAD8E6;
-  --promo-border-divider: #ECEAF4;
-  --promo-border-dashed: #B6B3C6;
-  --promo-radius-card: 16px;
-  --promo-radius-input: 10px;
-  --promo-radius-btn: 10px;
-  --promo-text-primary: #17181C;
-  --promo-text-secondary: #5D6068;
-  --promo-text-tertiary: #3F424A;
-  --promo-green: #0F6B4F;
-  --promo-green-hover: #0B563F;
-  --promo-green-tint: #E3F2EC;
-  --promo-green-text: #0B5A42;
-  --promo-amber: #C27A0E;
-  --promo-amber-tint: #FDF5E8;
-  --promo-grey-status: #8A8D94;
-  --promo-grey-tint: #EFEEF7;
-  --promo-draft-dot: #C6C3D3;
-  --promo-red-delete: #A3361F;
+  --primary:        #5B4CF5;   /* indigo-violet */
+  --primary-hover:  #4A3BE0;
+  --primary-grad:   linear-gradient(135deg, #6366F1 0%, #7C3AED 100%);
+  --primary-soft:   #EEF0FF;   /* light lavender tint */
+  --primary-border: #C7C9FB;
+  --page-bg:        #F7F7FC;   /* very light lavender page bg */
+  --card-bg:        #FFFFFF;
+  --card-border:    #ECECF5;
+  --text-heading:   #0F172A;
+  --text-body:      #475569;
+  --text-muted:     #64748B;
+  --radius-card:    20px;
+  --radius-btn:     12px;
+  --shadow-card:    0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(91,76,245,.06);
+
+  /* Status colours (pastel pill background + darker text): */
+  --status-active-bg:       #DCFCE7;
+  --status-active-text:     #15803D;
+  --status-active-dot:      #22C55E;
+  --status-active-border:   #BBF7D0;
+
+  --status-scheduled-bg:    #FEF3C7;
+  --status-scheduled-text:  #B45309;
+  --status-scheduled-dot:   #F59E0B;
+  --status-scheduled-border:#FDE68A;
+
+  --status-expired-bg:      #FEE2E2;
+  --status-expired-text:    #B91C1C;
+  --status-expired-dot:     #EF4444;
+  --status-expired-border:  #FECACA;
+
+  --status-draft-bg:        #F1F5F9;
+  --status-draft-text:      #475569;
+  --status-draft-dot:       #94A3B8;
+  --status-draft-border:    #E2E8F0;
+
+  --tag-chip-bg:            #EDE9FE;
+  --tag-chip-text:          #6D28D9;
+  --tag-chip-border:        #DDD6FE;
+
+  --promo-font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --promo-font-mono: 'JetBrains Mono', monospace;
+  --promo-bg-page: var(--page-bg);
+  --promo-bg-card: var(--card-bg);
+  --promo-bg-input: #FFFFFF;
+  --promo-bg-strip: #FAFAFE;
+  --promo-bg-chip: var(--tag-chip-bg);
+  --promo-border: var(--card-border);
+  --promo-border-input: var(--card-border);
+  --promo-border-divider: var(--card-border);
+  --promo-border-dashed: var(--primary-border);
+  --promo-radius-card: var(--radius-card);
+  --promo-radius-input: var(--radius-btn);
+  --promo-radius-btn: var(--radius-btn);
+  --promo-text-primary: var(--text-heading);
+  --promo-text-secondary: var(--text-body);
+  --promo-text-tertiary: var(--text-muted);
+
+  --promo-green: var(--primary);
+  --promo-green-hover: var(--primary-hover);
+  --promo-green-tint: var(--primary-soft);
+  --promo-green-text: #4338CA;
+  --promo-amber: #B45309;
+  --promo-amber-tint: #FEF3C7;
+  --promo-grey-status: #64748B;
+  --promo-grey-tint: #F1F5F9;
+  --promo-draft-dot: #94A3B8;
+  --promo-red-delete: #DC2626;
 }
 
 /* Page Root Container */
 .promo-page-wrapper {
-  background-color: var(--promo-bg-page);
+  background-color: var(--page-bg);
   min-height: calc(100vh - 65px);
-  padding: 24px 24px 64px;
+  padding: 0;
   font-family: var(--promo-font-ui);
   color: var(--promo-text-primary);
   box-sizing: border-box;
 }
 
 .promo-container {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
 }
 
 /* Accessibility Focus Ring */
@@ -56,7 +100,9 @@
 .promo-page-wrapper select:focus-visible,
 .promo-page-wrapper textarea:focus-visible,
 .promo-page-wrapper a:focus-visible {
-  outline: 2px solid var(--promo-green);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(91, 76, 245, 0.15);
+  border-color: var(--primary);
   outline-offset: 2px;
 }
 
@@ -77,13 +123,15 @@
 }
 
 .promo-btn-primary {
-  min-height: 44px;
-  padding: 0 20px;
-  background-color: var(--promo-green);
+  min-height: 40px;
+  padding: 0.52rem 1.15rem;
+  background: var(--primary-grad);
   color: #FFFFFF;
-  border: 1px solid var(--promo-green);
+  border: none;
   font-weight: 600;
-  border-radius: var(--promo-radius-btn);
+  border-radius: var(--radius-btn);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .promo-btn-primary:hover:not(:disabled) {
@@ -97,13 +145,15 @@
 }
 
 .promo-btn-secondary {
-  min-height: 44px;
-  padding: 0 18px;
+  min-height: 40px;
+  padding: 0.52rem 1.05rem;
   background-color: #FFFFFF;
-  color: var(--promo-text-primary);
-  border: 1px solid var(--promo-border-input);
-  font-weight: 500;
-  border-radius: var(--promo-radius-btn);
+  color: var(--text-heading);
+  border: 1px solid var(--card-border);
+  font-weight: 600;
+  border-radius: var(--radius-btn);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .promo-btn-secondary:hover {
@@ -259,9 +309,10 @@
 
 /* Main White Panel */
 .promo-main-panel {
-  background: var(--promo-bg-card);
-  border: 1px solid var(--promo-border);
-  border-radius: var(--promo-radius-card);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
@@ -294,14 +345,15 @@
 .promo-search-input {
   width: 100%;
   height: 44px;
-  border: 1px solid var(--promo-border-input);
-  border-radius: var(--promo-radius-input);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-btn);
   padding: 0 14px 0 42px;
   font-family: var(--promo-font-ui);
   font-size: 14px;
-  color: var(--promo-text-primary);
-  background-color: var(--promo-bg-input);
+  color: var(--text-heading);
+  background-color: #FFFFFF;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .promo-search-input::placeholder {
@@ -310,20 +362,21 @@
 
 .promo-dropdown-select {
   height: 44px;
-  border: 1px solid var(--promo-border-input);
-  border-radius: var(--promo-radius-input);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-btn);
   padding: 0 32px 0 14px;
   font-family: var(--promo-font-ui);
   font-size: 14px;
-  color: var(--promo-text-primary);
-  background-color: var(--promo-bg-input);
+  color: var(--text-heading);
+  background-color: #FFFFFF;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235D6068' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   box-sizing: border-box;
   min-width: 150px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* Promotion Rows List */
@@ -336,10 +389,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--promo-border-divider);
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--card-border);
   gap: 20px;
-  transition: background-color 0.1s ease;
+  transition: background-color 0.15s ease;
 }
 
 .promo-row-item:last-child {
@@ -347,7 +400,7 @@
 }
 
 .promo-row-item:hover {
-  background-color: var(--promo-bg-strip);
+  background-color: #FAF9FE;
 }
 
 @media (max-width: 900px) {
@@ -370,12 +423,13 @@
 .promo-row-icon-tile {
   width: 48px;
   height: 48px;
-  background-color: var(--promo-green-tint);
+  background-color: var(--primary-soft);
+  border: 1px solid var(--primary-border);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--promo-green);
+  color: var(--primary);
   flex-shrink: 0;
 }
 
@@ -401,12 +455,13 @@
 .promo-type-chip {
   font-family: var(--promo-font-mono);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--promo-text-secondary);
-  background-color: var(--promo-bg-chip);
-  padding: 2px 7px;
-  border-radius: 4px;
-  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: var(--tag-chip-text);
+  background-color: var(--tag-chip-bg);
+  border: 1px solid var(--tag-chip-border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
 }
 
 .promo-row-subtitle {
@@ -422,10 +477,10 @@
 
 .promo-col-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--promo-text-secondary);
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 
@@ -451,16 +506,16 @@
   width: 100%;
   max-width: 150px;
   height: 6px;
-  background-color: var(--promo-border-divider);
-  border-radius: 3px;
+  background-color: #E5E7F0;
+  border-radius: 999px;
   overflow: hidden;
   margin: 6px 0 4px;
 }
 
 .promo-runs-bar-fill {
   height: 100%;
-  background-color: var(--promo-green);
-  border-radius: 3px;
+  background: var(--primary-grad);
+  border-radius: 999px;
   transition: width 0.3s ease;
 }
 
@@ -474,32 +529,61 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 700;
   white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.promo-status-dot-inner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .promo-status-pill.active {
-  background-color: var(--promo-green-tint);
-  color: var(--promo-green);
+  background-color: var(--status-active-bg);
+  color: var(--status-active-text);
+  border-color: var(--status-active-border);
+}
+.promo-status-pill.active .promo-status-dot-inner {
+  background-color: var(--status-active-dot);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
 }
 
 .promo-status-pill.scheduled {
-  background-color: var(--promo-amber-tint);
-  color: var(--promo-amber);
+  background-color: var(--status-scheduled-bg);
+  color: var(--status-scheduled-text);
+  border-color: var(--status-scheduled-border);
+}
+.promo-status-pill.scheduled .promo-status-dot-inner {
+  background-color: var(--status-scheduled-dot);
 }
 
 .promo-status-pill.expired {
-  background-color: var(--promo-grey-tint);
-  color: var(--promo-grey-status);
+  background-color: var(--status-expired-bg);
+  color: var(--status-expired-text);
+  border-color: var(--status-expired-border);
+}
+.promo-status-pill.expired .promo-status-dot-inner {
+  background-color: var(--status-expired-dot);
 }
 
 .promo-status-pill.draft,
-.promo-status-pill.paused {
-  background-color: var(--promo-bg-chip);
-  color: var(--promo-text-secondary);
+.promo-status-pill.paused,
+.promo-status-pill.draft_paused {
+  background-color: var(--status-draft-bg);
+  color: var(--status-draft-text);
+  border-color: var(--status-draft-border);
+}
+.promo-status-pill.draft .promo-status-dot-inner,
+.promo-status-pill.paused .promo-status-dot-inner,
+.promo-status-pill.draft_paused .promo-status-dot-inner {
+  background-color: var(--status-draft-dot);
 }
 
 /* Row Actions */
@@ -510,52 +594,57 @@
 }
 
 .promo-btn-edit-outline {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 16px;
   background-color: #FFFFFF;
-  border: 1px solid var(--promo-border-input);
-  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
   font-size: 13.5px;
-  font-weight: 500;
-  color: var(--promo-text-primary);
+  font-weight: 600;
+  color: var(--text-heading);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
+  transition: all 0.15s ease;
 }
 
 .promo-btn-edit-outline:hover {
-  background-color: var(--promo-bg-strip);
-  border-color: var(--promo-border-input);
+  background-color: var(--primary-soft);
+  border-color: var(--primary-border);
+  color: var(--primary);
 }
 
 .promo-icon-btn {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--promo-text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .promo-icon-btn:hover {
-  background-color: var(--promo-bg-chip);
-  color: var(--promo-text-primary);
+  background-color: var(--primary-soft);
+  color: var(--primary);
 }
 
 .promo-icon-btn.delete {
   color: var(--promo-red-delete);
 }
 
+.promo-icon-btn.delete {
+  color: #DC2626;
+}
 .promo-icon-btn.delete:hover {
-  background-color: #FDE8E5;
-  color: #8C2A16;
+  background-color: #FEE2E2;
+  color: #B91C1C;
 }
 
 /* Empty State */
@@ -579,11 +668,12 @@
 
 /* Footer Strip */
 .promo-footer-strip {
-  background-color: var(--promo-bg-strip);
-  border-top: 1px solid var(--promo-border-divider);
-  padding: 14px 20px;
+  background-color: #FAFAFE;
+  border-top: 1px solid var(--card-border);
+  padding: 14px 24px;
   font-size: 13px;
-  color: var(--promo-text-secondary);
+  color: var(--text-muted);
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -631,9 +721,10 @@
 
 /* Numbered Section Cards */
 .promo-section-card {
-  background: var(--promo-bg-card);
-  border: 1px solid var(--promo-border);
-  border-radius: var(--promo-radius-card);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   padding: 24px;
   margin-bottom: 20px;
 }
@@ -648,14 +739,15 @@
 .promo-number-badge {
   width: 28px;
   height: 28px;
-  background-color: var(--promo-text-primary);
-  color: #FFFFFF;
+  background-color: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -700,9 +792,10 @@
 }
 
 .promo-offer-tile.selected {
-  border: 2px solid var(--promo-green);
-  background-color: var(--promo-green-tint);
+  border: 2px solid var(--primary);
+  background-color: var(--primary-soft);
   padding: 15px;
+  box-shadow: 0 0 0 2px rgba(91, 76, 245, 0.12);
 }
 
 .promo-tile-icon-box {
@@ -931,14 +1024,14 @@
 
 /* Green Live Summary Box */
 .promo-live-summary-box {
-  background-color: var(--promo-green-tint);
-  border: 1px solid #C3E5D7;
-  border-radius: 10px;
+  background-color: var(--primary-soft);
+  border: 1px solid var(--primary-border);
+  border-radius: 12px;
   padding: 14px 16px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  color: var(--promo-green-text);
+  color: #4338CA;
   font-size: 13.5px;
   line-height: 1.5;
 }
@@ -1726,7 +1819,7 @@
   gap: 6px;
   padding: 3px 8px;
   background: var(--promo-green-tint);
-  border: 1px solid #C3E5D7;
+  border: 1px solid var(--primary-border);
   color: var(--promo-green-text);
   border-radius: 6px;
   font-size: 12px;
@@ -1736,7 +1829,7 @@
 
 .pos-promo-summary-panel {
   background: var(--promo-green-tint);
-  border: 1px solid #C3E5D7;
+  border: 1px solid var(--primary-border);
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 12px;
@@ -1782,4 +1875,52 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+
+/* Bento Stat Cards Themed Hover Glows */
+.cat-bento-kpi-card.bento-cat-kpi-active-promo:hover {
+  border-color: rgba(167, 243, 208, 0.95);
+  box-shadow:
+    0 3px 8px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(15, 23, 42, 0.08),
+    0 28px 48px -8px rgba(16, 185, 129, 0.18),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.cat-bento-kpi-card.bento-cat-kpi-sched-promo:hover {
+  border-color: rgba(253, 230, 138, 0.95);
+  box-shadow:
+    0 3px 8px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(15, 23, 42, 0.08),
+    0 28px 48px -8px rgba(245, 158, 11, 0.18),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.cat-bento-kpi-card.bento-cat-kpi-exp-promo:hover {
+  border-color: rgba(254, 202, 202, 0.95);
+  box-shadow:
+    0 3px 8px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(15, 23, 42, 0.08),
+    0 28px 48px -8px rgba(239, 68, 68, 0.18),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.cat-bento-kpi-card.bento-cat-kpi-draft-promo:hover {
+  border-color: rgba(203, 213, 225, 0.95);
+  box-shadow:
+    0 3px 8px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(15, 23, 42, 0.08),
+    0 28px 48px -8px rgba(100, 116, 139, 0.18),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.cat-bento-kpi-card.active-filter {
+  border: 2px solid var(--primary) !important;
+  box-shadow:
+    0 0 0 2.5px rgba(91, 76, 245, 0.15),
+    0 4px 12px 0 rgba(15, 23, 42, 0.04),
+    0 16px 30px -4px rgba(91, 76, 245, 0.18),
+    inset 0 1.5px 0 0 #ffffff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 50%, var(--primary-soft) 100%) !important;
 }

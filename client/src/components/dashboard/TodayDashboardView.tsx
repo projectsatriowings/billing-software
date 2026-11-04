@@ -11,7 +11,6 @@ import {
 import { OpenShiftModal } from '../shifts/OpenShiftModal.tsx';
 import { CashMovementModal } from '../shifts/CashMovementModal.tsx';
 import { CloseShiftModal } from '../shifts/CloseShiftModal.tsx';
-import { BranchSwitcher } from './BranchSwitcher.tsx';
 import {
   SparklesIcon,
   DownloadIcon,
@@ -794,11 +793,6 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
   if (loading && !data) {
     return (
       <div className="today-dash-root">
-        {/* Skeleton Header */}
-        <div className="today-dash-header skeleton-loading">
-          <div className="skeleton-row" style={{ height: '36px', width: '380px', marginBottom: '8px' }}></div>
-          <div className="skeleton-row" style={{ height: '18px', width: '260px' }}></div>
-        </div>
 
         {/* Skeleton KPI Cards */}
         <div className="today-kpi-grid">
@@ -843,39 +837,6 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
 
   return (
     <div className="today-dash-root">
-      {/* 1. TOP HEADER (Greeting, Shop GSTIN, Shift Pill, Actions) */}
-      <header className="today-dash-header">
-        <div className="header-meta-row">
-          <div className="header-today-pill">
-            <CalendarIcon size={14} className="today-pill-icon" />
-            <span>Today · {nowKolkata.formattedDate}</span>
-          </div>
-
-          <div className="dashboard-branch-selector">
-            <span className="branch-selector-label">Branch:</span>
-            {isSuperAdmin && data?.branches && data.branches.length > 0 ? (
-              <BranchSwitcher
-                branches={data.branches}
-                selectedBranchCode={selectedBranchCode}
-                onSelectBranch={handleBranchChange}
-                user={user}
-                onManageBranches={onManageBranches}
-              />
-            ) : (
-              <div className="branch-selector-pills">
-                <div
-                  className="dashboard-branch-pill active read-only-branch-pill"
-                  title={`${data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'} (Assigned branch)`}
-                >
-                  <Building2Icon size={13} className="branch-icon" />
-                  <span>{data?.selectedBranch?.name || data?.branches?.[0]?.name || user.assignedLocation || 'Branch'}</span>
-                  <LockIcon size={11} className="branch-lock-icon" />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
 
       {/* Empty State Banner if 0 bills today */}
       {isBilledEmpty && (

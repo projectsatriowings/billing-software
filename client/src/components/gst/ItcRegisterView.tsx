@@ -181,17 +181,8 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            ITC Register & Reconciliation
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Compare purchase invoices and business expenses against auto-drafted GSTR-2B. Authorize eligible tax credits for GSTR-3B.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Return Period Filter & Actions Bar */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
             <input
@@ -231,7 +222,6 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
             {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <BarChartIcon className="h-4 w-4 text-slate-600" />}
             <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
-        </div>
       </div>
 
       {/* Summary Cards */}
@@ -247,7 +237,7 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
           {/* Card 1: Total Book GST */}
           <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition-all hover:border-purple-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">Total Book GST</span>
+              <h1 className="text-xs font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400 m-0">Total Book GST</h1>
               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <BookOpenIcon className="h-3.5 w-3.5 text-slate-500" />
                 <span>Books</span>
