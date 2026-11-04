@@ -127,6 +127,11 @@ export function registerPurchases(r: Router) {
     `;
     const params: unknown[] = [tenantId];
 
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND (p.branch_id = ? OR p.branch_id IS NULL)';
+      params.push(scope.branchId);
+    }
+
     if (status && status !== 'ALL') {
       if (status === 'voided') {
         sql += ' AND p.status = \'voided\'';
@@ -176,6 +181,9 @@ export function registerPurchases(r: Router) {
   // Get single purchase with lines and payment history
   r.get('/api/purchases/:id', requirePerm('purchases'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND (p.branch_id = ? OR p.branch_id IS NULL)' : '';
+    const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
     const purchase = await ctx.db.one(
       `SELECT p.*,
               part.name AS supplier_name,
@@ -184,8 +192,8 @@ export function registerPurchases(r: Router) {
               part.address AS supplier_address
        FROM purchases p
        LEFT JOIN parties part ON p.supplier_id = part.id AND part.tenant_id = p.tenant_id
-       WHERE p.id = ? AND p.tenant_id = ?`,
-      [ctx.params.id, tenantId],
+       WHERE p.id = ? AND p.tenant_id = ?${branchClause}`,
+      [ctx.params.id, tenantId, ...branchParams],
     );
     if (!purchase) throw notFound('Purchase');
 

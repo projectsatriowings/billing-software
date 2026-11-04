@@ -860,7 +860,7 @@ export function App() {
       sessionStorage.setItem('sa_selected_branch', 'all');
     }
     loadInvoices();
-    loadReports();
+    loadReports(newBranchCode);
     window.dispatchEvent(new CustomEvent('branch_scope_changed', { detail: newBranchCode }));
     loadItems();
     loadPurchases();
@@ -1570,6 +1570,7 @@ export function App() {
     if (!isSuperAdmin) {
       const enforcedBranch = user.branchId || (user as any).branch_id || user.assignedLocation;
       if (enforcedBranch) {
+        setSelectedBranchScope(enforcedBranch);
         localStorage.setItem('sa_selected_branch', enforcedBranch);
         localStorage.setItem('selected_branch', enforcedBranch);
         sessionStorage.setItem('sa_selected_branch', enforcedBranch);
@@ -2271,9 +2272,11 @@ export function App() {
   };
 
 
-  const loadReports = async () => {
+  const loadReports = async (overrideBranch?: string) => {
     try {
-      const res = await api<DashboardReport>('/api/reports/dashboard');
+      const bScope = overrideBranch !== undefined ? overrideBranch : selectedBranchScope;
+      const query = bScope && bScope.toLowerCase() !== 'all' ? `?branch=${encodeURIComponent(bScope)}` : '';
+      const res = await api<DashboardReport>(`/api/reports/dashboard${query}`);
       setReport(res);
     } catch (err) {
       console.error('Failed to load reports', err);
@@ -2315,12 +2318,17 @@ export function App() {
       setShop(res.shop);
       const isUserSuperAdmin = res.user.role === 'owner' || String(res.user.role).toUpperCase() === 'SUPER_ADMIN';
       if (!isUserSuperAdmin) {
+        const enforced = res.user.branchId || (res.user as any).branch_id || res.user.assignedLocation || 'MAIN';
+        setSelectedBranchScope(enforced);
         try {
-          localStorage.removeItem('sa_selected_branch');
-          localStorage.removeItem('selected_branch');
-          sessionStorage.removeItem('sa_selected_branch');
-          sessionStorage.removeItem('selected_branch');
+          localStorage.setItem('sa_selected_branch', enforced);
+          localStorage.setItem('selected_branch', enforced);
+          sessionStorage.setItem('sa_selected_branch', enforced);
+          sessionStorage.setItem('selected_branch', enforced);
         } catch {}
+      } else {
+        const saved = localStorage.getItem('sa_selected_branch') || 'all';
+        setSelectedBranchScope(saved);
       }
       loadMyBusinesses();
     } catch (err: any) {
@@ -10445,47 +10453,68 @@ export function App() {
                     <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Sales:
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setInvoiceBranchFilter('all')}
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: invoiceBranchFilter === 'all' ? 700 : 500,
-                        background: invoiceBranchFilter === 'all' ? '#f3f0ff' : '#ffffff',
-                        border: invoiceBranchFilter === 'all' ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                        color: invoiceBranchFilter === 'all' ? '#6d4aff' : '#334155',
-                        padding: '0.25rem 0.6rem',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      All Branches ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
-                    </button>
-                    {branches.map((b) => {
-                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                      const isSelected = invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
-                      return (
+                    {(user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN') ? (
+                      <>
                         <button
-                          key={b.id}
                           type="button"
-                          onClick={() => setInvoiceBranchFilter(b.id)}
+                          onClick={() => {
+                            setInvoiceBranchFilter('all');
+                            handleGlobalBranchChange('all');
+                          }}
                           style={{
                             fontSize: '0.75rem',
-                            fontWeight: isSelected ? 700 : 500,
-                            background: isSelected ? '#f3f0ff' : '#ffffff',
-                            border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                            color: isSelected ? '#6d4aff' : '#334155',
+                            fontWeight: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? 700 : 500,
+                            background: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#f3f0ff' : '#ffffff',
+                            border: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                            color: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#6d4aff' : '#334155',
                             padding: '0.25rem 0.6rem',
                             borderRadius: '6px',
                             cursor: 'pointer',
                           }}
                         >
-                          <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
+                          All Branches (Overall) ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
                         </button>
-                      );
-                    })}
+                        {branches.map((b) => {
+                          const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                          const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                          const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                          const isSelected = selectedBranchScope === b.id || selectedBranchScope === b.code || invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => {
+                                setInvoiceBranchFilter(b.id);
+                                handleGlobalBranchChange(b.code || b.id);
+                              }}
+                              style={{
+                                fontSize: '0.75rem',
+                                fontWeight: isSelected ? 700 : 500,
+                                background: isSelected ? '#f3f0ff' : '#ffffff',
+                                border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
+                                color: isSelected ? '#6d4aff' : '#334155',
+                                padding: '0.25rem 0.6rem',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
+                            </button>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      (() => {
+                        const myBranch = branches.find(b => b.id === user.branchId || b.code === user.assignedLocation) || branches[0];
+                        const bSales = invoices.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                        const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                        return (
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#166534', background: '#dcfce7', padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #86efac' }}>
+                            🏢 {myBranch?.name || user.assignedLocation}: {formatRupees(bSalesTotal)} ({bSales.length} bills)
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
                 )}
                 <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -11197,154 +11226,395 @@ export function App() {
           })()}
 
           {/* TAB 5: REPORTS & ANALYTICS */}
-          {displayTab === 'reports' && report && (
-            <div>
-              {/* KPI Cards */}
-              <div className="kpi-grid">
-                <div className="kpi-card">
-                  <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                    <RupeeIcon size={24} />
-                  </div>
-                  <div>
-                    <div className="kpi-val mono" style={{ color: '#10b981' }}>
-                      {formatRupees(report.today.totalMinor)}
+          {displayTab === 'reports' && report && (() => {
+            const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+            const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
+            const activeBranchObj = branches.find(
+              (b) =>
+                b.id === selectedBranchScope ||
+                b.code === selectedBranchScope ||
+                (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
+            ) || branches[0];
+            const currentBranchTitle = isOverall
+              ? 'All Branches (Overall)'
+              : (activeBranchObj?.name || user.assignedLocation || 'Branch');
+
+            const visibleBranches = isOverall
+              ? branches
+              : branches.filter(
+                  (b) =>
+                    b.id === selectedBranchScope ||
+                    b.code === selectedBranchScope ||
+                    (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
+                );
+            const displayBranches = visibleBranches.length > 0 ? visibleBranches : (activeBranchObj ? [activeBranchObj] : branches);
+
+            return (
+              <div>
+                {/* Branch Scope Header & Drilldown Navigator */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    padding: '0.85rem 1.15rem',
+                    background: isOverall ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' : 'linear-gradient(90deg, #eff6ff 0%, #ffffff 100%)',
+                    border: isOverall ? '1.5px solid #bbf7d0' : '1.5px solid #bfdbfe',
+                    borderRadius: '12px',
+                    marginBottom: '1.25rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        background: isOverall ? '#10b981' : '#3b82f6',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Building2Icon size={20} />
                     </div>
-                    <div className="kpi-label">Today's Revenue ({shop?.name})</div>
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                    <ReceiptIcon size={24} />
-                  </div>
-                  <div>
-                    <div className="kpi-val mono">{report.today.billCount}</div>
-                    <div className="kpi-label">Bills Generated Today</div>
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                    <LandmarkIcon size={24} />
-                  </div>
-                  <div>
-                    <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
-                    <div className="kpi-label">GST Collected Today</div>
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
-                    <WalletIcon size={24} />
-                  </div>
-                  <div>
-                    <div className="kpi-val mono" style={{ color: '#ea580c' }}>
-                      {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
+                    <div>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b' }}>
+                        Financial Reports — {isOverall ? 'All Branches (Overall)' : (currentBranchTitle + ' (' + (activeBranchObj?.code || 'BRANCH') + ')')}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
+                        {isOverall
+                          ? 'Showing consolidated aggregate financials across all branches'
+                          : ('Showing isolated financial performance for ' + currentBranchTitle + ' only')}
+                      </div>
                     </div>
-                    <div className="kpi-label">Today's Customer Collections</div>
                   </div>
+
+                  {isSuperAdmin ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Select Scope:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleGlobalBranchChange('all')}
+                        style={{
+                          fontSize: '0.76rem',
+                          fontWeight: isOverall ? 700 : 500,
+                          background: isOverall ? '#10b981' : '#ffffff',
+                          color: isOverall ? '#ffffff' : '#334155',
+                          border: isOverall ? '1px solid #059669' : '1px solid #cbd5e1',
+                          padding: '0.3rem 0.75rem',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🌐 All Branches (Overall)
+                      </button>
+                      {branches.map((b) => {
+                        const isThisActive = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                            style={{
+                              fontSize: '0.76rem',
+                              fontWeight: isThisActive ? 700 : 500,
+                              background: isThisActive ? '#3b82f6' : '#ffffff',
+                              color: isThisActive ? '#ffffff' : '#334155',
+                              border: isThisActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+                              padding: '0.3rem 0.75rem',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🏢 {b.name} ({b.code})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: '#f1f5f9',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: '#334155',
+                      }}
+                    >
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                      Assigned Branch: {currentBranchTitle} ({activeBranchObj?.code || user.assignedLocation})
+                    </div>
+                  )}
                 </div>
 
-                <div className="kpi-card">
-                  <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
-                    <PackageIcon size={24} />
-                  </div>
-                  <div>
-                    <div className="kpi-val mono">{report.overall.itemCount}</div>
-                    <div className="kpi-label">Active SKUs in Catalog</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Top Items & Payment Breakdown */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                <div className="card">
-                  <div className="card-title">Top Selling Products in {shop?.name}</div>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Qty Sold</th>
-                        <th>Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.topItems.map((item, idx) => (
-                        <tr key={idx}>
-                          <td style={{ fontWeight: 600 }}>{item.name}</td>
-                          <td className="mono">{item.qtyMilli / 1000} units</td>
-                          <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
-                            {formatRupees(item.totalMinor)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="card">
-                  <div className="card-title">Payment Method Breakdown</div>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Method</th>
-                        <th>Volume</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.paymentBreakdown.map((pay, idx) => (
-                        <tr key={idx}>
-                          <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
-                          <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
-                            {formatRupees(pay.totalMinor)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Branch-Wise Sales & Collections Performance */}
-              {branches.length > 0 && (
-                <div className="card" style={{ marginTop: '1.25rem' }}>
-                  <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Building2Icon size={18} style={{ color: '#6d4aff' }} />
-                    <span>Branch-Wise Sales & Operations Performance</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-                    {branches.map((b) => {
-                      const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                      const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                      const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                      const bTaxable = bSales.reduce((sum, i) => sum + (i.taxableMinor || 0), 0);
-                      const bGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
-                      const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
-                      const bReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                      return (
-                        <div key={b.id} style={{ background: '#f8fafc', borderRadius: '12px', border: '1.5px solid #e2e8f0', padding: '1.1rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                            <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
-                            <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>{b.code}</span>
-                          </div>
-                          <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
-                            {formatRupees(bSalesTotal)}
-                          </div>
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bSales.length}</strong></span>
-                            <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
-                          </div>
-                          {bReturnsTotal > 0 && (
-                            <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
-                              Returns: {formatRupees(bReturnsTotal)} ({bReturns.length} credit notes)
-                            </div>
-                          )}
+                {/* KPI Cards */}
+                <div className="kpi-grid">
+                  <div className="kpi-card">
+                    <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                      <RupeeIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="kpi-val mono" style={{ color: '#10b981' }}>
+                        {formatRupees(report.today.totalMinor)}
+                      </div>
+                      <div className="kpi-label">Today's Revenue ({isOverall ? 'All Branches' : currentBranchTitle})</div>
+                      {report.overall.totalMinor > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Cumulative Sales: <strong style={{ color: '#1e293b' }}>{formatRupees(report.overall.totalMinor)}</strong>
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="kpi-card">
+                    <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
+                      <ReceiptIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="kpi-val mono">{report.today.billCount}</div>
+                      <div className="kpi-label">Bills Generated Today</div>
+                      {report.overall.billCount > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Total Bills: <strong style={{ color: '#1e293b' }}>{report.overall.billCount}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="kpi-card">
+                    <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                      <LandmarkIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
+                      <div className="kpi-label">GST Collected Today</div>
+                      {report.gstPosition?.outputGstMinor !== undefined && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Output GST: <strong style={{ color: '#1e293b' }}>{formatRupees(report.gstPosition.outputGstMinor)}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="kpi-card">
+                    <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
+                      <WalletIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="kpi-val mono" style={{ color: '#ea580c' }}>
+                        {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
+                      </div>
+                      <div className="kpi-label">Today's Customer Collections</div>
+                      {report.outstandingDuesMinor !== undefined && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Khata Dues: <strong style={{ color: '#b45309' }}>{formatRupees(report.outstandingDuesMinor)}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="kpi-card">
+                    <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                      <PackageIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="kpi-val mono">{report.overall.itemCount}</div>
+                      <div className="kpi-label">Active SKUs in Catalog</div>
+                      {report.overall.customerCount > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Customers: <strong style={{ color: '#1e293b' }}>{report.overall.customerCount}</strong>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
+
+                {/* Top Items & Payment Breakdown */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                  <div className="card">
+                    <div className="card-title">
+                      Top Selling Products {isOverall ? '— All Branches (Overall)' : ('in ' + currentBranchTitle)}
+                    </div>
+                    {report.topItems && report.topItems.length > 0 ? (
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Product</th>
+                            <th>Qty Sold</th>
+                            <th>Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.topItems.map((item, idx) => (
+                            <tr key={idx}>
+                              <td style={{ fontWeight: 600 }}>{item.name}</td>
+                              <td className="mono">{item.qtyMilli / 1000} units</td>
+                              <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
+                                {formatRupees(item.totalMinor)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                        <PackageIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                        <div style={{ fontSize: '0.85rem' }}>No sales recorded for this branch yet</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="card">
+                    <div className="card-title">
+                      Payment Method Breakdown {isOverall ? '— All Branches (Overall)' : ('— ' + currentBranchTitle)}
+                    </div>
+                    {report.paymentBreakdown && report.paymentBreakdown.length > 0 ? (
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Method</th>
+                            <th>Volume</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.paymentBreakdown.map((pay, idx) => (
+                            <tr key={idx}>
+                              <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
+                              <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
+                                {formatRupees(pay.totalMinor)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                        <WalletIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                        <div style={{ fontSize: '0.85rem' }}>No payments collected for this branch yet</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Branch-Wise Sales & Collections Performance */}
+                {branches.length > 0 && (
+                  <div className="card" style={{ marginTop: '1.25rem' }}>
+                    <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Building2Icon size={18} style={{ color: '#6d4aff' }} />
+                        <span>
+                          {isOverall
+                            ? 'Branch-Wise Sales & Operations Performance (All Branches)'
+                            : ('Branch Sales & Operations Performance — ' + currentBranchTitle)}
+                        </span>
+                      </div>
+                      {isSuperAdmin && !isOverall && (
+                        <button
+                          type="button"
+                          onClick={() => handleGlobalBranchChange('all')}
+                          style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            background: '#f1f5f9',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            padding: '0.25rem 0.6rem',
+                            cursor: 'pointer',
+                            color: '#334155',
+                          }}
+                        >
+                          ← Switch to Overall (All Branches)
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                      {displayBranches.map((b) => {
+                        const compData = report.branchComparison?.find((c) => c.id === b.id || c.code === b.code);
+                        const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                        const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                        const invSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                        const invGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
+                        const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
+                        const invReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+
+                        const bSalesTotal = compData?.allTimeSalesTotalMinor ?? (invSalesTotal || compData?.todaySalesTotalMinor || 0);
+                        const bBillsCount = compData?.allTimeSalesCount ?? (bSales.length || compData?.todaySalesCount || 0);
+                        const bGst = compData?.allTimeGstMinor ?? invGst;
+                        const bReturnsTotal = compData?.allTimeReturnsTotalMinor ?? invReturnsTotal;
+                        const bReturnsCount = compData?.allTimeReturnsCount ?? bReturns.length;
+
+                        const isSelectedBranch = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+
+                        return (
+                          <div
+                            key={b.id}
+                            style={{
+                              background: isSelectedBranch ? '#f0fdf4' : '#f8fafc',
+                              borderRadius: '12px',
+                              border: isSelectedBranch ? '2px solid #10b981' : '1.5px solid #e2e8f0',
+                              padding: '1.1rem',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                {isSelectedBranch && (
+                                  <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.68rem', fontWeight: 700 }}>
+                                    Active Filter
+                                  </span>
+                                )}
+                                <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>
+                                  {b.code}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
+                              {formatRupees(bSalesTotal)}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bBillsCount}</strong></span>
+                              <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
+                            </div>
+                            {bReturnsTotal > 0 && (
+                              <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
+                                Returns: {formatRupees(bReturnsTotal)} ({bReturnsCount} credit notes)
+                              </div>
+                            )}
+                            {isSuperAdmin && isOverall && (
+                              <button
+                                type="button"
+                                onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                                style={{
+                                  marginTop: '0.75rem',
+                                  width: '100%',
+                                  padding: '0.35rem 0.5rem',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  color: '#4338ca',
+                                  background: '#eef2ff',
+                                  border: '1px solid #c7d2fe',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                View {b.name} Report →
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
               {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
               <div className="card" style={{ marginTop: '1.25rem' }}>
@@ -11413,7 +11683,8 @@ export function App() {
                 </table>
               </div>
             </div>
-          )}
+          );
+        })()}
 
           {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
           {displayTab === 'settings' && (
