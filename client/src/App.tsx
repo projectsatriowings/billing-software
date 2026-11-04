@@ -2660,9 +2660,16 @@ export function App() {
         return;
       }
 
-      const devices = await Html5Qrcode.getCameras();
+      let devices: Array<{ id: string; label: string }> = [];
+      try {
+        devices = await Html5Qrcode.getCameras();
+      } catch (camErr: any) {
+        console.warn('Could not enumerate cameras:', camErr);
+        devices = [];
+      }
+
       if (!devices || devices.length === 0) {
-        setPosCameraError('No camera found on this device. Please connect a webcam.');
+        setPosCameraError('No camera found or permission denied. Please connect a webcam.');
         setIsPosCameraStarting(false);
         isPosCameraStartingRef.current = false;
         return;
