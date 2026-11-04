@@ -2725,9 +2725,9 @@ export function App() {
             {
               fps: 16,
               qrbox: (viewfinderWidth, viewfinderHeight) => {
-                const width = Math.min(320, Math.floor(viewfinderWidth * 0.90));
-                const height = Math.min(160, Math.floor(viewfinderHeight * 0.65));
-                return { width, height };
+                const w = Math.max(50, Math.min(280, Math.floor((viewfinderWidth || 280) * 0.88)));
+                const h = Math.max(50, Math.min(160, Math.floor((viewfinderHeight || 160) * 0.65)));
+                return { width: w, height: h };
               },
               aspectRatio: 1.777,
             },
@@ -2739,6 +2739,12 @@ export function App() {
           setIsPosCameraStarting(false);
           isPosCameraStartingRef.current = false;
         } catch (err: any) {
+          try {
+            if (posHtml5QrCodeRef.current) {
+              posHtml5QrCodeRef.current.clear();
+              posHtml5QrCodeRef.current = null;
+            }
+          } catch {}
           setPosCameraError(err?.message || 'Could not start camera stream.');
           setIsPosCameraStarting(false);
           isPosCameraStartingRef.current = false;
@@ -8527,14 +8533,14 @@ export function App() {
                             </div>
                           </div>
 
-                          <div id="pos-inline-camera-view" className="pos-inline-camera-view">
-                            {isPosCameraStarting && (
-                              <div className="pos-cam-loading">
-                                <div className="pos-cam-spinner"></div>
-                                <span>Starting camera stream...</span>
-                              </div>
-                            )}
-                          </div>
+                          <div id="pos-inline-camera-view" className="pos-inline-camera-view" />
+
+                          {isPosCameraStarting && (
+                            <div className="pos-cam-loading">
+                              <div className="pos-cam-spinner"></div>
+                              <span>Starting camera stream...</span>
+                            </div>
+                          )}
 
                           {posCameraError && (
                             <div className="pos-cam-error-banner">
