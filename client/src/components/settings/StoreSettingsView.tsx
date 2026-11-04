@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Shop, User, PublicPaymentSettings } from '../../api';
 import { getPaymentSettings, updatePaymentSettings } from '../../api';
 import { ToggleSwitch } from '../ToggleSwitch';
+import { SmsSettingsSection } from './SmsSettingsSection';
 import { STATES } from '../../../../shared/states.ts';
 import { qrSvg, upiUri } from '../../../../shared/qr.ts';
 import { billMessage } from '../../../../shared/whatsapp.ts';
@@ -21,7 +22,7 @@ export interface StoreSettingsViewProps {
   onNavigateTab?: (tab: string) => void;
 }
 
-type SettingsSection = 'profile' | 'billing' | 'inventory' | 'payments' | 'whatsapp' | 'security';
+type SettingsSection = 'profile' | 'billing' | 'inventory' | 'payments' | 'sms' | 'whatsapp' | 'security';
 
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
   retail: { label: 'Retail / Kirana / Supermarket', icon: '🛒', desc: 'Barcode scanning, standard inventory, fast POS checkout' },
@@ -341,6 +342,7 @@ export function StoreSettingsView({
           { id: 'billing', icon: '📜', label: 'Business & Billing Rules' },
           { id: 'inventory', icon: '📦', label: 'Inventory & Purchase' },
           { id: 'payments', icon: '💳', label: 'Payments & Integrations' },
+          { id: 'sms', icon: '💬', label: 'SMS & Free Trial' },
           { id: 'whatsapp', icon: '📲', label: 'WhatsApp & Notifications' },
           { id: 'security', icon: '🛡️', label: 'Users, Security & Audit' },
         ].map((tab) => {
@@ -1299,6 +1301,15 @@ export function StoreSettingsView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* SECTION 4.5: SMS & FREE TRIAL SETTINGS */}
+      {activeSection === 'sms' && (
+        <SmsSettingsSection
+          user={user}
+          shop={shop}
+          showToast={showToast}
+        />
       )}
 
 {/* SECTION 5: WHATSAPP & NOTIFICATIONS */}

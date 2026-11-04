@@ -113,6 +113,7 @@ import {
   ArrowRightIcon,
   BarChart3Icon,
   Building2Icon,
+  SparklesIcon,
   RupeeIcon,
   ReceiptIcon,
   TruckIcon,
@@ -604,6 +605,14 @@ export function App() {
       if (isRouteMatch) return true;
     } catch { }
     return HIDE_BUSINESS_BAR_TABS.has(displayTab) || HIDE_BUSINESS_BAR_TABS.has(activeTab);
+  })();
+
+  const userFirstName = user?.name ? user.name.split(' ')[0] : 'User';
+  const dashboardGreeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   })();
 
   // Header title for the 6 specific modules
@@ -3369,6 +3378,13 @@ export function App() {
         customerLoyaltyPoints?: number;
         partyId?: string;
         isNewCustomer?: boolean;
+        sms?: {
+          sent: boolean;
+          status: string;
+          error?: string;
+          skipped?: boolean;
+          messageId?: string;
+        } | null;
       }>('/api/invoices', {
         method: 'POST',
         body: JSON.stringify({
@@ -3425,7 +3441,8 @@ export function App() {
           }
         }
       }
-      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}`);
+      const smsSuffix = res.sms?.sent ? ' • 📲 SMS Sent!' : '';
+      showToast(isKot ? `KOT & Bill Generated: ${res.number}` : `Invoice ${res.number} generated!${pointsMsg}${smsSuffix}`);
       window.dispatchEvent(new CustomEvent('bill_completed', { detail: res }));
 
       // Trigger Checkout Success Modal for final bill (Section 4.1: Restaurant flow triggers after final bill, not KOT)
@@ -6379,6 +6396,18 @@ export function App() {
             <h1 className="top-header-title" title={currentHeaderTitle}>
               {currentHeaderTitle}
             </h1>
+          ) : displayTab === 'dashboard' && user ? (
+            <div className="top-dash-greeting-group-left">
+              <h1 className="header-greeting-title">
+                <span>{dashboardGreeting}, {userFirstName}</span>
+                <SparklesIcon size={18} style={{ color: '#6366f1', marginLeft: '6px', verticalAlign: 'middle' }} />
+              </h1>
+              <div className="header-shop-subtitle">
+                <span>{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
+                <span className="dot-sep">·</span>
+                <span className="mono">GSTIN {shop?.gstin || '33AAAAA0000A1Z9'}</span>
+              </div>
+            </div>
           ) : (
             <div className="top-header-title-spacer" />
           )}
@@ -6560,125 +6589,125 @@ export function App() {
           {displayTab === 'dashboard' && user && (() => {
             const isSuperAdminUser = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
             return (
-            <div className="dashboard-tab-wrapper">
-              {isSuperAdminUser && (
-                <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
-                  <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '7px',
-                        border: 'none',
-                        fontWeight: 600,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
-                        color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
-                        boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onClick={() => {
-                        setDashboardViewMode('today');
-                        setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
-                      }}
-                    >
-                      <BarChart3Icon size={15} />
-                      <span>Today's Live Overview</span>
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '7px',
-                        border: 'none',
-                        fontWeight: 600,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
-                        color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
-                        boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onClick={() => setDashboardViewMode('management')}
-                    >
-                      <Building2Icon size={15} />
-                      <span>Company Multi-Branch View</span>
-                    </button>
+              <div className="dashboard-tab-wrapper">
+                {isSuperAdminUser && (
+                  <div className="dashboard-mode-switcher-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem' }}>
+                    <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <button
+                        type="button"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '7px',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          background: dashboardViewMode === 'today' ? '#6d4aff' : 'transparent',
+                          color: dashboardViewMode === 'today' ? '#ffffff' : '#64748b',
+                          boxShadow: dashboardViewMode === 'today' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => {
+                          setDashboardViewMode('today');
+                          setTimeout(() => window.dispatchEvent(new CustomEvent('dashboard_view_focused')), 40);
+                        }}
+                      >
+                        <BarChart3Icon size={15} />
+                        <span>Today's Live Overview</span>
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          borderRadius: '7px',
+                          border: 'none',
+                          fontWeight: 600,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          background: dashboardViewMode === 'management' ? '#6d4aff' : 'transparent',
+                          color: dashboardViewMode === 'management' ? '#ffffff' : '#64748b',
+                          boxShadow: dashboardViewMode === 'management' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onClick={() => setDashboardViewMode('management')}
+                      >
+                        <Building2Icon size={15} />
+                        <span>Company Multi-Branch View</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!isSuperAdminUser || dashboardViewMode === 'today' ? (
-                <TodayDashboardView
-                  user={user}
-                  shop={shop}
-                  selectedBranch={selectedBranchScope}
-                  onBranchChange={handleGlobalBranchChange}
-                  onNavigateToPos={() => setActiveTab('pos')}
-                  onNavigateToShifts={() => setActiveTab('shifts')}
-                  onNavigateToInventory={() => setActiveTab('inventory')}
-                  onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
-                  onNavigateToPurchases={() => {
-                    setActiveTab('purchases');
-                    loadPurchases();
-                  }}
-                  onOpenAddProductModal={() => {
-                    setEditingItem(null);
-                    setShowItemModal(true);
-                  }}
-                  showToast={showToast}
-                  onManageBranches={() => setActiveTab('user-management')}
-                />
-              ) : (
-                <div className="role-dashboards-view">
-                  {user.role === 'owner' && (
-                    <SuperAdminDashboard
-                      user={user}
-                      shop={shop}
-                      report={report}
-                      onRefreshReport={loadReports}
-                      onNavigate={setActiveTab}
-                    />
-                  )}
-                  {user.role === 'manager' && (
-                    <StoreManagerDashboard
-                      user={user}
-                      shop={shop}
-                      onNavigate={(tab) => {
-                        if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
-                          setShowInventoryDropdown(true);
-                        }
-                        setActiveTab(tab as any);
-                      }}
-                    />
-                  )}
-                  {user?.role === 'cashier' && (
-                    <CashierDashboard
-                      user={user}
-                      shop={shop}
-                      onNavigateToPos={() => setActiveTab('pos')}
-                      onNavigateToShifts={() => setActiveTab('shifts')}
-                    />
-                  )}
-                  {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
-                    <SuperAdminDashboard
-                      user={user}
-                      shop={shop}
-                      report={report}
-                      onRefreshReport={loadReports}
-                      onNavigate={setActiveTab}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
+                {!isSuperAdminUser || dashboardViewMode === 'today' ? (
+                  <TodayDashboardView
+                    user={user}
+                    shop={shop}
+                    selectedBranch={selectedBranchScope}
+                    onBranchChange={handleGlobalBranchChange}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                    onNavigateToShifts={() => setActiveTab('shifts')}
+                    onNavigateToInventory={() => setActiveTab('inventory')}
+                    onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
+                    onNavigateToPurchases={() => {
+                      setActiveTab('purchases');
+                      loadPurchases();
+                    }}
+                    onOpenAddProductModal={() => {
+                      setEditingItem(null);
+                      setShowItemModal(true);
+                    }}
+                    showToast={showToast}
+                    onManageBranches={() => setActiveTab('user-management')}
+                  />
+                ) : (
+                  <div className="role-dashboards-view">
+                    {user.role === 'owner' && (
+                      <SuperAdminDashboard
+                        user={user}
+                        shop={shop}
+                        report={report}
+                        onRefreshReport={loadReports}
+                        onNavigate={setActiveTab}
+                      />
+                    )}
+                    {user.role === 'manager' && (
+                      <StoreManagerDashboard
+                        user={user}
+                        shop={shop}
+                        onNavigate={(tab) => {
+                          if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                            setShowInventoryDropdown(true);
+                          }
+                          setActiveTab(tab as any);
+                        }}
+                      />
+                    )}
+                    {user?.role === 'cashier' && (
+                      <CashierDashboard
+                        user={user}
+                        shop={shop}
+                        onNavigateToPos={() => setActiveTab('pos')}
+                        onNavigateToShifts={() => setActiveTab('shifts')}
+                      />
+                    )}
+                    {user.role !== 'owner' && user.role !== 'manager' && user.role !== 'cashier' && (
+                      <SuperAdminDashboard
+                        user={user}
+                        shop={shop}
+                        report={report}
+                        onRefreshReport={loadReports}
+                        onNavigate={setActiveTab}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })()}
 

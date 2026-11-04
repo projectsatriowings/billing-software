@@ -208,9 +208,10 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
   branches,
   selectedBranchCode,
   onSelectBranch,
-  user: _user,
+  user,
   onManageBranches,
 }) => {
+  const isSuperAdmin = Boolean(user && (user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN'));
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -544,7 +545,9 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
             className={`branch-switcher-chevron ${isOpen ? 'rotated' : ''}`}
           />
         </button>
-        <span className="branch-switcher-sa-tag">Super Admin</span>
+        {isSuperAdmin && (
+          <span className="branch-switcher-sa-tag">Super Admin</span>
+        )}
       </div>
 
       {isOpen && (

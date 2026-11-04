@@ -10,6 +10,7 @@ import { normalizePhone } from '../../../shared/whatsapp.ts';
 import { audit } from '../audit.ts';
 import { resolveBranchScope } from '../branchScope.ts';
 import { invalidateTodayDashboardCache } from './dashboard.ts';
+import { sendInvoiceBillSms } from '../services/smsService.ts';
 
 export function registerInvoices(r: Router) {
   // List invoices
@@ -668,6 +669,33 @@ export function registerInvoices(r: Router) {
       });
     });
 
+    // 7. Automatic SMS Notification to customer (isolated so billing / payment is never impacted)
+    let smsDispatchResult: any = null;
+    const billPhone = customerPhone || cleanPhoneDigits;
+    if (billPhone && billPhone.trim()) {
+      try {
+        const branchRow = await ctx.db.one<any>(
+          'SELECT name FROM branches WHERE id = ? AND tenant_id = ?',
+          [invoiceBranchId, tenantId]
+        );
+        smsDispatchResult = await sendInvoiceBillSms(ctx.db, {
+          tenantId,
+          branchId: invoiceBranchId,
+          customerId: partyId || null,
+          invoiceId,
+          invoiceNumber: assignedNumber,
+          customerName: customerName || null,
+          customerPhone: billPhone.trim(),
+          totalMinor: calculated.totalMinor,
+          earnedLoyaltyPoints,
+          shopName: shop.name || 'Store',
+          branchName: branchRow?.name || undefined,
+        });
+      } catch (smsErr: any) {
+        console.warn(`[SMS Dispatch] Non-fatal error sending invoice SMS for ${assignedNumber}:`, smsErr?.message || smsErr);
+      }
+    }
+
     return {
       id: invoiceId,
       invoiceId,
@@ -684,6 +712,13 @@ export function registerInvoices(r: Router) {
       customerLoyaltyPoints,
       partyId,
       isNewCustomer,
+      sms: smsDispatchResult ? {
+        sent: smsDispatchResult.status === 'sent',
+        status: smsDispatchResult.status,
+        error: smsDispatchResult.error,
+        skipped: Boolean(smsDispatchResult.skipped),
+        messageId: smsDispatchResult.messageId,
+      } : null,
     };
   });
 
