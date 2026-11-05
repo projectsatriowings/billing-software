@@ -4416,18 +4416,11 @@ export function App() {
     );
 
     try {
-      if (newActive) {
-        await api(`/api/items/${item.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active: true }),
-        });
-        showToast(`Item "${item.name}" reactivated!`);
-      } else {
-        await api(`/api/items/${item.id}`, {
-          method: 'DELETE',
-        });
-        showToast(`Item "${item.name}" deactivated!`);
-      }
+      await api(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: newActive }),
+      });
+      showToast(newActive ? `Item "${item.name}" reactivated!` : `Item "${item.name}" deactivated!`);
       await loadItems();
     } catch (err: any) {
       // Roll back on failure!
@@ -4442,13 +4435,16 @@ export function App() {
 
   const handleConfirmDelete = async () => {
     if (!deletingItem || isDeleting) return;
+    const targetItem = deletingItem;
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await deleteProduct(deletingItem.id);
-      showToast(`Product "${deletingItem.name}" deleted successfully!`);
+      await deleteProduct(targetItem.id);
+      // Immediately remove the deleted item from local state so the table updates instantly
+      setItems((prevItems) => prevItems.filter((it) => it.id !== targetItem.id && it.sku !== targetItem.sku));
+      showToast(`Product "${targetItem.name}" deleted successfully!`);
       setDeletingItem(null);
-      loadItems();
+      await loadItems();
     } catch (err: any) {
       setDeleteError(err.message || 'Failed to delete product. It may be referenced by historical transactions.');
     } finally {
