@@ -743,8 +743,12 @@ export interface SupplierLedger {
   paymentHistory: SupplierPaymentRecord[];
 }
 
-export const fetchInventoryDashboard = () =>
-  api<{ stats: import('../../shared/types.ts').InventoryDashboardStats }>('/api/inventory/dashboard');
+export const fetchInventoryDashboard = (params: { branch?: string } = {}) => {
+  const sp = new URLSearchParams();
+  if (params.branch) sp.set('branch', params.branch);
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<{ stats: import('../../shared/types.ts').InventoryDashboardStats }>(`/api/inventory/dashboard${qs}`);
+};
 
 export const fetchInventoryItems = (params: {
   q?: string;
@@ -753,6 +757,7 @@ export const fetchInventoryItems = (params: {
   sort?: string;
   limit?: number;
   offset?: number;
+  branch?: string;
 } = {}) => {
   const sp = new URLSearchParams();
   if (params.q) sp.set('q', params.q);
@@ -761,6 +766,7 @@ export const fetchInventoryItems = (params: {
   if (params.sort) sp.set('sort', params.sort);
   if (params.limit) sp.set('limit', String(params.limit));
   if (params.offset) sp.set('offset', String(params.offset));
+  if (params.branch) sp.set('branch', params.branch);
   const queryStr = sp.toString() ? `?${sp.toString()}` : '';
   return api<{ items: Item[]; total: number; limit: number; offset: number }>(`/api/inventory/items${queryStr}`);
 };

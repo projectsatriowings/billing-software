@@ -498,6 +498,7 @@ export interface InventoryDashboardStats {
   zeroStockCount?: number;
   negativeStockCount?: number;
   unconfiguredCount: number;
+  distinctCategoryCount?: number;
   totalStockValueMinor: number | null;
   costingMethod?: string;
   valuationDate?: string;

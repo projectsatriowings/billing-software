@@ -47,19 +47,20 @@ export function registerInventory(r: Router) {
         SELECT 
           i.id,
           i.name,
-          i.reorder_milli,
+          COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorized') AS category,
+          COALESCE(i.reorder_milli, 0) AS reorder_milli,
           COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
-          i.cost_minor,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
+          COALESCE(i.cost_minor, 0) AS cost_minor,
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND (sm.branch_id = i.branch_id OR (sm.branch_id IS NULL AND i.branch_id IS NULL))), 0)::bigint AS stock_milli
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
       )
       SELECT
         COUNT(*)::int AS total_active,
-        COUNT(CASE WHEN stock_milli > 0 THEN 1 END)::int AS in_stock,
+        COUNT(CASE WHEN stock_milli > 0 AND (GREATEST(reorder_milli, min_stock_milli) = 0 OR stock_milli > GREATEST(reorder_milli, min_stock_milli)) THEN 1 END)::int AS in_stock,
         COUNT(CASE 
           WHEN stock_milli > 0 
-           AND (reorder_milli > 0 OR min_stock_milli > 0)
+           AND GREATEST(reorder_milli, min_stock_milli) > 0
            AND stock_milli <= GREATEST(reorder_milli, min_stock_milli)
           THEN 1 
         END)::int AS low_stock,
@@ -67,6 +68,7 @@ export function registerInventory(r: Router) {
         COUNT(CASE WHEN stock_milli = 0 THEN 1 END)::int AS zero_stock,
         COUNT(CASE WHEN stock_milli < 0 THEN 1 END)::int AS negative_stock,
         COUNT(CASE WHEN (reorder_milli = 0 AND min_stock_milli = 0) THEN 1 END)::int AS unconfigured,
+        COUNT(DISTINCT category)::int AS distinct_category_count,
         COALESCE(SUM(CASE WHEN stock_milli > 0 THEN (stock_milli * cost_minor / 1000) ELSE 0 END), 0)::bigint AS total_stock_value_minor
       FROM item_stock`,
       [tenantId, ...branchParams],
@@ -170,6 +172,7 @@ export function registerInventory(r: Router) {
         zeroStockCount: Number((counts as any)?.zeroStock ?? (counts as any)?.zero_stock ?? 0),
         negativeStockCount: Number((counts as any)?.negativeStock ?? (counts as any)?.negative_stock ?? 0),
         unconfiguredCount: Number((counts as any)?.unconfigured ?? 0),
+        distinctCategoryCount: Number((counts as any)?.distinctCategoryCount ?? (counts as any)?.distinct_category_count ?? categoryRows.length),
         totalStockValueMinor: isAuthorizedForCost ? Number((counts as any)?.totalStockValueMinor ?? (counts as any)?.total_stock_value_minor ?? 0) : null,
         costingMethod: 'Current Item Master Cost',
         valuationDate: new Date().toISOString(),
@@ -266,9 +269,9 @@ export function registerInventory(r: Router) {
 
     let statusCondition = '';
     if (status === 'in_stock') {
-      statusCondition = `WHERE stock_milli > 0`;
+      statusCondition = `WHERE stock_milli > 0 AND (GREATEST(reorder_milli, min_stock_milli) = 0 OR stock_milli > GREATEST(reorder_milli, min_stock_milli))`;
     } else if (status === 'low_stock') {
-      statusCondition = `WHERE stock_milli > 0 AND (reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli)`;
+      statusCondition = `WHERE stock_milli > 0 AND GREATEST(reorder_milli, min_stock_milli) > 0 AND stock_milli <= GREATEST(reorder_milli, min_stock_milli)`;
     } else if (status === 'out_of_stock') {
       statusCondition = `WHERE stock_milli <= 0`;
     } else if (status === 'zero_stock') {
@@ -344,6 +347,7 @@ export function registerInventory(r: Router) {
         if (stockMilli < 0) stockStatus = 'negative_stock';
         else if (stockMilli === 0) stockStatus = 'out_of_stock';
         else if (threshold > 0 && stockMilli <= threshold) stockStatus = 'low_stock';
+        else stockStatus = 'in_stock';
 
         return {
           id: r.id,

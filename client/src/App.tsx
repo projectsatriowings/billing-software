@@ -10323,6 +10323,8 @@ export function App() {
           {/* TAB: INVENTORY MANAGEMENT */}
           {displayTab === 'inventory' && (
             <InventoryDashboard
+              key={selectedBranchScope}
+              selectedBranch={selectedBranchScope}
               items={items}
               categories={categories}
               categoriesList={categoriesList}
