@@ -565,6 +565,7 @@ const MicroSparkBars: React.FC<{
               height: `${heightPct}%`,
               background: color,
               opacity,
+              animationDelay: `${idx * 45}ms`,
             }}
           />
         );
@@ -615,6 +616,10 @@ const BeadedDotMatrixBarChart: React.FC<{
 
   const hoveredPt = hoveredIdx !== null ? displayPoints[hoveredIdx] : null;
 
+  const chartAnimKey = useMemo(() => {
+    return `${colCount}-${metricKey}-${displayPoints[0]?.date || ''}-${displayPoints[colCount - 1]?.date || ''}`;
+  }, [colCount, metricKey, displayPoints]);
+
   return (
     <div className="inspire-chart-card">
       <div className="inspire-card-header">
@@ -662,6 +667,7 @@ const BeadedDotMatrixBarChart: React.FC<{
 
       <div className="inspire-svg-chart-wrap" style={{ position: 'relative' }}>
         <svg
+          key={`bar-chart-${chartAnimKey}`}
           viewBox={`0 0 ${width} ${height}`}
           className="inspire-svg-canvas"
           preserveAspectRatio="none"
@@ -726,12 +732,16 @@ const BeadedDotMatrixBarChart: React.FC<{
                   return (
                     <circle
                       key={dIdx}
+                      className={`beaded-bar-dot ${isActive ? 'active-bead' : 'inactive-bead'}`}
                       cx={cx}
                       cy={cy}
                       r={isHovered && isActive ? dotRadius * 1.15 : dotRadius}
                       fill={isActive ? (isHovered ? '#0f766e' : '#14b8a6') : '#e2e8f0'}
                       opacity={isActive ? 0.95 : 0.45}
-                      style={{ transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                      style={{
+                        animationDelay: `${cIdx * 35 + dIdx * 25}ms`,
+                        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                      }}
                     />
                   );
                 })}
@@ -836,6 +846,10 @@ const DualSplineAreaChart: React.FC<{
 
   const hoveredPt = hoveredIdx !== null ? displayPoints[hoveredIdx] : null;
 
+  const chartAnimKey = useMemo(() => {
+    return `${displayPoints.length}-${displayPoints[0]?.date || ''}-${displayPoints[displayPoints.length - 1]?.date || ''}`;
+  }, [displayPoints]);
+
   return (
     <div className="inspire-chart-card">
       <div className="inspire-card-header">
@@ -918,25 +932,45 @@ const DualSplineAreaChart: React.FC<{
             );
           })}
 
-          {salesAreaPath && <path d={salesAreaPath} fill="url(#inspireSalesArea)" />}
-          {profitAreaPath && <path d={profitAreaPath} fill="url(#inspireProfitArea)" />}
+          {salesAreaPath && (
+            <path
+              key={`sales-area-${chartAnimKey}`}
+              className="inspire-spline-area sales-area"
+              d={salesAreaPath}
+              fill="url(#inspireSalesArea)"
+            />
+          )}
+          {profitAreaPath && (
+            <path
+              key={`profit-area-${chartAnimKey}`}
+              className="inspire-spline-area profit-area"
+              d={profitAreaPath}
+              fill="url(#inspireProfitArea)"
+            />
+          )}
 
           {salesPath && (
             <path
+              key={`sales-line-${chartAnimKey}`}
+              className="inspire-spline-line sales-line"
               d={salesPath}
               fill="none"
               stroke="#0284c7"
               strokeWidth="2.4"
               strokeLinecap="round"
+              pathLength="100"
             />
           )}
           {profitPath && (
             <path
+              key={`profit-line-${chartAnimKey}`}
+              className="inspire-spline-line profit-line"
               d={profitPath}
               fill="none"
               stroke="#0d9488"
               strokeWidth="2.4"
               strokeLinecap="round"
+              pathLength="100"
             />
           )}
 
@@ -1123,6 +1157,10 @@ const CategorySalesDonutCard: React.FC<{
   const outerR = 76;
   const innerR = 52;
 
+  const donutAnimKey = useMemo(() => {
+    return `${categories?.length || 0}-${totalCatSalesMinor}`;
+  }, [categories, totalCatSalesMinor]);
+
   const arcs = useMemo(() => {
     let currentAngle = 0;
     const items = categories && categories.length > 0 ? categories : [
@@ -1196,15 +1234,17 @@ const CategorySalesDonutCard: React.FC<{
               const isHovered = hoveredIdx === arc.idx;
               return (
                 <path
-                  key={arc.idx}
+                  key={`arc-${donutAnimKey}-${arc.idx}`}
+                  className="inspire-donut-slice"
                   d={arc.pathD}
                   fill={arc.color}
                   opacity={hoveredIdx === null || isHovered ? 1 : 0.65}
                   style={{
                     transformOrigin: '95px 95px',
-                    transform: isHovered ? 'scale(1.04)' : 'scale(1)',
+                    transform: isHovered ? 'scale(1.05)' : 'scale(1)',
                     transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                     cursor: 'pointer',
+                    animationDelay: `${arc.idx * 75}ms`,
                   }}
                   onMouseEnter={() => setHoveredIdx(arc.idx)}
                   onMouseLeave={() => setHoveredIdx(null)}
@@ -1217,7 +1257,8 @@ const CategorySalesDonutCard: React.FC<{
               if (arc.share < 12) return null;
               return (
                 <text
-                  key={`lbl-${arc.idx}`}
+                  key={`lbl-${donutAnimKey}-${arc.idx}`}
+                  className="donut-slice-label"
                   x={arc.labelX}
                   y={arc.labelY}
                   textAnchor="middle"
@@ -1225,19 +1266,38 @@ const CategorySalesDonutCard: React.FC<{
                   fontSize="9.5"
                   fontWeight="700"
                   fill="#475569"
+                  style={{ animationDelay: `${arcs.length * 75 + 160}ms` }}
                 >
                   {arc.share}%
                 </text>
               );
             })}
-
-            <text x="95" y="88" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#64748b" letterSpacing="0.06em">
-              TOTAL
-            </text>
-            <text x="95" y="108" textAnchor="middle" fontSize="13.5" fontWeight="800" fill="#0f172a" className="mono">
-              {formatRupees(totalCatSalesMinor)}
-            </text>
           </svg>
+
+          {/* Central Total KPI with Count-up animation */}
+          <div
+            className="donut-center-overlay"
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              width: '90px',
+            }}
+          >
+            <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              TOTAL
+            </div>
+            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#0f172a', marginTop: '1px' }} className="mono">
+              <AnimatedCounter
+                value={totalCatSalesMinor}
+                formatter={(v) => formatRupees(v)}
+                triggerKey={totalCatSalesMinor}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="donut-legend-list">
