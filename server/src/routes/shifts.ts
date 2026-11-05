@@ -400,6 +400,7 @@ export function registerShifts(r: Router) {
         userEmail: shift.userEmail ?? shift.user_email,
         userRole: shift.userRole ?? shift.user_role,
         location: shift.location || 'MAIN',
+        counter: shift.counter || 'COUNTER-1',
         status: shift.status,
         openedAt: shift.openedAt ?? shift.opened_at,
         openingCashMinor: Number(shift.openingCashMinor ?? shift.opening_cash_minor ?? 0),

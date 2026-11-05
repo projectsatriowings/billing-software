@@ -139,6 +139,7 @@ import { type BarcodeTargetItem } from '../../shared/barcodeScannerUtils.ts';
 import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
+import { SelectCounterModal } from './components/shifts/SelectCounterModal.tsx';
 import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
@@ -868,6 +869,15 @@ export function App() {
     loadPurchases();
     loadParties();
   };
+
+  const activeBranch = branches.find(
+    (b) =>
+      b.id === user?.branchId ||
+      b.code?.toUpperCase() === (user?.branchId || user?.assignedLocation || '').toUpperCase() ||
+      (selectedBranchScope && selectedBranchScope !== 'all' && (b.id === selectedBranchScope || b.code?.toUpperCase() === selectedBranchScope.toUpperCase()))
+  );
+  const currentBranchName = activeBranch?.name || user?.assignedLocation || shop?.name || 'Main Branch';
+  const currentBranchCode = activeBranch?.code || 'MAIN';
   const [activePromotionsList, setActivePromotionsList] = useState<Promotion[]>([]);
   const [promoEvalResult, setPromoEvalResult] = useState<PromotionEvalResult | null>(null);
   const catalogSearchInputRef = useRef<HTMLInputElement>(null);
@@ -928,6 +938,14 @@ export function App() {
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
   const [showDiscountPicker, setShowDiscountPicker] = useState(false);
   const [showPosOpenShiftModal, setShowPosOpenShiftModal] = useState(false);
+  const [selectedCounter, setSelectedCounter] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('pos_selected_counter') || localStorage.getItem('pos_selected_counter') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [showCounterModal, setShowCounterModal] = useState<boolean>(false);
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -1518,6 +1536,14 @@ export function App() {
         setShop(res.shop);
         initSettingsForm(res.shop);
         loadMyBusinesses();
+        if (res.user?.role === 'cashier') {
+          setActiveTab('pos');
+          try {
+            if (!sessionStorage.getItem('pos_selected_counter')) {
+              setShowCounterModal(true);
+            }
+          } catch { }
+        }
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
         const isStockTransferRoute =
@@ -1596,6 +1622,9 @@ export function App() {
   useEffect(() => {
     if (!user || !shop) return;
     const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+    if (user.role === 'cashier' && activeTab === 'dashboard') {
+      setActiveTab('pos');
+    }
     if (!isSuperAdmin) {
       const enforcedBranch = user.branchId || (user as any).branch_id || user.assignedLocation;
       if (enforcedBranch) {
@@ -2347,6 +2376,10 @@ export function App() {
       setToken(res.token);
       setUser(res.user);
       setShop(res.shop);
+      if (res.user.role === 'cashier') {
+        setActiveTab('pos');
+        setShowCounterModal(true);
+      }
       const isUserSuperAdmin = res.user.role === 'owner' || String(res.user.role).toUpperCase() === 'SUPER_ADMIN';
       if (!isUserSuperAdmin) {
         try {
@@ -2369,6 +2402,8 @@ export function App() {
     } catch { /* ignore */ }
     clearToken();
     try {
+      sessionStorage.removeItem('pos_selected_counter');
+      localStorage.removeItem('pos_selected_counter');
       localStorage.removeItem('sa_selected_branch');
       localStorage.removeItem('selected_branch');
       sessionStorage.removeItem('sa_selected_branch');
@@ -3617,7 +3652,9 @@ export function App() {
         method: 'POST',
         body: JSON.stringify({
           lines,
-          location: user?.assignedLocation || undefined,
+          location: user?.assignedLocation || currentBranchCode || undefined,
+          counter: selectedCounter || 'Counter 1',
+          branchId: activeBranch?.id || user?.branchId || undefined,
           billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
           appliedPromotions: promoEvalResult?.appliedPromotions || [],
           promotionDiscountMinor: promoDiscountMinor,
@@ -5469,6 +5506,10 @@ export function App() {
           setUser(data.user);
           setShop(data.shop);
           loadDemoBusinesses();
+          if (data.user.role === 'cashier') {
+            setActiveTab('pos');
+            setShowCounterModal(true);
+          }
           navigateTo('dashboard');
           showToast(`Welcome back, ${data.user.name}!`);
         }}
@@ -5914,25 +5955,27 @@ export function App() {
 
           {/* Navigation Links - Strictly Tailored per Role */}
           <nav className="sidebar-nav">
-            {/* 1. Dashboard Tab - Custom title and icon per role */}
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-              title={user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
-            >
-              <span className="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="9" rx="1"></rect>
-                  <rect x="14" y="3" width="7" height="5" rx="1"></rect>
-                  <rect x="14" y="12" width="7" height="9" rx="1"></rect>
-                  <rect x="3" y="16" width="7" height="5" rx="1"></rect>
-                </svg>
-              </span>
-              <span className="nav-text">
-                {user.role === 'owner' ? 'Dashboard' : user.role === 'manager' ? 'Branch Dashboard' : 'Cashier Station'}
-              </span>
-            </button>
+            {/* 1. Dashboard Tab - Strictly hidden for Cashier */}
+            {user.role !== 'cashier' && (
+              <button
+                type="button"
+                className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+                title={user.role === 'owner' ? 'Dashboard' : 'Branch Dashboard'}
+              >
+                <span className="nav-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+                    <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+                    <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+                    <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+                  </svg>
+                </span>
+                <span className="nav-text">
+                  {user.role === 'owner' ? 'Dashboard' : 'Branch Dashboard'}
+                </span>
+              </button>
+            )}
 
             {/* 2. POS Counter - Available to Cashier, Store Manager, and Super Admin */}
             <button
@@ -6844,7 +6887,7 @@ export function App() {
           )}
 
           {/* TAB 0: DASHBOARD (TODAY'S LIVE OVERVIEW) */}
-          {displayTab === 'dashboard' && user && (
+          {displayTab === 'dashboard' && user && user.role !== 'cashier' && (
             <div className="dashboard-tab-wrapper">
               <TodayDashboardView
                 user={user}
@@ -6882,7 +6925,31 @@ export function App() {
                       </svg>
                     </span>
                     <div>
-                      <div className="bento-badge-title">POS Billing Counter</div>
+                      <div className="bento-badge-title-row">
+                        <span className="bento-badge-title">POS Billing Counter</span>
+                        <span className="bento-branch-chip" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          <span className="bento-branch-chip-label">Branch:</span>
+                          <span>{currentBranchName}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="bento-counter-chip"
+                          onClick={() => setShowCounterModal(true)}
+                          title="Active Checkout Counter • Click to switch counter"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                            <line x1="8" y1="21" x2="16" y2="21" />
+                            <line x1="12" y1="17" x2="12" y2="21" />
+                          </svg>
+                          <span>{selectedCounter || 'Select Counter'}</span>
+                          <span className="bento-counter-chip-action">Change</span>
+                        </button>
+                      </div>
                       <div className="bento-badge-sub">High-Speed Bento Billing Terminal</div>
                     </div>
                   </div>
@@ -6950,7 +7017,10 @@ export function App() {
                       onClick={() => setShowPosLoyaltyModal(true)}
                       title="Customer Loyalty Rewards is paused. Click to enable and configure scheme."
                     >
-                      <span>⏸️</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="6" y="4" width="4" height="16" />
+                        <rect x="14" y="4" width="4" height="16" />
+                      </svg>
                       <span>Loyalty Paused</span>
                     </div>
                   )}
@@ -15135,6 +15205,31 @@ export function App() {
           }}
           userName={user.name}
           userRole={user.role}
+          defaultLocation={currentBranchCode}
+          defaultCounter={selectedCounter || 'Counter 1'}
+          branches={branches}
+        />
+      )}
+
+      {/* CASHIER COUNTER SELECTION MODAL */}
+      {showCounterModal && user && (
+        <SelectCounterModal
+          isOpen={showCounterModal}
+          onClose={() => setShowCounterModal(false)}
+          onSelectCounter={(counterName) => {
+            setSelectedCounter(counterName);
+            try {
+              sessionStorage.setItem('pos_selected_counter', counterName);
+              localStorage.setItem('pos_selected_counter', counterName);
+            } catch { }
+            showToast(`Billing Counter set to ${counterName}`);
+          }}
+          currentCounter={selectedCounter || 'Counter 1'}
+          branchName={currentBranchName}
+          branchCode={currentBranchCode}
+          cashierName={user.name || 'Cashier'}
+          availableCounters={activeBranch?.counters}
+          canClose={Boolean(selectedCounter)}
         />
       )}
 

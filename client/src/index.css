@@ -13551,6 +13551,80 @@ body {
   flex-shrink: 0;
 }
 
+.bento-badge-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.bento-branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  background: #f1f5f9;
+  border: 1.2px solid #cbd5e1;
+  color: #1e293b;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.bento-branch-chip svg {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.bento-branch-chip-label {
+  color: #64748b;
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.bento-counter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  background: #ede9fe;
+  border: 1.2px solid #c4b5fd;
+  color: #5b21b6;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.08);
+}
+
+.bento-counter-chip:hover {
+  background: #ddd6fe;
+  border-color: #a78bfa;
+  color: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.2);
+}
+
+.bento-counter-chip svg {
+  color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.bento-counter-chip-action {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 800;
+  background: #7c3aed;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  letter-spacing: 0.03em;
+  margin-left: 2px;
+}
+
 .bento-badge-title {
   font-size: 1.02rem;
   font-weight: 800;
