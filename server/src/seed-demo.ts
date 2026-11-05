@@ -266,9 +266,9 @@ async function seedSupermarket(db: any, passwordHash: string, todayStr: string) 
 
     // 2. Branches
     const branches = [
-      { id: 'br_main_store', code: 'MAIN', name: 'SKS Main Central Branch', address: '124 Gandhi Road, T. Nagar, Chennai - 600017', counters: ['MAIN-C01'] },
-      { id: 'br_porur_store', code: 'SKS_POR', name: 'Shree Krishna–PORUR', address: '52 Mount Poonamallee Rd, Porur, Chennai - 600116', counters: ['POR-C01'] },
-      { id: 'br_tnagar_store', code: 'SKS_TNAGAR', name: 'Shree Krishna TNagar', address: '18 Usman Road, T. Nagar, Chennai - 600017', counters: ['TNR-C01'] },
+      { id: 'br_main_store', code: 'MAIN', name: 'SKS Main Central Branch', address: '124 Gandhi Road, T. Nagar, Chennai - 600017', counters: ['MAIN-C01', 'MAIN-C02', 'MAIN-C03', 'MAIN-C04'] },
+      { id: 'br_porur_store', code: 'SKS_POR', name: 'Shree Krishna–PORUR', address: '52 Mount Poonamallee Rd, Porur, Chennai - 600116', counters: ['POR-C01', 'POR-C02', 'POR-C03'] },
+      { id: 'br_tnagar_store', code: 'SKS_TNAGAR', name: 'Shree Krishna TNagar', address: '18 Usman Road, T. Nagar, Chennai - 600017', counters: ['TNR-C01', 'TNR-C02', 'TNR-C03'] },
     ];
 
     for (const br of branches) {
@@ -286,9 +286,21 @@ async function seedSupermarket(db: any, passwordHash: string, todayStr: string) 
 
     // 3. Counters
     const counters = [
+      // SKS Main Central Branch (MAIN)
       { id: 'cnt_main_1', branchId: 'br_main_store', name: 'Counter 1', code: 'MAIN-C01', username: 'sks_main_c1' },
+      { id: 'cnt_main_2', branchId: 'br_main_store', name: 'Counter 2', code: 'MAIN-C02', username: 'sks_main_c2' },
+      { id: 'cnt_main_3', branchId: 'br_main_store', name: 'Counter 3', code: 'MAIN-C03', username: 'sks_main_c3' },
+      { id: 'cnt_main_4', branchId: 'br_main_store', name: 'Express Counter', code: 'MAIN-C04', username: 'sks_main_c4' },
+
+      // Shree Krishna–PORUR (SKS_POR)
       { id: 'cnt_por_1', branchId: 'br_porur_store', name: 'Counter 1', code: 'POR-C01', username: 'sks_por_c1' },
+      { id: 'cnt_por_2', branchId: 'br_porur_store', name: 'Counter 2', code: 'POR-C02', username: 'sks_por_c2' },
+      { id: 'cnt_por_3', branchId: 'br_porur_store', name: 'Express Counter', code: 'POR-C03', username: 'sks_por_c3' },
+
+      // Shree Krishna TNagar (SKS_TNAGAR)
       { id: 'cnt_tnr_1', branchId: 'br_tnagar_store', name: 'Counter 1', code: 'TNR-C01', username: 'sks_tnr_c1' },
+      { id: 'cnt_tnr_2', branchId: 'br_tnagar_store', name: 'Counter 2', code: 'TNR-C02', username: 'sks_tnr_c2' },
+      { id: 'cnt_tnr_3', branchId: 'br_tnagar_store', name: 'Counter 3', code: 'TNR-C03', username: 'sks_tnr_c3' },
     ];
     for (const c of counters) {
       await q.exec(

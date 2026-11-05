@@ -19,23 +19,50 @@ const parseCounters = (v: any): string[] => {
   return ['COUNTER-1'];
 };
 
-export const branchView = (b: any): Branch => ({
-  id: b.id,
-  code: b.code,
-  name: b.name,
-  address: b.address || null,
-  phone: b.phone || null,
-  active: Boolean(b.active ?? true),
-  counters: parseCounters(b.counters),
-  managerId: b.managerId ?? b.manager_id ?? null,
-  managerName: b.managerName ?? b.manager_name ?? null,
-  managerEmail: b.managerEmail ?? b.manager_email ?? null,
-  managerUsername: b.managerUsername ?? b.manager_username ?? null,
-  countersTotal: Number(b.countersTotal ?? b.counters_total ?? (Array.isArray(b.counters) ? b.counters.length : 1)),
-  countersActive: Number(b.countersActive ?? b.counters_active ?? (b.active ? (Array.isArray(b.counters) ? b.counters.length : 1) : 0)),
-  createdAt: b.createdAt ?? b.created_at,
-  updatedAt: b.updatedAt ?? b.updated_at,
-});
+export const branchView = (b: any): Branch => {
+  let countersList: string[] = [];
+  if (Array.isArray(b.dynamic_counters) && b.dynamic_counters.length > 0) {
+    countersList = b.dynamic_counters.map(String);
+  } else if (Array.isArray(b.dynamicCounters) && b.dynamicCounters.length > 0) {
+    countersList = b.dynamicCounters.map(String);
+  } else {
+    countersList = parseCounters(b.counters);
+  }
+
+  const rawDetails = b.dynamic_counter_details || b.dynamicCounterDetails || b.counterDetails;
+  const counterDetails = Array.isArray(rawDetails) && rawDetails.length > 0
+    ? rawDetails
+    : countersList.map((code: string) => {
+        const m = code.trim().match(/^counter[_\-\s]*(\d+)$/i);
+        const mCode = code.trim().match(/^[A-Z0-9]+[_\-]C(?:0*)(\d+)$/i);
+        const name = m ? `Counter ${m[1]}` : mCode ? `Counter ${mCode[1]}` : (code.toUpperCase().includes('EXP') ? 'Express Counter' : code);
+        return {
+          id: code,
+          name,
+          code,
+          status: 'ACTIVE',
+        };
+      });
+
+  return {
+    id: b.id,
+    code: b.code,
+    name: b.name,
+    address: b.address || null,
+    phone: b.phone || null,
+    active: Boolean(b.active ?? true),
+    counters: countersList,
+    counterDetails,
+    managerId: b.managerId ?? b.manager_id ?? null,
+    managerName: b.managerName ?? b.manager_name ?? null,
+    managerEmail: b.managerEmail ?? b.manager_email ?? null,
+    managerUsername: b.managerUsername ?? b.manager_username ?? null,
+    countersTotal: Number(b.countersTotal ?? b.counters_total ?? countersList.length),
+    countersActive: Number(b.countersActive ?? b.counters_active ?? (b.active ? countersList.length : 0)),
+    createdAt: b.createdAt ?? b.created_at,
+    updatedAt: b.updatedAt ?? b.updated_at,
+  };
+};
 
 export function registerBranches(r: Router) {
   // 1. Get branches accessible to the user

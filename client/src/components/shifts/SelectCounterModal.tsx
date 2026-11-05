@@ -9,23 +9,27 @@ import {
   ZapIcon,
   ArrowRightIcon,
   SparklesIcon,
+  LayersIcon,
 } from '../inventory/InventoryIcons.tsx';
+import type { BranchCounterDetail } from '../../../../shared/types.ts';
 
 export interface SelectCounterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectCounter: (counterName: string) => void;
+  onSelectCounter: (counterCode: string, counterName?: string) => void;
   currentCounter?: string;
   branchName: string;
   branchCode: string;
   cashierName: string;
   availableCounters?: string[];
+  counterDetails?: BranchCounterDetail[];
   canClose?: boolean;
 }
 
-interface CounterOption {
+interface ResolvedCounterOption {
   id: string;
-  label: string;
+  code: string;
+  name: string;
   tag: string;
   desc: string;
   isExpress?: boolean;
@@ -35,64 +39,137 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   isOpen,
   onClose,
   onSelectCounter,
-  currentCounter = 'Counter 1',
+  currentCounter = '',
   branchName,
   branchCode,
   cashierName,
   availableCounters,
+  counterDetails,
   canClose = true,
 }) => {
-  const [selected, setSelected] = useState<string>(() => {
-    return currentCounter || 'Counter 1';
+  // Helper to format clean display name from code or name
+  const resolveCounterNameAndTag = (code: string, rawName?: string, index: number = 0): { name: string; tag: string; desc: string; isExpress: boolean } => {
+    const isExpress = (code || '').toUpperCase().includes('EXP') || (rawName || '').toLowerCase().includes('express');
+    
+    let name = rawName?.trim();
+    if (!name || name === code) {
+      const mNum = code.match(/(\d+)/);
+      if (mNum) {
+        const num = parseInt(mNum[1], 10);
+        name = isExpress ? 'Express Counter' : `Counter ${num}`;
+      } else {
+        name = isExpress ? 'Express Counter' : `Counter ${index + 1}`;
+      }
+    }
+
+    let tag = 'Standard';
+    let desc = `Checkout Register (${code})`;
+
+    if (index === 0 || code.toUpperCase().endsWith('-C01') || name.toLowerCase() === 'counter 1') {
+      tag = 'Primary';
+      desc = 'Main Billing Terminal • Register Lane 1';
+    } else if (isExpress) {
+      tag = 'Fast Track';
+      desc = 'Quick Pay & Basket Only Express Lane';
+    } else if (code.toUpperCase().endsWith('-C02') || name.toLowerCase() === 'counter 2') {
+      tag = 'Lane 2';
+      desc = 'Secondary POS Terminal • Register Lane 2';
+    } else if (code.toUpperCase().endsWith('-C03') || name.toLowerCase() === 'counter 3') {
+      tag = 'Lane 3';
+      desc = 'Standard POS Terminal • Register Lane 3';
+    }
+
+    return { name, tag, desc, isExpress };
+  };
+
+  // Build list of active counters created for this particular branch
+  const branchCountersList: ResolvedCounterOption[] = React.useMemo(() => {
+    if (counterDetails && counterDetails.length > 0) {
+      return counterDetails.map((c, idx) => {
+        const { name, tag, desc, isExpress } = resolveCounterNameAndTag(c.code, c.name, idx);
+        return {
+          id: c.id || c.code,
+          code: c.code,
+          name,
+          tag,
+          desc,
+          isExpress,
+        };
+      });
+    }
+
+    if (availableCounters && availableCounters.length > 0) {
+      return availableCounters.map((codeStr, idx) => {
+        const { name, tag, desc, isExpress } = resolveCounterNameAndTag(codeStr, undefined, idx);
+        return {
+          id: codeStr,
+          code: codeStr,
+          name,
+          tag,
+          desc,
+          isExpress,
+        };
+      });
+    }
+
+    // Default fallback if branch has not registered counters yet
+    const prefix = (branchCode || 'MAIN').toUpperCase();
+    return [
+      { id: `${prefix}-C01`, code: `${prefix}-C01`, name: 'Counter 1', tag: 'Primary', desc: 'Main Billing Terminal • Register Lane 1' },
+      { id: `${prefix}-C02`, code: `${prefix}-C02`, name: 'Counter 2', tag: 'Lane 2', desc: 'Secondary POS Terminal • Register Lane 2' },
+      { id: `${prefix}-C03`, code: `${prefix}-C03`, name: 'Counter 3', tag: 'Lane 3', desc: 'Standard POS Terminal • Register Lane 3' },
+      { id: `${prefix}-C04`, code: `${prefix}-C04`, name: 'Express Counter', tag: 'Fast Track', desc: 'Quick Pay & Basket Only Express Lane', isExpress: true },
+    ];
+  }, [counterDetails, availableCounters, branchCode]);
+
+  const [selectedCode, setSelectedCode] = useState<string>(() => {
+    if (currentCounter) {
+      const match = branchCountersList.find(c => c.code.toUpperCase() === currentCounter.toUpperCase() || c.name.toLowerCase() === currentCounter.toLowerCase());
+      if (match) return match.code;
+      return currentCounter;
+    }
+    return branchCountersList[0]?.code || 'MAIN-C01';
   });
+
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
   const [customCounterText, setCustomCounterText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // Build list of counter options
-  const defaultPresets: CounterOption[] = [
-    { id: 'Counter 1', label: 'Counter 1', tag: 'Primary', desc: 'Main Lane Checkout Register' },
-    { id: 'Counter 2', label: 'Counter 2', tag: 'Standard', desc: 'Secondary Lane Register' },
-    { id: 'Counter 3', label: 'Counter 3', tag: 'Standard', desc: 'Standard Checkout Lane 3' },
-    { id: 'Express Counter', label: 'Express Counter', tag: 'Fast Track', desc: 'Quick Pay & Basket Only Lane', isExpress: true },
-  ];
+  const currentSelectedObj = branchCountersList.find(c => c.code === selectedCode);
+  const displaySelectedLabel = isCustomMode
+    ? (customCounterText.trim() || 'Custom Counter')
+    : currentSelectedObj
+    ? `${currentSelectedObj.name} (${currentSelectedObj.code})`
+    : selectedCode;
 
-  // If branch provides specific counters, merge or use them
-  const branchList = availableCounters && availableCounters.length > 0
-    ? availableCounters.map((c, idx) => ({
-        id: c,
-        label: c,
-        tag: idx === 0 ? 'Primary' : c.toLowerCase().includes('express') ? 'Fast Track' : 'Standard',
-        desc: c.toLowerCase().includes('express') ? 'Quick Pay & Basket Only Lane' : `Checkout Station (${c})`,
-        isExpress: c.toLowerCase().includes('express'),
-      }))
-    : defaultPresets;
-
-  const handleSelect = (counterId: string) => {
-    setSelected(counterId);
+  const handleSelect = (counterCode: string) => {
+    setSelectedCode(counterCode);
     setIsCustomMode(false);
     setError(null);
   };
 
   const handleConfirm = () => {
-    let finalCounter = selected;
+    let finalCode = selectedCode;
+    let finalName = currentSelectedObj?.name || selectedCode;
+
     if (isCustomMode) {
       const trimmed = customCounterText.trim();
       if (!trimmed) {
-        setError('Please enter a valid counter name or choose one from the list.');
+        setError('Please enter a valid counter identifier or choose one from the branch counters list.');
         return;
       }
-      finalCounter = trimmed;
+      finalCode = trimmed;
+      finalName = trimmed;
     }
 
-    if (!finalCounter) {
-      setError('Please select a checkout counter before continuing.');
+    if (!finalCode) {
+      setError('Please select an active checkout counter for this branch before continuing.');
       return;
     }
 
-    onSelectCounter(finalCounter);
+    onSelectCounter(finalCode, finalName);
     onClose();
   };
 
@@ -116,7 +193,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
         className="shift-bento-dialog wide-1040"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '880px',
+          maxWidth: '920px',
           width: '92vw',
           maxHeight: '90vh',
           display: 'flex',
@@ -169,11 +246,11 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                     border: '1px solid #ddd6fe',
                   }}
                 >
-                  POS Register
+                  Branch Station
                 </span>
               </h3>
               <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                Choose the counter you are operating today for accurate shift logs and transaction data collection.
+                Choose the checkout station created in this branch for accurate counter sales tracking and shift data analysis.
               </p>
             </div>
           </div>
@@ -245,24 +322,24 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
 
             <div className="shift-bento-ribbon-tile">
               <div className="ribbon-tile-label">
-                <span>Cashier On Duty</span>
-                <UserIcon size={13} style={{ color: '#059669' }} />
+                <span>Branch Counters Count</span>
+                <LayersIcon size={13} style={{ color: '#059669' }} />
               </div>
-              <div className="ribbon-tile-val" style={{ fontSize: '1.05rem', color: '#1e293b' }}>
-                {cashierName || 'Cashier'}
+              <div className="ribbon-tile-val" style={{ fontSize: '1.05rem', color: '#059669' }}>
+                {branchCountersList.length} Active {branchCountersList.length === 1 ? 'Station' : 'Stations'}
               </div>
-              <div className="ribbon-tile-sub">Terminal Operator</div>
+              <div className="ribbon-tile-sub">Configured in {branchCode}</div>
             </div>
 
             <div className="shift-bento-ribbon-tile highlight">
               <div className="ribbon-tile-label">
-                <span>Selected Counter</span>
+                <span>Selected Destination</span>
                 <SparklesIcon size={13} style={{ color: '#8b5cf6' }} />
               </div>
               <div className="ribbon-tile-val" style={{ fontSize: '1.05rem', color: '#6d28d9' }}>
-                {isCustomMode ? (customCounterText.trim() || 'Custom Counter') : selected}
+                {displaySelectedLabel}
               </div>
-              <div className="ribbon-tile-sub">Billing Destination</div>
+              <div className="ribbon-tile-sub">Sales Analytics & Shift Target</div>
             </div>
           </div>
 
@@ -291,33 +368,33 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
           {/* Section Heading */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Choose Checkout Station
+              Checkout Stations Created in {branchCode}
             </span>
             <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
-              Click any card to select
+              Click any counter station to assign
             </span>
           </div>
 
-          {/* Bento Cards Grid for Available Counters */}
+          {/* Bento Cards Grid for Available Counters created in this branch */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '0.85rem',
               marginBottom: '1.2rem',
             }}
           >
-            {branchList.map((c) => {
-              const isCardActive = !isCustomMode && selected === c.id;
+            {branchCountersList.map((c) => {
+              const isCardActive = !isCustomMode && selectedCode === c.code;
               return (
                 <div
-                  key={c.id}
-                  onClick={() => handleSelect(c.id)}
+                  key={c.code}
+                  onClick={() => handleSelect(c.code)}
                   style={{
                     background: isCardActive ? 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)' : '#ffffff',
                     border: isCardActive ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
                     borderRadius: '14px',
-                    padding: '1rem',
+                    padding: '1.05rem',
                     cursor: 'pointer',
                     transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
                     display: 'flex',
@@ -334,8 +411,8 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                     <div
                       style={{
-                        width: '36px',
-                        height: '36px',
+                        width: '38px',
+                        height: '38px',
                         borderRadius: '10px',
                         background: isCardActive ? '#6366f1' : '#f1f5f9',
                         color: isCardActive ? '#ffffff' : '#475569',
@@ -353,27 +430,44 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                         </svg>
                       )}
                     </div>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 800,
-                        textTransform: 'uppercase',
-                        padding: '2px 7px',
-                        borderRadius: '12px',
-                        background: isCardActive ? '#6366f1' : c.isExpress ? '#fef3c7' : '#f1f5f9',
-                        color: isCardActive ? '#ffffff' : c.isExpress ? '#92400e' : '#475569',
-                        letterSpacing: '0.03em',
-                      }}
-                    >
-                      {c.tag}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          padding: '2px 7px',
+                          borderRadius: '12px',
+                          background: isCardActive ? '#6366f1' : c.isExpress ? '#fef3c7' : '#f1f5f9',
+                          color: isCardActive ? '#ffffff' : c.isExpress ? '#92400e' : '#475569',
+                          letterSpacing: '0.03em',
+                        }}
+                      >
+                        {c.tag}
+                      </span>
+                    </div>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.2rem' }}>
-                      {c.label}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '0.2rem' }}>
+                      <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                        {c.name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
+                          color: isCardActive ? '#4338ca' : '#64748b',
+                          background: isCardActive ? '#e0e7ff' : '#f1f5f9',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {c.code}
+                      </span>
                     </div>
-                    <div style={{ fontSize: '0.73rem', color: '#64748b', lineHeight: 1.35 }}>
+                    <div style={{ fontSize: '0.74rem', color: '#64748b', lineHeight: 1.35 }}>
                       {c.desc}
                     </div>
                   </div>
@@ -383,11 +477,11 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      paddingTop: '0.5rem',
+                      paddingTop: '0.55rem',
                       borderTop: isCardActive ? '1px solid rgba(99, 102, 241, 0.2)' : '1px solid #f1f5f9',
                     }}
                   >
-                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: isCardActive ? '#4f46e5' : '#94a3b8' }}>
+                    <span style={{ fontSize: '0.73rem', fontWeight: 600, color: isCardActive ? '#4f46e5' : '#94a3b8' }}>
                       {isCardActive ? 'Selected Counter' : 'Click to select'}
                     </span>
                     <div
@@ -427,7 +521,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
               onClick={() => {
                 setIsCustomMode(!isCustomMode);
                 if (!isCustomMode && !customCounterText) {
-                  setCustomCounterText('Counter 4');
+                  setCustomCounterText(`${branchCode || 'MAIN'}-C05`);
                 }
               }}
               style={{
@@ -454,10 +548,10 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                 </div>
                 <div>
                   <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1e293b' }}>
-                    Other / Custom Register Name
+                    Other / Dedicated Terminal Code
                   </div>
                   <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                    Type a custom counter name or dedicated terminal identifier
+                    Manually specify a custom counter identifier or register lane
                   </div>
                 </div>
               </div>
@@ -486,7 +580,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                       setCustomCounterText(e.target.value);
                       setError(null);
                     }}
-                    placeholder="e.g., Counter 4, Kiosk 1, Drive-Through, Bakery Billing..."
+                    placeholder={`e.g., ${branchCode || 'MAIN'}-C05, Kiosk 1, Drive-Through...`}
                     style={{
                       flex: 1,
                       padding: '0.65rem 0.9rem',
@@ -502,7 +596,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                     type="button"
                     onClick={() => {
                       if (customCounterText.trim()) {
-                        setSelected(customCounterText.trim());
+                        setSelectedCode(customCounterText.trim());
                       }
                     }}
                     style={{
@@ -540,7 +634,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
           >
             <InfoIcon size={16} style={{ flexShrink: 0, color: '#2563eb' }} />
             <span>
-              <strong>Data Collection Notice:</strong> Every bill generated, payment received, and cash float movement for this cashier session will be attributed to this counter.
+              <strong>Counter Analytics Notice:</strong> All bills, sales performance graphs, and drawer collections will be aggregated under this selected branch counter (<code>{displaySelectedLabel}</code>).
             </span>
           </div>
         </div>
@@ -572,7 +666,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
                 fontSize: '0.88rem',
               }}
             >
-              {isCustomMode ? (customCounterText.trim() || 'Custom Counter') : selected}
+              {displaySelectedLabel}
             </span>
           </div>
 

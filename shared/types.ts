@@ -49,6 +49,14 @@ export const PERMS = {
 export type Perm = keyof typeof PERMS;
 export const can = (role: Role | undefined, perm: Perm): boolean => !!role && (PERMS[perm] as readonly Role[]).includes(role);
 
+export interface BranchCounterDetail {
+  id: string;
+  name: string;
+  code: string;
+  status?: string;
+  loginUsername?: string | null;
+}
+
 export interface Branch {
   id: string;
   code: string;
@@ -57,6 +65,7 @@ export interface Branch {
   phone?: string | null;
   active: boolean;
   counters: string[];
+  counterDetails?: BranchCounterDetail[];
   managerId?: string | null;
   managerName?: string | null; managerEmail?: string | null; managerUsername?: string | null; countersTotal?: number; countersActive?: number;
   createdAt?: string;

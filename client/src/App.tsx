@@ -6946,7 +6946,13 @@ export function App() {
                             <line x1="8" y1="21" x2="16" y2="21" />
                             <line x1="12" y1="17" x2="12" y2="21" />
                           </svg>
-                          <span>{selectedCounter || 'Select Counter'}</span>
+                          <span>
+                            {(() => {
+                              const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                              if (match) return `${match.name} (${match.code})`;
+                              return selectedCounter || activeBranch?.counters?.[0] || 'Select Counter';
+                            })()}
+                          </span>
                           <span className="bento-counter-chip-action">Change</span>
                         </button>
                       </div>
@@ -15216,19 +15222,24 @@ export function App() {
         <SelectCounterModal
           isOpen={showCounterModal}
           onClose={() => setShowCounterModal(false)}
-          onSelectCounter={(counterName) => {
-            setSelectedCounter(counterName);
+          onSelectCounter={(counterCode, counterName) => {
+            setSelectedCounter(counterCode);
             try {
-              sessionStorage.setItem('pos_selected_counter', counterName);
-              localStorage.setItem('pos_selected_counter', counterName);
+              sessionStorage.setItem('pos_selected_counter', counterCode);
+              localStorage.setItem('pos_selected_counter', counterCode);
+              if (counterName) {
+                sessionStorage.setItem('pos_selected_counter_name', counterName);
+                localStorage.setItem('pos_selected_counter_name', counterName);
+              }
             } catch { }
-            showToast(`Billing Counter set to ${counterName}`);
+            showToast(`Billing Counter set to ${counterName || counterCode} (${counterCode})`);
           }}
-          currentCounter={selectedCounter || 'Counter 1'}
+          currentCounter={selectedCounter || activeBranch?.counters?.[0] || 'MAIN-C01'}
           branchName={currentBranchName}
           branchCode={currentBranchCode}
           cashierName={user.name || 'Cashier'}
           availableCounters={activeBranch?.counters}
+          counterDetails={activeBranch?.counterDetails}
           canClose={Boolean(selectedCounter)}
         />
       )}

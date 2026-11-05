@@ -79,11 +79,13 @@ export function parseCounters(v: any): string[] {
 
 export function formatCounterDisplayName(code: string): string {
   if (!code) return 'Counter 1';
-  const m = code.trim().match(/^counter[_\-\s]*(\d+)$/i);
-  if (m) {
-    return `Counter ${m[1]}`;
-  }
-  return code.trim();
+  const trimmed = code.trim();
+  const m = trimmed.match(/^counter[_\-\s]*(\d+)$/i);
+  if (m) return `Counter ${parseInt(m[1], 10)}`;
+  const mCode = trimmed.match(/^[A-Z0-9]+[_\-]C(?:0*)(\d+)$/i);
+  if (mCode) return `Counter ${parseInt(mCode[1], 10)}`;
+  if (trimmed.toUpperCase().includes('EXP')) return 'Express Counter';
+  return trimmed;
 }
 
 const PAYMENT_MODE_COLORS: Record<string, string> = {
@@ -149,7 +151,8 @@ export function registerDashboard(r: Router) {
     const [tenantRow, branchRows] = await Promise.all([
       ctx.db.one<any>('SELECT timezone FROM tenants WHERE id = ?', [tenantId]),
       ctx.db.query<any>(
-        `SELECT b.*, u.name AS manager_name
+        `SELECT b.*, u.name AS manager_name,
+           (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters
          FROM branches b
          LEFT JOIN users u ON u.id = b.manager_id
          ${branchWhereClause}
@@ -327,7 +330,9 @@ export function registerDashboard(r: Router) {
     }
     shiftSql += ' ORDER BY s.opened_at DESC LIMIT 1';
 
-    const assignedCounters = parseCounters(activeBranch.counters);
+    const assignedCounters: string[] = (Array.isArray(activeBranch?.dynamic_counters) && activeBranch.dynamic_counters.length > 0)
+      ? activeBranch.dynamic_counters.map(String)
+      : (Array.isArray(activeBranch?.counters) && activeBranch.counters.length > 0 ? parseCounters(activeBranch.counters) : ['COUNTER-1']);
 
     // 4. PARALLELIZE ALL 14 DATABASE QUERIES CONCURRENTLY VIA Promise.all
     const [
@@ -1194,6 +1199,21 @@ export function registerDashboard(r: Router) {
             (c) => c.toUpperCase().replace(/[^A-Z0-9]/g, '') === strippedClean
           );
           if (stripped) return stripped;
+
+          // Match by lane number (e.g. Counter 1 -> MAIN-C01, or MAIN-C01 -> Counter 1)
+          const mNum = trimmed.match(/(\d+)/);
+          if (mNum) {
+            const laneNo = mNum[1].replace(/^0+/, '');
+            const matchByLane = counters.find((c) => {
+              const cNum = c.match(/(\d+)/);
+              return cNum && cNum[1].replace(/^0+/, '') === laneNo;
+            });
+            if (matchByLane) return matchByLane;
+          }
+          if (trimmed.includes('EXP') || trimmed.includes('EXPRESS')) {
+            const matchExp = counters.find((c) => c.toUpperCase().includes('EXP') || c.toUpperCase().includes('EXPRESS'));
+            if (matchExp) return matchExp;
+          }
         }
       }
       return counters[0] || 'COUNTER-1';
@@ -1227,7 +1247,7 @@ export function registerDashboard(r: Router) {
       return `₹${val.toLocaleString('en-IN')}`;
     }
 
-    const countersList = assignedCounters.map((code, idx) => {
+    const countersList = assignedCounters.map((code: string, idx: number) => {
       const amtMinor = counterAmountsMap.get(code) || 0;
       return {
         id: `counter-${idx + 1}`,
@@ -1238,7 +1258,7 @@ export function registerDashboard(r: Router) {
       };
     });
 
-    const countersTotalMinor = countersList.reduce((sum, c) => sum + c.amountMinor, 0);
+    const countersTotalMinor = countersList.reduce((sum: number, c: { amountMinor: number }) => sum + c.amountMinor, 0);
 
     const countersToday = {
       title: 'Counters Today',
