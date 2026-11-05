@@ -10664,17 +10664,22 @@ body {
   padding: 0.25rem 0 2rem 0;
 }
 
-/* Shifts Hero Banner */
+/* Shifts Hero Banner - Clean Light 3D Bento */
 .shifts-hero-card {
-  background: linear-gradient(135deg, #1e1b4b 0%, #2e266d 55%, #3730a3 100%);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: 18px;
-  padding: 1.75rem 2.25rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f8fafc 100%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 20px;
+  padding: 1.35rem 1.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  box-shadow: 0 10px 30px -5px rgba(30, 27, 75, 0.22), 0 4px 12px -2px rgba(99, 102, 241, 0.15);
+  gap: 1.5rem;
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 6px 18px -2px rgba(15, 23, 42, 0.05),
+    0 18px 36px -6px rgba(99, 102, 241, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(226, 232, 240, 0.5);
   position: relative;
   overflow: hidden;
 }
@@ -10783,17 +10788,17 @@ body {
 
 .shifts-hero-title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #0f172a;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .shifts-hero-subtitle {
-  margin: 0;
-  font-size: 0.92rem;
-  color: #c7d2fe;
+  margin: 0.25rem 0 0 0;
+  font-size: 0.84rem;
+  color: #64748b;
   line-height: 1.45;
 }
 
@@ -33340,24 +33345,24 @@ select.expense-input-control {
    CASHIER SHIFT - 3D BENTO LAYOUT REDESIGN
    ========================================================================== */
 
-/* 1. 3D Bento Hero Card */
+/* 1. 3D Bento Hero Card - Light Bento Rectangle */
 .shifts-bento-hero {
-  background: linear-gradient(135deg, #1e1b4b 0%, #2e266d 55%, #3730a3 100%);
-  border: 1px solid rgba(129, 140, 248, 0.4);
-  border-radius: 22px;
-  padding: 1.85rem 2.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f8fafc 100%) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 20px !important;
+  padding: 1.35rem 1.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1.5rem !important;
   box-shadow:
-    0 1px 2px 0 rgba(15, 23, 42, 0.05),
-    0 10px 25px -4px rgba(30, 27, 75, 0.28),
-    0 24px 48px -10px rgba(79, 70, 229, 0.25),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 6px 18px -2px rgba(15, 23, 42, 0.05),
+    0 18px 36px -6px rgba(99, 102, 241, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(226, 232, 240, 0.5) !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 .shifts-bento-hero::before {
@@ -33367,20 +33372,12 @@ select.expense-input-control {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4) 20%, rgba(255, 255, 255, 0.4) 80%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95) 20%, rgba(255, 255, 255, 0.95) 80%, transparent);
   pointer-events: none;
 }
 
 .shifts-bento-hero::after {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 220px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(165, 180, 252, 0.22) 0%, rgba(99, 102, 241, 0) 70%);
-  border-radius: 50%;
-  pointer-events: none;
+  display: none !important;
 }
 
 .shift-bento-active-badge {
@@ -33432,9 +33429,9 @@ select.expense-input-control {
 
 .shifts-bento-title {
   margin: 0;
-  font-size: 1.65rem;
+  font-size: 1.45rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #0f172a !important;
   line-height: 1.25;
   letter-spacing: -0.015em;
   display: flex;
@@ -33444,31 +33441,32 @@ select.expense-input-control {
 }
 
 .shift-num-highlight {
-  color: #a5b4fc;
+  color: #4f46e5 !important;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .title-sep {
-  opacity: 0.45;
+  opacity: 0.35;
   font-weight: 300;
+  color: #94a3b8;
 }
 
 .title-cashier-group {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  font-size: 1.4rem;
-  color: #ffffff;
+  font-size: 1.25rem;
+  color: #0f172a !important;
 }
 
 .cashier-user-icon {
-  color: #c7d2fe;
+  color: #6366f1 !important;
 }
 
 .shifts-bento-subtitle {
-  margin: 0;
-  font-size: 0.92rem;
-  color: #c7d2fe;
+  margin: 0.25rem 0 0 0;
+  font-size: 0.84rem;
+  color: #64748b !important;
   line-height: 1.45;
 }
 
