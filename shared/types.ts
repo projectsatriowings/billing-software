@@ -510,6 +510,9 @@ export interface InventoryDashboardStats {
   recentMovements: StockMove[];
   replenishmentNeeded: {
     itemId: string;
+    branchId?: string | null;
+    branchName?: string | null;
+    branchCode?: string | null;
     name: string;
     sku?: string | null;
     barcode?: string | null;

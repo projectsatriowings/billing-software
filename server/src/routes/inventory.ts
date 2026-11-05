@@ -126,6 +126,9 @@ export function registerInventory(r: Router) {
       `WITH item_stock AS (
         SELECT 
           i.id,
+          i.branch_id,
+          b.name AS branch_name,
+          b.code AS branch_code,
           i.name,
           i.sku,
           i.barcode,
@@ -136,11 +139,15 @@ export function registerInventory(r: Router) {
           i.preferred_supplier_id,
           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
         FROM items i
+        LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
         WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
           AND (i.reorder_milli > 0 OR COALESCE(i.min_stock_milli, 0) > 0)
       )
       SELECT 
         s.id AS item_id,
+        s.branch_id,
+        s.branch_name,
+        s.branch_code,
         s.name,
         s.sku,
         s.barcode,
@@ -208,6 +215,9 @@ export function registerInventory(r: Router) {
         }),
         replenishmentNeeded: replenishmentRows.map((r: any) => ({
           itemId: r.itemId ?? r.item_id,
+          branchId: r.branchId ?? r.branch_id ?? null,
+          branchName: r.branchName ?? r.branch_name ?? null,
+          branchCode: r.branchCode ?? r.branch_code ?? null,
           name: r.name,
           sku: r.sku,
           barcode: r.barcode,
@@ -291,6 +301,9 @@ export function registerInventory(r: Router) {
         SELECT 
           i.id,
           i.tenant_id,
+          i.branch_id,
+          b.name AS branch_name,
+          b.code AS branch_code,
           i.name,
           i.sku,
           i.barcode,
@@ -312,6 +325,7 @@ export function registerInventory(r: Router) {
           i.created_at,
           i.updated_at
         FROM items i
+        LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
         LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND p.branch_id = i.branch_id
         ${whereSql}
       )
@@ -347,6 +361,9 @@ export function registerInventory(r: Router) {
 
         return {
           id: r.id,
+          branchId: r.branchId ?? r.branch_id ?? null,
+          branchName: r.branchName ?? r.branch_name ?? null,
+          branchCode: r.branchCode ?? r.branch_code ?? null,
           name: r.name,
           sku: r.sku ?? null,
           barcode: r.barcode ?? null,

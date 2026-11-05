@@ -1706,23 +1706,21 @@ export function App() {
   const loadItems = async () => {
     try {
       const res = await api<{ items: Item[] }>('/api/items?includeInactive=1');
-      // Deduplicate products by SKU, barcode, or ID to prevent duplicate rows in product catalogue,
-      // while consolidating multi-branch live ledger stock on the canonical product entry
+      // Group products, keeping multi-branch products distinct so each branch's stock and identity are visible
       const raw = res.items || [];
       const deduplicated: Item[] = [];
       const seen = new Map<string, Item>();
       for (const item of raw) {
+        const branchKey = item.branchId || 'main';
         const skuKey = item.sku?.trim().toUpperCase();
         const barcodeKey = item.barcode?.trim();
-        const key = skuKey ? `sku:${skuKey}` : barcodeKey ? `bc:${barcodeKey}` : `id:${item.id}`;
+        const key = `${branchKey}:${skuKey ? `sku:${skuKey}` : barcodeKey ? `bc:${barcodeKey}` : `id:${item.id}`}`;
         const existing = seen.get(key);
         if (existing) {
           existing.currentStockMilli = (existing.currentStockMilli || 0) + (item.currentStockMilli || 0);
         } else {
           const itemCopy = { ...item };
           seen.set(key, itemCopy);
-          if (skuKey) seen.set(`sku:${skuKey}`, itemCopy);
-          if (barcodeKey) seen.set(`bc:${barcodeKey}`, itemCopy);
           seen.set(`id:${item.id}`, itemCopy);
           deduplicated.push(itemCopy);
         }
@@ -9479,6 +9477,7 @@ export function App() {
                         <tr>
                           <th style={{ width: '74px', minWidth: '70px', textAlign: 'center' }}>Image</th>
                           <th className="col-product-name">Product Name</th>
+                          <th className="col-nowrap">Branch</th>
                           <th className="col-nowrap">Category</th>
                           <th className="col-nowrap">SKU / Code</th>
                           <th className="col-nowrap">HSN / SAC</th>
@@ -9584,6 +9583,34 @@ export function App() {
                                   Batch: {i.custom.batch} | Exp: {i.custom.expiry} | {i.custom.rack}
                                 </div>
                               )}
+                            </td>
+                            <td className="col-nowrap" style={{ verticalAlign: 'middle' }}>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  background: '#f8fafc',
+                                  color: '#334155',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '0.2rem 0.55rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 600,
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={branches.find(b => b.id === i.branchId || b.code === i.branchId)?.name || i.branchName || 'Main Central Branch'}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                  <path d="M3 21h18" />
+                                  <path d="M5 21V7l8-4v18" />
+                                  <path d="M19 21V11l-6-4" />
+                                  <line x1="9" y1="9" x2="9" y2="9.01" />
+                                  <line x1="9" y1="13" x2="9" y2="13.01" />
+                                  <line x1="9" y1="17" x2="9" y2="17.01" />
+                                </svg>
+                                <span>{branches.find(b => b.id === i.branchId || b.code === i.branchId)?.name || i.branchName || 'Main Store'}</span>
+                              </span>
                             </td>
                             <td className="col-nowrap"><span className="badge badge-blue">{i.category || 'General'}</span></td>
                             <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.sku || '—'}</td>
@@ -9816,7 +9843,7 @@ export function App() {
                         ))}
                         {filteredMasterItems.length === 0 && (
                           <tr>
-                            <td colSpan={can(user?.role as any, 'purchases') ? 13 : 12} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                            <td colSpan={can(user?.role as any, 'purchases') ? 14 : 13} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
                               No products match your search or filter criteria.
                             </td>
                           </tr>
@@ -10595,6 +10622,7 @@ export function App() {
           {/* TAB: INVENTORY MANAGEMENT */}
           {displayTab === 'inventory' && (
             <InventoryDashboard
+              branches={branches}
               items={items}
               categories={categories}
               categoriesList={categoriesList}

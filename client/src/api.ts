@@ -234,6 +234,9 @@ export interface DemoBusiness {
 export interface Item {
   id: string;
   name: string;
+  branchId?: string | null;
+  branchName?: string | null;
+  branchCode?: string | null;
   sku?: string;
   barcode?: string;
   hsn?: string;

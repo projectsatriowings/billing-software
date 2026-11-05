@@ -34,6 +34,8 @@ function formatItem(r: any) {
     id: r.id,
     tenantId: r.tenantId ?? r.tenant_id,
     branchId: r.branchId ?? r.branch_id,
+    branchName: r.branchName ?? r.branch_name ?? null,
+    branchCode: r.branchCode ?? r.branch_code ?? null,
     name: r.name,
     sku: r.sku ?? null,
     barcode: r.barcode ?? null,
@@ -72,8 +74,11 @@ export function registerItems(r: Router) {
 
     let sql = `
       SELECT i.*,
+             b.name AS branch_name,
+             b.code AS branch_code,
              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
       FROM items i
+      LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
       WHERE i.tenant_id = ?
     `;
     const params: unknown[] = [tenantId];
@@ -121,8 +126,11 @@ export function registerItems(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
     let sql = `SELECT i.*,
+              b.name AS branch_name,
+              b.code AS branch_code,
               COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
        FROM items i
+       LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
        WHERE i.tenant_id = ? AND i.id = ?`;
     const params: unknown[] = [tenantId, ctx.params.id];
     if (!scope.isSuperAdminAll && scope.branchId) {
