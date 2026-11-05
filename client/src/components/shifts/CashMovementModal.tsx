@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState } from 'react';
 import { recordCashMovement, type CashMovement, type Shift, type ShiftSummary } from '../../api.ts';
 
@@ -121,7 +122,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
     return `${dateStr} · ${timeStr}`;
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shift-modal-card" onClick={(e) => e.stopPropagation()}>
         {/* Top Accent Gradient Bar */}
@@ -338,6 +339,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

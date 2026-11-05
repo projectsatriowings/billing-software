@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { fetchShiftReport, reviewShift, type ShiftClosingReport } from '../../api.ts';
 import { formatMoney, classifyVariance } from '../../../../shared/shifts.ts';
@@ -85,7 +86,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shift-report-modal wide" onClick={(e) => e.stopPropagation()}>
         {/* Top Accent Gradient Bar */}
@@ -380,6 +381,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

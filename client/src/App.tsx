@@ -236,6 +236,7 @@ export const PAGE_TITLES: Record<string, string> = {
 };
 
 export const TAB_PAGE_TITLES: Record<string, string> = {
+  'shifts': 'Cashier Shifts & Day-End Closing',
   'inventory': 'Inventory Hub',
   'items': 'Product Catalogue',
   'categories': 'Category Management',
@@ -6776,7 +6777,7 @@ export function App() {
         {/* View Transition Stage (SPA Bento Transition) */}
         <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
           {/* Other Tab Headers */}
-          {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && !(user.role === 'manager' && displayTab === 'shifts') && (
+          {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && displayTab !== 'shifts' && (
             <header className="content-top-header">
               <div className="content-header-left">
                 <h1 className="content-page-title">

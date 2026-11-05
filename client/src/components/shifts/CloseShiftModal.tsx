@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { closeShift, fetchActiveShift, fetchShiftDetails, type Shift, type ShiftSummary } from '../../api.ts';
 import { formatMoney } from '../../../../shared/shifts.ts';
@@ -165,7 +166,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
     return `${dateStr} · ${timeStr}`;
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content shift-modal-card wide" onClick={(e) => e.stopPropagation()}>
         {/* Top Accent Gradient Bar */}
@@ -418,6 +419,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -36,6 +36,7 @@ import {
   UserIcon,
   MapPinIcon,
   ChevronRightIcon,
+  ArrowRightIcon,
   ShieldCheckIcon,
 } from '../inventory/InventoryIcons.tsx';
 
@@ -175,205 +176,225 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
   return (
     <div className="shifts-dashboard-wrapper">
-      {/* 3D BENTO HERO CARD */}
-      <div className="shifts-bento-hero bento-card-3d">
-        <div className="shifts-hero-left">
-          <div className="hero-status-pill-wrap">
-            {activeShift ? (
-              <span className="shift-bento-active-badge">
-                <span className="pulse-green-dot"></span>
-                ACTIVE CASHIER SHIFT
-              </span>
-            ) : (
-              <span className="shift-bento-closed-badge">
-                <span className="gray-dot"></span>
-                NO ACTIVE SHIFT OPEN
-              </span>
-            )}
-            <span className="bento-location-chip">
-              <MapPinIcon size={13} />
-              <span>{activeShift?.location || 'Main Counter'}</span>
-            </span>
-            {activeShift?.counter && (
-              <span className="bento-counter-chip">
-                <StoreIcon size={13} />
-                <span>{activeShift.counter}</span>
-              </span>
-            )}
+      {/* 3D BENTO HEADER RECTANGLE CARD (MATCHING SUPER ADMIN STYLE) */}
+      <div className="cat-bento-header-card bento-card-3d shifts-bento-header-card">
+        <div className="cat-bento-header-content">
+          <div className="cat-bento-title-group">
+            <div className="cat-bento-icon-box">
+              <StoreIcon size={24} />
+            </div>
+            <div>
+              <div className="cat-bento-title-row">
+                <h2 className="cat-bento-title">
+                  {activeShift ? `Shift #${activeShift.shiftNumber}` : 'Drawer Register Ready for New Shift'}
+                </h2>
+                {activeShift ? (
+                  <span className="cat-badge-live-sync" title="Drawer register actively recording transactions">
+                    <span className="live-indicator-dot"></span>
+                    ACTIVE CASHIER SHIFT
+                  </span>
+                ) : (
+                  <span className="cat-badge-live-sync" style={{ background: '#f1f5f9', color: '#64748b', borderColor: '#cbd5e1' }}>
+                    <span className="live-indicator-dot" style={{ background: '#94a3b8', boxShadow: 'none' }}></span>
+                    REGISTER CLOSED
+                  </span>
+                )}
+                <span className="bento-location-chip">
+                  <MapPinIcon size={13} />
+                  <span>{activeShift?.location || 'Main Counter'}</span>
+                </span>
+                {activeShift?.counter && (
+                  <span className="bento-counter-chip">
+                    <StoreIcon size={13} />
+                    <span>{activeShift.counter}</span>
+                  </span>
+                )}
+              </div>
+
+              <p className="cat-bento-subtitle">
+                {activeShift ? (
+                  <>
+                    Cashier: <strong>{activeShift.userName || user.name}</strong> • Opened {formatShiftOpenedAt(activeShift.openedAt)}
+                    {getDurationString(activeShift.openedAt) && (
+                      <> • Running for <strong>{getDurationString(activeShift.openedAt)}</strong></>
+                    )}
+                  </>
+                ) : (
+                  'Open a shift with an initial opening cash float to begin recording sales and drawer cash movements.'
+                )}
+              </p>
+            </div>
           </div>
 
-          <h2 className="shifts-bento-title">
+          <div className="cat-bento-header-actions">
             {activeShift ? (
               <>
-                Shift <span className="shift-num-highlight">#{activeShift.shiftNumber}</span>
-                <span className="title-sep">•</span>
-                <span className="title-cashier-group">
-                  <UserIcon size={18} className="cashier-user-icon" />
-                  <span>{activeShift.userName || user.name}</span>
-                </span>
-              </>
-            ) : (
-              'Drawer Register Ready for New Shift'
-            )}
-          </h2>
-
-          <p className="shifts-bento-subtitle">
-            {activeShift ? (
-              <>
-                Opened {formatShiftOpenedAt(activeShift.openedAt)}
-                {getDurationString(activeShift.openedAt) && (
-                  <> • Running for <strong>{getDurationString(activeShift.openedAt)}</strong></>
+                <button
+                  type="button"
+                  className="cat-btn-primary"
+                  onClick={() => setIsCashMovementModalOpen(true)}
+                >
+                  <ArrowDownLeftIcon size={15} />
+                  <span>Cash In / Out</span>
+                </button>
+                <button
+                  type="button"
+                  className="cat-btn-danger"
+                  onClick={() => setIsCloseShiftModalOpen(true)}
+                >
+                  <LockIcon size={15} />
+                  <span>Close Shift</span>
+                </button>
+                <button
+                  type="button"
+                  className="cat-btn-outline"
+                  onClick={() => setReportModalShiftId(activeShift.id)}
+                >
+                  <FileTextIcon size={15} />
+                  <span>Live Summary</span>
+                </button>
+                {onNavigateToPos && (
+                  <button
+                    type="button"
+                    className="cat-btn-outline"
+                    onClick={onNavigateToPos}
+                  >
+                    <ShoppingCartIcon size={15} />
+                    <span>Open POS</span>
+                  </button>
                 )}
               </>
             ) : (
-              'Open a shift with an initial opening cash float to begin recording sales and drawer cash movements.'
+              <button
+                type="button"
+                className="cat-btn-primary"
+                onClick={() => setIsOpenShiftModalOpen(true)}
+              >
+                <PlusIcon size={16} />
+                <span>Open New Cashier Shift</span>
+              </button>
             )}
-          </p>
-        </div>
-
-        <div className="shifts-hero-actions">
-          {activeShift ? (
-            <>
-              <button
-                type="button"
-                className="bento-hero-btn primary"
-                onClick={() => setIsCashMovementModalOpen(true)}
-              >
-                <ArrowDownLeftIcon size={16} />
-                <span>Cash In / Out</span>
-              </button>
-              <button
-                type="button"
-                className="bento-hero-btn danger"
-                onClick={() => setIsCloseShiftModalOpen(true)}
-              >
-                <LockIcon size={16} />
-                <span>Close Shift</span>
-              </button>
-              <button
-                type="button"
-                className="bento-hero-btn secondary"
-                onClick={() => setReportModalShiftId(activeShift.id)}
-              >
-                <FileTextIcon size={16} />
-                <span>Live Summary</span>
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="bento-hero-btn success large"
-              onClick={() => setIsOpenShiftModalOpen(true)}
-            >
-              <PlusIcon size={18} />
-              <span>Open New Cashier Shift</span>
-            </button>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* 5 REAL-TIME BENTO KPI METRIC CARDS WITH COUNTING ANIMATION */}
+      {/* 5 REAL-TIME BENTO KPI RECTANGLE CARDS WITH COUNTING ANIMATION */}
       {activeShift && summary && (
         <div className="shifts-bento-kpi-grid">
           {/* Card 1: Expected Drawer Cash */}
-          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-expected">
-            <div className="kpi-tile-header">
-              <div className="kpi-tile-icon-box emerald">
-                <WalletIcon size={18} />
+          <div className="cat-bento-kpi-card bento-card-3d bento-kpi-expected">
+            <div className="cat-kpi-header">
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge green">
+                  <WalletIcon size={18} />
+                </div>
+                <span className="cat-kpi-title">Expected in Drawer</span>
               </div>
-              <span className="kpi-tile-label">EXPECTED IN DRAWER</span>
-              <span className="bento-kpi-badge emerald">Live Balance</span>
+              <span className="kpi-sub-badge green">Live Balance</span>
             </div>
-            <div className="kpi-tile-value font-mono text-emerald-600">
+            <div className="cat-kpi-num mono text-green">
               <AnimatedCounter
                 value={summary.expectedCashMinor / 100}
                 formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               />
             </div>
-            <div className="kpi-tile-footer">
+            <div className="cat-kpi-footer">
               <span>Float ({formatMoney(summary.openingCashMinor)}) + Net Cash ({formatMoney(summary.expectedCashMinor - summary.openingCashMinor)})</span>
+              <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
             </div>
           </div>
 
           {/* Card 2: Cash Sales Collected */}
-          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-cash-sales">
-            <div className="kpi-tile-header">
-              <div className="kpi-tile-icon-box green">
-                <BanknoteIcon size={18} />
+          <div className="cat-bento-kpi-card bento-card-3d bento-kpi-cash">
+            <div className="cat-kpi-header">
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge green">
+                  <BanknoteIcon size={18} />
+                </div>
+                <span className="cat-kpi-title">Cash Sales</span>
               </div>
-              <span className="kpi-tile-label">CASH SALES</span>
-              <span className="bento-kpi-badge green">Cash In</span>
+              <span className="kpi-sub-badge green">Cash In</span>
             </div>
-            <div className="kpi-tile-value font-mono text-emerald-600">
+            <div className="cat-kpi-num mono text-green">
               <AnimatedCounter
                 value={summary.cashSalesMinor / 100}
                 formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               />
             </div>
-            <div className="kpi-tile-footer">
+            <div className="cat-kpi-footer">
               <span>Received into drawer from POS checkout</span>
+              <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
             </div>
           </div>
 
           {/* Card 3: Non-Cash Collections */}
-          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-noncash">
-            <div className="kpi-tile-header">
-              <div className="kpi-tile-icon-box blue">
-                <CreditCardIcon size={18} />
+          <div className="cat-bento-kpi-card bento-card-3d bento-kpi-noncash">
+            <div className="cat-kpi-header">
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge blue">
+                  <CreditCardIcon size={18} />
+                </div>
+                <span className="cat-kpi-title">Non-Cash (UPI / Card)</span>
               </div>
-              <span className="kpi-tile-label">NON-CASH (UPI / CARD)</span>
-              <span className="bento-kpi-badge blue">Bank Direct</span>
+              <span className="kpi-sub-badge blue">Bank Direct</span>
             </div>
-            <div className="kpi-tile-value font-mono text-blue-600">
+            <div className="cat-kpi-num mono text-blue">
               <AnimatedCounter
                 value={summary.nonCashPaymentsMinor / 100}
                 formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               />
             </div>
-            <div className="kpi-tile-footer">
+            <div className="cat-kpi-footer">
               <span>Direct bank credit (excluded from drawer)</span>
+              <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
             </div>
           </div>
 
           {/* Card 4: Net Cash Movements */}
-          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-movements">
-            <div className="kpi-tile-header">
-              <div className="kpi-tile-icon-box amber">
-                <RefreshCwIcon size={18} />
+          <div className="cat-bento-kpi-card bento-card-3d bento-kpi-movements">
+            <div className="cat-kpi-header">
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge amber">
+                  <RefreshCwIcon size={18} />
+                </div>
+                <span className="cat-kpi-title">Net Cash In / Out</span>
               </div>
-              <span className="kpi-tile-label">NET CASH IN / OUT</span>
-              <span className="bento-kpi-badge amber">
+              <span className="kpi-sub-badge amber">
                 {summary.cashInMinor >= summary.cashOutMinor ? '+Net In' : '-Net Out'}
               </span>
             </div>
-            <div className="kpi-tile-value font-mono text-amber-600">
+            <div className="cat-kpi-num mono text-amber">
               <AnimatedCounter
                 value={(summary.cashInMinor - summary.cashOutMinor) / 100}
                 formatter={(v) => (v < 0 ? '-' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               />
             </div>
-            <div className="kpi-tile-footer">
+            <div className="cat-kpi-footer">
               <span>+{formatMoney(summary.cashInMinor)} In • -{formatMoney(summary.cashOutMinor)} Out</span>
+              <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
             </div>
           </div>
 
           {/* Card 5: Total Shift Turnover */}
-          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-turnover">
-            <div className="kpi-tile-header">
-              <div className="kpi-tile-icon-box purple">
-                <TrendingUpIcon size={18} />
+          <div className="cat-bento-kpi-card bento-card-3d bento-kpi-turnover">
+            <div className="cat-kpi-header">
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge purple">
+                  <TrendingUpIcon size={18} />
+                </div>
+                <span className="cat-kpi-title">Total Collections</span>
               </div>
-              <span className="kpi-tile-label">TOTAL COLLECTIONS</span>
-              <span className="bento-kpi-badge purple">Gross Shift</span>
+              <span className="kpi-sub-badge purple">Gross Shift</span>
             </div>
-            <div className="kpi-tile-value font-mono text-purple-600">
+            <div className="cat-kpi-num mono text-purple">
               <AnimatedCounter
                 value={summary.totalCollectedMinor / 100}
                 formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               />
             </div>
-            <div className="kpi-tile-footer">
+            <div className="cat-kpi-footer">
               <span>Cash ({formatMoney(summary.cashSalesMinor)}) + Digital ({formatMoney(summary.nonCashPaymentsMinor)})</span>
+              <span className="cat-kpi-arrow"><ArrowRightIcon size={12} /></span>
             </div>
           </div>
         </div>
@@ -423,7 +444,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
           {activeShift && summary ? (
             <div className="shifts-overview-layout">
               {/* Formula Demonstration Bento Card */}
-              <div className="shifts-bento-card bento-card-3d formula-container-card">
+              <div className="cat-bento-card bento-card-3d formula-container-card">
                 <div className="bento-card-header">
                   <div className="bento-card-title-group">
                     <div className="bento-card-icon-pill indigo">
@@ -531,7 +552,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
               </div>
 
               {/* Shift Actions Bento Card */}
-              <div className="shifts-bento-card bento-card-3d side-actions-bento-card">
+              <div className="cat-bento-card bento-card-3d side-actions-bento-card">
                 <div className="bento-card-header">
                   <div className="bento-card-title-group">
                     <div className="bento-card-icon-pill emerald">
@@ -608,7 +629,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
               </div>
             </div>
           ) : (
-            <div className="bento-empty-shift-card bento-card-3d">
+            <div className="cat-bento-card bento-card-3d bento-empty-shift-card">
               <div className="bento-empty-icon-ring">
                 <StoreIcon size={44} />
               </div>
@@ -618,7 +639,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
               </p>
               <button
                 type="button"
-                className="bento-hero-btn success large"
+                className="cat-btn-primary large"
                 onClick={() => setIsOpenShiftModalOpen(true)}
               >
                 <PlusIcon size={18} />
@@ -632,7 +653,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 2: PAYMENT METHOD BREAKDOWN */}
       {selectedTab === 'payments' && (
         <div className="shifts-tab-content">
-          <div className="shifts-bento-card bento-card-3d">
+          <div className="cat-bento-card bento-card-3d">
             <div className="bento-card-header">
               <div className="bento-card-title-group">
                 <div className="bento-card-icon-pill blue">
@@ -709,7 +730,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 3: CASH MOVEMENTS */}
       {selectedTab === 'movements' && (
         <div className="shifts-tab-content">
-          <div className="shifts-bento-card bento-card-3d">
+          <div className="cat-bento-card bento-card-3d">
             <div className="bento-card-header">
               <div className="bento-card-title-group">
                 <div className="bento-card-icon-pill amber">
@@ -722,7 +743,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
               </div>
               <button
                 type="button"
-                className="bento-btn-primary sm"
+                className="cat-btn-primary"
                 onClick={() => setIsCashMovementModalOpen(true)}
                 disabled={!activeShift}
               >
@@ -789,7 +810,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 4: SHIFT HISTORY */}
       {selectedTab === 'history' && (
         <div className="shifts-tab-content">
-          <div className="shifts-bento-card bento-card-3d">
+          <div className="cat-bento-card bento-card-3d">
             <div className="bento-card-header">
               <div className="bento-card-title-group">
                 <div className="bento-card-icon-pill purple">
@@ -924,7 +945,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
         </div>
       )}
 
-      {/* MODALS */}
+      {/* MODALS - PORTALED DIRECTLY TO DOCUMENT.BODY TO ELIMINATE ANY CLIPPING OR WHITE BACKGROUND BORDER ARTIFACTS */}
       <OpenShiftModal
         isOpen={isOpenShiftModalOpen}
         onClose={() => setIsOpenShiftModalOpen(false)}
