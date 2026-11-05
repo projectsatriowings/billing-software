@@ -9479,12 +9479,12 @@ export function App() {
                           <th className="col-product-name">Product Name</th>
                           <th className="col-nowrap">Branch</th>
                           <th className="col-nowrap">Category</th>
+                          <th className="col-nowrap">Current Stock</th>
                           <th className="col-nowrap">SKU / Code</th>
                           <th className="col-nowrap">HSN / SAC</th>
                           <th className="col-nowrap">Selling Price</th>
                           {can(user?.role as any, 'purchases') && <th className="col-nowrap">Last Purchase Cost</th>}
                           <th className="col-nowrap">GST Rate</th>
-                          <th className="col-nowrap">Current Stock</th>
                           <th className="col-nowrap">Status</th>
                           <th className="col-nowrap" style={{ minWidth: '135px', textAlign: 'center' }}>Barcode Label</th>
                           <th className="col-nowrap" style={{ minWidth: '220px' }}>Actions</th>
@@ -9613,6 +9613,11 @@ export function App() {
                               </span>
                             </td>
                             <td className="col-nowrap"><span className="badge badge-blue">{i.category || 'General'}</span></td>
+                            <td className="col-nowrap">
+                              <span className={`badge ${i.currentStockMilli > 0 ? 'badge-emerald' : 'badge-amber'}`}>
+                                {i.currentStockMilli / 1000} {i.unit || 'pcs'}
+                              </span>
+                            </td>
                             <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.sku || '—'}</td>
                             <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.hsn || '—'}</td>
                             <td className="mono col-nowrap" style={{ fontWeight: 700, color: '#6d4aff' }}>{formatRupees(i.priceMinor)}</td>
@@ -9620,11 +9625,6 @@ export function App() {
                               <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 600 }}>{i.costMinor ? formatRupees(i.costMinor) : '—'}</td>
                             )}
                             <td className="mono col-nowrap" style={{ color: '#334155', fontWeight: 500 }}>{i.taxRateBp / 100}% {i.taxInclusive ? '(Incl)' : '(Excl)'}</td>
-                            <td className="col-nowrap">
-                              <span className={`badge ${i.currentStockMilli > 0 ? 'badge-emerald' : 'badge-amber'}`}>
-                                {i.currentStockMilli / 1000} {i.unit || 'pcs'}
-                              </span>
-                            </td>
                             <td className="col-nowrap">
                               {i.active !== false ? (
                                 <span className="badge badge-emerald">Active</span>
