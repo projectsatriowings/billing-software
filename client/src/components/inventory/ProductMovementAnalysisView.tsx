@@ -426,19 +426,27 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   const topSellers = data?.topSellers || [];
   const topSellerMax = topSellers.length > 0 ? topSellers[0].unitsSold || 1 : 1;
 
-  const totalTracked = summary?.totalTrackedProducts || 1;
-  const fastPct = Math.round(((summary?.fastMovingCount || 0) / totalTracked) * 100);
-  const slowPct = Math.round(((summary?.slowMovingCount || 0) / totalTracked) * 100);
-  const nonPct = Math.max(0, 100 - fastPct - slowPct);
+  // Data consistency & logic: zero-sales tracked items must count as non-moving
+  const totalTracked = summary?.totalTrackedProducts ?? 0;
+  const fastCount = summary?.fastMovingCount || 0;
+  const slowCount = summary?.slowMovingCount || 0;
+  const nonMovingCount = Math.max(
+    summary?.nonMovingCount ?? 0,
+    totalTracked > 0 ? totalTracked - fastCount - slowCount : 0
+  );
+
+  const fastPct = totalTracked > 0 ? Math.round((fastCount / totalTracked) * 100) : 0;
+  const slowPct = totalTracked > 0 ? Math.round((slowCount / totalTracked) * 100) : 0;
+  const nonPct = totalTracked > 0 ? Math.max(0, 100 - fastPct - slowPct) : 0;
 
   // Circulation Index Score (% of catalogue active in turnover)
   const circPct = Math.min(
     100,
     Math.max(
       0,
-      Math.round(
-        (((summary?.fastMovingCount || 0) + (summary?.slowMovingCount || 0)) / totalTracked) * 100
-      )
+      totalTracked > 0
+        ? Math.round(((fastCount + slowCount) / totalTracked) * 100)
+        : 0
     )
   );
   // Semi-circle arc circumference for radius=58: pi * 58 ~= 182.2

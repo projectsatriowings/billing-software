@@ -179,17 +179,8 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
   return (
     <div className="gst-view-wrapper">
       {/* Top Filter & Statutory Filing Timeline Control Bar */}
-      <div className="gst-header-card">
-        <div className="gst-header-left">
-          <h2 className="gst-header-title">
-            <span className="inline-flex items-center text-indigo-600"><DownloadIcon className="h-6 w-6" /></span> GST Import &amp; Export Hub
-          </h2>
-          <p className="gst-header-subtitle">
-            Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports for {periodLabel}.
-          </p>
-        </div>
-
-        <div className="gst-header-actions">
+      <div className="gst-header-card gst-toolbar-card">
+        <div className="gst-toolbar-controls">
           {/* Month Stepper Picker */}
           <div className="gst-period-picker-group">
             <span className="gst-period-label">Period</span>
@@ -259,9 +250,9 @@ export const GstImportExportView: React.FC<GstImportExportViewProps> = ({ onNavi
             </div>
             <div>
               <div className="gst-import-hero-title-row">
-                <h3 className="gst-import-hero-title">
+                <h1 className="gst-import-hero-title">
                   Import GSTR-2B Auto-Drafted ITC Statement
-                </h3>
+                </h1>
                 <span className="gst-import-pill">
                   Government Portal Sync
                 </span>
