@@ -712,11 +712,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     return `${formatRupees(data.cards.todaySales.netSalesMinor)} so far${busyText}${rushText}`;
   }, [data, chartMetric, busiestCurrentMetricPoint]);
 
-  // Dynamic title for chart card
+  // Dynamic title for chart card - uniform width to prevent layout shifts
   const chartTitle = useMemo(() => {
-    if (chartMetric === 'bills') return "Today's Bills by Hour";
-    if (chartMetric === 'profit') return "Today's Gross Profit by Hour";
-    return "Today's Sales by Hour";
+    if (chartMetric === 'bills') return "Today's Hourly Bills";
+    if (chartMetric === 'profit') return "Today's Hourly Profit";
+    return "Today's Hourly Sales";
   }, [chartMetric]);
 
   // Busiest hour index for default pinned tooltip
@@ -1056,12 +1056,11 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
 
               {/* Legend */}
               <div className="chart-legend">
-                <span className="legend-item">
-                  <span className="legend-line today" style={{ background: metricTheme.color }}></span> Today ({metricTheme.label})
+                <span className="legend-item" title={`Today's ${metricTheme.label}`}>
+                  <span className="legend-line today" style={{ background: metricTheme.color }}></span> Today
                 </span>
-                <span className="legend-item">
+                <span className="legend-item" title={!hasCompData ? 'No comparative transactions yesterday' : undefined}>
                   <span className="legend-line last-week"></span> Yesterday ({nowKolkata.compWeekdayShort || nowKolkata.compWeekday || 'Prev'})
-                  {!hasCompData && <span className="legend-empty-hint" style={{ color: '#94a3b8', fontSize: '0.72rem', marginLeft: '4px' }}>(No transactions)</span>}
                 </span>
               </div>
             </div>

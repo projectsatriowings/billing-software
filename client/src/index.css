@@ -27651,8 +27651,8 @@ select.expense-input-control {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.15rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+  flex-wrap: nowrap;
+  gap: 0.85rem;
   position: relative;
   z-index: 20;
 }
@@ -27664,6 +27664,7 @@ select.expense-input-control {
   color: #0f172a;
   letter-spacing: -0.015em;
   margin: 0;
+  white-space: nowrap;
 }
 
 .chart-card-subtitle,
@@ -27671,13 +27672,15 @@ select.expense-input-control {
   font-size: 0.82rem;
   color: #64748b;
   margin: 0.2rem 0 0 0;
+  white-space: nowrap;
 }
 
 .chart-header-right {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
-  flex-wrap: wrap;
+  gap: 0.85rem;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
   position: relative;
   z-index: 25;
 }
@@ -28779,6 +28782,18 @@ select.expense-input-control {
 
   .today-dash-root {
     padding: 1rem;
+  }
+
+  .chart-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .chart-header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
   }
 }
 
