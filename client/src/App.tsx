@@ -9512,13 +9512,15 @@ export function App() {
                                   borderRadius: '10px',
                                   overflow: 'hidden',
                                   border: '1.5px solid #e2e8f0',
-                                  background: '#f8fafc',
+                                  background: '#ffffff',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   flexShrink: 0,
                                   position: 'relative',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                  padding: '2px',
+                                  boxSizing: 'border-box',
                                 }}
                               >
                                 {i.imageUrl || (i as any).image ? (
@@ -9531,7 +9533,7 @@ export function App() {
                                       style={{
                                         width: '100%',
                                         height: '100%',
-                                        objectFit: 'cover',
+                                        objectFit: 'contain',
                                         display: 'block',
                                       }}
                                       onError={(e) => handleProductImageError(e, i.imageUrl || (i as any).image)}

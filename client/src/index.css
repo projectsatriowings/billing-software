@@ -32060,23 +32060,25 @@ select.expense-input-control {
    Product Table Image Thumbnail Styles (Perfect 50px Squircle)
    ───────────────────────────────────────────────────────────── */
 .product-table-image-cell {
-  width: 50px !important;
-  height: 50px !important;
-  max-width: 50px !important;
-  max-height: 50px !important;
-  min-width: 50px !important;
-  min-height: 50px !important;
+  width: 48px !important;
+  height: 48px !important;
+  max-width: 48px !important;
+  max-height: 48px !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
   margin: 0 auto !important;
   border-radius: 10px !important;
   overflow: hidden !important;
-  border: 1.5px solid #e2e8f0 !important;
-  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   flex-shrink: 0 !important;
   position: relative !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  padding: 3px !important;
+  box-sizing: border-box !important;
 }
 
 .product-thumb-img {
@@ -32084,7 +32086,7 @@ select.expense-input-control {
   height: 100% !important;
   max-width: 100% !important;
   max-height: 100% !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
   display: block !important;
 }
 
