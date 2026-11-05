@@ -1476,4 +1476,10 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS idx_sms_logs_customer ON sms_logs (tenant_id, customer_id)`,
     ],
   },
+  {
+    version: 52,
+    statements: [
+      `CREATE INDEX IF NOT EXISTS idx_stock_moves_tenant_item_branch ON stock_moves (tenant_id, item_id, branch_id)`,
+    ],
+  },
 ];

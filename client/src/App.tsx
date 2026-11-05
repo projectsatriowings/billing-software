@@ -1624,6 +1624,11 @@ export function App() {
     if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
+  }, [user, activeTab]);
+
+  // Initial and profile-change global data loader (avoids thrashing all 11 endpoints on every tab switch)
+  useEffect(() => {
+    if (!user) return;
     loadItems();
     loadCategories();
     loadParties();
@@ -1636,8 +1641,10 @@ export function App() {
     loadReports();
     loadDuesSummary();
     checkActiveShift();
-    initSettingsForm(shop);
-  }, [user, shop?.id, activeTab]);
+    if (shop) {
+      initSettingsForm(shop);
+    }
+  }, [user?.id, shop?.id]);
 
 
   // Real-time Promotions Evaluation Engine & BOGO Auto-Free Insertion

@@ -1,5 +1,6 @@
 import { handleProductImageError } from '../../imageUtils';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+
 import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights, Category } from '../../api.ts';
 import {
   fetchInventoryDashboard,
@@ -159,11 +160,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     }
   }, [searchQuery, categoryFilter, statusFilter, sortField, page, pageSize]);
 
+  const prevItemsCountRef = useRef<number | null>(null);
+
+  // Load dashboard high-level KPI stats on mount
   useEffect(() => {
     loadDashboardStats();
-    loadInsights();
-  }, [loadDashboardStats, loadInsights]);
+  }, [loadDashboardStats]);
 
+  // Lazily load tab-specific data only when that subtab is active
   useEffect(() => {
     if (activeSubTab === 'overview') {
       loadTableItems();
@@ -172,12 +176,15 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     }
   }, [activeSubTab, loadTableItems, loadInsights]);
 
-  // When products are added, imported, or updated in the catalog, refresh stats and table
+  // When products are added, imported, or deleted in the catalog, refresh stats and table without duplicate calls
   useEffect(() => {
-    loadDashboardStats();
-    if (activeSubTab === 'overview') {
-      loadTableItems();
+    if (prevItemsCountRef.current !== null && prevItemsCountRef.current !== items?.length) {
+      loadDashboardStats();
+      if (activeSubTab === 'overview') {
+        loadTableItems();
+      }
     }
+    prevItemsCountRef.current = items?.length ?? null;
   }, [items?.length, loadDashboardStats, loadTableItems, activeSubTab]);
 
   const handleRefreshAll = () => {

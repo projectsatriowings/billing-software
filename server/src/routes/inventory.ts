@@ -297,7 +297,7 @@ export function registerInventory(r: Router) {
     else if (sort === 'value_desc') orderSql = 'ORDER BY stock_value_minor DESC, name ASC';
 
     const baseCte = `
-      WITH item_stats AS (
+      WITH item_raw AS (
         SELECT 
           i.id,
           i.tenant_id,
@@ -319,24 +319,36 @@ export function registerInventory(r: Router) {
           p.name AS preferred_supplier_name,
           p.phone AS preferred_supplier_phone,
           COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
-          COALESCE(CASE WHEN (SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id) > 0 
-                   THEN ((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id) * i.cost_minor / 1000) 
-                   ELSE 0 END, 0)::bigint AS stock_value_minor,
           i.created_at,
           i.updated_at
         FROM items i
         LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
         LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND p.branch_id = i.branch_id
         ${whereSql}
+      ),
+      item_stats AS (
+        SELECT 
+          *,
+          CASE WHEN stock_milli > 0 THEN (stock_milli * cost_minor / 1000)::bigint ELSE 0::bigint END AS stock_value_minor
+        FROM item_raw
       )
     `;
 
-    // Total count for pagination
-    const totalRow = await ctx.db.one<{ total: number }>(
-      `${baseCte} SELECT COUNT(*)::int AS total FROM item_stats ${statusCondition}`,
-      params,
-    );
-    const total = Number(totalRow?.total ?? 0);
+    // Fast total count for pagination (avoids heavy subqueries when no stock status filter is applied)
+    let total = 0;
+    if (!statusCondition) {
+      const totalRow = await ctx.db.one<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM items i ${whereSql}`,
+        params,
+      );
+      total = Number(totalRow?.total ?? 0);
+    } else {
+      const totalRow = await ctx.db.one<{ total: number }>(
+        `${baseCte} SELECT COUNT(*)::int AS total FROM item_stats ${statusCondition}`,
+        params,
+      );
+      total = Number(totalRow?.total ?? 0);
+    }
 
     // Page items
     const rows = await ctx.db.query(
