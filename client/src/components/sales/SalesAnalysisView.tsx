@@ -6,6 +6,7 @@ import type {
   CategorySalesItem,
 } from '../../api.ts';
 import { fetchSalesAnalysis } from '../../api.ts';
+import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 
 interface SalesAnalysisViewProps {
   userRole?: string;
@@ -637,7 +638,20 @@ const BeadedDotMatrixBarChart: React.FC<{
       </div>
 
       <div className="inspire-stat-row">
-        <span className="inspire-big-metric mono">{totalValueFormatted}</span>
+        <span className="inspire-big-metric mono">
+          {metricKey === 'billsCount' ? (
+            <AnimatedCounter
+              value={displayPoints.reduce((acc, p) => acc + (p.billsCount || 0), 0)}
+              triggerKey={displayPoints}
+            />
+          ) : (
+            <AnimatedCounter
+              value={displayPoints.reduce((acc, p) => acc + (Number(p[metricKey]) || 0), 0)}
+              formatter={(v) => formatRupees(v)}
+              triggerKey={displayPoints}
+            />
+          )}
+        </span>
         {trendText && (
           <span className={`inspire-trend-pill ${isTrendPositive ? 'positive' : 'negative'}`}>
             {isTrendPositive ? <TrendUpIcon /> : <TrendDownIcon />}
@@ -845,7 +859,13 @@ const DualSplineAreaChart: React.FC<{
       </div>
 
       <div className="inspire-stat-row">
-        <span className="inspire-big-metric mono">{totalValueFormatted}</span>
+        <span className="inspire-big-metric mono">
+          <AnimatedCounter
+            value={series.reduce((acc, p) => acc + (p.grossProfitMinor || 0), 0)}
+            formatter={(v) => formatRupees(v)}
+            triggerKey={series}
+          />
+        </span>
         {trendText && (
           <span className={`inspire-trend-pill ${isTrendPositive ? 'positive' : 'negative'}`}>
             {isTrendPositive ? <TrendUpIcon /> : <TrendDownIcon />}
@@ -2299,7 +2319,13 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 </div>
               </div>
               <div className="inspire-kpi-bottom-row">
-                <span className="inspire-kpi-val mono">{formatRupees(data.summary.netSalesMinor)}</span>
+                <span className="inspire-kpi-val mono">
+                  <AnimatedCounter
+                    value={data.summary.netSalesMinor}
+                    formatter={(val) => formatRupees(val)}
+                    triggerKey={data.summary.netSalesMinor}
+                  />
+                </span>
                 <MicroSparkBars
                   values={data.series.map((s) => s.salesMinor)}
                   color="#0f766e"
@@ -2328,7 +2354,13 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 </div>
               </div>
               <div className="inspire-kpi-bottom-row">
-                <span className="inspire-kpi-val mono">{formatRupees(data.summary.grossProfitMinor)}</span>
+                <span className="inspire-kpi-val mono">
+                  <AnimatedCounter
+                    value={data.summary.grossProfitMinor}
+                    formatter={(val) => formatRupees(val)}
+                    triggerKey={data.summary.grossProfitMinor}
+                  />
+                </span>
                 <MicroSparkBars
                   values={data.series.map((s) => s.grossProfitMinor)}
                   color="#10b981"
@@ -2357,7 +2389,13 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 </div>
               </div>
               <div className="inspire-kpi-bottom-row">
-                <span className="inspire-kpi-val mono">{data.summary.billsCount.toLocaleString('en-IN')}+</span>
+                <span className="inspire-kpi-val mono">
+                  <AnimatedCounter
+                    value={data.summary.billsCount}
+                    suffix="+"
+                    triggerKey={data.summary.billsCount}
+                  />
+                </span>
                 <MicroSparkBars
                   values={data.series.map((s) => s.billsCount)}
                   color="#0284c7"
@@ -2387,7 +2425,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               </div>
               <div className="inspire-kpi-bottom-row">
                 <span className="inspire-kpi-val mono">
-                  {data.comparison?.diff ? `${Math.min(99.4, Math.max(3.2, 4.38 + data.comparison.diff.avgBillChangePct * 0.05)).toFixed(2)}%` : '4.38%'}
+                  {data.comparison?.diff ? (
+                    <AnimatedCounter
+                      value={Math.min(99.4, Math.max(3.2, 4.38 + data.comparison.diff.avgBillChangePct * 0.05))}
+                      decimals={2}
+                      suffix="%"
+                      triggerKey={data.comparison.diff.avgBillChangePct}
+                    />
+                  ) : (
+                    '4.38%'
+                  )}
                 </span>
                 <MicroSparkBars
                   values={data.series.map((s) => s.avgBillMinor || 10)}

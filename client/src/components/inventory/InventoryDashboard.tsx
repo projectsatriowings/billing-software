@@ -8,6 +8,7 @@ import {
   can,
 } from '../../api.ts';
 import { StatCard } from '../common/BentoUI.tsx';
+import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 import { StockLedgerView } from './StockLedgerView.tsx';
 import { StockAdjustmentModal } from './StockAdjustmentModal.tsx';
 import { PhysicalStockCountView } from './PhysicalStockCountView.tsx';
@@ -280,7 +281,11 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             }}
           >
             {isAuthorizedForCost ? (
-              ((stats?.totalStockValueMinor || 0) / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+              <AnimatedCounter
+                value={(stats?.totalStockValueMinor || 0) / 100}
+                formatter={(val) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                triggerKey={stats?.totalStockValueMinor}
+              />
             ) : (
               <span style={{ fontSize: '1rem', color: '#64748B' }}>Restricted (Staff)</span>
             )}
@@ -333,15 +338,15 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#64748B' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }}></span>
-                In-Stock: <strong style={{ color: totalProducts > 0 && inStockCount > 0 ? '#15803D' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? inStockPct : 0}%</strong> ({inStockCount})
+                In-Stock: <strong style={{ color: totalProducts > 0 && inStockCount > 0 ? '#15803D' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? inStockPct : 0}%</strong> (<AnimatedCounter value={inStockCount} triggerKey={inStockCount} />)
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B' }}></span>
-                Low: <strong style={{ color: totalProducts > 0 && lowStockCount > 0 ? '#B45309' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? lowStockPct : 0}%</strong> ({lowStockCount})
+                Low: <strong style={{ color: totalProducts > 0 && lowStockCount > 0 ? '#B45309' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? lowStockPct : 0}%</strong> (<AnimatedCounter value={lowStockCount} triggerKey={lowStockCount} />)
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }}></span>
-                Out: <strong style={{ color: totalProducts > 0 && outOfStockCount > 0 ? '#B91C1C' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? outOfStockPct : 0}%</strong> ({outOfStockCount})
+                Out: <strong style={{ color: totalProducts > 0 && outOfStockCount > 0 ? '#B91C1C' : '#0F172A', fontWeight: 600 }}>{totalProducts > 0 ? outOfStockPct : 0}%</strong> (<AnimatedCounter value={outOfStockCount} triggerKey={outOfStockCount} />)
               </span>
             </div>
           </div>
@@ -473,7 +478,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           iconVariant="purple"
           label="ACTIVE ITEMS"
           statusPill={{ text: `${categories.length} Cats`, variant: 'purple' }}
-          count={statsLoading ? '--' : stats?.totalActiveProducts ?? 0}
+          count={statsLoading ? '--' : <AnimatedCounter value={stats?.totalActiveProducts ?? 0} triggerKey={stats?.totalActiveProducts} />}
           countColor="#0F172A"
           hint={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? '✓ Showing all items' : 'In product master'}
           isSelected={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery}
@@ -494,7 +499,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           iconVariant="green"
           label="IN-STOCK"
           statusPill={{ text: `${inStockPct}%`, variant: 'green' }}
-          count={statsLoading ? '--' : stats?.inStockCount ?? 0}
+          count={statsLoading ? '--' : <AnimatedCounter value={stats?.inStockCount ?? 0} triggerKey={stats?.inStockCount} />}
           countColor={(stats?.inStockCount || 0) > 0 ? '#15803D' : '#0F172A'}
           hint={statusFilter === 'in_stock' ? '✓ Filter active (Click to reset)' : 'Sufficient shelf stock'}
           isSelected={statusFilter === 'in_stock'}
@@ -513,7 +518,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           iconVariant="amber"
           label="LOW STOCK"
           statusPill={(stats?.lowStockCount || 0) > 0 ? { text: 'Alert', variant: 'amber' } : { text: 'OK', variant: 'green' }}
-          count={statsLoading ? '--' : stats?.lowStockCount ?? 0}
+          count={statsLoading ? '--' : <AnimatedCounter value={stats?.lowStockCount ?? 0} triggerKey={stats?.lowStockCount} />}
           countColor={(stats?.lowStockCount || 0) > 0 ? '#B45309' : '#0F172A'}
           hint={statusFilter === 'low_stock' ? '✓ Filter active (Click to reset)' : 'At or below reorder'}
           isSelected={statusFilter === 'low_stock'}
@@ -538,7 +543,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               ? { text: 'Alert', variant: 'red' }
               : { text: 'OK', variant: 'green' }
           }
-          count={statsLoading ? '--' : stats?.outOfStockCount ?? 0}
+          count={statsLoading ? '--' : <AnimatedCounter value={stats?.outOfStockCount ?? 0} triggerKey={stats?.outOfStockCount} />}
           countColor={(stats?.outOfStockCount || 0) > 0 ? '#B91C1C' : '#0F172A'}
           hint={
             statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'
