@@ -2,7 +2,20 @@ import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { closeShift, fetchActiveShift, fetchShiftDetails, type Shift, type ShiftSummary } from '../../api.ts';
 import { formatMoney } from '../../../../shared/shifts.ts';
-import { UserIcon } from '../inventory/InventoryIcons.tsx';
+import {
+  LockIcon,
+  ShieldCheckIcon,
+  WalletIcon,
+  BanknoteIcon,
+  TrendingUpIcon,
+  CreditCardIcon,
+  RefreshCwIcon,
+  ScaleIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
+  ClockIcon,
+  UserIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface CloseShiftModalProps {
   isOpen: boolean;
@@ -19,93 +32,53 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
   activeShift,
   summary,
 }) => {
-  const [liveSummary, setLiveSummary] = useState<ShiftSummary>(summary);
-  const [loadingLive, setLoadingLive] = useState<boolean>(false);
-  const [userHasEditedCount, setUserHasEditedCount] = useState<boolean>(false);
-  const [countedRupees, setCountedRupees] = useState<string>(
-    ((summary?.expectedCashMinor ?? 0) / 100).toFixed(2)
-  );
+  const [countedRupees, setCountedRupees] = useState<string>(() => {
+    return (summary.expectedCashMinor / 100).toFixed(2);
+  });
+  const [closingNotes, setClosingNotes] = useState<string>('');
   const [varianceReason, setVarianceReason] = useState<string>('');
-  const [closingNote, setClosingNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [userHasEditedCount, setUserHasEditedCount] = useState<boolean>(false);
 
-  // Authoritative live data fetching & real-time synchronization
+  // Live updated summary
+  const [liveSummary, setLiveSummary] = useState<ShiftSummary>(summary);
+  const [loadingLive, setLoadingLive] = useState<boolean>(false);
+
   useEffect(() => {
-    if (!isOpen) {
-      setUserHasEditedCount(false);
-      return;
-    }
+    if (!isOpen) return;
 
-    if (summary) {
-      setLiveSummary(summary);
-      if (!userHasEditedCount) {
-        setCountedRupees(((summary.expectedCashMinor ?? 0) / 100).toFixed(2));
-      }
-    }
-
-    let mounted = true;
-    const fetchFreshTotals = async () => {
+    let isMounted = true;
+    const refreshLive = async () => {
       setLoadingLive(true);
       try {
-        let freshSummary: ShiftSummary | null = null;
-        if (activeShift?.id) {
-          try {
-            const det = await fetchShiftDetails(activeShift.id);
-            if (det?.shift?.summary) {
-              freshSummary = det.shift.summary;
-            }
-          } catch (detErr) {
-            console.warn('Could not fetch shift details by id:', detErr);
-          }
-        }
-        if (!freshSummary) {
-          const res = await fetchActiveShift();
-          if (res?.activeShift?.summary) {
-            freshSummary = res.activeShift.summary;
-          }
-        }
-        if (mounted && freshSummary) {
-          setLiveSummary(freshSummary);
+        const details = await fetchShiftDetails(activeShift.id);
+        if (isMounted && details?.shift?.summary) {
+          setLiveSummary(details.shift.summary);
           if (!userHasEditedCount) {
-            setCountedRupees(((freshSummary.expectedCashMinor ?? 0) / 100).toFixed(2));
+            setCountedRupees((details.shift.summary.expectedCashMinor / 100).toFixed(2));
           }
         }
       } catch (err) {
         console.warn('Could not refresh live shift summary:', err);
       } finally {
-        if (mounted) setLoadingLive(false);
+        if (isMounted) setLoadingLive(false);
       }
     };
 
-    fetchFreshTotals();
-
-    const handleSync = (e?: any) => {
-      if (e?.detail?.summary) {
-        setLiveSummary(e.detail.summary);
-        if (!userHasEditedCount) {
-          setCountedRupees(((e.detail.summary.expectedCashMinor ?? 0) / 100).toFixed(2));
-        }
-      }
-      fetchFreshTotals();
-    };
-
-    window.addEventListener('shift_status_changed', handleSync);
-    window.addEventListener('cash_movement_recorded', handleSync);
-
+    refreshLive();
     return () => {
-      mounted = false;
-      window.removeEventListener('shift_status_changed', handleSync);
-      window.removeEventListener('cash_movement_recorded', handleSync);
+      isMounted = false;
     };
-  }, [isOpen, activeShift?.id, summary]);
+  }, [isOpen, activeShift.id]);
 
   if (!isOpen) return null;
 
   const activeSummary = liveSummary || summary;
-  const parsedCounted = parseFloat(countedRupees);
-  const countedMinor = isNaN(parsedCounted) || parsedCounted < 0 ? 0 : Math.round(parsedCounted * 100);
-  const expectedMinor = activeSummary?.expectedCashMinor ?? 0;
+  const expectedMinor = activeSummary.expectedCashMinor;
+
+  const parsedRupees = parseFloat(countedRupees);
+  const countedMinor = isNaN(parsedRupees) ? 0 : Math.round(parsedRupees * 100);
   const varianceMinor = countedMinor - expectedMinor;
 
   const isBalanced = varianceMinor === 0;
@@ -116,17 +89,14 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (isNaN(parsedCounted) || parsedCounted < 0) {
-      setError('Please enter a valid non-negative counted cash amount.');
+    const parsed = parseFloat(countedRupees);
+    if (isNaN(parsed) || parsed < 0) {
+      setError('Please enter a valid physical cash count (non-negative number).');
       return;
     }
 
-    if (!isBalanced && !varianceReason.trim()) {
-      setError(
-        `A mandatory explanation reason is required for a cash ${
-          isShortage ? 'shortage' : 'excess'
-        } of ${formatMoney(Math.abs(varianceMinor))}.`
-      );
+    if (!isBalanced && (!varianceReason || varianceReason.trim().length < 3)) {
+      setError('A variance reason (minimum 3 characters) is strictly required when counted cash differs from expected cash.');
       return;
     }
 
@@ -134,14 +104,15 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
     try {
       const res = await closeShift(activeShift.id, {
         countedCashMinor: countedMinor,
-        varianceReason: varianceReason.trim() || undefined,
-        note: closingNote.trim() || undefined,
+        varianceReason: !isBalanced ? varianceReason.trim() : undefined,
+        note: closingNotes.trim() || undefined,
       });
-      window.dispatchEvent(new Event('shift_status_changed'));
+
+      window.dispatchEvent(new CustomEvent('shift_status_changed', { detail: res }));
       onSuccess(res.shift);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to close shift.');
+      setError(err.message || 'Failed to close shift. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -168,254 +139,302 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content shift-modal-card wide" onClick={(e) => e.stopPropagation()}>
+      <div className="shift-bento-dialog wide-1040" onClick={(e) => e.stopPropagation()}>
         {/* Top Accent Gradient Bar */}
         <div className="modal-top-accent red-accent"></div>
 
-        <div className="modal-header">
-          <div className="modal-title-wrap">
-            <div className="modal-icon-badge red">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
+        {/* 1. Bento Header */}
+        <div className="shift-bento-header">
+          <div className="shift-bento-header-left">
+            <div className="shift-bento-icon-badge rose">
+              <LockIcon size={22} />
             </div>
-            <div>
-              <h2 className="modal-title">Close Shift & Day-End Reconcile</h2>
-              <p className="modal-subtitle">
-                Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span> • Cashier:{' '}
-                <span className="cashier-pill-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UserIcon size={13} /> {activeShift.userName || 'Current Cashier'}</span>
-                {activeShift.openedAt && (
-                  <> • Opened: <span>{formatShiftOpenedAt(activeShift.openedAt)}</span></>
-                )}
+            <div className="shift-bento-title-wrap">
+              <h3>
+                <span>Close Shift & Day-End Reconcile</span>
+                <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span>
+              </h3>
+              <p>
+                <UserIcon size={12} />
+                <span>Cashier: <strong>{activeShift.userName || 'Current Cashier'}</strong></span>
+                <span>•</span>
+                <ClockIcon size={12} />
+                <span>Opened {formatShiftOpenedAt(activeShift.openedAt)}</span>
+                <span>•</span>
+                <ScaleIcon size={12} />
+                <span>Reconciliation Session</span>
               </p>
             </div>
           </div>
-          <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close modal">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="shift-modal-form">
-          <div className="shift-modal-body">
-          {error && (
-            <div className="shift-modal-alert error">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Expected Drawer Cash Breakdown Panel */}
-          <div className="shift-reconciliation-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <h4 className="panel-subheading" style={{ margin: 0 }}>Authoritative Drawer Cash Balance</h4>
-              {loadingLive && (
-                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>
-                  ↻ Refreshing live totals...
-                </span>
-              )}
-            </div>
-            <div className="recon-formula-grid">
-              <div className="recon-term">
-                <span className="term-label">Opening Float</span>
-                <span className="term-val">{formatMoney(activeSummary.openingCashMinor)}</span>
-              </div>
-              <span className="recon-op">+</span>
-              <div className="recon-term">
-                <span className="term-label">Cash Sales</span>
-                <span className="term-val">{formatMoney(activeSummary.cashSalesMinor)}</span>
-              </div>
-              {activeSummary.cashPaymentsMinor > 0 && (
-                <>
-                  <span className="recon-op">+</span>
-                  <div className="recon-term">
-                    <span className="term-label">Customer Receipts</span>
-                    <span className="term-val text-success">+{formatMoney(activeSummary.cashPaymentsMinor)}</span>
-                  </div>
-                </>
-              )}
-              <span className="recon-op">+</span>
-              <div className="recon-term">
-                <span className="term-label">Cash-In</span>
-                <span className="term-val text-success">+{formatMoney(activeSummary.cashInMinor)}</span>
-              </div>
-              <span className="recon-op">-</span>
-              <div className="recon-term">
-                <span className="term-label">Cash-Out</span>
-                <span className="term-val text-warning">-{formatMoney(activeSummary.cashOutMinor)}</span>
-              </div>
-              <span className="recon-op">-</span>
-              <div className="recon-term">
-                <span className="term-label">Cash Refunds</span>
-                <span className="term-val text-danger">-{formatMoney(activeSummary.cashRefundsMinor)}</span>
-              </div>
-              <span className="recon-op">=</span>
-              <div className="recon-term expected-term">
-                <span className="term-label">EXPECTED CASH</span>
-                <span className="term-val expected-val">{formatMoney(expectedMinor)}</span>
-              </div>
-            </div>
-
-            <div className="recon-noncash-notice">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-              </svg>
-              <span>
-                <strong>Non-Cash Collections:</strong> UPI, Card, and Bank payments total{' '}
-                <strong>{formatMoney(activeSummary.nonCashPaymentsMinor)}</strong> and are safely excluded from the physical cash drawer.
-              </span>
-            </div>
-          </div>
-
-          {/* Physical Counted Cash Input */}
-          <div className="form-group count-cash-group">
-            <label className="form-label">
-              <span>Actual Physical Cash Counted in Drawer (₹)</span>
-              <span className="req">*</span>
-            </label>
-            <div className="rupee-input-wrapper large">
-              <div className="rupee-badge-prefix">₹</div>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="form-input rupee-input large"
-                placeholder="0"
-                value={countedRupees}
-                onChange={(e) => {
-                  setCountedRupees(e.target.value);
-                  setUserHasEditedCount(true);
-                }}
-                autoFocus
-                required
-              />
-            </div>
-            <div className="quick-amount-pills">
-              <button
-                type="button"
-                className="quick-pill active"
-                onClick={() => {
-                  setCountedRupees((expectedMinor / 100).toFixed(2));
-                  setUserHasEditedCount(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                <span>Match Expected ({formatMoney(expectedMinor)})</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Live Variance Visual Indicator */}
-          <div className={`variance-banner ${isBalanced ? 'balanced' : isShortage ? 'shortage' : 'excess'}`}>
-            <div className="variance-banner-left">
-              <div className="variance-icon-wrap">
-                {isBalanced ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                ) : isShortage ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 20 4 8 20 8 12 20"></polygon>
-                  </svg>
-                ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 4 4 16 20 16 12 4"></polygon>
-                  </svg>
-                )}
-              </div>
-              <div>
-                <span className="variance-title">
-                  {isBalanced && 'Status: Matched • Cash Drawer Balanced (₹0.00 Variance)'}
-                  {isShortage && `Status: Short • Cash Shortage (${formatMoney(Math.abs(varianceMinor))} Deficit)`}
-                  {isExcess && `Status: Over • Cash Excess (+${formatMoney(varianceMinor)} Surplus)`}
-                </span>
-                <p className="variance-subtitle">
-                  {isBalanced && `Actual Cash (${formatMoney(countedMinor)}) = Expected Cash (${formatMoney(expectedMinor)}). Exact match.`}
-                  {isShortage && `Cash Difference = Actual (${formatMoney(countedMinor)}) - Expected (${formatMoney(expectedMinor)}) = -${formatMoney(Math.abs(varianceMinor))}. Explanation required.`}
-                  {isExcess && `Cash Difference = Actual (${formatMoney(countedMinor)}) - Expected (${formatMoney(expectedMinor)}) = +${formatMoney(varianceMinor)}. Explanation required.`}
-                </p>
-              </div>
-            </div>
-            <div className="variance-badge-number">
-              {formatMoney(varianceMinor)}
-            </div>
-          </div>
-
-          {/* Mandatory Discrepancy Reason if variance != 0 */}
-          {!isBalanced && (
-            <div className="form-group highlight-danger">
-              <label className="form-label text-danger">
-                <span>Mandatory Discrepancy Explanation Reason</span>
-                <span className="req">*</span>
-              </label>
-              <textarea
-                className="form-input form-textarea"
-                rows={2}
-                placeholder="Explain the reason for cash shortage or excess (e.g., Shortage on customer change, Safe transfer difference, etc.)"
-                value={varianceReason}
-                onChange={(e) => setVarianceReason(e.target.value)}
-                required
-              />
-              <span className="form-hint text-warning">
-                This explanation will be permanently recorded in the Day-End Closing Report and flagged for Manager review.
-              </span>
-            </div>
-          )}
-
-          {/* General Closing Notes */}
-          <div className="form-group">
-            <label className="form-label">General Handover / Closing Notes (Optional)</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="e.g., Evening handover to night cashier, all card batches settled"
-              value={closingNote}
-              onChange={(e) => setClosingNote(e.target.value)}
-              maxLength={250}
-            />
-          </div>
-          </div>
-
-          <div className="modal-actions">
+          <div className="shift-bento-header-actions">
+            <span
+              className="cat-badge-live-sync"
+              style={{ background: '#fff1f2', color: '#e11d48', borderColor: '#fecdd3' }}
+            >
+              <span className="live-indicator-dot" style={{ background: '#e11d48' }}></span>
+              CLOSING & RECONCILIATION
+            </span>
             <button
               type="button"
-              className="btn btn-secondary modal-cancel-btn"
+              className="modal-close-btn"
               onClick={onClose}
+              aria-label="Close modal"
+              title="Close"
               disabled={isSubmitting}
             >
-              Cancel
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
             </button>
-            <button
-              type="submit"
-              className="btn btn-danger btn-finalize-close"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="spinner-sm"></span>
-                  <span>Closing & Finalizing Shift...</span>
-                </>
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                  </svg>
-                  <span>Finalize Day-End Close</span>
-                </>
-              )}
-            </button>
+          </div>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div className="shift-bento-body">
+            {/* Top 4-Tile Bento Ribbon */}
+            <div className="shift-bento-ribbon">
+              <div className="shift-bento-ribbon-tile">
+                <div className="ribbon-tile-label">
+                  <span>Opening Float</span>
+                  <WalletIcon size={13} style={{ color: '#6366f1' }} />
+                </div>
+                <div className="ribbon-tile-val">{formatMoney(activeSummary.openingCashMinor)}</div>
+                <div className="ribbon-tile-sub">Shift starting cash</div>
+              </div>
+
+              <div className="shift-bento-ribbon-tile">
+                <div className="ribbon-tile-label">
+                  <span>Cash Sales</span>
+                  <BanknoteIcon size={13} style={{ color: '#10b981' }} />
+                </div>
+                <div className="ribbon-tile-val text-success" style={{ color: '#059669' }}>
+                  +{formatMoney(activeSummary.cashSalesMinor)}
+                </div>
+                <div className="ribbon-tile-sub">Direct POS checkout cash</div>
+              </div>
+
+              <div className="shift-bento-ribbon-tile">
+                <div className="ribbon-tile-label">
+                  <span>Net Movements</span>
+                  <RefreshCwIcon size={13} style={{ color: '#f59e0b' }} />
+                </div>
+                <div className="ribbon-tile-val" style={{ color: '#b45309' }}>
+                  {formatMoney(activeSummary.cashInMinor - activeSummary.cashOutMinor)}
+                </div>
+                <div className="ribbon-tile-sub">
+                  +{formatMoney(activeSummary.cashInMinor)} In • -{formatMoney(activeSummary.cashOutMinor)} Out
+                </div>
+              </div>
+
+              <div className="shift-bento-ribbon-tile highlight">
+                <div className="ribbon-tile-label">
+                  <span>Authoritative Expected</span>
+                  <ScaleIcon size={13} style={{ color: '#4f46e5' }} />
+                </div>
+                <div className="ribbon-tile-val" style={{ color: '#4338ca' }}>
+                  {formatMoney(expectedMinor)}
+                </div>
+                <div className="ribbon-tile-sub">
+                  {loadingLive ? 'Refreshing live...' : 'Exact formula ledger balance'}
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="shift-modal-alert error">
+                <AlertTriangleIcon size={18} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Dual Column Bento Grid */}
+            <div className="shift-bento-main-grid">
+              {/* Left Column: Physical Count Entry */}
+              <div className="shift-bento-panel">
+                <div className="shift-bento-panel-header">
+                  <div className="panel-header-title-box">
+                    <BanknoteIcon size={16} style={{ color: '#e11d48' }} />
+                    <h4 className="panel-header-title">Physical Drawer Count</h4>
+                  </div>
+                  <span className="bento-pill-badge info" style={{ fontSize: '0.68rem', padding: '0.15rem 0.5rem' }}>
+                    Cash Count
+                  </span>
+                </div>
+
+                {/* Counted Cash Input */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">
+                    <span>Actual Physical Cash Counted (₹)</span>
+                    <span className="req">*</span>
+                  </label>
+                  <div className="rupee-input-wrapper large">
+                    <div className="rupee-badge-prefix">₹</div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="form-input rupee-input large"
+                      placeholder="0.00"
+                      value={countedRupees}
+                      onChange={(e) => {
+                        setCountedRupees(e.target.value);
+                        setUserHasEditedCount(true);
+                      }}
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  <div className="quick-amount-pills">
+                    <button
+                      type="button"
+                      className="quick-pill active"
+                      onClick={() => {
+                        setCountedRupees((expectedMinor / 100).toFixed(2));
+                        setUserHasEditedCount(false);
+                      }}
+                    >
+                      <CheckCircle2Icon size={13} />
+                      <span>Match Expected ({formatMoney(expectedMinor)})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Variance Explanation if not balanced */}
+                {!isBalanced && (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">
+                      <span>Reason for {isShortage ? 'Shortage' : 'Excess'}</span>
+                      <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder={isShortage ? 'Explain cash shortage (e.g., miscounted change)...' : 'Explain cash surplus...'}
+                      value={varianceReason}
+                      onChange={(e) => setVarianceReason(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* Closing Shift Notes */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Shift Handover & Closing Notes (Optional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g., Safe drop verified, Drawer handed over to next shift"
+                    value={closingNotes}
+                    onChange={(e) => setClosingNotes(e.target.value)}
+                    maxLength={250}
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: Live Variance & Reconciliation Intelligence */}
+              <div className="shift-bento-panel">
+                <div className="shift-bento-panel-header">
+                  <div className="panel-header-title-box">
+                    <ScaleIcon size={16} style={{ color: '#4f46e5' }} />
+                    <h4 className="panel-header-title">Variance Reconciliation</h4>
+                  </div>
+                  <span
+                    className={`bento-pill-badge ${isBalanced ? 'green' : isShortage ? 'red' : 'amber'}`}
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      background: isBalanced ? '#ecfdf5' : isShortage ? '#fee2e2' : '#fef3c7',
+                      color: isBalanced ? '#047857' : isShortage ? '#b91c1c' : '#b45309',
+                    }}
+                  >
+                    {isBalanced ? 'BALANCED' : isShortage ? 'SHORTAGE' : 'EXCESS'}
+                  </span>
+                </div>
+
+                {/* Variance Banner */}
+                <div
+                  className={`variance-banner ${isBalanced ? 'balanced' : isShortage ? 'shortage' : 'excess'}`}
+                  style={{ margin: 0 }}
+                >
+                  <div className="variance-banner-left">
+                    <div className="variance-icon-wrap">
+                      {isBalanced ? (
+                        <CheckCircle2Icon size={22} />
+                      ) : (
+                        <AlertTriangleIcon size={22} />
+                      )}
+                    </div>
+                    <div>
+                      <span className="variance-title">
+                        {isBalanced && 'Cash Drawer Balanced'}
+                        {isShortage && `Cash Shortage: -${formatMoney(Math.abs(varianceMinor))}`}
+                        {isExcess && `Cash Excess: +${formatMoney(varianceMinor)}`}
+                      </span>
+                      <p className="variance-subtitle">
+                        {isBalanced && `Actual Count (${formatMoney(countedMinor)}) matches Expected (${formatMoney(expectedMinor)})`}
+                        {isShortage && `Deficit of ${formatMoney(Math.abs(varianceMinor))} requires manager explanation`}
+                        {isExcess && `Surplus of ${formatMoney(varianceMinor)} requires manager explanation`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="variance-badge-number">
+                    {isBalanced ? '₹0.00' : (varianceMinor < 0 ? '-' : '+') + formatMoney(Math.abs(varianceMinor))}
+                  </div>
+                </div>
+
+                {/* Non-Cash Collections Isolation Summary */}
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '0.85rem 1rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  <CreditCardIcon size={18} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '0.76rem', color: '#1e40af', lineHeight: 1.45 }}>
+                    <strong>Non-Cash Collections Protected:</strong> Digital payments ({formatMoney(activeSummary.nonCashPaymentsMinor)}) are verified and credited directly to bank, not contaminating the physical drawer.
+                  </div>
+                </div>
+
+                {/* Shift Financial Verification Guarantee */}
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 0.9rem', display: 'flex', gap: '0.65rem', alignItems: 'center', marginTop: 'auto', fontSize: '0.75rem', color: '#64748b' }}>
+                  <ShieldCheckIcon size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                  <span>Permanent audit trail generated with variance classification and shift closing report.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Bento Footer */}
+          <div className="shift-bento-footer">
+            <div className="shift-bento-footer-left">
+              <ShieldCheckIcon size={15} style={{ color: '#059669' }} />
+              <span>Shift reconciliation ledger finalized upon closing confirmation</span>
+            </div>
+
+            <div className="shift-bento-footer-actions">
+              <button
+                type="button"
+                className="cat-btn-outline"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                id="btn-confirm-close-shift"
+                className="cat-btn-danger"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <span>Closing Shift...</span>
+                ) : (
+                  <>
+                    <LockIcon size={15} />
+                    <span>Close Shift & Finalize Reconciliation</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

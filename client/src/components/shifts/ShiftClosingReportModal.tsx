@@ -3,13 +3,16 @@ import React, { useState, useEffect } from 'react';
 import { fetchShiftReport, reviewShift, type ShiftClosingReport } from '../../api.ts';
 import { formatMoney, classifyVariance } from '../../../../shared/shifts.ts';
 import {
-  RefreshCwIcon,
-  AlertTriangleIcon,
-  BanknoteIcon,
-  CreditCardIcon,
   FileTextIcon,
   ShieldCheckIcon,
+  WalletIcon,
+  BanknoteIcon,
+  TrendingUpIcon,
+  CreditCardIcon,
+  RefreshCwIcon,
+  ScaleIcon,
   CheckCircle2Icon,
+  AlertTriangleIcon,
   ClockIcon,
   PrinterIcon,
 } from '../inventory/InventoryIcons.tsx';
@@ -34,19 +37,21 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
   const [error, setError] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
   const [isReviewing, setIsReviewing] = useState<boolean>(false);
-  const [reviewSuccess, setReviewSuccess] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!isOpen || !shiftId) return;
-    loadReport();
+    if (isOpen && shiftId) {
+      loadReport();
+    }
   }, [isOpen, shiftId]);
+
+  if (!isOpen) return null;
 
   const loadReport = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchShiftReport(shiftId);
-      setReport(res.report);
+      const data = await fetchShiftReport(shiftId);
+      setReport(data.report);
     } catch (err: any) {
       setError(err.message || 'Failed to load shift closing report.');
     } finally {
@@ -54,29 +59,19 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
     }
   };
 
-  if (!isOpen) return null;
-
-  const isManagerOrOwner = ['owner', 'manager'].includes(userRole);
-  const varClass = report
-    ? report.varianceClassification || classifyVariance(report.summary.varianceMinor ?? 0)
-    : { type: 'balanced' as const, absAmountMinor: 0, requiresReason: false };
+  const isManagerOrOwner = ['owner', 'manager', 'admin'].includes(userRole);
 
   const handlePrint = () => {
-    const printUrl = `/api/shifts/${shiftId}/report?format=html`;
-    const win = window.open(printUrl, '_blank');
-    if (win) {
-      win.focus();
-    }
+    window.print();
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewNotes.trim()) return;
+    if (!report) return;
 
     setIsReviewing(true);
     try {
-      await reviewShift(shiftId, { reviewNotes: reviewNotes.trim() });
-      setReviewSuccess(true);
+      await reviewShift(report.shift.id, { reviewNotes: reviewNotes.trim() });
       await loadReport();
       if (onShiftUpdated) onShiftUpdated();
     } catch (err: any) {
@@ -86,43 +81,62 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
     }
   };
 
+  const varClass = report ? classifyVariance(report.summary.varianceMinor ?? 0) : { type: 'balanced' };
+
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content shift-report-modal wide" onClick={(e) => e.stopPropagation()}>
+      <div className="shift-bento-dialog wide-1040" onClick={(e) => e.stopPropagation()}>
         {/* Top Accent Gradient Bar */}
         <div className="modal-top-accent purple-accent"></div>
 
-        <div className="modal-header">
-          <div className="modal-title-wrap">
-            <div className="modal-icon-badge purple">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
+        {/* 1. Bento Header */}
+        <div className="shift-bento-header">
+          <div className="shift-bento-header-left">
+            <div className="shift-bento-icon-badge purple">
+              <FileTextIcon size={22} />
             </div>
-            <div>
-              <h2 className="modal-title">Day-End Shift Closing Report</h2>
-              <p className="modal-subtitle">Official Authoritative Audit & Drawer Settlement</p>
+            <div className="shift-bento-title-wrap">
+              <h3>
+                <span>Day-End Shift Closing Report</span>
+                {report && (
+                  <span className="shift-ref-pill">#{report.shift.shiftNumber}</span>
+                )}
+              </h3>
+              <p>
+                <span>Official Authoritative Audit & Drawer Settlement</span>
+                {report?.shift?.userName && (
+                  <>
+                    <span>•</span>
+                    <span>Cashier: <strong>{report.shift.userName}</strong></span>
+                  </>
+                )}
+                {report?.shift?.location && (
+                  <>
+                    <span>•</span>
+                    <span>Location: {report.shift.location}</span>
+                  </>
+                )}
+              </p>
             </div>
           </div>
-          <div className="header-actions">
+
+          <div className="shift-bento-header-actions">
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="cat-btn-outline"
               onClick={handlePrint}
               title="Print thermal or A4 day-end receipt"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                <rect x="6" y="14" width="12" height="8"></rect>
-              </svg>
+              <PrinterIcon size={14} />
               <span>Print Report</span>
             </button>
-            <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={onClose}
+              aria-label="Close modal"
+              title="Close"
+            >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -131,10 +145,11 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
           </div>
         </div>
 
-        <div className="modal-body report-modal-scroll">
+        {/* Body */}
+        <div className="shift-bento-body">
           {loading && (
             <div className="report-loading-state">
-              <RefreshCwIcon size={18} className="spinning-icon" />
+              <RefreshCwIcon size={20} className="spinning-icon" />
               <span>Compiling authoritative shift report...</span>
             </div>
           )}
@@ -147,238 +162,283 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
           )}
 
           {report && !loading && (
-            <div className="closing-report-document">
-              {/* Header Box */}
-              <div className="report-header-banner">
-                <div className="report-store-info">
-                  <h3 className="report-store-name">{report.shop?.name || 'Adaptive Billing'}</h3>
-                  <span className="report-store-meta">
-                    {report.shop?.gstin ? `GSTIN: ${report.shop.gstin}` : 'B2C Retail'} • {report.shop?.phone || ''}
-                  </span>
-                </div>
-                <div className="report-shift-badge-box">
-                  <span className="report-shift-no">{report.shift.shiftNumber}</span>
-                  <span className={`status-pill ${report.shift.status}`}>
-                    {report.shift.status.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Meta Grid */}
-              <div className="report-meta-grid">
-                <div className="meta-item">
-                  <span className="meta-label">Cashier</span>
-                  <span className="meta-val">{report.shift.userName}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Location</span>
-                  <span className="meta-val">{report.shift.location || 'MAIN'}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Opened At</span>
-                  <span className="meta-val">{new Date(report.shift.openedAt).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="meta-item">
-                  <span className="meta-label">Closed At</span>
-                  <span className="meta-val">
-                    {report.shift.closedAt ? new Date(report.shift.closedAt).toLocaleString('en-IN') : 'Still Open'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Drawer Cash Reconciliation Table */}
-              <div className="report-section">
-                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><BanknoteIcon size={18} /> Cash Drawer Reconciliation</h4>
-                <table className="report-table">
-                  <tbody>
-                    <tr>
-                      <td>Opening Cash Float</td>
-                      <td className="text-right font-mono">{formatMoney(report.summary.openingCashMinor)}</td>
-                    </tr>
-                    <tr>
-                      <td>(+) Cash Sales & Direct Receipts</td>
-                      <td className="text-right font-mono text-success">+{formatMoney(report.summary.cashSalesMinor)}</td>
-                    </tr>
-                    <tr>
-                      <td>(+) Cash-In Drawer Movements</td>
-                      <td className="text-right font-mono text-success">+{formatMoney(report.summary.cashInMinor)}</td>
-                    </tr>
-                    <tr>
-                      <td>(-) Cash-Out Drawer Movements</td>
-                      <td className="text-right font-mono text-warning">-{formatMoney(report.summary.cashOutMinor)}</td>
-                    </tr>
-                    <tr>
-                      <td>(-) Cash Refunds Paid from Drawer</td>
-                      <td className="text-right font-mono text-danger">-{formatMoney(report.summary.cashRefundsMinor)}</td>
-                    </tr>
-                    <tr className="highlight-row">
-                      <td><strong>EXPECTED DRAWER CASH</strong></td>
-                      <td className="text-right font-mono font-bold">{formatMoney(report.summary.expectedCashMinor)}</td>
-                    </tr>
-                    <tr className="highlight-row secondary">
-                      <td><strong>ACTUAL PHYSICAL COUNTED CASH</strong></td>
-                      <td className="text-right font-mono font-bold">{formatMoney(report.summary.countedCashMinor)}</td>
-                    </tr>
-                    <tr className={`variance-row ${varClass.type}`}>
-                      <td>
-                        <strong>CASH VARIANCE ({varClass.type.toUpperCase()})</strong>
-                      </td>
-                      <td className="text-right font-mono font-bold">
-                        {formatMoney(report.summary.varianceMinor)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                {/* Variance Explanation Notice */}
-                {report.summary.varianceMinor !== 0 && (
-                  <div className={`report-discrepancy-card ${varClass.type}`}>
-                    <span className="discrepancy-badge">
-                      {varClass.type === 'shortage' ? 'DEFICIT EXPLANATION' : 'SURPLUS EXPLANATION'}
-                    </span>
-                    <p className="discrepancy-text">
-                      {report.shift.note || 'No explanation reason recorded.'}
-                    </p>
+            <>
+              {/* 4-Tile Bento Ribbon */}
+              <div className="shift-bento-ribbon">
+                <div className="shift-bento-ribbon-tile">
+                  <div className="ribbon-tile-label">
+                    <span>Expected Cash</span>
+                    <WalletIcon size={13} style={{ color: '#6366f1' }} />
                   </div>
-                )}
+                  <div className="ribbon-tile-val">{formatMoney(report.summary.expectedCashMinor)}</div>
+                  <div className="ribbon-tile-sub">Calculated drawer total</div>
+                </div>
+
+                <div className="shift-bento-ribbon-tile">
+                  <div className="ribbon-tile-label">
+                    <span>Counted Cash</span>
+                    <BanknoteIcon size={13} style={{ color: '#059669' }} />
+                  </div>
+                  <div className="ribbon-tile-val text-success">
+                    {report.summary.countedCashMinor !== undefined && report.summary.countedCashMinor !== null
+                      ? formatMoney(report.summary.countedCashMinor)
+                      : '—'}
+                  </div>
+                  <div className="ribbon-tile-sub">Physical drawer count</div>
+                </div>
+
+                <div className="shift-bento-ribbon-tile highlight">
+                  <div className="ribbon-tile-label">
+                    <span>Variance</span>
+                    <ScaleIcon size={13} style={{ color: '#4f46e5' }} />
+                  </div>
+                  <div
+                    className="ribbon-tile-val"
+                    style={{
+                      color: (report.summary.varianceMinor ?? 0) === 0
+                        ? '#059669'
+                        : (report.summary.varianceMinor ?? 0) < 0
+                          ? '#dc2626'
+                          : '#d97706',
+                    }}
+                  >
+                    {(report.summary.varianceMinor ?? 0) === 0
+                      ? 'BALANCED'
+                      : formatMoney(report.summary.varianceMinor ?? 0)}
+                  </div>
+                  <div className="ribbon-tile-sub">
+                    {(report.summary.varianceMinor ?? 0) === 0 ? 'Zero discrepancy' : varClass.type.toUpperCase()}
+                  </div>
+                </div>
+
+                <div className="shift-bento-ribbon-tile">
+                  <div className="ribbon-tile-label">
+                    <span>Total Collections</span>
+                    <TrendingUpIcon size={13} style={{ color: '#7c3aed' }} />
+                  </div>
+                  <div className="ribbon-tile-val" style={{ color: '#7c3aed' }}>
+                    {formatMoney(report.summary.totalCollectedMinor)}
+                  </div>
+                  <div className="ribbon-tile-sub">Cash + Digital combined</div>
+                </div>
               </div>
 
-              {/* Collections by Payment Method */}
-              <div className="report-section">
-                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><CreditCardIcon size={18} /> Total Collections by Payment Method</h4>
-                <table className="report-table">
-                  <thead>
-                    <tr>
-                      <th>Payment Method</th>
-                      <th className="text-center">Count</th>
-                      <th className="text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.summary.paymentMethods.map((pm) => (
-                      <tr key={pm.method}>
-                        <td>
-                          <span className={`method-badge ${pm.method}`}>
-                            {pm.method.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="text-center font-mono">{pm.count}</td>
-                        <td className="text-right font-mono font-semibold">{formatMoney(pm.amountMinor)}</td>
-                      </tr>
-                    ))}
-                    <tr className="total-row">
-                      <td><strong>TOTAL SETTLED COLLECTIONS</strong></td>
-                      <td className="text-center font-mono font-bold">
-                        {report.summary.paymentMethods.reduce((a, b) => a + b.count, 0)}
-                      </td>
-                      <td className="text-right font-mono font-bold text-primary">
-                        {formatMoney(report.summary.totalCollectedMinor)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              {/* Dual Column Bento Grid */}
+              <div className="shift-bento-main-grid">
+                {/* Left Bento Panel: Cash Reconciliation & Payments */}
+                <div className="shift-bento-panel">
+                  <div className="shift-bento-panel-header">
+                    <div className="panel-header-title-box">
+                      <BanknoteIcon size={16} style={{ color: '#059669' }} />
+                      <h4 className="panel-header-title">Drawer Cash Reconciliation</h4>
+                    </div>
+                  </div>
 
-              {/* Cash Movements Ledger */}
-              {report.cashMovements.length > 0 && (
-                <div className="report-section">
-                  <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FileTextIcon size={18} /> Shift Cash Movements Log ({report.cashMovements.length})</h4>
-                  <table className="report-table">
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Type</th>
-                        <th>Reason / Notes</th>
-                        <th>Recorded By</th>
-                        <th className="text-right">Amount</th>
-                      </tr>
-                    </thead>
+                  <table className="report-table" style={{ margin: 0 }}>
                     <tbody>
-                      {report.cashMovements.map((cm) => (
-                        <tr key={cm.id}>
-                          <td className="text-muted font-mono" style={{ fontSize: '0.8rem' }}>
-                            {new Date(cm.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td>
-                            <span className={`movement-tag ${cm.movementType}`}>
-                              {cm.movementType === 'cash_in' ? 'CASH-IN' : 'CASH-OUT'}
-                            </span>
-                          </td>
-                          <td>
-                            <strong>{cm.reason}</strong>
-                            {cm.notes && <span className="cell-notes"> • {cm.notes}</span>}
-                          </td>
-                          <td className="text-muted">{cm.createdByName || 'Staff'}</td>
-                          <td className={`text-right font-mono font-semibold ${cm.movementType === 'cash_in' ? 'text-success' : 'text-warning'}`}>
-                            {cm.movementType === 'cash_in' ? '+' : '-'}{formatMoney(cm.amountMinor)}
-                          </td>
-                        </tr>
-                      ))}
+                      <tr>
+                        <td>Opening Cash Float</td>
+                        <td className="text-right font-mono">{formatMoney(report.summary.openingCashMinor)}</td>
+                      </tr>
+                      <tr>
+                        <td>(+) Cash Sales & Direct Receipts</td>
+                        <td className="text-right font-mono text-success">+{formatMoney(report.summary.cashSalesMinor)}</td>
+                      </tr>
+                      <tr>
+                        <td>(+) Cash-In Drawer Movements</td>
+                        <td className="text-right font-mono text-success">+{formatMoney(report.summary.cashInMinor)}</td>
+                      </tr>
+                      <tr>
+                        <td>(-) Cash-Out Drawer Movements</td>
+                        <td className="text-right font-mono text-warning">-{formatMoney(report.summary.cashOutMinor)}</td>
+                      </tr>
+                      <tr>
+                        <td>(-) Cash Refunds Paid from Drawer</td>
+                        <td className="text-right font-mono text-danger">-{formatMoney(report.summary.cashRefundsMinor)}</td>
+                      </tr>
+                      <tr className="highlight-row">
+                        <td><strong>EXPECTED DRAWER CASH</strong></td>
+                        <td className="text-right font-mono font-bold">{formatMoney(report.summary.expectedCashMinor)}</td>
+                      </tr>
+                      <tr className="highlight-row secondary">
+                        <td><strong>ACTUAL PHYSICAL COUNTED CASH</strong></td>
+                        <td className="text-right font-mono font-bold">
+                          {report.summary.countedCashMinor !== undefined && report.summary.countedCashMinor !== null
+                            ? formatMoney(report.summary.countedCashMinor)
+                            : '—'}
+                        </td>
+                      </tr>
+                      <tr className={`variance-row ${varClass.type}`}>
+                        <td>
+                          <strong>CASH VARIANCE ({varClass.type.toUpperCase()})</strong>
+                        </td>
+                        <td className="text-right font-mono font-bold">
+                          {formatMoney(report.summary.varianceMinor)}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
-                </div>
-              )}
 
-              {/* Manager Review Status */}
-              <div className="report-section review-section">
-                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldCheckIcon size={18} /> Manager Review & Audit Status</h4>
-                {report.shift.reviewedBy ? (
-                  <div className="manager-reviewed-card">
-                    <span className="reviewed-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CheckCircle2Icon size={15} /> REVIEWED & APPROVED</span>
-                    <p className="reviewed-by-line">
-                      Reviewed by <strong>{report.shift.reviewedByName || report.shift.reviewedBy}</strong> on{' '}
-                      {new Date(report.shift.reviewedAt!).toLocaleString('en-IN')}
-                    </p>
-                    {report.shift.reviewNotes && (
-                      <p className="reviewed-notes">
-                        <em>Review Notes:</em> {report.shift.reviewNotes}
+                  {/* Variance Explanation Notice */}
+                  {report.summary.varianceMinor !== 0 && (
+                    <div className={`report-discrepancy-card ${varClass.type}`} style={{ margin: 0 }}>
+                      <span className="discrepancy-badge">
+                        {varClass.type === 'shortage' ? 'DEFICIT EXPLANATION' : 'SURPLUS EXPLANATION'}
+                      </span>
+                      <p className="discrepancy-text">
+                        {report.shift.note || 'No explanation reason recorded.'}
                       </p>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <div className="pending-review-notice">
-                      <ClockIcon size={16} />
-                      <span>No manager review recorded yet for this shift.</span>
                     </div>
+                  )}
 
-                    {isManagerOrOwner && report.shift.status === 'closed' && (
-                      <form onSubmit={handleReviewSubmit} className="manager-review-form">
-                        <label className="form-label font-semibold">
-                          Acknowledge & Sign-off Discrepancy (Manager/Owner Action)
-                        </label>
-                        <textarea
-                          className="form-input form-textarea"
-                          rows={2}
-                          placeholder="Enter audit acknowledgment notes (e.g., Shortage inspected and approved, cash handed over to safe)"
-                          value={reviewNotes}
-                          onChange={(e) => setReviewNotes(e.target.value)}
-                          required
-                        />
-                        <button
-                          type="submit"
-                          className="btn btn-primary btn-sm"
-                          style={{ marginTop: '0.5rem' }}
-                          disabled={isReviewing}
-                        >
-                          {isReviewing ? 'Saving Review...' : 'Acknowledge & Approve Discrepancy'}
-                        </button>
-                      </form>
+                  {/* Payment Methods Breakdown */}
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <div className="panel-header-title-box" style={{ marginBottom: '0.65rem' }}>
+                      <CreditCardIcon size={15} style={{ color: '#2563eb' }} />
+                      <h4 className="panel-header-title" style={{ fontSize: '0.86rem' }}>Settled Collections by Method</h4>
+                    </div>
+                    <table className="report-table" style={{ margin: 0 }}>
+                      <thead>
+                        <tr>
+                          <th>Method</th>
+                          <th className="text-center">Count</th>
+                          <th className="text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.summary.paymentMethods.map((pm) => (
+                          <tr key={pm.method}>
+                            <td>
+                              <span className={`method-badge ${pm.method}`}>
+                                {pm.method.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="text-center font-mono">{pm.count}</td>
+                            <td className="text-right font-mono font-semibold">{formatMoney(pm.amountMinor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Right Bento Panel: Shift Meta, Movements & Review */}
+                <div className="shift-bento-panel">
+                  <div className="shift-bento-panel-header">
+                    <div className="panel-header-title-box">
+                      <ShieldCheckIcon size={16} style={{ color: '#7c3aed' }} />
+                      <h4 className="panel-header-title">Audit Log & Sign-Off</h4>
+                    </div>
+                    <span
+                      className={`status-pill ${report.shift.status}`}
+                      style={{ fontSize: '0.68rem', padding: '0.2rem 0.55rem' }}
+                    >
+                      {report.shift.status.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Metadata Card */}
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.78rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>Cashier:</span>
+                      <strong style={{ color: '#0f172a' }}>{report.shift.userName}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>Location / Register:</span>
+                      <strong style={{ color: '#0f172a' }}>{report.shift.location || 'MAIN'} ({report.shift.counter || 'COUNTER-1'})</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>Opened At:</span>
+                      <strong style={{ color: '#0f172a' }}>{new Date(report.shift.openedAt).toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>Closed At:</span>
+                      <strong style={{ color: '#0f172a' }}>
+                        {report.shift.closedAt ? new Date(report.shift.closedAt).toLocaleString('en-IN') : 'Still Open'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Manager Review Status */}
+                  <div style={{ marginTop: '0.25rem' }}>
+                    {report.shift.reviewedBy ? (
+                      <div className="manager-reviewed-card" style={{ margin: 0 }}>
+                        <span className="reviewed-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle2Icon size={14} /> REVIEWED & AUDITED
+                        </span>
+                        <p className="reviewed-by-line" style={{ margin: '0.35rem 0' }}>
+                          By <strong>{report.shift.reviewedByName || report.shift.reviewedBy}</strong> on{' '}
+                          {new Date(report.shift.reviewedAt!).toLocaleString('en-IN')}
+                        </p>
+                        {report.shift.reviewNotes && (
+                          <p className="reviewed-notes" style={{ margin: 0 }}>
+                            <em>Notes:</em> {report.shift.reviewNotes}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="pending-review-notice" style={{ margin: 0, marginBottom: '0.5rem' }}>
+                          <ClockIcon size={15} />
+                          <span>Discrepancy pending manager review sign-off</span>
+                        </div>
+
+                        {isManagerOrOwner && report.shift.status === 'closed' && (
+                          <form onSubmit={handleReviewSubmit} className="manager-review-form" style={{ margin: 0 }}>
+                            <label className="form-label font-semibold" style={{ fontSize: '0.78rem' }}>
+                              Acknowledge & Sign-Off Discrepancy
+                            </label>
+                            <textarea
+                              className="form-input form-textarea"
+                              rows={2}
+                              placeholder="Enter audit acknowledgment notes..."
+                              value={reviewNotes}
+                              onChange={(e) => setReviewNotes(e.target.value)}
+                              required
+                            />
+                            <button
+                              type="submit"
+                              className="cat-btn-primary"
+                              style={{ marginTop: '0.5rem', alignSelf: 'flex-start' }}
+                              disabled={isReviewing}
+                            >
+                              {isReviewing ? 'Saving Review...' : 'Acknowledge & Approve Discrepancy'}
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+
+                  {/* Movements Count */}
+                  {report.cashMovements.length > 0 && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem 0.9rem', fontSize: '0.76rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+                      <span>Recorded Cash Movements:</span>
+                      <strong style={{ color: '#0f172a' }}>{report.cashMovements.length} transactions</strong>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
-        <div className="modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Close
-          </button>
-          <button type="button" className="btn btn-primary" onClick={handlePrint}>
-            <PrinterIcon size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '6px' }} /> Print Thermal / A4 Report
-          </button>
+        {/* 3. Bento Footer */}
+        <div className="shift-bento-footer">
+          <div className="shift-bento-footer-left">
+            <ShieldCheckIcon size={15} style={{ color: '#059669' }} />
+            <span>Immutable day-end settlement record archived with Neon PostgreSQL</span>
+          </div>
+
+          <div className="shift-bento-footer-actions">
+            <button type="button" className="cat-btn-outline" onClick={onClose}>
+              Close
+            </button>
+            <button type="button" className="cat-btn-primary" onClick={handlePrint}>
+              <PrinterIcon size={14} />
+              <span>Print A4 / Thermal Receipt</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>,

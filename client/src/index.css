@@ -34326,3 +34326,322 @@ select.expense-input-control {
   border-radius: 14px;
   border: 1px solid #f1f5f9;
 }
+
+
+/* ==========================================================================
+   SHIFTS BENTO RECTANGLE MODALS (WIDE LANDSCAPE DUAL-COLUMN BENTO STYLE)
+   ========================================================================== */
+
+.shift-bento-dialog {
+  width: 94vw !important;
+  max-width: 960px !important;
+  max-height: 88vh !important;
+  background: #ffffff !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow:
+    0 25px 60px -15px rgba(15, 23, 42, 0.28),
+    0 10px 24px -5px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  position: relative !important;
+  animation: modalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.shift-bento-dialog.wide-1040 {
+  max-width: 1040px !important;
+}
+
+.shift-bento-header {
+  padding: 1rem 1.5rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.shift-bento-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.shift-bento-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.shift-bento-icon-badge.green {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.shift-bento-icon-badge.amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.shift-bento-icon-badge.indigo {
+  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+  color: #6366f1;
+  border: 1px solid #c7d2fe;
+}
+
+.shift-bento-icon-badge.rose {
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%);
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+}
+
+.shift-bento-icon-badge.purple {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.shift-bento-title-wrap h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.015em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shift-bento-title-wrap p {
+  margin: 0.2rem 0 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.shift-bento-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.shift-bento-body {
+  padding: 1.15rem 1.45rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  background: #f8fafc;
+}
+
+/* 4-Tile Bento Ribbon in Modals */
+.shift-bento-ribbon {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.shift-bento-ribbon.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.shift-bento-ribbon-tile {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), inset 0 1px 0 #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+
+.shift-bento-ribbon-tile.highlight {
+  background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%);
+  border-color: #c7d2fe;
+}
+
+.ribbon-tile-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ribbon-tile-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.15;
+}
+
+.ribbon-tile-sub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+}
+
+/* Dual Column Main Bento Grid */
+.shift-bento-main-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.15rem;
+  align-items: stretch;
+}
+
+@media (max-width: 768px) {
+  .shift-bento-ribbon {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .shift-bento-main-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.shift-bento-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), inset 0 1px 0 #ffffff;
+}
+
+.shift-bento-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.panel-header-title-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.panel-header-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.shift-bento-footer {
+  padding: 0.85rem 1.5rem;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.shift-bento-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.shift-bento-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* Dynamic Live Calculation Card */
+.live-calc-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.live-calc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.live-calc-row strong {
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
+}
+
+.live-calc-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0.2rem 0;
+}
+
+.live-calc-result-box {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1.5px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.live-calc-result-box.amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fde68a;
+}
+
+.calc-result-title {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.calc-result-amount {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #047857;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.calc-result-amount.text-amber {
+  color: #b45309;
+}
