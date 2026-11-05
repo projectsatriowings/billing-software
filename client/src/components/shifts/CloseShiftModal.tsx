@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { closeShift, fetchActiveShift, fetchShiftDetails, type Shift, type ShiftSummary } from '../../api.ts';
 import { formatMoney } from '../../../../shared/shifts.ts';
+import { UserIcon } from '../inventory/InventoryIcons.tsx';
 
 interface CloseShiftModalProps {
   isOpen: boolean;
@@ -182,7 +183,7 @@ export const CloseShiftModal: React.FC<CloseShiftModalProps> = ({
               <h2 className="modal-title">Close Shift & Day-End Reconcile</h2>
               <p className="modal-subtitle">
                 Shift: <span className="shift-ref-pill">#{activeShift.shiftNumber || activeShift.id.slice(0, 8)}</span> • Cashier:{' '}
-                <span className="cashier-pill-tag">👤 {activeShift.userName || 'Current Cashier'}</span>
+                <span className="cashier-pill-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><UserIcon size={13} /> {activeShift.userName || 'Current Cashier'}</span>
                 {activeShift.openedAt && (
                   <> • Opened: <span>{formatShiftOpenedAt(activeShift.openedAt)}</span></>
                 )}

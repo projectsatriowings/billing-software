@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { fetchShiftReport, reviewShift, type ShiftClosingReport } from '../../api.ts';
 import { formatMoney, classifyVariance } from '../../../../shared/shifts.ts';
+import {
+  RefreshCwIcon,
+  AlertTriangleIcon,
+  BanknoteIcon,
+  CreditCardIcon,
+  FileTextIcon,
+  ShieldCheckIcon,
+  CheckCircle2Icon,
+  ClockIcon,
+  PrinterIcon,
+} from '../inventory/InventoryIcons.tsx';
 
 interface ShiftClosingReportModalProps {
   isOpen: boolean;
@@ -122,14 +133,14 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
         <div className="modal-body report-modal-scroll">
           {loading && (
             <div className="report-loading-state">
-              <span className="spinner">⏳</span>
+              <RefreshCwIcon size={18} className="spinning-icon" />
               <span>Compiling authoritative shift report...</span>
             </div>
           )}
 
           {error && (
             <div className="shift-modal-alert error">
-              <span>⚠️</span>
+              <AlertTriangleIcon size={18} />
               <span>{error}</span>
             </div>
           )}
@@ -176,7 +187,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
 
               {/* Drawer Cash Reconciliation Table */}
               <div className="report-section">
-                <h4 className="report-section-title">💵 Cash Drawer Reconciliation</h4>
+                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><BanknoteIcon size={18} /> Cash Drawer Reconciliation</h4>
                 <table className="report-table">
                   <tbody>
                     <tr>
@@ -233,7 +244,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
 
               {/* Collections by Payment Method */}
               <div className="report-section">
-                <h4 className="report-section-title">💳 Total Collections by Payment Method</h4>
+                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><CreditCardIcon size={18} /> Total Collections by Payment Method</h4>
                 <table className="report-table">
                   <thead>
                     <tr>
@@ -270,7 +281,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
               {/* Cash Movements Ledger */}
               {report.cashMovements.length > 0 && (
                 <div className="report-section">
-                  <h4 className="report-section-title">📋 Shift Cash Movements Log ({report.cashMovements.length})</h4>
+                  <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><FileTextIcon size={18} /> Shift Cash Movements Log ({report.cashMovements.length})</h4>
                   <table className="report-table">
                     <thead>
                       <tr>
@@ -309,10 +320,10 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
 
               {/* Manager Review Status */}
               <div className="report-section review-section">
-                <h4 className="report-section-title">🛡️ Manager Review & Audit Status</h4>
+                <h4 className="report-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldCheckIcon size={18} /> Manager Review & Audit Status</h4>
                 {report.shift.reviewedBy ? (
                   <div className="manager-reviewed-card">
-                    <span className="reviewed-badge">✅ REVIEWED & APPROVED</span>
+                    <span className="reviewed-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CheckCircle2Icon size={15} /> REVIEWED & APPROVED</span>
                     <p className="reviewed-by-line">
                       Reviewed by <strong>{report.shift.reviewedByName || report.shift.reviewedBy}</strong> on{' '}
                       {new Date(report.shift.reviewedAt!).toLocaleString('en-IN')}
@@ -326,7 +337,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
                 ) : (
                   <div>
                     <div className="pending-review-notice">
-                      <span>⏳</span>
+                      <ClockIcon size={16} />
                       <span>No manager review recorded yet for this shift.</span>
                     </div>
 
@@ -365,7 +376,7 @@ export const ShiftClosingReportModal: React.FC<ShiftClosingReportModalProps> = (
             Close
           </button>
           <button type="button" className="btn btn-primary" onClick={handlePrint}>
-            🖨️ Print Thermal / A4 Report
+            <PrinterIcon size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '6px' }} /> Print Thermal / A4 Report
           </button>
         </div>
       </div>

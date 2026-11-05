@@ -33295,3 +33295,992 @@ select.expense-input-control {
 .product-subcard-table tbody tr {
   animation: productRowFade 0.35s ease-out backwards;
 }
+
+/* ==========================================================================
+   CASHIER SHIFT - 3D BENTO LAYOUT REDESIGN
+   ========================================================================== */
+
+/* 1. 3D Bento Hero Card */
+.shifts-bento-hero {
+  background: linear-gradient(135deg, #1e1b4b 0%, #2e266d 55%, #3730a3 100%);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  border-radius: 22px;
+  padding: 1.85rem 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.05),
+    0 10px 25px -4px rgba(30, 27, 75, 0.28),
+    0 24px 48px -10px rgba(79, 70, 229, 0.25),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shifts-bento-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4) 20%, rgba(255, 255, 255, 0.4) 80%, transparent);
+  pointer-events: none;
+}
+
+.shifts-bento-hero::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(165, 180, 252, 0.22) 0%, rgba(99, 102, 241, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.shift-bento-active-badge {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  padding: 0.32rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.shift-bento-closed-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.32rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bento-location-chip,
+.bento-counter-chip {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e0e7ff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.28rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.shifts-bento-title {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.shift-num-highlight {
+  color: #a5b4fc;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.title-sep {
+  opacity: 0.45;
+  font-weight: 300;
+}
+
+.title-cashier-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.4rem;
+  color: #ffffff;
+}
+
+.cashier-user-icon {
+  color: #c7d2fe;
+}
+
+.shifts-bento-subtitle {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #c7d2fe;
+  line-height: 1.45;
+}
+
+/* Bento Hero Buttons */
+.bento-hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.35rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.bento-hero-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+}
+
+.bento-hero-btn:active {
+  transform: translateY(0);
+}
+
+.bento-hero-btn.primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  border-color: rgba(165, 180, 252, 0.3);
+}
+
+.bento-hero-btn.danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border-color: rgba(254, 202, 202, 0.3);
+}
+
+.bento-hero-btn.secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+}
+
+.bento-hero-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.bento-hero-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border-color: rgba(167, 243, 208, 0.4);
+}
+
+.bento-hero-btn.large {
+  padding: 0.95rem 1.85rem;
+  font-size: 1.05rem;
+  border-radius: 14px;
+}
+
+/* 2. 5-Tile Bento KPI Grid */
+.shifts-bento-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 1.1rem;
+}
+
+.shifts-bento-kpi-tile {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f8fafc 100%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 20px;
+  padding: 1.25rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 6px 16px -2px rgba(15, 23, 42, 0.05),
+    0 16px 32px -6px rgba(99, 102, 241, 0.05),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(226, 232, 240, 0.5);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.3s ease;
+}
+
+.shifts-bento-kpi-tile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95) 20%, rgba(255, 255, 255, 0.95) 80%, transparent);
+  pointer-events: none;
+}
+
+.shifts-bento-kpi-tile:hover {
+  transform: translateY(-4px) translateZ(0);
+}
+
+.kpi-tile-expected:hover {
+  border-color: rgba(52, 211, 153, 0.8);
+  box-shadow:
+    0 2px 6px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(16, 185, 129, 0.12),
+    0 28px 50px -8px rgba(16, 185, 129, 0.15),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.kpi-tile-cash-sales:hover {
+  border-color: rgba(74, 222, 128, 0.8);
+  box-shadow:
+    0 2px 6px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(34, 197, 94, 0.12),
+    0 28px 50px -8px rgba(34, 197, 94, 0.14),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.kpi-tile-noncash:hover {
+  border-color: rgba(147, 197, 253, 0.9);
+  box-shadow:
+    0 2px 6px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(59, 130, 246, 0.12),
+    0 28px 50px -8px rgba(59, 130, 246, 0.15),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.kpi-tile-movements:hover {
+  border-color: rgba(252, 211, 77, 0.9);
+  box-shadow:
+    0 2px 6px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(245, 158, 11, 0.12),
+    0 28px 50px -8px rgba(245, 158, 11, 0.15),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.kpi-tile-turnover:hover {
+  border-color: rgba(196, 181, 253, 0.9);
+  box-shadow:
+    0 2px 6px 0 rgba(15, 23, 42, 0.03),
+    0 14px 28px -4px rgba(139, 92, 246, 0.12),
+    0 28px 50px -8px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 0 #ffffff;
+}
+
+.kpi-tile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.kpi-tile-icon-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.kpi-tile-icon-box.emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.kpi-tile-icon-box.green {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.kpi-tile-icon-box.blue {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.kpi-tile-icon-box.amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.kpi-tile-icon-box.purple {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.kpi-tile-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.bento-kpi-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.bento-kpi-badge.emerald {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.bento-kpi-badge.green {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.bento-kpi-badge.blue {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.bento-kpi-badge.amber {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.bento-kpi-badge.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.kpi-tile-value {
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0.2rem 0;
+}
+
+.kpi-tile-footer {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin-top: auto;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(241, 245, 249, 0.9);
+}
+
+/* 3. Bento Segmented Navigation Tabs */
+.shifts-bento-nav-tabs {
+  display: flex;
+  gap: 0.45rem;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  padding: 0.35rem;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.05);
+  overflow-x: auto;
+}
+
+.bento-nav-tab {
+  background: transparent;
+  border: none;
+  color: #475569;
+  padding: 0.65rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.bento-nav-tab:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.bento-nav-tab.active {
+  background: #ffffff;
+  color: #4f46e5;
+  font-weight: 700;
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.08),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 #ffffff;
+}
+
+.bento-tab-counter {
+  background: #e0e7ff;
+  color: #4f46e5;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.12rem 0.48rem;
+  border-radius: 9999px;
+  margin-left: 0.2rem;
+}
+
+.bento-nav-tab.active .bento-tab-counter {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+/* 4. Bento Section Cards */
+.shifts-bento-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 60%, #f8fafc 100%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 20px;
+  padding: 1.5rem 1.75rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 6px 18px -2px rgba(15, 23, 42, 0.05),
+    0 18px 36px -6px rgba(99, 102, 241, 0.05),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(226, 232, 240, 0.5);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shifts-bento-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95) 20%, rgba(255, 255, 255, 0.95) 80%, transparent);
+  pointer-events: none;
+}
+
+.bento-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.35rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(241, 245, 249, 0.9);
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.bento-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.bento-card-icon-pill {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.bento-card-icon-pill.indigo {
+  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.bento-card-icon-pill.emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.bento-card-icon-pill.blue {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.bento-card-icon-pill.amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.bento-card-icon-pill.purple {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.bento-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.bento-card-desc {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.bento-pill-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.bento-pill-badge.info {
+  background: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
+
+.bento-pill-badge.primary {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+/* 5. Formula Step Boxes */
+.formula-step-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem;
+  min-width: 145px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03), inset 0 1px 0 #ffffff;
+  transition: all 0.2s ease;
+}
+
+.formula-step-box:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.formula-step-box.result {
+  background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+  border: 2px solid #6366f1;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.18), inset 0 1px 0 #ffffff;
+}
+
+.step-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.step-box-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.step-box-badge.result {
+  background: #4f46e5;
+  color: #ffffff;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.step-box-icon {
+  color: #94a3b8;
+}
+
+.step-box-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.step-box-desc {
+  font-size: 0.7rem;
+  color: #64748b;
+  min-height: 28px;
+  line-height: 1.35;
+}
+
+.step-box-amount {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 0.2rem;
+}
+
+.formula-op-pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 1.15rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+/* Bento Safety Guarantee Alert */
+.bento-safety-guarantee {
+  margin-top: 1.25rem;
+  padding: 1rem 1.35rem;
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06), inset 0 1px 0 #ffffff;
+}
+
+.safety-guarantee-icon {
+  color: #4f46e5;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.safety-guarantee-content {
+  font-size: 0.85rem;
+  color: #3730a3;
+  line-height: 1.5;
+}
+
+/* 6. Bento Shift Action Cards */
+.bento-actions-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bento-action-card {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #ffffff;
+  color: #1e293b;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03), inset 0 1px 0 #ffffff;
+  position: relative;
+}
+
+.bento-action-card:hover {
+  transform: translateX(4px);
+}
+
+.bento-action-card.emerald:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.12), inset 0 1px 0 #ffffff;
+}
+
+.bento-action-card.amber:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.12), inset 0 1px 0 #ffffff;
+}
+
+.bento-action-card.indigo:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.12), inset 0 1px 0 #ffffff;
+}
+
+.bento-action-card.rose:hover {
+  border-color: rgba(244, 63, 94, 0.4);
+  box-shadow: 0 6px 18px rgba(244, 63, 94, 0.12), inset 0 1px 0 #ffffff;
+}
+
+.action-card-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.action-card-icon-box.emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.action-card-icon-box.amber {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.action-card-icon-box.indigo {
+  background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+  color: #6366f1;
+  border: 1px solid #c7d2fe;
+}
+
+.action-card-icon-box.rose {
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%);
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+}
+
+.action-card-text {
+  flex: 1;
+}
+
+.action-card-text strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.action-card-text p {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.76rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.action-card-arrow {
+  color: #cbd5e1;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.bento-action-card:hover .action-card-arrow {
+  color: #475569;
+  transform: translateX(3px);
+}
+
+/* 7. Empty Shift Bento Card */
+.bento-empty-shift-card {
+  padding: 3.5rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bento-empty-icon-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #a7f3d0;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15), inset 0 1px 0 #ffffff;
+}
+
+.bento-empty-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bento-empty-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+/* 8. Bento Empty State in Subtabs */
+.bento-empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bento-empty-svg {
+  color: #94a3b8;
+  opacity: 0.8;
+}
+
+.bento-empty-state p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* 9. History Table Bento Badges */
+.bento-reviewed-badge {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.bento-pending-badge {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.bento-table-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.bento-table-action-btn:hover {
+  background: #f8fafc;
+  border-color: #6366f1;
+  color: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.15);
+}
+
+.bento-filter-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.bento-filter-pill {
+  background: transparent;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bento-filter-pill:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.bento-filter-pill.active {
+  background: #4f46e5;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.bento-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.52rem 1.15rem;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bento-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.45);
+}
+
+.bento-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bento-btn-primary.sm {
+  padding: 0.42rem 0.85rem;
+  font-size: 0.78rem;
+}
+
+.bento-table-wrapper {
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid #f1f5f9;
+}

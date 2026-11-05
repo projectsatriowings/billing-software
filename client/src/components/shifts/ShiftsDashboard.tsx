@@ -13,12 +13,30 @@ import { OpenShiftModal } from './OpenShiftModal.tsx';
 import { CashMovementModal } from './CashMovementModal.tsx';
 import { CloseShiftModal } from './CloseShiftModal.tsx';
 import { ShiftClosingReportModal } from './ShiftClosingReportModal.tsx';
+import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 import {
   RupeeIcon,
   BanknoteIcon,
   CreditCardIcon,
   RefreshCwIcon,
   TrendingUpIcon,
+  WalletIcon,
+  ScaleIcon,
+  ClockIcon,
+  RotateCcwIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
+  FileTextIcon,
+  LockIcon,
+  ShoppingCartIcon,
+  StoreIcon,
+  ArrowDownLeftIcon,
+  ArrowUpRightIcon,
+  PlusIcon,
+  UserIcon,
+  MapPinIcon,
+  ChevronRightIcon,
+  ShieldCheckIcon,
 } from '../inventory/InventoryIcons.tsx';
 
 interface ShiftsDashboardProps {
@@ -72,7 +90,6 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       const res = await fetchActiveShift();
       setActiveShift(res.activeShift);
       if (res.activeShift) {
-        // Load movements
         const det = await fetchShiftDetails(res.activeShift.id);
         setMovements(det.movements || (det.shift as any)?.cashMovements || []);
       } else {
@@ -123,7 +140,7 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
   const summary = activeShift?.summary;
 
-  // Safe format shift opened timestamp (contextual date + time, with fallback)
+  // Safe format shift opened timestamp (contextual date + time)
   const formatShiftOpenedAt = (openedAtStr?: string | null) => {
     if (!openedAtStr) return 'Opening time unavailable';
     const date = new Date(openedAtStr);
@@ -158,42 +175,54 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
   return (
     <div className="shifts-dashboard-wrapper">
-      {/* Top Banner / Hero Card */}
-      <div className="shifts-hero-card">
+      {/* 3D BENTO HERO CARD */}
+      <div className="shifts-bento-hero bento-card-3d">
         <div className="shifts-hero-left">
           <div className="hero-status-pill-wrap">
             {activeShift ? (
-              <span className="shift-active-badge">
+              <span className="shift-bento-active-badge">
                 <span className="pulse-green-dot"></span>
                 ACTIVE CASHIER SHIFT
               </span>
             ) : (
-              <span className="shift-closed-badge">
+              <span className="shift-bento-closed-badge">
                 <span className="gray-dot"></span>
                 NO ACTIVE SHIFT OPEN
               </span>
             )}
-            <span className="shop-location-chip">
-              📍 {activeShift?.location || 'Main Counter'}
+            <span className="bento-location-chip">
+              <MapPinIcon size={13} />
+              <span>{activeShift?.location || 'Main Counter'}</span>
             </span>
+            {activeShift?.counter && (
+              <span className="bento-counter-chip">
+                <StoreIcon size={13} />
+                <span>{activeShift.counter}</span>
+              </span>
+            )}
           </div>
 
-          <h2 className="shifts-hero-title">
+          <h2 className="shifts-bento-title">
             {activeShift ? (
               <>
-                Shift <strong>{activeShift.shiftNumber}</strong> • Cashier: <strong>{activeShift.userName || user.name}</strong>
+                Shift <span className="shift-num-highlight">#{activeShift.shiftNumber}</span>
+                <span className="title-sep">•</span>
+                <span className="title-cashier-group">
+                  <UserIcon size={18} className="cashier-user-icon" />
+                  <span>{activeShift.userName || user.name}</span>
+                </span>
               </>
             ) : (
               'Drawer Register Ready for New Shift'
             )}
           </h2>
 
-          <p className="shifts-hero-subtitle">
+          <p className="shifts-bento-subtitle">
             {activeShift ? (
               <>
                 Opened {formatShiftOpenedAt(activeShift.openedAt)}
                 {getDurationString(activeShift.openedAt) && (
-                  <> • Active for <strong>{getDurationString(activeShift.openedAt)}</strong></>
+                  <> • Running for <strong>{getDurationString(activeShift.openedAt)}</strong></>
                 )}
               </>
             ) : (
@@ -207,148 +236,184 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
             <>
               <button
                 type="button"
-                className="btn btn-primary btn-hero-action"
+                className="bento-hero-btn primary"
                 onClick={() => setIsCashMovementModalOpen(true)}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/>
-                </svg>
+                <ArrowDownLeftIcon size={16} />
                 <span>Cash In / Out</span>
               </button>
               <button
                 type="button"
-                className="btn btn-danger btn-hero-action"
+                className="bento-hero-btn danger"
                 onClick={() => setIsCloseShiftModalOpen(true)}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
+                <LockIcon size={16} />
                 <span>Close Shift</span>
               </button>
               <button
                 type="button"
-                className="btn btn-secondary btn-hero-action"
+                className="bento-hero-btn secondary"
                 onClick={() => setReportModalShiftId(activeShift.id)}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                </svg>
+                <FileTextIcon size={16} />
                 <span>Live Summary</span>
               </button>
             </>
           ) : (
             <button
               type="button"
-              className="btn btn-success btn-hero-action large"
+              className="bento-hero-btn success large"
               onClick={() => setIsOpenShiftModalOpen(true)}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="16"></line>
-                <line x1="8" y1="12" x2="16" y2="12"></line>
-              </svg>
+              <PlusIcon size={18} />
               <span>Open New Cashier Shift</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Real-time KPI Metric Cards */}
+      {/* 5 REAL-TIME BENTO KPI METRIC CARDS WITH COUNTING ANIMATION */}
       {activeShift && summary && (
-        <div className="shifts-kpi-grid">
+        <div className="shifts-bento-kpi-grid">
           {/* Card 1: Expected Drawer Cash */}
-          <div className="shift-kpi-card highlight-expected">
-            <div className="kpi-card-top">
-              <span className="kpi-label">EXPECTED IN DRAWER</span>
-              <span className="kpi-icon"><RupeeIcon size={18} /></span>
+          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-expected">
+            <div className="kpi-tile-header">
+              <div className="kpi-tile-icon-box emerald">
+                <WalletIcon size={18} />
+              </div>
+              <span className="kpi-tile-label">EXPECTED IN DRAWER</span>
+              <span className="bento-kpi-badge emerald">Live Balance</span>
             </div>
-            <div className="kpi-main-val font-mono">{formatMoney(summary.expectedCashMinor)}</div>
-            <span className="kpi-subtext">
-              Float ({formatMoney(summary.openingCashMinor)}) + Net Cash ({formatMoney(summary.expectedCashMinor - summary.openingCashMinor)})
-            </span>
+            <div className="kpi-tile-value font-mono text-emerald-600">
+              <AnimatedCounter
+                value={summary.expectedCashMinor / 100}
+                formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              />
+            </div>
+            <div className="kpi-tile-footer">
+              <span>Float ({formatMoney(summary.openingCashMinor)}) + Net Cash ({formatMoney(summary.expectedCashMinor - summary.openingCashMinor)})</span>
+            </div>
           </div>
 
           {/* Card 2: Cash Sales Collected */}
-          <div className="shift-kpi-card">
-            <div className="kpi-card-top">
-              <span className="kpi-label">CASH SALES</span>
-              <span className="kpi-icon text-success"><BanknoteIcon size={18} /></span>
+          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-cash-sales">
+            <div className="kpi-tile-header">
+              <div className="kpi-tile-icon-box green">
+                <BanknoteIcon size={18} />
+              </div>
+              <span className="kpi-tile-label">CASH SALES</span>
+              <span className="bento-kpi-badge green">Cash In</span>
             </div>
-            <div className="kpi-main-val font-mono text-success">{formatMoney(summary.cashSalesMinor)}</div>
-            <span className="kpi-subtext">Received into drawer from POS checkout</span>
+            <div className="kpi-tile-value font-mono text-emerald-600">
+              <AnimatedCounter
+                value={summary.cashSalesMinor / 100}
+                formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              />
+            </div>
+            <div className="kpi-tile-footer">
+              <span>Received into drawer from POS checkout</span>
+            </div>
           </div>
 
           {/* Card 3: Non-Cash Collections */}
-          <div className="shift-kpi-card">
-            <div className="kpi-card-top">
-              <span className="kpi-label">NON-CASH (UPI / CARD)</span>
-              <span className="kpi-icon text-primary"><CreditCardIcon size={18} /></span>
+          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-noncash">
+            <div className="kpi-tile-header">
+              <div className="kpi-tile-icon-box blue">
+                <CreditCardIcon size={18} />
+              </div>
+              <span className="kpi-tile-label">NON-CASH (UPI / CARD)</span>
+              <span className="bento-kpi-badge blue">Bank Direct</span>
             </div>
-            <div className="kpi-main-val font-mono text-primary">{formatMoney(summary.nonCashPaymentsMinor)}</div>
-            <span className="kpi-subtext">Direct bank credit (excluded from drawer)</span>
+            <div className="kpi-tile-value font-mono text-blue-600">
+              <AnimatedCounter
+                value={summary.nonCashPaymentsMinor / 100}
+                formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              />
+            </div>
+            <div className="kpi-tile-footer">
+              <span>Direct bank credit (excluded from drawer)</span>
+            </div>
           </div>
 
           {/* Card 4: Net Cash Movements */}
-          <div className="shift-kpi-card">
-            <div className="kpi-card-top">
-              <span className="kpi-label">NET CASH IN / OUT</span>
-              <span className="kpi-icon text-warning"><RefreshCwIcon size={18} /></span>
+          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-movements">
+            <div className="kpi-tile-header">
+              <div className="kpi-tile-icon-box amber">
+                <RefreshCwIcon size={18} />
+              </div>
+              <span className="kpi-tile-label">NET CASH IN / OUT</span>
+              <span className="bento-kpi-badge amber">
+                {summary.cashInMinor >= summary.cashOutMinor ? '+Net In' : '-Net Out'}
+              </span>
             </div>
-            <div className="kpi-main-val font-mono text-warning">
-              {formatMoney(summary.cashInMinor - summary.cashOutMinor)}
+            <div className="kpi-tile-value font-mono text-amber-600">
+              <AnimatedCounter
+                value={(summary.cashInMinor - summary.cashOutMinor) / 100}
+                formatter={(v) => (v < 0 ? '-' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              />
             </div>
-            <span className="kpi-subtext">
-              +{formatMoney(summary.cashInMinor)} In • -{formatMoney(summary.cashOutMinor)} Out
-            </span>
+            <div className="kpi-tile-footer">
+              <span>+{formatMoney(summary.cashInMinor)} In • -{formatMoney(summary.cashOutMinor)} Out</span>
+            </div>
           </div>
 
           {/* Card 5: Total Shift Turnover */}
-          <div className="shift-kpi-card">
-            <div className="kpi-card-top">
-              <span className="kpi-label">TOTAL COLLECTIONS</span>
-              <span className="kpi-icon"><TrendingUpIcon size={18} /></span>
+          <div className="shifts-bento-kpi-tile bento-card-3d kpi-tile-turnover">
+            <div className="kpi-tile-header">
+              <div className="kpi-tile-icon-box purple">
+                <TrendingUpIcon size={18} />
+              </div>
+              <span className="kpi-tile-label">TOTAL COLLECTIONS</span>
+              <span className="bento-kpi-badge purple">Gross Shift</span>
             </div>
-            <div className="kpi-main-val font-mono">{formatMoney(summary.totalCollectedMinor)}</div>
-            <span className="kpi-subtext">
-              Cash ({formatMoney(summary.cashSalesMinor)}) + Digital ({formatMoney(summary.nonCashPaymentsMinor)})
-            </span>
+            <div className="kpi-tile-value font-mono text-purple-600">
+              <AnimatedCounter
+                value={summary.totalCollectedMinor / 100}
+                formatter={(v) => '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              />
+            </div>
+            <div className="kpi-tile-footer">
+              <span>Cash ({formatMoney(summary.cashSalesMinor)}) + Digital ({formatMoney(summary.nonCashPaymentsMinor)})</span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Tabs Navigation */}
-      <div className="shifts-nav-tabs">
+      {/* BENTO SEGMENTED NAVIGATION TABS */}
+      <div className="shifts-bento-nav-tabs">
         <button
           type="button"
-          className={`tab-btn ${selectedTab === 'overview' ? 'active' : ''}`}
+          className={`bento-nav-tab ${selectedTab === 'overview' ? 'active' : ''}`}
           onClick={() => setSelectedTab('overview')}
         >
-          🧮 Drawer Reconciliation
+          <ScaleIcon size={16} />
+          <span>Drawer Reconciliation</span>
         </button>
         <button
           type="button"
-          className={`tab-btn ${selectedTab === 'payments' ? 'active' : ''}`}
+          className={`bento-nav-tab ${selectedTab === 'payments' ? 'active' : ''}`}
           onClick={() => setSelectedTab('payments')}
         >
-          💳 Payment Breakdown
+          <CreditCardIcon size={16} />
+          <span>Payment Breakdown</span>
         </button>
         <button
           type="button"
-          className={`tab-btn ${selectedTab === 'movements' ? 'active' : ''}`}
+          className={`bento-nav-tab ${selectedTab === 'movements' ? 'active' : ''}`}
           onClick={() => setSelectedTab('movements')}
         >
-          📋 Cash Movements ({movements.length})
+          <ArrowDownLeftIcon size={16} />
+          <span>Cash Movements</span>
+          <span className="bento-tab-counter">{movements.length}</span>
         </button>
         <button
           type="button"
-          className={`tab-btn ${selectedTab === 'history' ? 'active' : ''}`}
+          className={`bento-nav-tab ${selectedTab === 'history' ? 'active' : ''}`}
           onClick={() => setSelectedTab('history')}
         >
-          📜 Past Shifts ({shiftHistory.length})
+          <ClockIcon size={16} />
+          <span>Past Shifts</span>
+          <span className="bento-tab-counter">{shiftHistory.length}</span>
         </button>
       </div>
 
@@ -357,154 +422,207 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
         <div className="shifts-tab-content">
           {activeShift && summary ? (
             <div className="shifts-overview-layout">
-              {/* Formula Demonstration Box */}
-              <div className="shifts-section-card">
-                <div className="card-header-clean">
-                  <h3 className="section-title">Authoritative Expected Cash Formula</h3>
-                  <span className="badge-pill info">Strict Integer Paise Math</span>
+              {/* Formula Demonstration Bento Card */}
+              <div className="shifts-bento-card bento-card-3d formula-container-card">
+                <div className="bento-card-header">
+                  <div className="bento-card-title-group">
+                    <div className="bento-card-icon-pill indigo">
+                      <ScaleIcon size={18} />
+                    </div>
+                    <div>
+                      <h3 className="bento-card-title">Authoritative Expected Cash Formula</h3>
+                      <p className="bento-card-desc">Exact arithmetic model governing drawer cash reconciliation</p>
+                    </div>
+                  </div>
+                  <span className="bento-pill-badge info">Strict Integer Paise Math</span>
                 </div>
 
                 <div className="formula-detailed-flow">
-                  <div className="formula-step">
-                    <div className="step-badge">1</div>
-                    <div className="step-content">
-                      <span className="step-title">Opening Float</span>
-                      <span className="step-desc">Physical cash in drawer at shift start</span>
-                      <span className="step-amount font-mono">{formatMoney(summary.openingCashMinor)}</span>
+                  {/* Step 1 */}
+                  <div className="formula-step-box">
+                    <div className="step-box-header">
+                      <span className="step-box-badge">01</span>
+                      <BanknoteIcon size={15} className="step-box-icon" />
                     </div>
+                    <span className="step-box-title">Opening Float</span>
+                    <span className="step-box-desc">Physical cash in drawer at shift start</span>
+                    <span className="step-box-amount font-mono">{formatMoney(summary.openingCashMinor)}</span>
                   </div>
 
-                  <div className="formula-operator">+</div>
+                  <div className="formula-op-pill">+</div>
 
-                  <div className="formula-step">
-                    <div className="step-badge">2</div>
-                    <div className="step-content">
-                      <span className="step-title">Cash Sales</span>
-                      <span className="step-desc">Cash payments received against invoices</span>
-                      <span className="step-amount font-mono text-success">+{formatMoney(summary.cashSalesMinor)}</span>
+                  {/* Step 2 */}
+                  <div className="formula-step-box">
+                    <div className="step-box-header">
+                      <span className="step-box-badge">02</span>
+                      <PlusIcon size={15} className="step-box-icon text-emerald-600" />
                     </div>
+                    <span className="step-box-title">Cash Sales</span>
+                    <span className="step-box-desc">Cash payments received in POS</span>
+                    <span className="step-box-amount font-mono text-emerald-600">+{formatMoney(summary.cashSalesMinor)}</span>
                   </div>
 
-                  <div className="formula-operator">+</div>
+                  <div className="formula-op-pill">+</div>
 
-                  <div className="formula-step">
-                    <div className="step-badge">3</div>
-                    <div className="step-content">
-                      <span className="step-title">Cash-In Movements</span>
-                      <span className="step-desc">Authorized safe transfers or change deposits</span>
-                      <span className="step-amount font-mono text-success">+{formatMoney(summary.cashInMinor)}</span>
+                  {/* Step 3 */}
+                  <div className="formula-step-box">
+                    <div className="step-box-header">
+                      <span className="step-box-badge">03</span>
+                      <ArrowDownLeftIcon size={15} className="step-box-icon text-emerald-600" />
                     </div>
+                    <span className="step-box-title">Cash-In</span>
+                    <span className="step-box-desc">Safe transfers or float top-ups</span>
+                    <span className="step-box-amount font-mono text-emerald-600">+{formatMoney(summary.cashInMinor)}</span>
                   </div>
 
-                  <div className="formula-operator">-</div>
+                  <div className="formula-op-pill">-</div>
 
-                  <div className="formula-step">
-                    <div className="step-badge">4</div>
-                    <div className="step-content">
-                      <span className="step-title">Cash-Out Movements</span>
-                      <span className="step-desc">Petty cash, owner draws, or safe deposits</span>
-                      <span className="step-amount font-mono text-warning">-{formatMoney(summary.cashOutMinor)}</span>
+                  {/* Step 4 */}
+                  <div className="formula-step-box">
+                    <div className="step-box-header">
+                      <span className="step-box-badge">04</span>
+                      <ArrowUpRightIcon size={15} className="step-box-icon text-amber-600" />
                     </div>
+                    <span className="step-box-title">Cash-Out</span>
+                    <span className="step-box-desc">Petty cash, owner draws or safe drops</span>
+                    <span className="step-box-amount font-mono text-amber-600">-{formatMoney(summary.cashOutMinor)}</span>
                   </div>
 
-                  <div className="formula-operator">-</div>
+                  <div className="formula-op-pill">-</div>
 
-                  <div className="formula-step">
-                    <div className="step-badge">5</div>
-                    <div className="step-content">
-                      <span className="step-title">Cash Refunds</span>
-                      <span className="step-desc">Refunds paid in physical cash from drawer</span>
-                      <span className="step-amount font-mono text-danger">-{formatMoney(summary.cashRefundsMinor)}</span>
+                  {/* Step 5 */}
+                  <div className="formula-step-box">
+                    <div className="step-box-header">
+                      <span className="step-box-badge">05</span>
+                      <RotateCcwIcon size={15} className="step-box-icon text-rose-600" />
                     </div>
+                    <span className="step-box-title">Cash Refunds</span>
+                    <span className="step-box-desc">Refunds paid from drawer cash</span>
+                    <span className="step-box-amount font-mono text-rose-600">-{formatMoney(summary.cashRefundsMinor)}</span>
                   </div>
 
-                  <div className="formula-operator">=</div>
+                  <div className="formula-op-pill">=</div>
 
-                  <div className="formula-step result">
-                    <div className="step-badge primary">✓</div>
-                    <div className="step-content">
-                      <span className="step-title">EXPECTED DRAWER CASH</span>
-                      <span className="step-desc">Exact expected cash to be counted at closing</span>
-                      <span className="step-amount font-mono font-bold text-primary">
-                        {formatMoney(summary.expectedCashMinor)}
+                  {/* Step Result */}
+                  <div className="formula-step-box result">
+                    <div className="step-box-header">
+                      <span className="step-box-badge result">
+                        <CheckCircle2Icon size={13} />
                       </span>
+                      <WalletIcon size={15} className="step-box-icon text-indigo-600" />
                     </div>
+                    <span className="step-box-title font-bold text-indigo-900">EXPECTED DRAWER CASH</span>
+                    <span className="step-box-desc">Exact expected cash to count at close</span>
+                    <span className="step-box-amount font-mono font-bold text-indigo-600">
+                      {formatMoney(summary.expectedCashMinor)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="formula-safety-notice">
-                  <span>🛡️</span>
-                  <span>
+                {/* Financial Safety Guarantee Bento Alert */}
+                <div className="bento-safety-guarantee">
+                  <div className="safety-guarantee-icon">
+                    <ShieldCheckIcon size={20} />
+                  </div>
+                  <div className="safety-guarantee-content">
                     <strong>Financial Safety Guarantee:</strong> Unpaid credit sales ({formatMoney(summary.creditSalesUnpaidMinor)}) and digital payments ({formatMoney(summary.nonCashPaymentsMinor)}) are strictly isolated and do not artificially inflate the physical cash drawer.
-                  </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Quick Actions Card */}
-              <div className="shifts-section-card side-actions-card">
-                <h3 className="section-title">Shift Actions</h3>
-                <div className="side-actions-list">
+              {/* Shift Actions Bento Card */}
+              <div className="shifts-bento-card bento-card-3d side-actions-bento-card">
+                <div className="bento-card-header">
+                  <div className="bento-card-title-group">
+                    <div className="bento-card-icon-pill emerald">
+                      <PlusIcon size={18} />
+                    </div>
+                    <div>
+                      <h3 className="bento-card-title">Shift Actions</h3>
+                      <p className="bento-card-desc">Direct drawer operations</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bento-actions-stack">
                   <button
                     type="button"
-                    className="side-action-btn primary"
+                    className="bento-action-card emerald"
                     onClick={() => setIsCashMovementModalOpen(true)}
                   >
-                    <span>📥</span>
-                    <div>
+                    <div className="action-card-icon-box emerald">
+                      <ArrowDownLeftIcon size={18} />
+                    </div>
+                    <div className="action-card-text">
                       <strong>Add Cash-In</strong>
                       <p>Deposit float or change from safe</p>
                     </div>
+                    <ChevronRightIcon size={16} className="action-card-arrow" />
                   </button>
 
                   <button
                     type="button"
-                    className="side-action-btn warning"
+                    className="bento-action-card amber"
                     onClick={() => setIsCashMovementModalOpen(true)}
                   >
-                    <span>📤</span>
-                    <div>
+                    <div className="action-card-icon-box amber">
+                      <ArrowUpRightIcon size={18} />
+                    </div>
+                    <div className="action-card-text">
                       <strong>Record Cash-Out</strong>
                       <p>Withdraw petty cash or owner draw</p>
                     </div>
+                    <ChevronRightIcon size={16} className="action-card-arrow" />
                   </button>
 
                   <button
                     type="button"
-                    className="side-action-btn success"
+                    className="bento-action-card indigo"
                     onClick={onNavigateToPos}
                   >
-                    <span>🛒</span>
-                    <div>
+                    <div className="action-card-icon-box indigo">
+                      <ShoppingCartIcon size={18} />
+                    </div>
+                    <div className="action-card-text">
                       <strong>Open POS Counter</strong>
                       <p>Record sales under this active shift</p>
                     </div>
+                    <ChevronRightIcon size={16} className="action-card-arrow" />
                   </button>
 
                   <button
                     type="button"
-                    className="side-action-btn danger"
+                    className="bento-action-card rose"
                     onClick={() => setIsCloseShiftModalOpen(true)}
                   >
-                    <span>🔒</span>
-                    <div>
-                      <strong>Close Shift & Reconcile</strong>
-                      <p>Count cash, compute variance, and finalize</p>
+                    <div className="action-card-icon-box rose">
+                      <LockIcon size={18} />
                     </div>
+                    <div className="action-card-text">
+                      <strong>Close Shift & Reconcile</strong>
+                      <p>Count cash, compute variance & close</p>
+                    </div>
+                    <ChevronRightIcon size={16} className="action-card-arrow" />
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="empty-shift-banner">
-              <span className="empty-icon">🏪</span>
-              <h3>No Active Shift Open</h3>
-              <p>You currently do not have an open shift. Click below to start your shift with an opening cash float.</p>
+            <div className="bento-empty-shift-card bento-card-3d">
+              <div className="bento-empty-icon-ring">
+                <StoreIcon size={44} />
+              </div>
+              <h3 className="bento-empty-title">No Active Shift Open</h3>
+              <p className="bento-empty-desc">
+                You currently do not have an open shift. Click below to start your shift with an opening cash float to begin recording POS sales and drawer cash movements.
+              </p>
               <button
                 type="button"
-                className="btn btn-success btn-lg"
+                className="bento-hero-btn success large"
                 onClick={() => setIsOpenShiftModalOpen(true)}
               >
-                🟢 Open Cashier Shift Now
+                <PlusIcon size={18} />
+                <span>Open Cashier Shift Now</span>
               </button>
             </div>
           )}
@@ -514,63 +632,73 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 2: PAYMENT METHOD BREAKDOWN */}
       {selectedTab === 'payments' && (
         <div className="shifts-tab-content">
-          <div className="shifts-section-card">
-            <div className="card-header-clean">
-              <h3 className="section-title">Collections by Payment Method</h3>
-              <span className="badge-pill">Active Shift Receipts</span>
+          <div className="shifts-bento-card bento-card-3d">
+            <div className="bento-card-header">
+              <div className="bento-card-title-group">
+                <div className="bento-card-icon-pill blue">
+                  <CreditCardIcon size={18} />
+                </div>
+                <div>
+                  <h3 className="bento-card-title">Collections by Payment Method</h3>
+                  <p className="bento-card-desc">Active shift transaction settlement breakdown</p>
+                </div>
+              </div>
+              <span className="bento-pill-badge primary">Active Shift Receipts</span>
             </div>
 
             {summary && summary.paymentMethods.length > 0 ? (
-              <table className="shifts-table">
-                <thead>
-                  <tr>
-                    <th>Payment Method</th>
-                    <th>Classification</th>
-                    <th className="text-center">Count</th>
-                    <th className="text-right">Collected Amount</th>
-                    <th className="text-right">% of Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.paymentMethods.map((pm) => {
-                    const pct = summary.totalCollectedMinor > 0
-                      ? ((pm.amountMinor / summary.totalCollectedMinor) * 100).toFixed(1)
-                      : '0.0';
-                    return (
-                      <tr key={pm.method}>
-                        <td>
-                          <span className={`method-badge ${pm.method}`}>
-                            {pm.method.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          {pm.method === 'cash' ? (
-                            <span className="text-success font-semibold">Physical Cash Drawer</span>
-                          ) : (
-                            <span className="text-muted">Digital / Bank Transfer</span>
-                          )}
-                        </td>
-                        <td className="text-center font-mono">{pm.count}</td>
-                        <td className="text-right font-mono font-semibold">{formatMoney(pm.amountMinor)}</td>
-                        <td className="text-right font-mono text-muted">{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="table-total-row">
-                    <td colSpan={2}><strong>TOTAL SETTLED COLLECTIONS</strong></td>
-                    <td className="text-center font-mono font-bold">
-                      {summary.paymentMethods.reduce((a, b) => a + b.count, 0)}
-                    </td>
-                    <td className="text-right font-mono font-bold text-primary">
-                      {formatMoney(summary.totalCollectedMinor)}
-                    </td>
-                    <td className="text-right font-mono font-bold">100%</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="bento-table-wrapper">
+                <table className="shifts-table">
+                  <thead>
+                    <tr>
+                      <th>Payment Method</th>
+                      <th>Classification</th>
+                      <th className="text-center">Count</th>
+                      <th className="text-right">Collected Amount</th>
+                      <th className="text-right">% of Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.paymentMethods.map((pm) => {
+                      const pct = summary.totalCollectedMinor > 0
+                        ? ((pm.amountMinor / summary.totalCollectedMinor) * 100).toFixed(1)
+                        : '0.0';
+                      return (
+                        <tr key={pm.method}>
+                          <td>
+                            <span className={`method-badge ${pm.method}`}>
+                              {pm.method.toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            {pm.method === 'cash' ? (
+                              <span className="text-success font-semibold">Physical Cash Drawer</span>
+                            ) : (
+                              <span className="text-muted">Digital / Bank Transfer</span>
+                            )}
+                          </td>
+                          <td className="text-center font-mono">{pm.count}</td>
+                          <td className="text-right font-mono font-semibold">{formatMoney(pm.amountMinor)}</td>
+                          <td className="text-right font-mono text-muted">{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="table-total-row">
+                      <td colSpan={2}><strong>TOTAL SETTLED COLLECTIONS</strong></td>
+                      <td className="text-center font-mono font-bold">
+                        {summary.paymentMethods.reduce((a, b) => a + b.count, 0)}
+                      </td>
+                      <td className="text-right font-mono font-bold text-primary">
+                        {formatMoney(summary.totalCollectedMinor)}
+                      </td>
+                      <td className="text-right font-mono font-bold">100%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <div className="empty-subtab-state">
-                <span>💳</span>
+              <div className="bento-empty-state">
+                <CreditCardIcon size={40} className="bento-empty-svg" />
                 <p>No payments recorded yet for this active shift.</p>
               </div>
             )}
@@ -581,55 +709,76 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 3: CASH MOVEMENTS */}
       {selectedTab === 'movements' && (
         <div className="shifts-tab-content">
-          <div className="shifts-section-card">
-            <div className="card-header-clean">
-              <h3 className="section-title">Cash Movements Ledger</h3>
+          <div className="shifts-bento-card bento-card-3d">
+            <div className="bento-card-header">
+              <div className="bento-card-title-group">
+                <div className="bento-card-icon-pill amber">
+                  <ArrowDownLeftIcon size={18} />
+                </div>
+                <div>
+                  <h3 className="bento-card-title">Cash Movements Ledger</h3>
+                  <p className="bento-card-desc">Detailed audit trail of drawer cash inflows and outflows</p>
+                </div>
+              </div>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="bento-btn-primary sm"
                 onClick={() => setIsCashMovementModalOpen(true)}
                 disabled={!activeShift}
               >
-                + Record Movement
+                <PlusIcon size={14} />
+                <span>Record Movement</span>
               </button>
             </div>
 
             {movements.length > 0 ? (
-              <table className="shifts-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Type</th>
-                    <th>Reason</th>
-                    <th>Notes</th>
-                    <th>Author</th>
-                    <th className="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movements.map((cm) => (
-                    <tr key={cm.id}>
-                      <td className="font-mono text-muted" style={{ fontSize: '0.85rem' }}>
-                        {new Date(cm.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td>
-                        <span className={`movement-tag ${cm.movementType}`}>
-                          {cm.movementType === 'cash_in' ? 'CASH-IN' : 'CASH-OUT'}
-                        </span>
-                      </td>
-                      <td><strong>{cm.reason}</strong></td>
-                      <td className="text-muted">{cm.notes || '—'}</td>
-                      <td>{cm.createdByName || 'Staff'}</td>
-                      <td className={`text-right font-mono font-semibold ${cm.movementType === 'cash_in' ? 'text-success' : 'text-warning'}`}>
-                        {cm.movementType === 'cash_in' ? '+' : '-'}{formatMoney(cm.amountMinor)}
-                      </td>
+              <div className="bento-table-wrapper">
+                <table className="shifts-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Type</th>
+                      <th>Reason</th>
+                      <th>Notes</th>
+                      <th>Author</th>
+                      <th className="text-right">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {movements.map((cm) => (
+                      <tr key={cm.id}>
+                        <td className="font-mono text-muted" style={{ fontSize: '0.85rem' }}>
+                          {new Date(cm.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td>
+                          <span className={`movement-tag ${cm.movementType}`}>
+                            {cm.movementType === 'cash_in' ? (
+                              <>
+                                <ArrowDownLeftIcon size={12} />
+                                <span>CASH-IN</span>
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUpRightIcon size={12} />
+                                <span>CASH-OUT</span>
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td><strong>{cm.reason}</strong></td>
+                        <td className="text-muted">{cm.notes || '—'}</td>
+                        <td>{cm.createdByName || 'Staff'}</td>
+                        <td className={`text-right font-mono font-semibold ${cm.movementType === 'cash_in' ? 'text-success' : 'text-warning'}`}>
+                          {cm.movementType === 'cash_in' ? '+' : '-'}{formatMoney(cm.amountMinor)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <div className="empty-subtab-state">
-                <span>📋</span>
+              <div className="bento-empty-state">
+                <FileTextIcon size={40} className="bento-empty-svg" />
                 <p>No cash-in or cash-out movements recorded yet for this shift.</p>
               </div>
             )}
@@ -640,15 +789,23 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
       {/* TAB CONTENT 4: SHIFT HISTORY */}
       {selectedTab === 'history' && (
         <div className="shifts-tab-content">
-          <div className="shifts-section-card">
-            <div className="card-header-clean">
-              <h3 className="section-title">All Cashier Shifts History</h3>
-              <div className="filter-pills-row">
+          <div className="shifts-bento-card bento-card-3d">
+            <div className="bento-card-header">
+              <div className="bento-card-title-group">
+                <div className="bento-card-icon-pill purple">
+                  <ClockIcon size={18} />
+                </div>
+                <div>
+                  <h3 className="bento-card-title">All Cashier Shifts History</h3>
+                  <p className="bento-card-desc">Historical registry of opened, reconciled, and audited shifts</p>
+                </div>
+              </div>
+              <div className="bento-filter-pills-row">
                 {['ALL', 'open', 'closed'].map((st) => (
                   <button
                     key={st}
                     type="button"
-                    className={`filter-pill ${historyStatusFilter === st ? 'active' : ''}`}
+                    className={`bento-filter-pill ${historyStatusFilter === st ? 'active' : ''}`}
                     onClick={() => setHistoryStatusFilter(st)}
                   >
                     {st.toUpperCase()}
@@ -659,102 +816,107 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
             {loadingHistory ? (
               <div className="report-loading-state">
-                <span className="spinner">⏳</span>
+                <RefreshCwIcon size={20} className="spinning-icon" />
                 <span>Loading past cashier shifts...</span>
               </div>
             ) : shiftHistory.length > 0 ? (
-              <table className="shifts-table">
-                <thead>
-                  <tr>
-                    <th>Shift #</th>
-                    <th>Status</th>
-                    <th>Cashier</th>
-                    <th>Location</th>
-                    <th>Opened</th>
-                    <th>Closed</th>
-                    <th className="text-right">Expected</th>
-                    <th className="text-right">Counted</th>
-                    <th className="text-right">Variance</th>
-                    <th>Manager Review</th>
-                    <th className="text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shiftHistory.map((s) => {
-                    const variance = s.varianceMinor ?? 0;
-                    const isBalanced = variance === 0;
-                    const isShortage = variance < 0;
-                    const isExcess = variance > 0;
-                    return (
-                      <tr key={s.id}>
-                        <td><strong>{s.shiftNumber}</strong></td>
-                        <td>
-                          <span className={`status-pill ${s.status}`}>
-                            {s.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>{s.userName || 'Cashier'}</td>
-                        <td className="text-muted">{s.location || 'MAIN'}</td>
-                        <td className="font-mono" style={{ fontSize: '0.8rem' }}>
-                          {new Date(s.openedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
-                          {new Date(s.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="font-mono text-muted" style={{ fontSize: '0.8rem' }}>
-                          {s.closedAt ? (
-                            <>
-                              {new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
-                              {new Date(s.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                            </>
-                          ) : (
-                            'Active'
-                          )}
-                        </td>
-                        <td className="text-right font-mono">{formatMoney(s.expectedCashMinor)}</td>
-                        <td className="text-right font-mono">
-                          {s.countedCashMinor !== undefined && s.countedCashMinor !== null
-                            ? formatMoney(s.countedCashMinor)
-                            : '—'}
-                        </td>
-                        <td className="text-right font-mono">
-                          {s.status === 'closed' ? (
-                            <span className={`variance-tag ${isBalanced ? 'balanced' : isShortage ? 'shortage' : 'excess'}`}>
-                              {isBalanced ? 'BALANCED' : formatMoney(variance)}
+              <div className="bento-table-wrapper">
+                <table className="shifts-table">
+                  <thead>
+                    <tr>
+                      <th>Shift #</th>
+                      <th>Status</th>
+                      <th>Cashier</th>
+                      <th>Location</th>
+                      <th>Opened</th>
+                      <th>Closed</th>
+                      <th className="text-right">Expected</th>
+                      <th className="text-right">Counted</th>
+                      <th className="text-right">Variance</th>
+                      <th>Manager Review</th>
+                      <th className="text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shiftHistory.map((s) => {
+                      const variance = s.varianceMinor ?? 0;
+                      const isBalanced = variance === 0;
+                      const isShortage = variance < 0;
+                      const isExcess = variance > 0;
+                      return (
+                        <tr key={s.id}>
+                          <td><strong>#{s.shiftNumber}</strong></td>
+                          <td>
+                            <span className={`status-pill ${s.status}`}>
+                              {s.status.toUpperCase()}
                             </span>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </td>
-                        <td>
-                          {s.reviewedBy ? (
-                            <span className="reviewed-check" title={`Reviewed on ${s.reviewedAt}`}>
-                              ✅ Reviewed
-                            </span>
-                          ) : s.status === 'closed' && variance !== 0 ? (
-                            <span className="pending-review-tag" title="Shortage/Excess pending manager review">
-                              ⚠️ Pending Review
-                            </span>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </td>
-                        <td className="text-center">
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            onClick={() => setReportModalShiftId(s.id)}
-                            title="View full day-end report"
-                          >
-                            📄 Report
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td>{s.userName || 'Cashier'}</td>
+                          <td className="text-muted">{s.location || 'MAIN'}</td>
+                          <td className="font-mono" style={{ fontSize: '0.8rem' }}>
+                            {new Date(s.openedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
+                            {new Date(s.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="font-mono text-muted" style={{ fontSize: '0.8rem' }}>
+                            {s.closedAt ? (
+                              <>
+                                {new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
+                                {new Date(s.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </>
+                            ) : (
+                              <span className="text-success font-semibold">Active</span>
+                            )}
+                          </td>
+                          <td className="text-right font-mono">{formatMoney(s.expectedCashMinor)}</td>
+                          <td className="text-right font-mono">
+                            {s.countedCashMinor !== undefined && s.countedCashMinor !== null
+                              ? formatMoney(s.countedCashMinor)
+                              : '—'}
+                          </td>
+                          <td className="text-right font-mono">
+                            {s.status === 'closed' ? (
+                              <span className={`variance-tag ${isBalanced ? 'balanced' : isShortage ? 'shortage' : 'excess'}`}>
+                                {isBalanced ? 'BALANCED' : formatMoney(variance)}
+                              </span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td>
+                            {s.reviewedBy ? (
+                              <span className="bento-reviewed-badge" title={`Reviewed on ${s.reviewedAt}`}>
+                                <CheckCircle2Icon size={13} />
+                                <span>Reviewed</span>
+                              </span>
+                            ) : s.status === 'closed' && variance !== 0 ? (
+                              <span className="bento-pending-badge" title="Shortage/Excess pending manager review">
+                                <AlertTriangleIcon size={13} />
+                                <span>Pending Review</span>
+                              </span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="bento-table-action-btn"
+                              onClick={() => setReportModalShiftId(s.id)}
+                              title="View full day-end report"
+                            >
+                              <FileTextIcon size={13} />
+                              <span>Report</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <div className="empty-subtab-state">
-                <span>📜</span>
+              <div className="bento-empty-state">
+                <ClockIcon size={40} className="bento-empty-svg" />
                 <p>No shift records found for filter "{historyStatusFilter}".</p>
               </div>
             )}

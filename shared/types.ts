@@ -666,6 +666,7 @@ export interface Shift {
   userEmail?: string;
   userRole?: Role;
   location: string;
+  counter?: string | null;
   status: ShiftStatus;
   openedAt: string;
   closedAt?: string | null;
