@@ -768,8 +768,9 @@ export interface SupplierLedger {
   paymentHistory: SupplierPaymentRecord[];
 }
 
-export const fetchInventoryDashboard = (branchId?: string) => {
-  const queryStr = branchId && branchId !== 'all' ? `?branch=${encodeURIComponent(branchId)}` : '';
+export const fetchInventoryDashboard = (paramsOrBranchId?: string | { branch?: string }) => {
+  const branch = typeof paramsOrBranchId === 'string' ? paramsOrBranchId : paramsOrBranchId?.branch;
+  const queryStr = branch && branch !== 'all' ? `?branch=${encodeURIComponent(branch)}` : '';
   return api<{ stats: import('../../shared/types.ts').InventoryDashboardStats }>(`/api/inventory/dashboard${queryStr}`);
 };
 
@@ -781,6 +782,7 @@ export const fetchInventoryItems = (params: {
   branchId?: string;
   limit?: number;
   offset?: number;
+  branch?: string;
 } = {}) => {
   const sp = new URLSearchParams();
   if (params.q) sp.set('q', params.q);
@@ -790,6 +792,7 @@ export const fetchInventoryItems = (params: {
   if (params.branchId && params.branchId !== 'all') sp.set('branch', params.branchId);
   if (params.limit) sp.set('limit', String(params.limit));
   if (params.offset) sp.set('offset', String(params.offset));
+  if (params.branch) sp.set('branch', params.branch);
   const queryStr = sp.toString() ? `?${sp.toString()}` : '';
   return api<{ items: Item[]; total: number; limit: number; offset: number }>(`/api/inventory/items${queryStr}`);
 };
