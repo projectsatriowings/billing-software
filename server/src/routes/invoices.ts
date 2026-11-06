@@ -356,6 +356,47 @@ export function registerInvoices(r: Router) {
     let isNewCustomer = false;
 
     await ctx.db.tx(async (q) => {
+      // 0a. Validate branch stock availability before committing invoice or number series
+      const itemQtyRequestedMap = new Map<string, number>();
+      for (const line of formattedLines) {
+        if (line.itemId) {
+          itemQtyRequestedMap.set(line.itemId, (itemQtyRequestedMap.get(line.itemId) || 0) + line.qtyMilli);
+        }
+      }
+
+      for (const [itemId, requestedMilli] of itemQtyRequestedMap.entries()) {
+        const itemRow = await q.one<any>(
+          'SELECT id, name, track_stock, branch_id FROM items WHERE id = ? AND tenant_id = ? FOR UPDATE',
+          [itemId, tenantId]
+        );
+        const isTracked = itemRow && itemRow.trackStock !== false && itemRow.track_stock !== false;
+        if (isTracked) {
+          const stockRow = await q.one<any>(
+            `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS current_stock_milli
+             FROM stock_moves
+             WHERE tenant_id = ? AND item_id = ? AND (branch_id IS NOT DISTINCT FROM ?)`,
+            [tenantId, itemId, invoiceBranchId]
+          );
+          const currentStockMilli = BigInt(stockRow?.currentStockMilli ?? stockRow?.current_stock_milli ?? 0);
+          const reqMilli = BigInt(requestedMilli);
+          if (currentStockMilli < reqMilli) {
+            const availableUnits = Math.max(0, Math.floor(Number(currentStockMilli) / 1000));
+            throw bad(
+              `Insufficient stock for "${itemRow.name}". Only ${availableUnits} unit${availableUnits === 1 ? '' : 's'} available in this branch.`,
+              'INSUFFICIENT_STOCK',
+              {
+                itemId: itemRow.id,
+                itemName: itemRow.name,
+                availableUnits,
+                requestedUnits: Number(reqMilli) / 1000,
+                availableStockMilli: Number(currentStockMilli),
+                requestedQtyMilli: Number(reqMilli),
+              }
+            );
+          }
+        }
+      }
+
       // 0. Auto-enroll new customer if phone was given at counter and party does not exist yet
       if (!partyId && cleanPhoneDigits && cleanPhoneDigits.length >= 7) {
         const existingParty = await q.one<{ id: string }>(
@@ -561,7 +602,7 @@ export function registerInvoices(r: Router) {
 
         // Deduct inventory at the sale's branch location (verifying item exists to prevent foreign key errors)
         if (item.itemId) {
-          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? AND branch_id = ? LIMIT 1', [item.itemId, tenantId, invoiceBranchId]);
+          const itemExists = await q.one('SELECT id FROM items WHERE id = ? AND tenant_id = ? LIMIT 1', [item.itemId, tenantId]);
           if (itemExists) {
             await q.exec(
               `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id)

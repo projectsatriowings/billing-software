@@ -44,12 +44,15 @@ interface ShiftsDashboardProps {
   user: User;
   shop: Shop | null;
   onNavigateToPos?: () => void;
+  selectedBranch?: string;
+  branches?: any[];
 }
 
 export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
   user,
   shop,
   onNavigateToPos,
+  selectedBranch,
 }) => {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
@@ -78,10 +81,12 @@ export const ShiftsDashboard: React.FC<ShiftsDashboardProps> = ({
 
     window.addEventListener('shift_status_changed', handleSync);
     window.addEventListener('cash_movement_recorded', handleSync);
+    window.addEventListener('branch_scope_changed', handleSync);
 
     return () => {
       window.removeEventListener('shift_status_changed', handleSync);
       window.removeEventListener('cash_movement_recorded', handleSync);
+      window.removeEventListener('branch_scope_changed', handleSync);
     };
   }, [historyStatusFilter]);
 

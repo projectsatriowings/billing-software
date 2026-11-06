@@ -11,6 +11,7 @@ import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 interface SalesAnalysisViewProps {
   userRole?: string;
   shopName?: string;
+  selectedBranch?: string;
   onNavigateToInvoices?: (searchDate?: string) => void;
   showToast?: (msg: string) => void;
 }
@@ -1529,6 +1530,7 @@ function renderInsightIcon(iconStr: string, theme?: string) {
 export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
   userRole = 'owner',
   shopName = 'Shree Krishna Supermarket & Retail',
+  selectedBranch = 'all',
   onNavigateToInvoices,
   showToast,
 }) => {
@@ -1650,6 +1652,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
         counterId: selectedCounter,
         categoryId: selectedCategory,
         userId: selectedCashier,
+        branch: selectedBranch && selectedBranch.toLowerCase() !== 'all' ? selectedBranch : undefined,
       });
       setData(res);
     } catch (err: any) {
@@ -1658,10 +1661,18 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [fromYMD, toYMD, comparePreset, selectedCounter, selectedCategory, selectedCashier]);
+  }, [fromYMD, toYMD, comparePreset, selectedCounter, selectedCategory, selectedCashier, selectedBranch]);
 
   useEffect(() => {
     loadAnalysis();
+  }, [loadAnalysis]);
+
+  useEffect(() => {
+    const handleBranchScopeChanged = () => {
+      loadAnalysis();
+    };
+    window.addEventListener('branch_scope_changed', handleBranchScopeChanged);
+    return () => window.removeEventListener('branch_scope_changed', handleBranchScopeChanged);
   }, [loadAnalysis]);
 
   // Handle Export Report (Full Report CSV)

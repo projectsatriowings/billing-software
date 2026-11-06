@@ -19,7 +19,6 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
   suppliers,
 }) => {
   const [reorderUnits, setReorderUnits] = useState<string>('');
-  const [minStockUnits, setMinStockUnits] = useState<string>('');
   const [preferredSupplierId, setPreferredSupplierId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +26,6 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
   useEffect(() => {
     if (item) {
       setReorderUnits(item.reorderMilli ? (item.reorderMilli / 1000).toString() : '0');
-      setMinStockUnits(item.minStockMilli ? (item.minStockMilli / 1000).toString() : '0');
       setPreferredSupplierId(item.preferredSupplierId || '');
     }
     setError(null);
@@ -42,10 +40,9 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
     setError(null);
 
     const reorderVal = parseFloat(reorderUnits) || 0;
-    const minStockVal = parseFloat(minStockUnits) || 0;
 
-    if (reorderVal < 0 || minStockVal < 0) {
-      setError('Thresholds must be zero or a positive quantity.');
+    if (reorderVal < 0) {
+      setError('Threshold must be zero or a positive quantity.');
       return;
     }
 
@@ -53,7 +50,6 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
     try {
       const res = await updateItemReorder(item.id, {
         reorderMilli: Math.round(reorderVal * 1000),
-        minStockMilli: Math.round(minStockVal * 1000),
         preferredSupplierId: preferredSupplierId || null,
       });
       setIsSubmitting(false);
@@ -121,23 +117,6 @@ export const ReorderConfigModal: React.FC<ReorderConfigModalProps> = ({
             <span className="field-helper">
               When stock drops to or below this level, an automated reorder suggestion is generated.
             </span>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '1rem' }}>
-            <label className="field-label">Safety / Minimum Buffer Stock ({unit})</label>
-            <div className="input-with-unit">
-              <input
-                type="number"
-                step="any"
-                min="0"
-                className="form-input"
-                placeholder="e.g. 5"
-                value={minStockUnits}
-                onChange={(e) => setMinStockUnits(e.target.value)}
-              />
-              <span className="input-unit-tag">{unit}</span>
-            </div>
-            <span className="field-helper">Critical threshold below which the item is flagged as urgently needing replenishment.</span>
           </div>
 
           <div className="form-group" style={{ marginBottom: '1.25rem' }}>

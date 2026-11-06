@@ -528,7 +528,6 @@ export interface InventoryDashboardStats {
     category?: string | null;
     unit: string;
     currentStockMilli: number;
-    minStockMilli: number;
     reorderMilli: number;
     suggestedOrderQtyMilli: number;
     preferredSupplierId?: string | null;
@@ -1226,4 +1225,28 @@ export interface TerminalTransaction {
   metadata?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Format stock consumption / runway duration into a clear, human-friendly string.
+ * - If >= 1 day: displays in days (e.g. "1.5 Days", "1 Day")
+ * - If < 1 day and >= 1 hour: displays in hours (e.g. "9.6 Hours", "12 Hours", "18 Hours")
+ * - If < 1 hour: displays in minutes (e.g. "29 Minutes", "1 Minute")
+ * - Handles rounding correctly and avoids displaying 0 for positive durations.
+ */
+export function formatStockDuration(days: number | null | undefined): string {
+  if (days === null || days === undefined || isNaN(days) || days <= 0) {
+    return '0 Days';
+  }
+  if (days >= 1) {
+    const formattedDays = Number(days.toFixed(1));
+    return `${formattedDays} ${formattedDays === 1 ? 'Day' : 'Days'}`;
+  }
+  const totalHours = days * 24;
+  if (totalHours >= 1) {
+    const formattedHours = Number(totalHours.toFixed(1));
+    return `${formattedHours} ${formattedHours === 1 ? 'Hour' : 'Hours'}`;
+  }
+  const totalMinutes = Math.max(1, Math.round(totalHours * 60));
+  return `${totalMinutes} ${totalMinutes === 1 ? 'Minute' : 'Minutes'}`;
 }

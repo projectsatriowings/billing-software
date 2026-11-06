@@ -42,12 +42,14 @@ interface StockTransferViewProps {
   user: User;
   onNavigateToTab?: (tab: string) => void;
   showToast?: (msg: string, type?: 'info' | 'error' | 'success') => void;
+  selectedBranch?: string;
 }
 
 export const StockTransferView: React.FC<StockTransferViewProps> = ({
   user,
   onNavigateToTab,
   showToast = (msg) => console.log(msg),
+  selectedBranch,
 }) => {
   // Navigation / sub-views: 'list' | 'create_step1' | 'create_step2' | 'create_step3' | 'details'
   const [activeView, setActiveView] = useState<'list' | 'create_step1' | 'create_step2' | 'create_step3' | 'details'>('list');
@@ -65,7 +67,26 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
   const [loadingList, setLoadingList] = useState(false);
 
   // Filters for Screen 1
-  const [filterBranch, setFilterBranch] = useState<string>('ALL');
+  const [filterBranch, setFilterBranch] = useState<string>(
+    selectedBranch && selectedBranch.toLowerCase() !== 'all' ? selectedBranch : 'ALL'
+  );
+
+  useEffect(() => {
+    if (selectedBranch) {
+      setFilterBranch(selectedBranch.toLowerCase() === 'all' ? 'ALL' : selectedBranch);
+    }
+  }, [selectedBranch]);
+
+  useEffect(() => {
+    const handleBranchScopeChanged = (e: any) => {
+      const b = e.detail?.branch || e.detail;
+      if (b) {
+        setFilterBranch(b.toLowerCase() === 'all' ? 'ALL' : b);
+      }
+    };
+    window.addEventListener('branch_scope_changed', handleBranchScopeChanged);
+    return () => window.removeEventListener('branch_scope_changed', handleBranchScopeChanged);
+  }, []);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [filterFromDate, setFilterFromDate] = useState<string>('');
@@ -734,557 +755,557 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
             }}
           >
 
-          {/* Incoming Shipments Alert Banner (visible when transfers in transit are arriving at user's branch) */}
-          {(() => {
-            const incomingInTransit = transfers.filter(
-              (t) =>
-                t.status === 'in_transit' &&
-                (user.role === 'owner' ||
-                  user.assignedLocation === t.toBranch ||
-                  Boolean(user.allowedLocations?.includes(t.toBranch)))
-            );
+            {/* Incoming Shipments Alert Banner (visible when transfers in transit are arriving at user's branch) */}
+            {(() => {
+              const incomingInTransit = transfers.filter(
+                (t) =>
+                  t.status === 'in_transit' &&
+                  (user.role === 'owner' ||
+                    user.assignedLocation === t.toBranch ||
+                    Boolean(user.allowedLocations?.includes(t.toBranch)))
+              );
 
-            if (incomingInTransit.length === 0) return null;
+              if (incomingInTransit.length === 0) return null;
 
-            return (
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                  border: '1px solid #a7f3d0',
-                  borderRadius: '12px',
-                  padding: '0.9rem 1.25rem',
-                  marginBottom: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '1rem',
-                  flexWrap: 'wrap',
-                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.1)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '10px',
-                      background: '#16a34a',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
-                    }}
-                  >
-                    <TruckIcon size={20} />
+              return (
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                    border: '1px solid #a7f3d0',
+                    borderRadius: '12px',
+                    padding: '0.9rem 1.25rem',
+                    marginBottom: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.1)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '10px',
+                        background: '#16a34a',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                      }}
+                    >
+                      <TruckIcon size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem' }}>
+                        {incomingInTransit.length} Incoming Shipment{incomingInTransit.length > 1 ? 's' : ''} in Transit Ready for Receiving
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
+                        Transfers dispatched to your branch. Inspect the delivered items and click <strong>Receive</strong> to credit them to your live inventory.
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.92rem' }}>
-                      {incomingInTransit.length} Incoming Shipment{incomingInTransit.length > 1 ? 's' : ''} in Transit Ready for Receiving
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#047857', marginTop: '2px' }}>
-                      Transfers dispatched to your branch. Inspect the delivered items and click <strong>Receive</strong> to credit them to your live inventory.
-                    </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterStatus('in_transit');
+                      }}
+                      style={{
+                        background: '#16a34a',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.45rem 1rem',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      View In-Transit ({incomingInTransit.length}) ➔
+                    </button>
                   </div>
                 </div>
+              );
+            })()}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFilterStatus('in_transit');
-                    }}
-                    style={{
-                      background: '#16a34a',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '0.45rem 1rem',
-                      borderRadius: '8px',
-                      fontWeight: 700,
-                      fontSize: '0.82rem',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    View In-Transit ({incomingInTransit.length}) ➔
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Filters Toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-              alignItems: 'center',
-              background: '#f8fafc',
-              padding: '0.85rem 1rem',
-              borderRadius: '12px',
-              border: '1px solid #e2e8f0',
-              marginBottom: '1.25rem',
-            }}
-          >
-            {/* Branch Filter */}
-            <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
-              <select
-                className="form-input"
-                value={filterBranch}
-                onChange={(e) => {
-                  setFilterBranch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  background: '#ffffff',
-                  borderColor: '#cbd5e1',
-                  borderRadius: '8px',
-                  padding: '0.45rem 0.75rem',
-                  fontSize: '0.85rem',
-                  width: '100%',
-                  height: '38px',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="ALL">All Branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.code}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status Filter */}
-            <div style={{ flex: '0 1 160px', minWidth: '135px' }}>
-              <select
-                className="form-input"
-                value={filterStatus}
-                onChange={(e) => {
-                  setFilterStatus(e.target.value);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  background: '#ffffff',
-                  borderColor: '#cbd5e1',
-                  borderRadius: '8px',
-                  padding: '0.45rem 0.75rem',
-                  fontSize: '0.85rem',
-                  width: '100%',
-                  height: '38px',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="all">All Status</option>
-                <option value="in_transit">In Transit</option>
-                <option value="completed">Completed</option>
-                <option value="partially_received">Partially Received</option>
-                <option value="draft">Draft</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-
-            {/* Date Range Filter Capsule */}
+            {/* Filters Toolbar */}
             <div
               style={{
-                display: 'inline-flex',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
                 alignItems: 'center',
-                gap: '0.4rem',
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                padding: '0 0.6rem',
-                height: '38px',
-                boxSizing: 'border-box',
-                flex: '0 0 auto',
-                minWidth: '290px',
+                background: '#f8fafc',
+                padding: '0.85rem 1rem',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                marginBottom: '1.25rem',
               }}
             >
-              <CalendarIcon size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />
-              <input
-                type="date"
-                value={filterFromDate}
-                onChange={(e) => {
-                  setFilterFromDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                title="From Date"
-                style={{
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: '0.82rem',
-                  color: filterFromDate ? '#1e293b' : '#64748b',
-                  background: 'transparent',
-                  padding: '0',
-                  width: '125px',
-                  cursor: 'pointer',
-                }}
-              />
-              <span style={{ color: '#94a3b8', fontSize: '0.8rem', padding: '0 2px' }}>–</span>
-              <input
-                type="date"
-                value={filterToDate}
-                onChange={(e) => {
-                  setFilterToDate(e.target.value);
-                  setCurrentPage(1);
-                }}
-                title="To Date"
-                style={{
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: '0.82rem',
-                  color: filterToDate ? '#1e293b' : '#64748b',
-                  background: 'transparent',
-                  padding: '0',
-                  width: '125px',
-                  cursor: 'pointer',
-                }}
-              />
-            </div>
-
-            {/* Search Input - flexible to take remaining space */}
-            <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '200px' }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Search by transfer number..."
-                value={filterSearch}
-                onChange={(e) => {
-                  setFilterSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') loadTransfersList();
-                }}
-                style={{
-                  background: '#ffffff',
-                  borderColor: '#cbd5e1',
-                  borderRadius: '8px',
-                  padding: '0.45rem 2rem 0.45rem 2.2rem',
-                  fontSize: '0.85rem',
-                  width: '100%',
-                  height: '38px',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  left: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#94a3b8',
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <SearchIcon size={14} />
-              </span>
-              {filterSearch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterSearch('');
+              {/* Branch Filter */}
+              <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
+                <select
+                  className="form-input"
+                  value={filterBranch}
+                  onChange={(e) => {
+                    setFilterBranch(e.target.value);
                     setCurrentPage(1);
                   }}
                   style={{
+                    background: '#ffffff',
+                    borderColor: '#cbd5e1',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.85rem',
+                    width: '100%',
+                    height: '38px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="ALL">All Branches</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.code}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div style={{ flex: '0 1 160px', minWidth: '135px' }}>
+                <select
+                  className="form-input"
+                  value={filterStatus}
+                  onChange={(e) => {
+                    setFilterStatus(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    background: '#ffffff',
+                    borderColor: '#cbd5e1',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.85rem',
+                    width: '100%',
+                    height: '38px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="all">All Status</option>
+                  <option value="in_transit">In Transit</option>
+                  <option value="completed">Completed</option>
+                  <option value="partially_received">Partially Received</option>
+                  <option value="draft">Draft</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {/* Date Range Filter Capsule */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '0 0.6rem',
+                  height: '38px',
+                  boxSizing: 'border-box',
+                  flex: '0 0 auto',
+                  minWidth: '290px',
+                }}
+              >
+                <CalendarIcon size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                <input
+                  type="date"
+                  value={filterFromDate}
+                  onChange={(e) => {
+                    setFilterFromDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  title="From Date"
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: '0.82rem',
+                    color: filterFromDate ? '#1e293b' : '#64748b',
+                    background: 'transparent',
+                    padding: '0',
+                    width: '125px',
+                    cursor: 'pointer',
+                  }}
+                />
+                <span style={{ color: '#94a3b8', fontSize: '0.8rem', padding: '0 2px' }}>–</span>
+                <input
+                  type="date"
+                  value={filterToDate}
+                  onChange={(e) => {
+                    setFilterToDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  title="To Date"
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: '0.82rem',
+                    color: filterToDate ? '#1e293b' : '#64748b',
+                    background: 'transparent',
+                    padding: '0',
+                    width: '125px',
+                    cursor: 'pointer',
+                  }}
+                />
+              </div>
+
+              {/* Search Input - flexible to take remaining space */}
+              <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '200px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search by transfer number..."
+                  value={filterSearch}
+                  onChange={(e) => {
+                    setFilterSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') loadTransfersList();
+                  }}
+                  style={{
+                    background: '#ffffff',
+                    borderColor: '#cbd5e1',
+                    borderRadius: '8px',
+                    padding: '0.45rem 2rem 0.45rem 2.2rem',
+                    fontSize: '0.85rem',
+                    width: '100%',
+                    height: '38px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <span
+                  style={{
                     position: 'absolute',
-                    right: '8px',
+                    left: '10px',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
                     color: '#94a3b8',
-                    cursor: 'pointer',
-                    padding: '2px',
+                    pointerEvents: 'none',
                     display: 'flex',
                     alignItems: 'center',
                   }}
-                  title="Clear search"
                 >
-                  <XIcon size={13} />
-                </button>
-              )}
-            </div>
-
-            {/* Clear All Filters Button */}
-            {(filterBranch !== 'ALL' ||
-              filterStatus !== 'all' ||
-              Boolean(filterFromDate) ||
-              Boolean(filterToDate) ||
-              Boolean(filterSearch.trim())) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterBranch('ALL');
-                    setFilterStatus('all');
-                    setFilterFromDate('');
-                    setFilterToDate('');
-                    setFilterSearch('');
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    height: '38px',
-                    padding: '0 0.85rem',
-                    background: '#f1f5f9',
-                    color: '#475569',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#fee2e2';
-                    e.currentTarget.style.color = '#b91c1c';
-                    e.currentTarget.style.borderColor = '#fca5a5';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f1f5f9';
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.borderColor = '#cbd5e1';
-                  }}
-                >
-                  <XIcon size={13} />
-                  <span>Reset</span>
-                </button>
-              )}
-          </div>
-
-          {/* Table Matching Reference Image */}
-          <div style={{ overflowX: 'auto' }}>
-            <table
-              className="table"
-              style={{
-                width: '100%',
-                borderCollapse: 'separate',
-                borderSpacing: '0',
-                fontSize: '0.86rem',
-              }}
-            >
-              <thead>
-                <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    Transfer No.
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    From Branch
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    To Branch
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    Date
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    Status
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    Items
-                  </th>
-                  <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
-                    Created By
-                  </th>
-                  <th
+                  <SearchIcon size={14} />
+                </span>
+                {filterSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterSearch('');
+                      setCurrentPage(1);
+                    }}
                     style={{
-                      padding: '0.85rem 1rem',
-                      borderBottom: '1px solid #e2e8f0',
-                      fontWeight: 700,
-                      textAlign: 'right',
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title="Clear search"
+                  >
+                    <XIcon size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Clear All Filters Button */}
+              {(filterBranch !== 'ALL' ||
+                filterStatus !== 'all' ||
+                Boolean(filterFromDate) ||
+                Boolean(filterToDate) ||
+                Boolean(filterSearch.trim())) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterBranch('ALL');
+                      setFilterStatus('all');
+                      setFilterFromDate('');
+                      setFilterToDate('');
+                      setFilterSearch('');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      height: '38px',
+                      padding: '0 0.85rem',
+                      background: '#f1f5f9',
+                      color: '#475569',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#fee2e2';
+                      e.currentTarget.style.color = '#b91c1c';
+                      e.currentTarget.style.borderColor = '#fca5a5';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#f1f5f9';
+                      e.currentTarget.style.color = '#475569';
+                      e.currentTarget.style.borderColor = '#cbd5e1';
                     }}
                   >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingList ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                      <RefreshCwIcon size={24} className="spin" style={{ marginBottom: '8px' }} />
-                      <div>Loading stock transfers...</div>
-                    </td>
-                  </tr>
-                ) : transfers.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                      <PackageIcon size={36} style={{ color: '#cbd5e1', marginBottom: '8px' }} />
-                      <div style={{ fontWeight: 600, color: '#475569' }}>No stock transfers found</div>
-                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-                        Click "+ Create New Transfer" above to initiate a branch transfer.
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  transfers.map((trf) => (
-                    <tr
-                      key={trf.id}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        transition: 'background 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <td style={{ padding: '0.9rem 1rem', fontWeight: 700, color: '#1e293b' }}>
-                        {trf.transferNumber}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem', color: '#334155' }}>
-                        {trf.fromBranchName || trf.fromBranch}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem', color: '#334155' }}>
-                        {trf.toBranchName || trf.toBranch}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem', color: '#64748b', fontSize: '0.82rem' }}>
-                        {trf.transferDate}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem' }}>{renderStatusBadge(trf.status)}</td>
-                      <td style={{ padding: '0.9rem 1rem', fontWeight: 600, color: '#0f172a' }}>
-                        {trf.itemsCount || 0}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem', color: '#475569' }}>
-                        {trf.requestedByName || 'Staff'}
-                      </td>
-                      <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleViewTransferDetails(trf.id)}
-                            style={{
-                              background: '#f1f5f9',
-                              border: '1px solid #cbd5e1',
-                              color: '#334155',
-                              padding: '0.35rem 0.75rem',
-                              borderRadius: '6px',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            View
-                          </button>
+                    <XIcon size={13} />
+                    <span>Reset</span>
+                  </button>
+                )}
+            </div>
 
-                          {/* Direct Receive button for incoming in-transit transfers */}
-                          {trf.status === 'in_transit' &&
-                            (user.role === 'owner' ||
-                              user.assignedLocation === trf.toBranch ||
-                              Boolean(user.allowedLocations?.includes(trf.toBranch))) && (
-                              <button
-                                type="button"
-                                onClick={() => handleDirectReceive(trf.id)}
-                                style={{
-                                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  padding: '0.35rem 0.75rem',
-                                  borderRadius: '6px',
-                                  fontSize: '0.8rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                }}
-                              >
-                                <CheckCircleIcon size={13} /> Receive
-                              </button>
-                            )}
+            {/* Table Matching Reference Image */}
+            <div style={{ overflowX: 'auto' }}>
+              <table
+                className="table"
+                style={{
+                  width: '100%',
+                  borderCollapse: 'separate',
+                  borderSpacing: '0',
+                  fontSize: '0.86rem',
+                }}
+              >
+                <thead>
+                  <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      Transfer No.
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      From Branch
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      To Branch
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      Date
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      Status
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      Items
+                    </th>
+                    <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 700 }}>
+                      Created By
+                    </th>
+                    <th
+                      style={{
+                        padding: '0.85rem 1rem',
+                        borderBottom: '1px solid #e2e8f0',
+                        fontWeight: 700,
+                        textAlign: 'right',
+                      }}
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingList ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                        <RefreshCwIcon size={24} className="spin" style={{ marginBottom: '8px' }} />
+                        <div>Loading stock transfers...</div>
+                      </td>
+                    </tr>
+                  ) : transfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                        <PackageIcon size={36} style={{ color: '#cbd5e1', marginBottom: '8px' }} />
+                        <div style={{ fontWeight: 600, color: '#475569' }}>No stock transfers found</div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                          Click "+ Create New Transfer" above to initiate a branch transfer.
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    transfers.map((trf) => (
+                      <tr
+                        key={trf.id}
+                        style={{
+                          borderBottom: '1px solid #f1f5f9',
+                          transition: 'background 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <td style={{ padding: '0.9rem 1rem', fontWeight: 700, color: '#1e293b' }}>
+                          {trf.transferNumber}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem', color: '#334155' }}>
+                          {trf.fromBranchName || trf.fromBranch}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem', color: '#334155' }}>
+                          {trf.toBranchName || trf.toBranch}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem', color: '#64748b', fontSize: '0.82rem' }}>
+                          {trf.transferDate}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem' }}>{renderStatusBadge(trf.status)}</td>
+                        <td style={{ padding: '0.9rem 1rem', fontWeight: 600, color: '#0f172a' }}>
+                          {trf.itemsCount || 0}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem', color: '#475569' }}>
+                          {trf.requestedByName || 'Staff'}
+                        </td>
+                        <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewTransferDetails(trf.id)}
+                              style={{
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                color: '#334155',
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              View
+                            </button>
 
-          {/* Pagination Footer */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginTop: '1.25rem',
-              paddingTop: '1rem',
-              borderTop: '1px solid #f1f5f9',
-              fontSize: '0.82rem',
-              color: '#64748b',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-            }}
-          >
-            <div>
-              Showing {transfers.length > 0 ? (currentPage - 1) * 10 + 1 : 0} to{' '}
-              {Math.min(currentPage * 10, totalTransfers)} of {totalTransfers} transfers
+                            {/* Direct Receive button for incoming in-transit transfers */}
+                            {trf.status === 'in_transit' &&
+                              (user.role === 'owner' ||
+                                user.assignedLocation === trf.toBranch ||
+                                Boolean(user.allowedLocations?.includes(trf.toBranch))) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectReceive(trf.id)}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    padding: '0.35rem 0.75rem',
+                                    borderRadius: '6px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                >
+                                  <CheckCircleIcon size={13} /> Receive
+                                </button>
+                              )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '0.3rem 0.6rem',
-                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
-                  opacity: currentPage <= 1 ? 0.5 : 1,
-                }}
-              >
-                &lt;
-              </button>
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                const pageNum = i + 1;
-                const isActive = pageNum === currentPage;
-                return (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    style={{
-                      background: isActive ? '#6366f1' : '#ffffff',
-                      color: isActive ? '#ffffff' : '#334155',
-                      border: isActive ? '1px solid #6366f1' : '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '0.3rem 0.65rem',
-                      fontWeight: isActive ? 700 : 500,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '0.3rem 0.6rem',
-                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                  opacity: currentPage >= totalPages ? 0.5 : 1,
-                }}
-              >
-                &gt;
-              </button>
+            {/* Pagination Footer */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: '1.25rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid #f1f5f9',
+                fontSize: '0.82rem',
+                color: '#64748b',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+              }}
+            >
+              <div>
+                Showing {transfers.length > 0 ? (currentPage - 1) * 10 + 1 : 0} to{' '}
+                {Math.min(currentPage * 10, totalTransfers)} of {totalTransfers} transfers
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '0.3rem 0.6rem',
+                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                    opacity: currentPage <= 1 ? 0.5 : 1,
+                  }}
+                >
+                  &lt;
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = i + 1;
+                  const isActive = pageNum === currentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      style={{
+                        background: isActive ? '#6366f1' : '#ffffff',
+                        color: isActive ? '#ffffff' : '#334155',
+                        border: isActive ? '1px solid #6366f1' : '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.65rem',
+                        fontWeight: isActive ? 700 : 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '0.3rem 0.6rem',
+                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                    opacity: currentPage >= totalPages ? 0.5 : 1,
+                  }}
+                >
+                  &gt;
+                </button>
+              </div>
             </div>
           </div>
-        </div>
         </div>
       )}
 
