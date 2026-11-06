@@ -23,6 +23,15 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
     return null;
   }
 
+  // Normalize current select value so it matches whether code or id was passed
+  const selectValue = React.useMemo(() => {
+    if (!selectedBranch || selectedBranch.toLowerCase() === 'all') return 'all';
+    const match = branches.find(
+      (b) => b.id === selectedBranch || (b.code && b.code.toUpperCase() === selectedBranch.toUpperCase())
+    );
+    return match ? (match.code || match.id) : selectedBranch;
+  }, [selectedBranch, branches]);
+
   return (
     <div className={`top-branch-selector-pill ${className}`.trim()}>
       {/* a) Building icon, 18px, stroke #5B4FE9, aria-hidden */}
@@ -56,7 +65,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
       <div className="top-branch-select-wrapper">
         <select
           id={id}
-          value={selectedBranch}
+          value={selectValue}
           onChange={(e) => onSelectBranch(e.target.value)}
           className="top-branch-select"
           title="Switch branch scope"

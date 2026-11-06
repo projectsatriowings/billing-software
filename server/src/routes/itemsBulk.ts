@@ -705,8 +705,8 @@ export function registerItemsBulk(r: Router) {
             `INSERT INTO items (
               id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-              reorder_milli, min_stock_milli, favorite, custom, active, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
+              reorder_milli, favorite, custom, active, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, false, '{}'::jsonb, true, ?)`,
             [
               id, tenantId, branchId, row.name, finalSku, finalBarcode, row.hsn || null,
               row.unit || 'pcs', row.category || null,

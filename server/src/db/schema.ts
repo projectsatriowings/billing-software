@@ -1482,4 +1482,10 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS idx_stock_moves_tenant_item_branch ON stock_moves (tenant_id, item_id, branch_id)`,
     ],
   },
+  {
+    version: 53,
+    statements: [
+      `ALTER TABLE items DROP COLUMN IF EXISTS min_stock_milli`,
+    ],
+  },
 ];

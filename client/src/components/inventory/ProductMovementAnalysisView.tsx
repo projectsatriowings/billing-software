@@ -7,6 +7,7 @@ import type {
 import {
   fetchProductMovementAnalysis,
   fetchInventoryDashboard,
+  formatStockDuration,
 } from '../../api.ts';
 import {
   WarehouseIcon,
@@ -35,17 +36,19 @@ import {
 import './StockReportBentoView.css';
 
 interface ProductMovementAnalysisViewProps {
-  categories: string[];
+  categories?: string[];
   onNavigateToPurchases?: (supplierId?: string, itemId?: string) => void;
   userRole?: string;
+  selectedBranch?: string;
 }
 
 import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 export { AnimatedCounter };
 
 export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewProps> = ({
-  categories,
+  categories = [],
   onNavigateToPurchases,
+  selectedBranch,
 }) => {
   // Date range filter: '7d' | '30d' | '90d' | 'custom'
   const [selectedRange, setSelectedRange] = useState<'7d' | '30d' | '90d' | 'custom'>('30d');
@@ -149,6 +152,14 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
   useEffect(() => {
     loadAnalysis('30d');
   }, []);
+
+  useEffect(() => {
+    const handleBranchChange = () => {
+      loadAnalysis(selectedRange);
+    };
+    window.addEventListener('branch_scope_changed', handleBranchChange);
+    return () => window.removeEventListener('branch_scope_changed', handleBranchChange);
+  }, [loadAnalysis, selectedRange]);
 
   const handleRangeSelect = (range: '7d' | '30d' | '90d' | 'custom') => {
     setSelectedRange(range);
@@ -324,10 +335,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
         p.unitsSold,
         p.salesTxns,
         `"${formatLastSold(p.lastSoldAt)}"`,
-        `"${
-          p.movementStatus === 'fast_moving'
-            ? 'Fast-moving'
-            : p.movementStatus === 'slow_moving'
+        `"${p.movementStatus === 'fast_moving'
+          ? 'Fast-moving'
+          : p.movementStatus === 'slow_moving'
             ? 'Slow-moving'
             : 'Non-moving'
         }"`,
@@ -897,9 +907,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
           {/* Tile 4: Tied Assets / Active SKUs */}
           <div
-            className={`srb-metric-tile violet ${
-              statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery ? 'active' : ''
-            }`}
+            className={`srb-metric-tile violet ${statusFilter === 'ALL' && categoryFilter === 'ALL' && !searchQuery ? 'active' : ''
+              }`}
             onClick={() => {
               setStatusFilter('ALL');
               setCategoryFilter('ALL');
@@ -976,10 +985,10 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     idx === 0
                       ? 'gold'
                       : idx === 1
-                      ? 'silver'
-                      : idx === 2
-                      ? 'bronze'
-                      : 'standard';
+                        ? 'silver'
+                        : idx === 2
+                          ? 'bronze'
+                          : 'standard';
 
                   const itemDetails = data?.products.find((p) => p.id === item.id);
                   const itemCat = itemDetails?.category || 'General';
@@ -1070,9 +1079,9 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                       <span className="srb-intel-kicker amber">Velocity Champion</span>
                     </div>
                     {data.insights.bestSeller.runwayDays !== null &&
-                    data.insights.bestSeller.runwayDays !== undefined ? (
+                      data.insights.bestSeller.runwayDays !== undefined ? (
                       <span className="srb-runway-badge amber">
-                        <ClockIcon size={11} /> ~{data.insights.bestSeller.runwayDays}d Runway
+                        <ClockIcon size={11} /> Stock Lasts ~{formatStockDuration(data.insights.bestSeller.runwayDays)}
                       </span>
                     ) : (
                       <span className="srb-runway-badge amber">Active Seller</span>
@@ -1128,7 +1137,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                           />
                         </div>
                         <span className="srb-runway-note">
-                          Stock balance provides ~{data.insights.bestSeller.runwayDays} days of buffer at current churn.
+                          Stock is sufficient for approximately {formatStockDuration(data.insights.bestSeller.runwayDays)} at current daily sales.
                         </span>
                       </div>
                     )}
@@ -1207,7 +1216,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                     <div className="srb-intel-mini-icon red">
                       <AlertOctagonIcon size={13} />
                     </div>
-                    <span className="srb-intel-kicker red">Capital Lockup Radar</span>
+                    <span className="srb-intel-kicker red">Unsold Stock Alert</span>
                   </div>
                   <span className="srb-runway-badge red">
                     <span className="srb-pulse-dot red" /> 0 Sales ({data.insights.nonMovingSummary.days}d)
@@ -1216,7 +1225,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
 
                 <div className="srb-dormant-hero-block">
                   <div className="srb-dormant-val-col">
-                    <span className="srb-dormant-val-label">Capital Stalled On Shelves</span>
+                    <span className="srb-dormant-val-label">Money Invested in Unsold Stock</span>
                     <div className="srb-dormant-amount red">
                       <AnimatedCounter
                         value={data.insights.nonMovingSummary.tiedCapitalMinor}
@@ -1495,9 +1504,8 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                       {/* Current Stock */}
                       <td>
                         <span
-                          className={`srb-stock-pill ${
-                            isNegStock ? 'zero' : isLowStock ? 'low' : 'healthy'
-                          }`}
+                          className={`srb-stock-pill ${isNegStock ? 'zero' : isLowStock ? 'low' : 'healthy'
+                            }`}
                         >
                           ● {p.currentStockUnits.toLocaleString('en-IN')} {p.unit}
                         </span>
@@ -1548,7 +1556,7 @@ export const ProductMovementAnalysisView: React.FC<ProductMovementAnalysisViewPr
                       {/* Action */}
                       <td style={{ textAlign: 'right' }}>
                         {onNavigateToPurchases &&
-                        (p.movementStatus === 'fast_moving' || isLowStock) ? (
+                          (p.movementStatus === 'fast_moving' || isLowStock) ? (
                           <button
                             type="button"
                             className="srb-btn-restock-action"

@@ -127,6 +127,11 @@ export function registerPurchases(r: Router) {
     `;
     const params: unknown[] = [tenantId];
 
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      sql += ' AND (p.branch_id = ? OR p.branch_id IS NULL)';
+      params.push(scope.branchId);
+    }
+
     if (status && status !== 'ALL') {
       if (status === 'voided') {
         sql += ' AND p.status = \'voided\'';

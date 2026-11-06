@@ -12,7 +12,11 @@ export function registerStockTransfers(r: Router) {
 
     const fromBranch = (ctx.query.fromBranch ?? '').trim().toUpperCase();
     const toBranch = (ctx.query.toBranch ?? '').trim().toUpperCase();
-    const branch = (ctx.query.branch ?? '').trim().toUpperCase();
+    const branch = (
+      (ctx.query.branch as string) ||
+      (ctx.req?.headers?.['x-branch-id'] as string) ||
+      ''
+    ).trim().toUpperCase();
     const status = (ctx.query.status ?? 'all').trim().toLowerCase();
     const search = (ctx.query.search ?? '').trim().toLowerCase();
     const fromDate = (ctx.query.from ?? '').trim();

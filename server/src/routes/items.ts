@@ -48,7 +48,6 @@ function formatItem(r: any) {
     taxInclusive: Boolean(r.taxInclusive ?? r.tax_inclusive),
     trackStock: Boolean(r.trackStock ?? r.track_stock),
     reorderMilli: Number(r.reorderMilli ?? r.reorder_milli ?? 0),
-    minStockMilli: Number(r.minStockMilli ?? r.min_stock_milli ?? 0),
     preferredSupplierId: r.preferredSupplierId ?? r.preferred_supplier_id ?? null,
     favorite: Boolean(r.favorite),
     imageUrl: r.imageUrl ?? r.image_url ?? (typeof r.custom === 'object' && r.custom?.image ? r.custom.image : null),
@@ -314,7 +313,6 @@ export function registerItems(r: Router) {
     const taxInclusive = V.bool(b.taxInclusive, true);
     const trackStock = V.bool(b.trackStock, true);
     const reorderMilli = V.int(b.reorderMilli ?? b.reorderLevelMilli ?? 0, 'Reorder quantity', { min: 0 });
-    const minStockMilli = V.int(b.minStockMilli ?? 0, 'Minimum stock quantity', { min: 0 });
     const preferredSupplierId = V.optStr(b.preferredSupplierId, 'Preferred supplier', 60);
     const favorite = V.bool(b.favorite, false);
     const custom = validateCustom(b.custom);
@@ -348,9 +346,9 @@ export function registerItems(r: Router) {
         `INSERT INTO items (
           id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
           price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-          reorder_milli, min_stock_milli, preferred_supplier_id, favorite, custom, active, image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
-        [id, tenantId, branchId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
+          reorder_milli, preferred_supplier_id, favorite, custom, active, image_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
+        [id, tenantId, branchId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
       );
 
       if (barcode) {
@@ -410,7 +408,6 @@ export function registerItems(r: Router) {
     const taxInclusive = b.taxInclusive !== undefined ? V.bool(b.taxInclusive) : Boolean(item.taxInclusive ?? item.tax_inclusive);
     const trackStock = b.trackStock !== undefined ? V.bool(b.trackStock) : Boolean(item.trackStock ?? item.track_stock);
     const reorderMilli = (b.reorderMilli !== undefined || b.reorderLevelMilli !== undefined) ? V.int(b.reorderMilli ?? b.reorderLevelMilli, 'Reorder quantity', { min: 0 }) : Number(item.reorderMilli ?? item.reorder_milli ?? 0);
-    const minStockMilli = b.minStockMilli !== undefined ? V.int(b.minStockMilli, 'Minimum stock', { min: 0 }) : Number(item.minStockMilli ?? item.min_stock_milli ?? 0);
     const preferredSupplierId = b.preferredSupplierId !== undefined ? V.optStr(b.preferredSupplierId, 'Preferred supplier', 60) : (item.preferredSupplierId ?? item.preferred_supplier_id ?? null);
     const favorite = b.favorite !== undefined ? V.bool(b.favorite) : Boolean(item.favorite);
     const custom = b.custom !== undefined ? validateCustom(b.custom) : (typeof item.custom === 'string' ? JSON.parse(item.custom) : (item.custom ?? {}));
@@ -443,9 +440,9 @@ export function registerItems(r: Router) {
         `UPDATE items SET
           name = ?, price_minor = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?,
           hsn = ?, unit = ?, category = ?, tax_inclusive = ?, track_stock = ?, reorder_milli = ?,
-          min_stock_milli = ?, preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, image_url = ?, updated_at = now()
+          preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, image_url = ?, updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, minStockMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
+        [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
       );
 
       // Keep product_barcodes table synchronized

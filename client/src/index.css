@@ -15498,6 +15498,13 @@ body {
   background: #4338ca;
 }
 
+.tile-stepper-btn:disabled,
+.tile-stepper-btn.disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
 .tile-stepper-qty {
   font-size: 0.82rem;
   font-weight: 800;
@@ -16027,6 +16034,13 @@ body {
 .bento-qty-btn:hover {
   background: #e2e8f0;
   color: #0f172a;
+}
+
+.bento-qty-btn:disabled,
+.bento-qty-btn.disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
 .bento-qty-value {
