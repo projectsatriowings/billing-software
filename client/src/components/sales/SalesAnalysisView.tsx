@@ -5,7 +5,7 @@ import type {
   DaywiseSalesRow,
   CategorySalesItem,
 } from '../../api.ts';
-import { fetchSalesAnalysis } from '../../api.ts';
+import { fetchSalesAnalysis, scheduleDailySalesReportEmail, fetchScheduledDailySalesReportEmail } from '../../api.ts';
 import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
 
 interface SalesAnalysisViewProps {
@@ -261,9 +261,10 @@ const PrinterIcon = () => (
   </svg>
 );
 
-const WhatsAppCalendarIcon = () => (
+const MailReportIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
   </svg>
 );
 
@@ -633,10 +634,6 @@ const BeadedDotMatrixBarChart: React.FC<{
           </div>
         </div>
         <div className="inspire-header-actions">
-          <button type="button" className="inspire-pill-btn">
-            <FilterFunnelIcon />
-            <span>Filter</span>
-          </button>
           <button type="button" className="inspire-more-btn" title="More options">
             <MoreDotsIcon />
           </button>
@@ -863,10 +860,6 @@ const DualSplineAreaChart: React.FC<{
           </div>
         </div>
         <div className="inspire-header-actions">
-          <button type="button" className="inspire-pill-btn">
-            <FilterFunnelIcon />
-            <span>Filter</span>
-          </button>
           <button type="button" className="inspire-more-btn" title="More options">
             <MoreDotsIcon />
           </button>
@@ -1085,10 +1078,6 @@ const ProductSalesBreakdownCard: React.FC<{
           </div>
         </div>
         <div className="inspire-header-actions">
-          <button type="button" className="inspire-pill-btn">
-            <FilterFunnelIcon />
-            <span>Filter</span>
-          </button>
           <button type="button" className="inspire-more-btn" title="More options">
             <MoreDotsIcon />
           </button>
@@ -1149,8 +1138,7 @@ const ProductSalesBreakdownCard: React.FC<{
 const CategorySalesDonutCard: React.FC<{
   categories: CategorySalesItem[];
   totalCatSalesMinor: number;
-  onFilterCategory?: (cat: string) => void;
-}> = ({ categories, totalCatSalesMinor, onFilterCategory }) => {
+}> = ({ categories, totalCatSalesMinor }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const cx = 95;
@@ -1218,10 +1206,6 @@ const CategorySalesDonutCard: React.FC<{
           </div>
         </div>
         <div className="inspire-header-actions">
-          <button type="button" className="inspire-pill-btn">
-            <FilterFunnelIcon />
-            <span>Filter</span>
-          </button>
           <button type="button" className="inspire-more-btn" title="More options">
             <MoreDotsIcon />
           </button>
@@ -1244,12 +1228,10 @@ const CategorySalesDonutCard: React.FC<{
                     transformOrigin: '95px 95px',
                     transform: isHovered ? 'scale(1.05)' : 'scale(1)',
                     transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                    cursor: 'pointer',
                     animationDelay: `${arc.idx * 75}ms`,
                   }}
                   onMouseEnter={() => setHoveredIdx(arc.idx)}
                   onMouseLeave={() => setHoveredIdx(null)}
-                  onClick={() => onFilterCategory?.(arc.category)}
                 />
               );
             })}
@@ -1308,8 +1290,6 @@ const CategorySalesDonutCard: React.FC<{
               className="donut-legend-item"
               onMouseEnter={() => setHoveredIdx(idx)}
               onMouseLeave={() => setHoveredIdx(null)}
-              onClick={() => onFilterCategory?.(cat.category)}
-              style={{ cursor: 'pointer' }}
             >
               <span className="donut-legend-bar" style={{ background: cat.color }} />
               <div className="donut-legend-info">
@@ -1563,10 +1543,27 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
   const [sortAsc, setSortAsc] = useState<boolean>(false);
   const [grouping, setGrouping] = useState<GroupingPreset>('day');
 
-  // Schedule daily report modal
+  // Schedule daily report modal (Email)
   const [showScheduleModal, setShowScheduleModal] = useState<boolean>(false);
-  const [schedulePhone, setSchedulePhone] = useState<string>('9840123456');
+  const [scheduleEmail, setScheduleEmail] = useState<string>('');
   const [scheduleSent, setScheduleSent] = useState<boolean>(false);
+  const [emailTouched, setEmailTouched] = useState<boolean>(false);
+  const [scheduleError, setScheduleError] = useState<string>('');
+
+  const isValidEmail = useMemo(() => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(scheduleEmail.trim());
+  }, [scheduleEmail]);
+
+  // Load existing scheduled report email if available
+  useEffect(() => {
+    fetchScheduledDailySalesReportEmail(selectedBranch)
+      .then((res) => {
+        if (res?.email) {
+          setScheduleEmail(res.email);
+        }
+      })
+      .catch(() => {});
+  }, [selectedBranch]);
 
   // Modern category view toggle ('bento' | 'leaderboard')
   const [categoryViewMode, setCategoryViewMode] = useState<'bento' | 'leaderboard'>('bento');
@@ -1748,15 +1745,34 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
     window.print();
   };
 
-  // Send WhatsApp Schedule report demonstration
-  const handleSendScheduleReport = () => {
-    if (!schedulePhone.trim()) return;
+  // Send Daily Sales Report Email & Save Schedule
+  const handleSendScheduleReport = async () => {
+    const trimmed = scheduleEmail.trim();
+    if (!trimmed || !isValidEmail) {
+      setEmailTouched(true);
+      setScheduleError('Please enter a valid recipient email address.');
+      return;
+    }
+
     setScheduleSent(true);
-    setTimeout(() => {
+    setScheduleError('');
+
+    try {
+      const res = await scheduleDailySalesReportEmail({
+        email: trimmed,
+        branch: selectedBranch,
+      });
+
       setShowScheduleModal(false);
       setScheduleSent(false);
-      showToast?.(`Daily sales report scheduled to WhatsApp +91 ${schedulePhone} at 10:00 PM`);
-    }, 1200);
+      showToast?.(res?.message || `Daily sales report sent to ${trimmed} and scheduled daily for 10:00 PM`);
+    } catch (err: any) {
+      console.error('[SalesAnalysisView] Schedule report failed:', err);
+      setScheduleSent(false);
+      const errMsg = err?.message || 'Failed to dispatch report email. Please verify SMTP settings.';
+      setScheduleError(errMsg);
+      showToast?.(errMsg);
+    }
   };
 
   // Sorted daywise rows
@@ -2164,170 +2180,16 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
 
             <button
               type="button"
-              className="btn btn-secondary sales-action-btn"
-              onClick={handlePrint}
-              disabled={loading || !data}
-              title="Print clean Sales Analysis document"
-            >
-              <PrinterIcon />
-              <span>Print</span>
-            </button>
-
-            <button
-              type="button"
               className="btn btn-primary sales-schedule-btn"
-              onClick={() => setShowScheduleModal(true)}
-              title="Schedule automated daily sales digest to shop owner's WhatsApp"
+              onClick={() => {
+                setScheduleError('');
+                setShowScheduleModal(true);
+              }}
+              title="Schedule automated daily sales digest via Email"
             >
-              <WhatsAppCalendarIcon />
+              <MailReportIcon />
               <span>Schedule Daily Report</span>
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. FILTERS BAR */}
-      <div className="card sales-filter-bar">
-        <div className="sales-filter-left">
-          {/* Counter Dropdown */}
-          <div className="sales-select-wrap">
-            <span className="sales-select-icon">
-              <StoreIcon />
-            </span>
-            <select
-              className="form-select sales-filter-select"
-              value={selectedCounter}
-              onChange={(e) => setSelectedCounter(e.target.value)}
-              aria-label="Filter by register counter"
-            >
-              {data?.filterOptions.counters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              )) || <option value="ALL">All counters</option>}
-            </select>
-            <span className="sales-select-chevron">
-              <ChevronDownIcon />
-            </span>
-          </div>
-
-          {/* Category Dropdown */}
-          <div className="sales-select-wrap">
-            <span className="sales-select-icon">
-              <TagFilterIcon />
-            </span>
-            <select
-              className="form-select sales-filter-select"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              aria-label="Filter by product category"
-            >
-              <option value="ALL">All categories</option>
-              {data?.filterOptions.categories
-                .filter((cat) => cat !== 'All categories')
-                .map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-            </select>
-            <span className="sales-select-chevron">
-              <ChevronDownIcon />
-            </span>
-          </div>
-
-          {/* Cashier Dropdown */}
-          <div className="sales-select-wrap">
-            <span className="sales-select-icon">
-              <UserFilterIcon />
-            </span>
-            <select
-              className="form-select sales-filter-select"
-              value={selectedCashier}
-              onChange={(e) => setSelectedCashier(e.target.value)}
-              aria-label="Filter by billing cashier"
-            >
-              <option value="ALL">All cashiers</option>
-              {data?.filterOptions.cashiers
-                .filter((u) => u.id !== 'ALL')
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-            </select>
-            <span className="sales-select-chevron">
-              <ChevronDownIcon />
-            </span>
-          </div>
-        </div>
-
-        <div className="sales-filter-right">
-          {/* Date Range Pills */}
-          <div className="sales-pills-group" role="tablist">
-            <button
-              type="button"
-              className={`sales-pill-btn ${datePreset === 'today' ? 'active' : ''}`}
-              onClick={() => setDatePreset('today')}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              className={`sales-pill-btn ${datePreset === '7d' ? 'active' : ''}`}
-              onClick={() => setDatePreset('7d')}
-            >
-              Last 7 Days
-            </button>
-            <button
-              type="button"
-              className={`sales-pill-btn ${datePreset === '30d' ? 'active' : ''}`}
-              onClick={() => setDatePreset('30d')}
-            >
-              Last 30 Days
-            </button>
-            <button
-              type="button"
-              className={`sales-pill-btn ${datePreset === 'this_month' ? 'active' : ''}`}
-              onClick={() => setDatePreset('this_month')}
-            >
-              This Month
-            </button>
-            <button
-              type="button"
-              className={`sales-pill-btn ${datePreset === '90d' ? 'active' : ''}`}
-              onClick={() => setDatePreset('90d')}
-            >
-              Last 90 Days
-            </button>
-            <button
-              type="button"
-              className={`sales-pill-btn custom-pill ${datePreset === 'custom' ? 'active' : ''}`}
-              onClick={openCustomDateModal}
-            >
-              <CalendarIcon />
-              <span>{datePreset === 'custom' && customFrom && customTo ? `${formatDMMM(customFrom)} – ${formatDMMM(customTo)}` : 'Custom'}</span>
-            </button>
-          </div>
-
-          {/* Compare Period Dropdown */}
-          <div className="sales-compare-wrap">
-            <span className="sales-compare-icon">
-              <GitCompareIcon />
-            </span>
-            <select
-              className="form-select sales-compare-select"
-              value={comparePreset}
-              onChange={(e) => setComparePreset(e.target.value as ComparePreset)}
-              aria-label="Comparison period"
-            >
-              <option value="previous_period">Compare: Previous period</option>
-              <option value="same_period_last_month">Compare: Same period last month</option>
-              <option value="none">Compare: None</option>
-            </select>
-            <span className="sales-select-chevron">
-              <ChevronDownIcon />
-            </span>
           </div>
         </div>
       </div>
@@ -2544,7 +2406,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             <CategorySalesDonutCard
               categories={data.categories}
               totalCatSalesMinor={data.summary.netSalesMinor}
-              onFilterCategory={(cat) => setSelectedCategory(cat)}
             />
           </div>
 
@@ -2602,20 +2463,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                         <span>Ranks</span>
                       </button>
                     </div>
-
-                    <button
-                      type="button"
-                      className="panel-details-link"
-                      onClick={() => {
-                        if (data.categories.length > 0) {
-                          setSelectedCategory(data.categories[0].category);
-                        }
-                      }}
-                      title="Filter by Top Category"
-                    >
-                      <span>Filter</span>
-                      <ChevronRightMini />
-                    </button>
                   </div>
                 </div>
 
@@ -2633,7 +2480,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           }}
                           onMouseEnter={() => setHoveredCatIdx(idx)}
                           onMouseLeave={() => setHoveredCatIdx(null)}
-                          onClick={() => setSelectedCategory(cat.category)}
                           title={`${cat.category}: ${cat.sharePct}% (${formatRupees(cat.netSalesMinor)})`}
                         />
                       ))}
@@ -2669,8 +2515,8 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           className={`cat-bento-card ${isHovered ? 'hovered' : ''} ${isTop3 ? 'is-top-tier' : ''}`}
                           onMouseEnter={() => setHoveredCatIdx(idx)}
                           onMouseLeave={() => setHoveredCatIdx(null)}
-                          onClick={() => setSelectedCategory(cat.category)}
                           style={{
+                            cursor: 'default',
                             borderTop: `3px solid ${cat.color}`,
                           }}
                         >
@@ -2730,7 +2576,7 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                           className={`cat-leaderboard-row ${isHovered ? 'hovered' : ''}`}
                           onMouseEnter={() => setHoveredCatIdx(idx)}
                           onMouseLeave={() => setHoveredCatIdx(null)}
-                          onClick={() => setSelectedCategory(cat.category)}
+                          style={{ cursor: 'default' }}
                         >
                           <div className="cat-leaderboard-rank-col">
                             <span className={`cat-lead-rank-badge rank-${idx + 1}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
@@ -3037,22 +2883,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
               </div>
 
               <div className="daywise-actions-area">
-                {/* Group dropdown */}
-                <div className="daywise-group-wrap">
-                  <select
-                    className="form-select daywise-group-select"
-                    value={grouping}
-                    onChange={(e) => setGrouping(e.target.value as GroupingPreset)}
-                  >
-                    <option value="day">Group: Day</option>
-                    <option value="week">Group: Week</option>
-                    <option value="month">Group: Month</option>
-                  </select>
-                  <span className="daywise-group-chevron">
-                    <ChevronDownIcon />
-                  </span>
-                </div>
-
                 {/* Export CSV button */}
                 <button
                   type="button"
@@ -3062,17 +2892,6 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 >
                   <FileSpreadsheetIcon />
                   <span>Export CSV</span>
-                </button>
-
-                {/* Print button */}
-                <button
-                  type="button"
-                  className="btn btn-secondary daywise-btn"
-                  onClick={handlePrint}
-                  title="Print Sales Summary"
-                >
-                  <PrinterIcon />
-                  <span>Print</span>
                 </button>
               </div>
             </div>
@@ -3270,196 +3089,14 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
         </>
       )}
 
-      {/* CUSTOM DATE RANGE MODAL */}
-      {showCustomModal && (
-        <div className="modal-backdrop" onClick={() => setShowCustomModal(false)}>
-          <div
-            className="sales-custom-modal"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="customDateModalTitle"
-          >
-            <div className="sales-modal-header">
-              <div className="sales-modal-title-wrap">
-                <div className="sales-modal-icon-badge">
-                  <CalendarIcon />
-                </div>
-                <div>
-                  <h3 id="customDateModalTitle" className="sales-modal-title">Select Custom Date Range</h3>
-                  <p className="sales-modal-subtitle">Filter analytics for any custom billing period</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="sales-modal-close-btn"
-                onClick={() => setShowCustomModal(false)}
-                aria-label="Close modal"
-              >
-                <CloseModalIcon />
-              </button>
-            </div>
-
-            <form onSubmit={handleApplyCustomRange}>
-              <div className="sales-modal-body">
-                {/* Quick Presets Row */}
-                <div className="sales-modal-quick-presets">
-                  <span className="quick-presets-label">Quick picks:</span>
-                  <div className="quick-presets-list">
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        setModalFrom(addDaysYMD(today, -6));
-                        setModalTo(today);
-                      }}
-                    >
-                      Last 7D
-                    </button>
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        setModalFrom(addDaysYMD(today, -13));
-                        setModalTo(today);
-                      }}
-                    >
-                      Last 14D
-                    </button>
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        setModalFrom(addDaysYMD(today, -29));
-                        setModalTo(today);
-                      }}
-                    >
-                      Last 30D
-                    </button>
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        setModalFrom(addDaysYMD(today, -59));
-                        setModalTo(today);
-                      }}
-                    >
-                      Last 60D
-                    </button>
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        const parts = today.split('-');
-                        setModalFrom(`${parts[0]}-${parts[1]}-01`);
-                        setModalTo(today);
-                      }}
-                    >
-                      This Month
-                    </button>
-                    <button
-                      type="button"
-                      className="quick-chip-btn"
-                      onClick={() => {
-                        const today = getTodayKolkataYMD();
-                        const d = new Date(today + 'T12:00:00Z');
-                        d.setUTCMonth(d.getUTCMonth() - 1);
-                        const prevY = d.getUTCFullYear();
-                        const prevM = String(d.getUTCMonth() + 1).padStart(2, '0');
-                        const lastDay = new Date(Date.UTC(prevY, d.getUTCMonth() + 1, 0)).getUTCDate();
-                        setModalFrom(`${prevY}-${prevM}-01`);
-                        setModalTo(`${prevY}-${prevM}-${String(lastDay).padStart(2, '0')}`);
-                      }}
-                    >
-                      Last Month
-                    </button>
-                  </div>
-                </div>
-
-                {/* Date Fields Grid */}
-                <div className="sales-modal-dates-grid">
-                  <div className="sales-date-input-wrap">
-                    <label className="sales-date-label">
-                      <span>From Date (Start)</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="sales-date-field"
-                      value={modalFrom}
-                      onChange={(e) => setModalFrom(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="sales-date-input-wrap">
-                    <label className="sales-date-label">
-                      <span>To Date (End)</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="sales-date-field"
-                      value={modalTo}
-                      onChange={(e) => setModalTo(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Selected Range Summary Box */}
-                {modalFrom && modalTo && modalFrom <= modalTo ? (
-                  <div className="sales-range-summary-box">
-                    <div className="summary-box-icon-wrap">
-                      <CalendarIcon />
-                    </div>
-                    <div className="summary-box-content">
-                      <span className="summary-days-count">{selectedRangeDays} days duration</span>
-                      <span className="summary-date-sub">
-                        {formatDMMMYYYY(modalFrom)} – {formatDMMMYYYY(modalTo)}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="sales-range-error-box">
-                    <AlertTriangleIcon />
-                    <span>Invalid range: "From Date" cannot be after "To Date".</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="sales-modal-footer">
-                <button
-                  type="button"
-                  className="sales-modal-btn-cancel"
-                  onClick={() => setShowCustomModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="sales-modal-btn-apply"
-                  disabled={!modalFrom || !modalTo || modalFrom > modalTo}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                  <span>Apply Date Range</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* SCHEDULE DAILY REPORT MODAL */}
       {showScheduleModal && (
-        <div className="modal-backdrop" onClick={() => setShowScheduleModal(false)}>
+        <div
+          className="modal-backdrop sales-schedule-modal-backdrop"
+          onClick={() => setShowScheduleModal(false)}
+        >
           <div
-            className="sales-custom-modal"
+            className="sales-custom-modal sales-schedule-modal"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -3467,12 +3104,12 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
           >
             <div className="sales-modal-header">
               <div className="sales-modal-title-wrap">
-                <div className="sales-modal-icon-badge" style={{ background: '#ecfdf5', color: '#10b981' }}>
-                  <WhatsAppCalendarIcon />
+                <div className="sales-modal-icon-badge" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
+                  <MailReportIcon />
                 </div>
                 <div>
                   <h3 id="scheduleModalTitle" className="sales-modal-title">Schedule Daily Sales Report</h3>
-                  <p className="sales-modal-subtitle">Automated WhatsApp closing digest at 10:00 PM</p>
+                  <p className="sales-modal-subtitle">Automated daily closing sales digest delivered via Email</p>
                 </div>
               </div>
               <button
@@ -3486,24 +3123,54 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
             </div>
             <div className="sales-modal-body">
               <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '0 0 1.25rem 0', lineHeight: 1.55 }}>
-                Receive a daily closing WhatsApp summary every evening at 10:00 PM containing Net Sales, Bills, Cash/UPI breakdown, Gross Profit and Returns.
+                Receive a comprehensive daily store closing report directly in your inbox containing Total Revenue, Completed Bills, Gross Profit, Top Products Sold, and Payment Breakdown.
               </p>
               <div className="sales-date-input-wrap">
-                <label className="sales-date-label">
-                  <span>WhatsApp Phone Number</span>
+                <label className="sales-date-label" htmlFor="scheduleEmailInput">
+                  <span>Recipient Email Address</span>
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="badge badge-emerald" style={{ padding: '0.65rem 0.85rem', fontSize: '0.9rem', borderRadius: '10px' }}>
-                    +91
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      color: '#6366f1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <MailReportIcon />
                   </span>
                   <input
-                    type="tel"
+                    id="scheduleEmailInput"
+                    type="email"
                     className="sales-date-field"
-                    placeholder="98401 23456"
-                    value={schedulePhone}
-                    onChange={(e) => setSchedulePhone(e.target.value)}
+                    style={{
+                      paddingLeft: '2.4rem',
+                      borderColor: emailTouched && !isValidEmail ? '#ef4444' : undefined,
+                    }}
+                    placeholder="owner@example.com"
+                    value={scheduleEmail}
+                    onChange={(e) => {
+                      setScheduleEmail(e.target.value);
+                      setEmailTouched(true);
+                      if (scheduleError) setScheduleError('');
+                    }}
+                    onBlur={() => setEmailTouched(true)}
+                    autoComplete="email"
                   />
                 </div>
+                {emailTouched && !isValidEmail && (
+                  <div style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '6px', fontWeight: 500 }}>
+                    Please enter a valid email address (e.g., owner@example.com)
+                  </div>
+                )}
+                {scheduleError && (
+                  <div style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '6px', fontWeight: 500 }}>
+                    {scheduleError}
+                  </div>
+                )}
               </div>
             </div>
             <div className="sales-modal-footer">
@@ -3518,10 +3185,10 @@ export const SalesAnalysisView: React.FC<SalesAnalysisViewProps> = ({
                 type="button"
                 className="sales-modal-btn-apply"
                 onClick={handleSendScheduleReport}
-                disabled={scheduleSent || !schedulePhone.trim()}
-                style={{ background: '#10b981' }}
+                disabled={scheduleSent || !isValidEmail}
+                style={{ background: '#6366f1' }}
               >
-                {scheduleSent ? 'Saving Schedule...' : 'Save & Enable WhatsApp Digest'}
+                {scheduleSent ? 'Sending & Saving Schedule...' : 'Save & Enable Email Report'}
               </button>
             </div>
           </div>

@@ -1,6 +1,8 @@
 import { requireUser } from '../auth.ts';
 import { resolveBranchScope } from '../branchScope.ts';
-import { type Router } from '../http.ts';
+import { type Router, bad, HttpError } from '../http.ts';
+import { newId } from '../security.ts';
+import { sendDailySalesReportEmail, type DailySalesReportEmailData } from '../services/mailer.ts';
 import type {
   SalesAnalysisData,
   SalesSummaryMetrics,
@@ -1038,5 +1040,297 @@ export function registerSalesAnalysis(r: Router) {
     };
 
     return payload;
+  });
+
+  // GET: Fetch currently configured schedule email
+  r.get('/api/sales-analysis/schedule-email', requireUser, async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const branchId = scope.isSuperAdminAll ? null : (scope.branchId || null);
+
+    const rec = branchId
+      ? await ctx.db.one<any>(
+          `SELECT recipient_email, is_active, scheduled_time, last_sent_at 
+           FROM scheduled_sales_reports 
+           WHERE tenant_id = ? AND branch_id = ?
+           ORDER BY updated_at DESC LIMIT 1`,
+          [tenantId, branchId]
+        )
+      : await ctx.db.one<any>(
+          `SELECT recipient_email, is_active, scheduled_time, last_sent_at 
+           FROM scheduled_sales_reports 
+           WHERE tenant_id = ? AND branch_id IS NULL
+           ORDER BY updated_at DESC LIMIT 1`,
+          [tenantId]
+        );
+
+    let finalRec = rec;
+    if (!finalRec && branchId) {
+      finalRec = await ctx.db.one<any>(
+        `SELECT recipient_email, is_active, scheduled_time, last_sent_at 
+         FROM scheduled_sales_reports 
+         WHERE tenant_id = ? AND branch_id IS NULL 
+         ORDER BY updated_at DESC LIMIT 1`,
+        [tenantId]
+      );
+    }
+
+    return {
+      scheduled: Boolean(finalRec),
+      email: finalRec?.recipient_email || ctx.user?.email || '',
+      isActive: finalRec?.is_active ?? true,
+      scheduledTime: finalRec?.scheduled_time || '22:00',
+      lastSentAt: finalRec?.last_sent_at || null,
+    };
+  });
+
+  // POST: Schedule daily sales report and dispatch real email report
+  r.post('/api/sales-analysis/schedule-email', requireUser, async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const rawEmail = typeof ctx.body?.email === 'string' ? ctx.body.email.trim().toLowerCase() : '';
+
+    if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+      throw bad('Please enter a valid recipient email address.');
+    }
+
+    const scope = await resolveBranchScope(ctx);
+    const branchId = scope.isSuperAdminAll ? null : (scope.branchId || null);
+
+    // 1. Fetch Tenant and Branch info
+    const tenant = await ctx.db.one<any>('SELECT name, owner_email FROM tenants WHERE id = ?', [tenantId]);
+    const storeName = tenant?.name || 'SKS Super market';
+    let branchName = 'All Branches (Overall)';
+    if (branchId) {
+      const br = await ctx.db.one<any>('SELECT name FROM branches WHERE id = ? AND tenant_id = ?', [branchId, tenantId]);
+      if (br?.name) branchName = br.name;
+    }
+
+    // 2. Determine report date
+    const now = new Date();
+    const todayYMD = toKolkataYMD(now);
+
+    const branchFilterSql = branchId ? 'AND i.branch_id = ?' : '';
+    const branchParams = branchId ? [branchId] : [];
+
+    const todaySales = await ctx.db.one<any>(
+      `SELECT count(*)::int as count FROM invoices i WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}`,
+      [tenantId, todayYMD, ...branchParams]
+    );
+
+    let reportDateYMD = todayYMD;
+    let isToday = true;
+
+    if (!todaySales || todaySales.count === 0) {
+      const latest = await ctx.db.one<any>(
+        `SELECT i.bdate FROM invoices i WHERE i.tenant_id = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql} ORDER BY i.bdate DESC LIMIT 1`,
+        [tenantId, ...branchParams]
+      );
+      if (latest?.bdate) {
+        reportDateYMD = latest.bdate;
+        isToday = (reportDateYMD === todayYMD);
+      }
+    }
+
+    const dObj = new Date(reportDateYMD + 'T12:00:00Z');
+    const dateFormatted = dObj.toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const reportDateLabel = isToday ? `Today (${dateFormatted})` : dateFormatted;
+
+    // 3. Query sales summary for reportDateYMD
+    const salesAgg = await ctx.db.one<any>(
+      `SELECT
+        COUNT(DISTINCT i.id)::int AS count,
+        COALESCE(SUM(i.total_minor), 0)::bigint AS total,
+        COALESCE(SUM(i.taxable_minor), 0)::bigint AS taxable,
+        COALESCE(SUM(i.cgst_minor), 0)::bigint AS cgst,
+        COALESCE(SUM(i.sgst_minor), 0)::bigint AS sgst,
+        COALESCE(SUM(i.igst_minor), 0)::bigint AS igst,
+        COALESCE(SUM(i.discount_minor), 0)::bigint AS discount
+       FROM invoices i
+       WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+
+    const returnsAgg = await ctx.db.one<any>(
+      `SELECT
+        COUNT(DISTINCT i.id)::int AS count,
+        COALESCE(SUM(i.total_minor), 0)::bigint AS total
+       FROM invoices i
+       WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'credit_note' ${branchFilterSql}`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+
+    const billsCount = Number(salesAgg?.count || 0);
+    const grossSalesMinor = Number(salesAgg?.total || 0);
+    const returnsMinor = Number(returnsAgg?.total || 0);
+    const returnsCount = Number(returnsAgg?.count || 0);
+    const netSalesMinor = Math.max(0, grossSalesMinor - returnsMinor);
+    const avgBillValueMinor = billsCount > 0 ? Math.round(netSalesMinor / billsCount) : 0;
+    const totalGstMinor = Number(salesAgg?.cgst || 0) + Number(salesAgg?.sgst || 0) + Number(salesAgg?.igst || 0);
+
+    // COGS and Gross Profit
+    const cogsRes = await ctx.db.one<any>(
+      `SELECT COALESCE(SUM((il.qty_milli * it.cost_minor)::numeric / 1000), 0)::bigint AS cogs
+       FROM invoice_lines il
+       JOIN invoices i ON i.id = il.invoice_id AND i.tenant_id = il.tenant_id
+       JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+       WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+    const cogsMinor = Number(cogsRes?.cogs || 0);
+    const grossProfitMinor = Math.max(0, netSalesMinor - cogsMinor);
+    const marginPct = netSalesMinor > 0 ? Number(((grossProfitMinor / netSalesMinor) * 100).toFixed(1)) : 0;
+
+    // Pending Orders count (cancelled/held)
+    const pendingOrdersRes = await ctx.db.one<any>(
+      `SELECT count(*)::int as count FROM invoices i WHERE i.tenant_id = ? AND i.status = 'cancelled' AND i.bdate = ? ${branchFilterSql}`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+    const pendingOrdersCount = Number(pendingOrdersRes?.count || 0);
+
+    // 4. Query Top Products Sold
+    const topProductsRows = await ctx.db.query<any>(
+      `SELECT
+        it.name,
+        it.category,
+        ROUND(COALESCE(SUM(il.qty_milli), 0) / 1000.0, 1)::float AS qty,
+        COALESCE(SUM(il.total_minor), 0)::bigint AS revenue
+       FROM invoice_lines il
+       JOIN invoices i ON i.id = il.invoice_id AND i.tenant_id = il.tenant_id
+       JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+       WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}
+       GROUP BY it.id, it.name, it.category
+       ORDER BY revenue DESC
+       LIMIT 5`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+
+    const topProducts = topProductsRows.map((r) => ({
+      name: r.name,
+      category: r.category || 'General',
+      quantity: Number(r.qty || 0),
+      revenueMinor: Number(r.revenue || 0),
+    }));
+
+    // 5. Query Category Breakdown
+    const categoryRows = await ctx.db.query<any>(
+      `SELECT
+        it.category,
+        COALESCE(SUM(il.total_minor), 0)::bigint AS sales
+       FROM invoice_lines il
+       JOIN invoices i ON i.id = il.invoice_id AND i.tenant_id = il.tenant_id
+       JOIN items it ON it.id = il.item_id AND it.tenant_id = il.tenant_id
+       WHERE i.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}
+       GROUP BY it.category
+       ORDER BY sales DESC
+       LIMIT 4`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+
+    const categories = categoryRows.map((r) => {
+      const sales = Number(r.sales || 0);
+      const sharePct = netSalesMinor > 0 ? Number(((sales / netSalesMinor) * 100).toFixed(1)) : 0;
+      return {
+        category: r.category || 'General',
+        netSalesMinor: sales,
+        sharePct,
+      };
+    });
+
+    // 6. Query Payment Modes Breakdown
+    const paymentRows = await ctx.db.query<any>(
+      `SELECT
+        p.mode,
+        COUNT(p.id)::int AS count,
+        COALESCE(SUM(p.amount_minor), 0)::bigint AS total
+       FROM payments p
+       JOIN invoices i ON i.id = p.invoice_id AND i.tenant_id = p.tenant_id
+       WHERE p.tenant_id = ? AND i.bdate = ? AND i.status = 'posted' AND i.kind = 'sale' ${branchFilterSql}
+       GROUP BY p.mode
+       ORDER BY total DESC`,
+      [tenantId, reportDateYMD, ...branchParams]
+    );
+
+    const payments = paymentRows.map((r) => ({
+      mode: r.mode || 'cash',
+      amountMinor: Number(r.total || 0),
+      count: Number(r.count || 0),
+    }));
+
+    const nowKolkata = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(now);
+
+    const reportData: DailySalesReportEmailData = {
+      storeName,
+      branchName,
+      reportDate: reportDateLabel,
+      generatedAt: nowKolkata,
+      summary: {
+        totalRevenueMinor: netSalesMinor,
+        grossSalesMinor,
+        billsCount,
+        grossProfitMinor,
+        marginPct,
+        avgBillValueMinor,
+        returnsMinor,
+        returnsCount,
+        totalGstMinor,
+        pendingOrdersCount,
+      },
+      topProducts,
+      categories,
+      payments,
+    };
+
+    // 7. Dispatch Email Report
+    let sendResult: any = null;
+    try {
+      sendResult = await sendDailySalesReportEmail(rawEmail, reportData);
+    } catch (sendErr: any) {
+      console.error('[Sales Analysis] Error sending email report:', sendErr);
+      throw new HttpError(500, 'EMAIL_FAILED', `Failed to send email report: ${sendErr.message || 'SMTP delivery error'}`);
+    }
+
+    // 8. Upsert schedule record in scheduled_sales_reports
+    const existing = branchId
+      ? await ctx.db.one<any>(
+          'SELECT id FROM scheduled_sales_reports WHERE tenant_id = ? AND branch_id = ?',
+          [tenantId, branchId]
+        )
+      : await ctx.db.one<any>(
+          'SELECT id FROM scheduled_sales_reports WHERE tenant_id = ? AND branch_id IS NULL',
+          [tenantId]
+        );
+
+    if (existing) {
+      await ctx.db.exec(
+        `UPDATE scheduled_sales_reports 
+         SET recipient_email = ?, is_active = TRUE, last_sent_at = now(), updated_at = now() 
+         WHERE id = ?`,
+        [rawEmail, existing.id]
+      );
+    } else {
+      await ctx.db.exec(
+        `INSERT INTO scheduled_sales_reports 
+         (id, tenant_id, branch_id, recipient_email, is_active, scheduled_time, last_sent_at, created_by) 
+         VALUES (?, ?, ?, ?, TRUE, '22:00', now(), ?)`,
+        [newId('ssr'), tenantId, branchId, rawEmail, ctx.user!.id]
+      );
+    }
+
+    return {
+      ok: true,
+      message: `Daily sales report sent to ${rawEmail} and scheduled daily for 10:00 PM.`,
+      reportSent: true,
+      messageId: sendResult?.messageId,
+      email: rawEmail,
+    };
   });
 }
