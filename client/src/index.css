@@ -26899,6 +26899,36 @@ select.expense-input-control {
   color: #cbd5e1;
 }
 
+/* Schedule Daily Sales Report Modal - Top Center Positioning */
+.sales-schedule-modal-backdrop {
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding-top: 25px !important;
+  padding-bottom: 25px !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  z-index: 1100 !important;
+  overflow-y: auto !important;
+}
+
+.sales-schedule-modal {
+  margin: 0 auto !important;
+  max-width: 480px !important;
+  width: 100% !important;
+  animation: modalTopSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes modalTopSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Sales Analysis Custom Date & Schedule Modals */
 .sales-custom-modal {
   background: #ffffff;

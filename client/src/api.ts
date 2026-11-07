@@ -909,6 +909,29 @@ export const fetchSalesAnalysis = (params: {
   return api<import('../../shared/types.ts').SalesAnalysisData>(`/api/sales-analysis${qs}`);
 };
 
+export const scheduleDailySalesReportEmail = (data: { email: string; branch?: string }) => {
+  return api<{ ok: boolean; message: string; reportSent?: boolean; email?: string }>(
+    '/api/sales-analysis/schedule-email',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+};
+
+export const fetchScheduledDailySalesReportEmail = (branch?: string) => {
+  const sp = new URLSearchParams();
+  if (branch && branch.toLowerCase() !== 'all') sp.set('branch', branch);
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<{
+    scheduled: boolean;
+    email: string;
+    isActive: boolean;
+    scheduledTime: string;
+    lastSentAt: string | null;
+  }>(`/api/sales-analysis/schedule-email${qs}`);
+};
+
 export type {
   InventoryInsights,
   StockoutRiskItem,

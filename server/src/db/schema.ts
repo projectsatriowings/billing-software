@@ -1488,4 +1488,22 @@ version: 29,
       `ALTER TABLE items DROP COLUMN IF EXISTS min_stock_milli`,
     ],
   },
+  {
+    version: 54,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS scheduled_sales_reports (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL,
+        recipient_email TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        scheduled_time TEXT NOT NULL DEFAULT '22:00',
+        last_sent_at TIMESTAMPTZ,
+        created_by TEXT REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sched_reports_tenant ON scheduled_sales_reports (tenant_id)`,
+    ],
+  },
 ];
