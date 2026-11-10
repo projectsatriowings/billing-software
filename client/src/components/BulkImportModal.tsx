@@ -21,6 +21,7 @@ import {
   api,
   bulkImportItems,
   fetchItemByBarcode,
+  getActiveBranchScope,
   type BulkImportRow,
   type BulkImportResult,
   type Category,
@@ -391,6 +392,7 @@ interface Props {
   categories: Category[];
   existingItems?: Item[];
   shopName?: string;
+  branchId?: string | null;
   onClose: () => void;
   onImportDone: () => void;
 }
@@ -450,7 +452,7 @@ export function downloadExcelTemplate(): void {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function BulkImportModal({ categories, existingItems = [], shopName, onClose, onImportDone }: Props) {
+export function BulkImportModal({ categories, existingItems = [], shopName, branchId, onClose, onImportDone }: Props) {
   const [step, setStep] = useState<WizardStep>('choose');
   const [importSource, setImportSource] = useState<string>('Uploaded File');
   const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'manual'>('upload');
@@ -459,6 +461,24 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
   const [parseError, setParseError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Determine active branch scope for collision avoidance and barcode isolation
+  const activeBranchId = useMemo(() => {
+    if (branchId && branchId.toLowerCase() !== 'all') return branchId;
+    const globalScope = getActiveBranchScope();
+    return (globalScope && globalScope.toLowerCase() !== 'all') ? globalScope : null;
+  }, [branchId]);
+
+  // Branch-scoped items: when a branch is selected, only consider existing items in this branch for collision checks
+  const branchScopedItems = useMemo(() => {
+    if (!activeBranchId) return existingItems;
+    const activeLower = activeBranchId.toLowerCase();
+    return existingItems.filter((it) => {
+      const bId = (it.branchId || '').toLowerCase();
+      const bCode = (it.branchCode || '').toLowerCase();
+      return bId === activeLower || bCode === activeLower;
+    });
+  }, [existingItems, activeBranchId]);
 
   // Generate unique batch ID for idempotency protection against double submission
   const importBatchId = useRef(`imp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
@@ -494,11 +514,18 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
 
   // Pre-index existing items for matching
   const catalogCandidates: MatchCandidate[] = useMemo(() => {
-    return existingItems.map((it) => ({
+    return branchScopedItems.map((it) => ({
       id: it.id,
       name: it.name,
       sku: it.sku || null,
       barcode: it.barcode || null,
+      barcodeType: (it.barcodeType || (it as any).barcode_type || null) as ('INTERNAL' | 'MANUFACTURER' | null),
+      barcodes: (it.barcodes || (it as any).all_barcodes || []).map((b: any) => ({
+        id: b.id,
+        barcode: b.barcode,
+        barcodeType: (b.barcodeType || b.barcode_type || 'INTERNAL') as ('INTERNAL' | 'MANUFACTURER'),
+        branchId: b.branchId || b.branch_id || null,
+      })),
       category: it.category || null,
       unit: it.unit || 'pcs',
       priceMinor: it.priceMinor,
@@ -510,23 +537,23 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
       packSize: extractPackSize(it.name)?.raw || it.unit,
       imageUrl: it.imageUrl || (it as any).image || null,
     }));
-  }, [existingItems]);
+  }, [branchScopedItems]);
 
   const existingSkusSet = useMemo(() => {
     const s = new Set<string>();
-    for (const it of existingItems) {
+    for (const it of branchScopedItems) {
       if (it.sku && it.sku.trim()) s.add(it.sku.trim().toLowerCase());
     }
     return s;
-  }, [existingItems]);
+  }, [branchScopedItems]);
 
   const existingBarcodesSet = useMemo(() => {
     const s = new Set<string>();
-    for (const it of existingItems) {
+    for (const it of branchScopedItems) {
       if (it.barcode && it.barcode.trim()) s.add(it.barcode.trim());
     }
     return s;
-  }, [existingItems]);
+  }, [branchScopedItems]);
 
   // Dynamic store categories loaded from database
   const [categoryList, setCategoryList] = useState<Category[]>(categories || []);
@@ -680,8 +707,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
           errors.push({ field: 'sku', isDuplicate: true, message: `SKU "${skuTrim}" repeats row ${first}` });
           isDuplicateInFile = true;
         } else if (!r.matchedItem && existingSkusSet.has(skuLower)) {
-          // If it's a new product, check collision against existing database SKU
-          errors.push({ field: 'sku', isDuplicate: true, message: `SKU "${skuTrim}" already exists for another product` });
+          // If it's a new product, check collision against existing database SKU in this branch
+          errors.push({ field: 'sku', isDuplicate: true, message: `SKU "${skuTrim}" already exists in this branch` });
           isDuplicateInFile = true;
         } else {
           seenSkus.set(skuLower, r.rowNum);
@@ -916,6 +943,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
 
       let barcode = '';
       let barcodeType: 'INTERNAL' | 'MANUFACTURER' | null = null;
+      let additionalBarcodes: { barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER' }[] = [];
       const isBarcodeAutoGenerated = false;
 
       if (matchResult.classification === 'RESTOCK' && matchResult.matchedItem) {
@@ -925,8 +953,30 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         category = matchedItem.category || '';
         const foundActive = activeCategories.find((c) => c.name.toLowerCase() === category.toLowerCase());
         categoryId = foundActive ? foundActive.id : '';
-        barcode = matchedItem.barcode || barcodeRaw || '';
-        barcodeType = barcode ? 'MANUFACTURER' : null;
+
+        // Determine barcode and its true database type:
+        if (barcodeRaw) {
+          barcode = barcodeRaw;
+          const foundPb = matchedItem.barcodes?.find((b) => b.barcode.trim() === barcodeRaw.trim());
+          if (foundPb) {
+            barcodeType = foundPb.barcodeType;
+          } else if (matchedItem.barcode && matchedItem.barcode.trim() === barcodeRaw.trim()) {
+            barcodeType = matchedItem.barcodeType || 'INTERNAL';
+          } else {
+            barcodeType = 'MANUFACTURER';
+          }
+        } else {
+          // No barcode in uploaded file: inherit matched product's primary barcode and stored type
+          barcode = matchedItem.barcode || '';
+          barcodeType = matchedItem.barcodeType || (barcode ? 'INTERNAL' : null);
+        }
+
+        // Inherit any additional registered barcodes for this product
+        if (matchedItem.barcodes && matchedItem.barcodes.length > 0) {
+          additionalBarcodes = matchedItem.barcodes
+            .filter((b) => b.barcode && b.barcode.trim() !== barcode.trim())
+            .map((b) => ({ barcode: b.barcode.trim(), barcodeType: b.barcodeType }));
+        }
       } else {
         // New Product or Ambiguous: automatically generate unique SKU
         finalSku = generateUniqueSku(name, existingSkusSet, seenImportSkus);
@@ -953,7 +1003,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         barcode,
         barcodeType,
         isBarcodeAutoGenerated,
-        additionalBarcodes: [],
+        additionalBarcodes,
         productNature: natureInfo.nature,
         natureConfidence: natureInfo.confidence,
         isNatureManuallyEdited: false,
@@ -1120,7 +1170,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
           } else {
             updated.barcode = strVal;
             updated.isBarcodeAutoGenerated = false;
-            updated.barcodeType = strVal.startsWith('20') && strVal.length === 13 ? 'INTERNAL' : (strVal ? 'MANUFACTURER' : null);
+            if (!strVal) {
+              updated.barcodeType = null;
+            } else if (r.matchedItem?.barcode && r.matchedItem.barcode.trim() === strVal) {
+              updated.barcodeType = r.matchedItem.barcodeType || 'INTERNAL';
+            } else if (r.matchedItem?.barcodes?.some((b) => b.barcode.trim() === strVal)) {
+              updated.barcodeType = r.matchedItem.barcodes.find((b) => b.barcode.trim() === strVal)!.barcodeType;
+            } else {
+              updated.barcodeType = r.barcodeType || 'MANUFACTURER';
+            }
             updated.barcodeError = undefined;
           }
         }
@@ -1139,7 +1197,12 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
             updated.sku = matchResult.matchedItem.sku || r.sku;
             if (matchResult.matchedItem.barcode && !r.isBarcodeAutoGenerated) {
               updated.barcode = matchResult.matchedItem.barcode;
-              updated.barcodeType = 'MANUFACTURER';
+              updated.barcodeType = matchResult.matchedItem.barcodeType || 'INTERNAL';
+            }
+            if (matchResult.matchedItem.barcodes) {
+              updated.additionalBarcodes = matchResult.matchedItem.barcodes
+                .filter((b) => b.barcode && b.barcode.trim() !== (updated.barcode || '').trim())
+                .map((b) => ({ barcode: b.barcode.trim(), barcodeType: b.barcodeType }));
             }
             if (matchResult.matchedItem.category) {
               updated.category = matchResult.matchedItem.category;
@@ -1190,14 +1253,23 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         const candidateCat = activeCategories.find(
           (c) => c.name.toLowerCase() === candidateCatName.toLowerCase()
         );
+        const finalBc = candidate.barcode || r.barcode || '';
+        const finalBcType = candidate.barcode
+          ? (candidate.barcodeType || 'INTERNAL')
+          : r.barcodeType;
+        const addBcs = (candidate.barcodes || [])
+          .filter((b) => b.barcode && b.barcode.trim() !== finalBc.trim())
+          .map((b) => ({ barcode: b.barcode.trim(), barcodeType: b.barcodeType }));
+
         return {
           ...r,
           resolution: 'LINK' as const,
           matchedItem: candidate,
           sku: candidate.sku || r.sku,
-          barcode: candidate.barcode || r.barcode || '',
-          barcodeType: candidate.barcode ? 'MANUFACTURER' : r.barcodeType,
+          barcode: finalBc,
+          barcodeType: finalBcType,
           isBarcodeAutoGenerated: false,
+          additionalBarcodes: addBcs,
           category: candidateCatName,
           categoryId: candidateCat ? candidateCat.id : r.categoryId,
           unit: candidate.unit || r.unit,
@@ -1348,16 +1420,16 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     }));
   }, [rawRows]);
 
-  // Taken barcodes in store catalog (existingItems)
+  // Taken barcodes in store catalog (scoped to active branch)
   const takenCatalogBarcodes = useMemo(() => {
     const map = new Map<string, { name: string; id?: string }>();
-    for (const it of existingItems) {
+    for (const it of branchScopedItems) {
       if (it.barcode && it.barcode.trim()) {
         map.set(it.barcode.trim(), { name: it.name, id: it.id });
       }
     }
     return map;
-  }, [existingItems]);
+  }, [branchScopedItems]);
 
   // Handler for barcode assignment from ScanManufacturerBarcodeModal
   const handleAssignFromScanModal = useCallback(
@@ -1417,7 +1489,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         }
 
         // Skip restock products with existing valid barcodes, or manufacturer barcodes
-        const isMfr = (r.barcodeType === 'MANUFACTURER' && currentBarcode) || r.scannedInSession || Boolean(r.matchedItem && !r.isBarcodeAutoGenerated && currentBarcode);
+        const isMfr = (r.barcodeType === 'MANUFACTURER' && currentBarcode) || (r.scannedInSession && currentBarcode);
         if (isMfr || (r.matchedItem && currentBarcode) || currentBarcode) {
           return {
             ...r,
@@ -1470,7 +1542,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
     if (!row) return;
 
     // Never overwrite a manufacturer barcode with an internal barcode
-    const isMfr = row.barcodeType === 'MANUFACTURER' || row.scannedInSession || Boolean(row.matchedItem && !row.isBarcodeAutoGenerated);
+    const isMfr = row.barcodeType === 'MANUFACTURER' || row.scannedInSession;
     if (isMfr) return;
 
     const seenImportBarcodes = new Set<string>();
@@ -1579,7 +1651,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
         };
       });
 
-      const res = await bulkImportItems(payloadRows, importBatchId.current);
+      const res = await bulkImportItems(payloadRows, importBatchId.current, activeBranchId);
       setImportResult(res);
       setStep('results');
     } catch (err: any) {
@@ -2638,13 +2710,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
 
                         const barcodeTrim = (row.barcode || '').trim();
                         const hasBarcode = Boolean(barcodeTrim);
-                        const isMbc = hasBarcode && (
-                          row.barcodeType === 'MANUFACTURER' ||
-                          row.scannedInSession ||
-                          Boolean(row.matchedItem && !row.isBarcodeAutoGenerated) ||
-                          (!row.isBarcodeAutoGenerated && !(barcodeTrim.startsWith('20') && barcodeTrim.length === 13) && row.barcodeType !== 'INTERNAL')
+                        const isIbc = hasBarcode && (
+                          row.barcodeType === 'INTERNAL' ||
+                          (row.isBarcodeAutoGenerated && row.barcodeType !== 'MANUFACTURER')
                         );
-                        const isIbc = hasBarcode && !isMbc;
+                        const isMbc = hasBarcode && !isIbc;
 
                         return (
                           <React.Fragment key={row._id}>
@@ -2948,6 +3018,31 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                         <span>Scanned</span>
                                       </span>
                                     )}
+
+                                    {row.additionalBarcodes && row.additionalBarcodes.map((ab, idx) => {
+                                      const isAbMbc = ab.barcodeType === 'MANUFACTURER';
+                                      return (
+                                        <span
+                                          key={idx}
+                                          style={{
+                                            fontSize: '0.65rem',
+                                            fontWeight: 800,
+                                            padding: '1px 5px',
+                                            borderRadius: '4px',
+                                            background: isAbMbc ? '#ccfbf1' : '#f3e8ff',
+                                            color: isAbMbc ? '#0f766e' : '#7e22ce',
+                                            border: isAbMbc ? '1px solid #99f6e4' : '1px solid #e9d5ff',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '2px',
+                                          }}
+                                          title={`Additional Barcode: ${ab.barcode} (${isAbMbc ? 'Manufacturer Barcode' : 'Internal Barcode'})`}
+                                        >
+                                          {isAbMbc ? <CameraIcon size={10} color="#0f766e" /> : <BarcodeIcon size={10} color="#7e22ce" />}
+                                          <span>+{isAbMbc ? 'MBC' : 'IBC'}</span>
+                                        </span>
+                                      );
+                                    })}
                                   </div>
 
                                   <input
@@ -2999,6 +3094,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, onCl
                                           <RefreshCwIcon size={12} color="#4f46e5" />
                                         </button>
                                       )}
+                                    </div>
+                                  )}
+                                  {row.additionalBarcodes && row.additionalBarcodes.length > 0 && (
+                                    <div style={{ fontSize: '0.64rem', color: '#64748b', lineHeight: 1.2 }}>
+                                      {row.additionalBarcodes.map((ab, idx) => (
+                                        <span key={idx} style={{ display: 'inline-block', marginRight: '4px' }}>
+                                          also: <code style={{ fontFamily: 'monospace', fontWeight: 600 }}>{ab.barcode}</code> ({ab.barcodeType === 'MANUFACTURER' ? 'MBC' : 'IBC'})
+                                        </span>
+                                      ))}
                                     </div>
                                   )}
                                   {row.barcodeError && (

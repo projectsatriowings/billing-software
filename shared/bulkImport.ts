@@ -829,6 +829,8 @@ export interface MatchCandidate {
   name: string;
   sku: string | null;
   barcode: string | null;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+  barcodes?: { id?: string; barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER'; branchId?: string | null }[];
   category: string | null;
   unit: string;
   priceMinor: number;
@@ -882,7 +884,11 @@ export function matchProductToCatalog(
 
   // 1. Reliable Identifier: Barcode match (if provided in file/row)
   if (inBarcode) {
-    const bcMatches = catalog.filter((item) => item.barcode && item.barcode.trim() === inBarcode);
+    const bcMatches = catalog.filter(
+      (item) =>
+        (item.barcode && item.barcode.trim() === inBarcode) ||
+        (item.barcodes && item.barcodes.some((b) => b.barcode && b.barcode.trim() === inBarcode))
+    );
     if (bcMatches.length === 1) {
       const cand = {
         ...bcMatches[0],

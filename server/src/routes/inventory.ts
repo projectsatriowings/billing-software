@@ -1513,18 +1513,20 @@ export function registerInventory(r: Router) {
       };
     });
 
-    // 3. Duplicate Items & Barcode Collision Warnings
+    // 3. Duplicate Items & Barcode Collision Warnings (within the same branch)
     const barcodeDuplicates = await ctx.db.query(
       `SELECT 
         barcode,
+        branch_id,
         COUNT(*)::int AS count,
         json_agg(json_build_object('id', id, 'name', name, 'sku', sku)) AS items
       FROM items
       WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL AND TRIM(barcode) != ''
-      GROUP BY barcode
+        ${itemBranchFilter}
+      GROUP BY branch_id, barcode
       HAVING COUNT(*) > 1
       LIMIT 10`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     const nameDuplicates = await ctx.db.query(

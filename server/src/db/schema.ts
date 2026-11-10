@@ -1506,4 +1506,143 @@ version: 29,
       `CREATE INDEX IF NOT EXISTS idx_sched_reports_tenant ON scheduled_sales_reports (tenant_id)`,
     ],
   },
+  {
+    version: 55,
+    statements: [
+      // 1. Drop existing global or full-table unique indexes on product_barcodes
+      `DROP INDEX IF EXISTS product_barcodes_uq`,
+      `DROP INDEX IF EXISTS product_barcodes_tenant_id_barcode_key`,
+      `DROP INDEX IF EXISTS product_barcodes_branch_barcode_uq`,
+      `DROP INDEX IF EXISTS product_barcodes_internal_branch_uq`,
+
+      // 2. Composite key for internal barcodes only: UNIQUE (branch_id, barcode) WHERE barcode_type = 'INTERNAL'
+      `CREATE UNIQUE INDEX IF NOT EXISTS product_barcodes_internal_branch_uq
+       ON product_barcodes (branch_id, barcode)
+       WHERE barcode_type = 'INTERNAL' AND branch_id IS NOT NULL`,
+
+      // 3. Composite lookup index on (tenant_id, branch_id, barcode)
+      `CREATE INDEX IF NOT EXISTS idx_product_barcodes_branch_lookup
+       ON product_barcodes (tenant_id, branch_id, barcode)`,
+    ],
+  },
+  {
+    version: 56,
+    statements: [
+      // 1. Drop any legacy global unique constraint or index on items(sku)
+      `DROP INDEX IF EXISTS items_sku`,
+      `DROP INDEX IF EXISTS items_tenant_sku_uq`,
+      `DROP INDEX IF EXISTS items_branch_sku_uq`,
+
+      // 2. Ensure every item has a branch_id assigned (defaulting to MAIN or oldest branch if missing)
+      `UPDATE items SET branch_id = (SELECT id FROM branches WHERE tenant_id = items.tenant_id ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1) WHERE branch_id IS NULL`,
+
+      // 3. Create branch-level unique index on (branch_id, sku)
+      `CREATE UNIQUE INDEX IF NOT EXISTS items_branch_sku_uq
+       ON items (branch_id, sku)
+       WHERE branch_id IS NOT NULL AND sku IS NOT NULL AND sku <> ''`,
+
+      // 4. Index for fast branch-level SKU search/lookup
+      `CREATE INDEX IF NOT EXISTS idx_items_tenant_branch_sku
+       ON items (tenant_id, branch_id, lower(sku))`,
+    ],
+  },
+  {
+    version: 57,
+    statements: [
+      // 1. Add barcode_type column to items table if not present
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS barcode_type TEXT DEFAULT 'INTERNAL' CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER'))`,
+
+      // 2. Backfill barcode_type on items from product_barcodes
+      `UPDATE items SET barcode_type = COALESCE(
+         (SELECT pb.barcode_type FROM product_barcodes pb
+          WHERE pb.tenant_id = items.tenant_id AND pb.product_id = items.id AND pb.barcode = items.barcode
+          ORDER BY (pb.branch_id = items.branch_id) DESC, pb.created_at DESC LIMIT 1),
+         'INTERNAL'
+       ) WHERE barcode IS NOT NULL AND barcode <> ''`,
+
+      // 3. Composite index for fast item barcode lookup
+      `CREATE INDEX IF NOT EXISTS idx_items_tenant_branch_barcode_type
+       ON items (tenant_id, branch_id, barcode, barcode_type)`,
+    ],
+  },
+  {
+    version: 58,
+    statements: [
+      // 1. Index on stock_transfers for fast destination branch synchronization lookups
+      `CREATE INDEX IF NOT EXISTS idx_stock_transfers_destination_sync
+       ON stock_transfers (tenant_id, to_branch, status)`,
+
+      // 2. Reconcile primary barcodes in product_barcodes for destination branches of completed/received stock transfers
+      `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type, created_at)
+       SELECT
+         'bc_' || substr(md5(random()::text || clock_timestamp()::text || row_number() over()::text), 1, 16),
+         st.tenant_id,
+         COALESCE(tb.id, st.to_branch),
+         stl.item_id,
+         i.barcode,
+         COALESCE(i.barcode_type, 'MANUFACTURER'),
+         now()
+       FROM stock_transfers st
+       JOIN stock_transfer_lines stl ON stl.transfer_id = st.id
+       JOIN items i ON i.id = stl.item_id AND i.tenant_id = st.tenant_id
+       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND (tb.id = st.to_branch OR tb.code = st.to_branch)
+       WHERE st.status IN ('completed', 'received', 'partially_received')
+         AND i.barcode IS NOT NULL AND i.barcode <> ''
+         AND NOT EXISTS (
+           SELECT 1 FROM product_barcodes pb
+           WHERE pb.tenant_id = st.tenant_id
+             AND pb.branch_id = COALESCE(tb.id, st.to_branch)
+             AND pb.product_id = stl.item_id
+             AND pb.barcode = i.barcode
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM product_barcodes pb2
+           WHERE pb2.tenant_id = st.tenant_id
+             AND pb2.branch_id = COALESCE(tb.id, st.to_branch)
+             AND pb2.barcode = i.barcode
+             AND pb2.barcode_type = 'INTERNAL'
+             AND pb2.product_id <> stl.item_id
+         )`,
+
+      // 3. Reconcile secondary product_barcodes for destination branches of completed/received stock transfers
+      `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type, created_at)
+       SELECT
+         'bc_' || substr(md5(random()::text || clock_timestamp()::text || row_number() over()::text), 1, 16),
+         st.tenant_id,
+         COALESCE(tb.id, st.to_branch),
+         stl.item_id,
+         src_pb.barcode,
+         src_pb.barcode_type,
+         now()
+       FROM stock_transfers st
+       JOIN stock_transfer_lines stl ON stl.transfer_id = st.id
+       JOIN product_barcodes src_pb ON src_pb.product_id = stl.item_id AND src_pb.tenant_id = st.tenant_id
+       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND (tb.id = st.to_branch OR tb.code = st.to_branch)
+       WHERE st.status IN ('completed', 'received', 'partially_received')
+         AND NOT EXISTS (
+           SELECT 1 FROM product_barcodes pb
+           WHERE pb.tenant_id = st.tenant_id
+             AND pb.branch_id = COALESCE(tb.id, st.to_branch)
+             AND pb.product_id = stl.item_id
+             AND pb.barcode = src_pb.barcode
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM product_barcodes pb2
+           WHERE pb2.tenant_id = st.tenant_id
+             AND pb2.branch_id = COALESCE(tb.id, st.to_branch)
+             AND pb2.barcode = src_pb.barcode
+             AND pb2.barcode_type = 'INTERNAL'
+             AND pb2.product_id <> stl.item_id
+         )`,
+
+      // 4. Ensure no duplicate barcode rows for the same product and branch
+      `DELETE FROM product_barcodes a
+       USING product_barcodes b
+       WHERE a.id > b.id
+         AND a.tenant_id = b.tenant_id
+         AND a.branch_id = b.branch_id
+         AND a.product_id = b.product_id
+         AND a.barcode = b.barcode`,
+    ],
+  },
 ];
