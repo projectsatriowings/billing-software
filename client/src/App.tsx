@@ -6990,7 +6990,7 @@ export function App() {
                   <div className="header-store-chip" title="Active Branch Scope">
                     <span className="store-chip-dot"></span>
                     <span className="store-chip-text">
-                      🏢 <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
+                      🏢 <strong>{currentBranchName}</strong>
                     </span>
                   </div>
                   <div className="header-store-chip">

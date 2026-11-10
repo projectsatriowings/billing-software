@@ -16,10 +16,38 @@ export function withAuthToken(url: string): string {
   return `${url}${sep}token=${encodeURIComponent(token)}`;
 }
 
+export function getActiveBranchScope(): string {
+  const br = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
+  return br || 'all';
+}
+
+export function setActiveBranchScope(branch: string) {
+  const val = (branch || 'all').trim();
+  if (val && val.toLowerCase() !== 'all') {
+    localStorage.setItem('sa_selected_branch', val);
+    localStorage.setItem('selected_branch', val);
+    sessionStorage.setItem('sa_selected_branch', val);
+    sessionStorage.setItem('selected_branch', val);
+  } else {
+    localStorage.setItem('sa_selected_branch', 'all');
+    localStorage.setItem('selected_branch', 'all');
+    sessionStorage.setItem('sa_selected_branch', 'all');
+    sessionStorage.setItem('selected_branch', 'all');
+  }
+}
+
 export async function downloadFile(url: string, defaultFilename: string): Promise<void> {
   const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const selectedBranch = getActiveBranchScope();
+  if (selectedBranch && selectedBranch.toLowerCase() !== 'all') {
+    headers['x-branch-id'] = selectedBranch;
+  }
   const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -39,26 +67,6 @@ export async function downloadFile(url: string, defaultFilename: string): Promis
   a.click();
   window.URL.revokeObjectURL(objectUrl);
   document.body.removeChild(a);
-}
-
-export function getActiveBranchScope(): string {
-  const br = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
-  return br || 'all';
-}
-
-export function setActiveBranchScope(branch: string) {
-  const val = (branch || 'all').trim();
-  if (val && val.toLowerCase() !== 'all') {
-    localStorage.setItem('sa_selected_branch', val);
-    localStorage.setItem('selected_branch', val);
-    sessionStorage.setItem('sa_selected_branch', val);
-    sessionStorage.setItem('selected_branch', val);
-  } else {
-    localStorage.setItem('sa_selected_branch', 'all');
-    localStorage.setItem('selected_branch', 'all');
-    sessionStorage.setItem('sa_selected_branch', 'all');
-    sessionStorage.setItem('selected_branch', 'all');
-  }
 }
 
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
