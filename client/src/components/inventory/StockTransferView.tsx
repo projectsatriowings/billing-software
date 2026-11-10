@@ -43,6 +43,7 @@ interface StockTransferViewProps {
   onNavigateToTab?: (tab: string) => void;
   showToast?: (msg: string, type?: 'info' | 'error' | 'success') => void;
   selectedBranch?: string;
+  onReloadItems?: () => void;
 }
 
 export const StockTransferView: React.FC<StockTransferViewProps> = ({
@@ -50,6 +51,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
   onNavigateToTab,
   showToast = (msg) => console.log(msg),
   selectedBranch,
+  onReloadItems,
 }) => {
   // Navigation / sub-views: 'list' | 'create_step1' | 'create_step2' | 'create_step3' | 'details'
   const [activeView, setActiveView] = useState<'list' | 'create_step1' | 'create_step2' | 'create_step3' | 'details'>('list');
@@ -210,16 +212,34 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     }
   };
 
+  const searchSeqRef = useRef(0);
+
+  // Source branch switching handler
+  const handleSourceBranchChange = (newFrom: string) => {
+    setWizardFromBranch(newFrom);
+    setWizardLines([]);
+    setProductSearchQuery('');
+    setBranchProducts([]);
+    setShowProductDropdown(false);
+    if (wizardToBranch === newFrom) {
+      const other = branches.find((b) => b.code !== newFrom)?.code || '';
+      setWizardToBranch(other);
+    }
+  };
+
   // Fetch next transfer number when entering Screen 2
   const handleStartCreateTransfer = async () => {
     try {
-      const res = await getNextStockTransferNumber();
+      const res = await getNextStockTransferNumber(wizardFromBranch || undefined);
       setNextTransferNumber(res.nextTransferNumber || 'TRF-0001');
     } catch {
       setNextTransferNumber('TRF-0001');
     }
     setWizardLines([]);
     setWizardNotes('');
+    setProductSearchQuery('');
+    setBranchProducts([]);
+    setShowProductDropdown(false);
     setWizardTransferDate(new Date().toISOString().split('T')[0]);
     setActiveView('create_step1');
   };
@@ -232,14 +252,23 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
   }, [activeView, wizardFromBranch, productSearchQuery]);
 
   const loadSourceBranchProducts = async () => {
+    if (!wizardFromBranch) return;
+    const currentSeq = ++searchSeqRef.current;
     try {
       setLoadingProducts(true);
       const res = await getBranchStock(wizardFromBranch, productSearchQuery.trim());
-      setBranchProducts(res.items || []);
+      if (searchSeqRef.current === currentSeq) {
+        setBranchProducts(res.items || []);
+      }
     } catch (err: any) {
-      console.error(err);
+      if (searchSeqRef.current === currentSeq) {
+        console.error(err);
+        setBranchProducts([]);
+      }
     } finally {
-      setLoadingProducts(false);
+      if (searchSeqRef.current === currentSeq) {
+        setLoadingProducts(false);
+      }
     }
   };
 
@@ -309,6 +338,9 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
       showToast('Source and Destination branches cannot be the same. Please choose different branches.', 'error');
       return;
     }
+    setProductSearchQuery('');
+    setBranchProducts([]);
+    setShowProductDropdown(false);
     setActiveView('create_step2');
   };
 
@@ -419,6 +451,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
       const res = await dispatchStockTransfer(detailedTransfer.id);
       showToast(res.message || 'Transfer dispatched successfully!', 'success');
       setShowDispatchModal(false);
+      onReloadItems?.();
       handleViewTransferDetails(detailedTransfer.id);
     } catch (err: any) {
       showToast(err.message || 'Failed to dispatch transfer', 'error');
@@ -480,6 +513,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
 
       showToast(res.message || 'Transfer received successfully!', 'success');
       setShowReceiveModal(false);
+      onReloadItems?.();
       handleViewTransferDetails(detailedTransfer.id);
     } catch (err: any) {
       showToast(err.message || 'Failed to receive transfer', 'error');
@@ -497,6 +531,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
     try {
       const res = await cancelStockTransfer(detailedTransfer.id, 'Cancelled from management console');
       showToast(res.message || 'Transfer cancelled successfully', 'info');
+      onReloadItems?.();
       handleViewTransferDetails(detailedTransfer.id);
     } catch (err: any) {
       showToast(err.message || 'Failed to cancel transfer', 'error');
@@ -1390,14 +1425,7 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                 className="form-input"
                 value={wizardFromBranch}
                 disabled={!isSuperAdmin}
-                onChange={(e) => {
-                  const newFrom = e.target.value;
-                  setWizardFromBranch(newFrom);
-                  if (wizardToBranch === newFrom) {
-                    const other = branches.find((b) => b.code !== newFrom)?.code || '';
-                    setWizardToBranch(other);
-                  }
-                }}
+                onChange={(e) => handleSourceBranchChange(e.target.value)}
                 style={{
                   borderRadius: '8px',
                   borderColor: '#cbd5e1',
@@ -1693,25 +1721,33 @@ export const StockTransferView: React.FC<StockTransferViewProps> = ({
                   branchProducts.map((p) => {
                     const isAlreadyAdded = wizardLines.some((l) => l.itemId === p.id);
                     const stock = p.availableStockUnits;
+                    const isOutOfStock = stock <= 0;
                     return (
                       <div
                         key={p.id}
-                        onClick={() => !isAlreadyAdded && handleAddProductToTransfer(p)}
+                        onClick={() => {
+                          if (isAlreadyAdded) return;
+                          if (isOutOfStock) {
+                            showToast(`"${p.name}" has 0 stock at ${wizardFromBranch}. Cannot transfer out of stock items.`, 'error');
+                            return;
+                          }
+                          handleAddProductToTransfer(p);
+                        }}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '0.65rem 0.85rem',
                           borderBottom: '1px solid #f8fafc',
-                          cursor: isAlreadyAdded ? 'not-allowed' : 'pointer',
-                          background: isAlreadyAdded ? '#f8fafc' : '#ffffff',
-                          opacity: isAlreadyAdded ? 0.6 : 1,
+                          cursor: isAlreadyAdded || isOutOfStock ? 'not-allowed' : 'pointer',
+                          background: isAlreadyAdded ? '#f8fafc' : isOutOfStock ? '#fef2f2' : '#ffffff',
+                          opacity: isAlreadyAdded ? 0.6 : isOutOfStock ? 0.8 : 1,
                         }}
                         onMouseEnter={(e) => {
-                          if (!isAlreadyAdded) e.currentTarget.style.background = '#f1f5f9';
+                          if (!isAlreadyAdded && !isOutOfStock) e.currentTarget.style.background = '#f1f5f9';
                         }}
                         onMouseLeave={(e) => {
-                          if (!isAlreadyAdded) e.currentTarget.style.background = '#ffffff';
+                          if (!isAlreadyAdded && !isOutOfStock) e.currentTarget.style.background = isOutOfStock ? '#fef2f2' : '#ffffff';
                         }}
                       >
                         <div>
