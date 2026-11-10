@@ -105,55 +105,78 @@ export function registerReports(r: Router) {
       [tenantId, ...branchParams],
     );
 
-    // Branch comparison for Super Admin / Owner
+    // Branch comparison & metrics
     let branchComparison: any[] = [];
     let totalBranchesCount = 1;
     let activeBranchesCount = 1;
     let totalCountersCount = 1;
 
-    if (userRole === 'owner' || (userRole as string) === 'SUPER_ADMIN') {
-      const branches = await ctx.db.query<any>(
-        'SELECT id, code, name, active, counters FROM branches WHERE tenant_id = ? ORDER BY code = \'MAIN\' DESC, code ASC',
-        [tenantId],
+    let targetBranchFilter = '';
+    const targetBranchParams: unknown[] = [tenantId];
+    if (!scope.isSuperAdminAll && scope.branchId) {
+      targetBranchFilter = ' AND id = ?';
+      targetBranchParams.push(scope.branchId);
+    }
+
+    const branches = await ctx.db.query<any>(
+      `SELECT id, code, name, active, counters FROM branches WHERE tenant_id = ? ${targetBranchFilter} ORDER BY code = 'MAIN' DESC, code ASC`,
+      targetBranchParams,
+    );
+    totalBranchesCount = branches.length || 1;
+    activeBranchesCount = branches.filter((b) => b.active).length || 1;
+    totalCountersCount = branches.reduce((sum, b) => {
+      const c = Array.isArray(b.counters) ? b.counters : (typeof b.counters === 'string' ? JSON.parse(b.counters) : ['COUNTER-1']);
+      return sum + (c.length || 1);
+    }, 0);
+
+    for (const b of branches) {
+      const bSalesToday = await ctx.db.one<{ count: number; total: number }>(
+        `SELECT COUNT(*)::int AS count, COALESCE(SUM(total_minor), 0)::bigint AS total
+         FROM invoices WHERE tenant_id = ? AND branch_id = ? AND bdate = ? AND status = 'posted' AND kind = 'sale'`,
+        [tenantId, b.id, todayStr],
       );
-      totalBranchesCount = branches.length || 1;
-      activeBranchesCount = branches.filter((b) => b.active).length || 1;
-      totalCountersCount = branches.reduce((sum, b) => {
-        const c = Array.isArray(b.counters) ? b.counters : (typeof b.counters === 'string' ? JSON.parse(b.counters) : ['COUNTER-1']);
-        return sum + (c.length || 1);
-      }, 0);
+      const bSalesAll = await ctx.db.one<{ count: number; total: number; taxable: number; gst: number }>(
+        `SELECT COUNT(*)::int AS count,
+                COALESCE(SUM(total_minor), 0)::bigint AS total,
+                COALESCE(SUM(taxable_minor), 0)::bigint AS taxable,
+                COALESCE(SUM(cgst_minor + sgst_minor + igst_minor), 0)::bigint AS gst
+         FROM invoices WHERE tenant_id = ? AND branch_id = ? AND status = 'posted' AND kind = 'sale'`,
+        [tenantId, b.id],
+      );
+      const bReturnsAll = await ctx.db.one<{ count: number; total: number }>(
+        `SELECT COUNT(*)::int AS count, COALESCE(SUM(total_minor), 0)::bigint AS total
+         FROM invoices WHERE tenant_id = ? AND branch_id = ? AND status = 'posted' AND kind = 'credit_note'`,
+        [tenantId, b.id],
+      );
+      const bColls = await ctx.db.one<{ total: number }>(
+        `SELECT COALESCE(SUM(amount_minor), 0)::bigint AS total
+         FROM payments WHERE tenant_id = ? AND branch_id = ? AND (status IS NULL OR status = 'posted')
+           AND (bdate = ? OR (payment_date IS NOT NULL AND payment_date::date = ?::date))`,
+        [tenantId, b.id, todayStr, todayStr],
+      );
+      const bShifts = await ctx.db.one<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM shifts WHERE tenant_id = ? AND branch_id = ? AND status = 'open'`,
+        [tenantId, b.id],
+      );
+      const bCounters = Array.isArray(b.counters) ? b.counters : (typeof b.counters === 'string' ? JSON.parse(b.counters) : ['COUNTER-1']);
 
-      for (const b of branches) {
-        const bSales = await ctx.db.one<{ count: number; total: number }>(
-          `SELECT COUNT(*)::int AS count, COALESCE(SUM(total_minor), 0)::bigint AS total
-           FROM invoices WHERE tenant_id = ? AND branch_id = ? AND bdate = ? AND status = 'posted' AND kind = 'sale'`,
-          [tenantId, b.id, todayStr],
-        );
-        const bColls = await ctx.db.one<{ total: number }>(
-          `SELECT COALESCE(SUM(amount_minor), 0)::bigint AS total
-           FROM payments WHERE tenant_id = ? AND branch_id = ? AND (status IS NULL OR status = 'posted')
-             AND (bdate = ? OR (payment_date IS NOT NULL AND payment_date::date = ?::date))`,
-          [tenantId, b.id, todayStr, todayStr],
-        );
-        const bShifts = await ctx.db.one<{ count: number }>(
-          `SELECT COUNT(*)::int AS count FROM shifts WHERE tenant_id = ? AND branch_id = ? AND status = 'open'`,
-          [tenantId, b.id],
-        );
-        const bCounters = Array.isArray(b.counters) ? b.counters : (typeof b.counters === 'string' ? JSON.parse(b.counters) : ['COUNTER-1']);
-
-        branchComparison.push({
-          id: b.id,
-          code: b.code,
-          name: b.name,
-          active: Boolean(b.active ?? true),
-          countersCount: bCounters.length,
-          counters: bCounters,
-          todaySalesCount: Number(bSales?.count ?? 0),
-          todaySalesTotalMinor: Number(bSales?.total ?? 0),
-          todayCollectionsMinor: Number(bColls?.total ?? 0),
-          openShiftsCount: Number(bShifts?.count ?? 0),
-        });
-      }
+      branchComparison.push({
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        active: Boolean(b.active ?? true),
+        countersCount: bCounters.length,
+        counters: bCounters,
+        todaySalesCount: Number(bSalesToday?.count ?? 0),
+        todaySalesTotalMinor: Number(bSalesToday?.total ?? 0),
+        todayCollectionsMinor: Number(bColls?.total ?? 0),
+        openShiftsCount: Number(bShifts?.count ?? 0),
+        allTimeSalesCount: Number(bSalesAll?.count ?? 0),
+        allTimeSalesTotalMinor: Number(bSalesAll?.total ?? 0),
+        allTimeGstMinor: Number(bSalesAll?.gst ?? 0),
+        allTimeReturnsCount: Number(bReturnsAll?.count ?? 0),
+        allTimeReturnsTotalMinor: Number(bReturnsAll?.total ?? 0),
+      });
     }
 
     // Refunds paid distinctly from collections (Section 10.2)
@@ -205,14 +228,17 @@ export function registerReports(r: Router) {
       (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
 
-    // Customer count & item count
+    // Customer count & item count (including shared catalog items and shared customer records)
+    const customerBranchClause = (!scope.isSuperAdminAll && scope.branchId) ? 'AND (branch_id = ? OR branch_id IS NULL)' : '';
+    const itemBranchClause = (!scope.isSuperAdminAll && scope.branchId) ? 'AND (branch_id = ? OR branch_id IS NULL)' : '';
+
     const totalCustomers = await ctx.db.one<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM parties WHERE tenant_id = ? AND type = 'customer' AND active = true ${branchFilterSql}`,
-      [tenantId, ...branchParams],
+      `SELECT COUNT(*)::int AS count FROM parties WHERE tenant_id = ? AND type = 'customer' AND active = true ${customerBranchClause}`,
+      (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
     const totalItems = await ctx.db.one<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM items WHERE tenant_id = ? AND active = true ${branchFilterSql}`,
-      [tenantId, ...branchParams],
+      `SELECT COUNT(*)::int AS count FROM items WHERE tenant_id = ? AND active = true ${itemBranchClause}`,
+      (!scope.isSuperAdminAll && scope.branchId) ? [tenantId, scope.branchId] : [tenantId],
     );
 
     // Today's Purchases & Input Tax Credit (ITC)
