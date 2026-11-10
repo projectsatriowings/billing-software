@@ -4385,15 +4385,31 @@ export function App() {
     }));
   }, [items]);
 
+  const catalogTakenBarcodes = useMemo(() => {
+    const map = new Map<string, { name: string; id?: string }>();
+    const targetBranchId = activeBranch?.id || (selectedBranchScope && selectedBranchScope.toLowerCase() !== 'all' ? selectedBranchScope : null);
+    for (const it of items) {
+      if ((!targetBranchId || it.branchId === targetBranchId) && it.barcode && it.barcode.trim()) {
+        map.set(it.barcode.trim(), { name: it.name, id: it.id });
+      }
+    }
+    return map;
+  }, [items, activeBranch, selectedBranchScope]);
+
   const handleAssignCatalogBarcode = async (
     id: number | string,
     newBarcode: string | null,
     barcodeType?: 'MANUFACTURER' | 'INTERNAL' | null
   ) => {
     try {
+      const targetBranchId = activeBranch?.id || (selectedBranchScope && selectedBranchScope.toLowerCase() !== 'all' ? selectedBranchScope : undefined);
       await api(`/api/items/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ barcode: newBarcode || null }),
+        body: JSON.stringify({
+          barcode: newBarcode || null,
+          barcodeType: barcodeType || undefined,
+          branchId: targetBranchId,
+        }),
       });
       setItems((prev) =>
         prev.map((it) => (it.id === id ? { ...it, barcode: newBarcode || undefined } : it))
@@ -4499,6 +4515,7 @@ export function App() {
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const targetBranchId = activeBranch?.id || (selectedBranchScope && selectedBranchScope.toLowerCase() !== 'all' ? selectedBranchScope : undefined);
       if (editingItem) {
         await api(`/api/items/${editingItem.id}`, {
           method: 'PATCH',
@@ -4506,6 +4523,7 @@ export function App() {
             name: itemFormName,
             sku: itemFormSku || null,
             barcode: itemFormBarcode || null,
+            branchId: editingItem.branchId || targetBranchId,
             hsn: itemFormHsn || null,
             unit: itemFormUnit,
             category: itemFormCategory || null,
@@ -4526,6 +4544,7 @@ export function App() {
             name: itemFormName,
             sku: itemFormSku || null,
             barcode: itemFormBarcode || null,
+            branchId: targetBranchId,
             hsn: itemFormHsn || null,
             unit: itemFormUnit,
             category: itemFormCategory || null,
@@ -10906,6 +10925,7 @@ export function App() {
                     setActiveTab(tab as any);
                   }}
                   showToast={showToast}
+                  onReloadItems={loadItems}
                 />
               </div>
             )}
@@ -14352,6 +14372,7 @@ export function App() {
           <BulkImportModal
             categories={categoriesList}
             existingItems={items}
+            branchId={activeBranch?.id || (selectedBranchScope !== 'all' ? selectedBranchScope : undefined)}
             shopName={shop?.name}
             onClose={() => setShowBulkImportModal(false)}
             onImportDone={() => {
@@ -14389,6 +14410,7 @@ export function App() {
         {showScanMfrModal && (
           <ScanManufacturerBarcodeModal
             targets={catalogBarcodeTargets}
+            takenCatalogBarcodes={catalogTakenBarcodes}
             initialSelectedId={scanMfrInitialItemId}
             shopName={shop?.name}
             onAssign={handleAssignCatalogBarcode}
@@ -14970,7 +14992,17 @@ export function App() {
                             <button
                               type="button"
                               style={{ background: 'none', border: 'none', color: '#4f46e5', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-                              onClick={() => {
+                              onClick={async () => {
+                                try {
+                                  const targetBranchId = activeBranch?.id || (selectedBranchScope && selectedBranchScope.toLowerCase() !== 'all' ? selectedBranchScope : '');
+                                  const res = await api<{ barcode: string }>(`/api/items/generate-barcode${targetBranchId ? `?branchId=${encodeURIComponent(targetBranchId)}` : ''}`);
+                                  if (res?.barcode) {
+                                    setItemFormBarcode(res.barcode);
+                                    return;
+                                  }
+                                } catch {
+                                  // fallback to local generation
+                                }
                                 const code = '20' + Date.now().toString().slice(-10);
                                 let sum = 0;
                                 for (let k = 0; k < 12; k++) sum += parseInt(code[k], 10) * (k % 2 === 0 ? 1 : 3);

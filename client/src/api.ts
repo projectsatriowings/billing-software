@@ -259,6 +259,8 @@ export interface Item {
   branchCode?: string | null;
   sku?: string;
   barcode?: string;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+  barcodes?: { id?: string; barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER'; branchId?: string | null }[];
   hsn?: string;
   unit: string;
   category?: string;
@@ -1376,11 +1378,37 @@ export interface BulkImportResult {
   results: BulkImportRowResult[];
 }
 
-export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string) =>
+export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string, branchId?: string | null) =>
   api<BulkImportResult>('/api/items/bulk-import', {
     method: 'POST',
-    body: JSON.stringify({ rows, importBatchId }),
+    body: JSON.stringify({ rows, importBatchId, branchId: branchId || undefined }),
   });
+
+export const generateInternalBarcodeApi = (branchId?: string) =>
+  api<{ barcode: string; barcodeType: string; branchId: string | null }>(
+    `/api/items/generate-barcode${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
+  );
+
+export const checkBarcodeApi = (barcode: string, options?: { branchId?: string; barcodeType?: string; productId?: string }) => {
+  const qp = new URLSearchParams();
+  qp.set('barcode', barcode);
+  if (options?.branchId) qp.set('branchId', options.branchId);
+  if (options?.barcodeType) qp.set('barcodeType', options.barcodeType);
+  if (options?.productId) qp.set('productId', options.productId);
+  return api<{ available: boolean; conflict?: boolean; message?: string; barcodeType?: string; branchId?: string | null }>(
+    `/api/items/check-barcode?${qp.toString()}`
+  );
+};
+
+export const checkSkuApi = (sku: string, options?: { branchId?: string; productId?: string }) => {
+  const qp = new URLSearchParams();
+  qp.set('sku', sku);
+  if (options?.branchId) qp.set('branchId', options.branchId);
+  if (options?.productId) qp.set('productId', options.productId);
+  return api<{ available: boolean; conflict?: boolean; message?: string; branchId?: string | null }>(
+    `/api/items/check-sku?${qp.toString()}`
+  );
+};
 
 export const fetchItemByBarcode = (code: string) =>
   api<{ item: Item }>(`/api/items/by-barcode/${encodeURIComponent(code)}`);
@@ -1738,8 +1766,8 @@ export const getStockTransfers = (params?: {
   }>(`/api/stock-transfers${qs ? `?${qs}` : ''}`);
 };
 
-export const getNextStockTransferNumber = () =>
-  api<{ nextTransferNumber: string }>('/api/stock-transfers/next-number');
+export const getNextStockTransferNumber = (branch?: string) =>
+  api<{ nextTransferNumber: string }>(branch ? `/api/stock-transfers/next-number?branch=${encodeURIComponent(branch)}` : '/api/stock-transfers/next-number');
 
 export const getBranchStock = (branch: string, q?: string, limit?: number) => {
   const query = new URLSearchParams();

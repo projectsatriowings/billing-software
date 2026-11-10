@@ -1,8 +1,18 @@
 import { requirePerm } from '../auth.ts';
-import { bad, conflict, notFound, V, type Router } from '../http.ts';
+import { bad, conflict, notFound, V, type Router, type Ctx } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
 import { resolveBranchScope } from '../branchScope.ts';
+import { generateUniqueInternalBarcode } from '../../../shared/bulkImport.ts';
+
+function isInternalBarcode(barcode?: string | null, barcodeType?: string | null): boolean {
+  if (!barcode) return false;
+  const t = (barcodeType || '').toUpperCase();
+  if (t === 'INTERNAL') return true;
+  if (t === 'MANUFACTURER') return false;
+  const trimmed = barcode.trim();
+  return trimmed.startsWith('20') && trimmed.length === 13;
+}
 
 function validateCustom(raw: unknown): Record<string, string | number> {
   if (raw === undefined || raw === null || raw === '') return {};
@@ -39,6 +49,10 @@ function formatItem(r: any) {
     name: r.name,
     sku: r.sku ?? null,
     barcode: r.barcode ?? null,
+    barcodeType: r.barcodeType ?? r.barcode_type ?? null,
+    barcodes: (typeof (r.allBarcodes ?? r.all_barcodes) === 'string'
+      ? JSON.parse(r.allBarcodes ?? r.all_barcodes)
+      : (r.allBarcodes ?? r.all_barcodes ?? r.barcodes ?? [])),
     hsn: r.hsn ?? null,
     unit: r.unit,
     category: r.category ?? null,
@@ -60,6 +74,38 @@ function formatItem(r: any) {
   };
 }
 
+/**
+ * Builds SQL condition to check if an item is associated with a specific branch:
+ * 1) It was created in this branch (i.branch_id = branchId), OR
+ * 2) It has stock moves recorded in this branch (transferred, counted, sold, adjusted), OR
+ * 3) It was transferred to this branch via completed / received stock transfer
+ */
+function buildBranchAssociationClause(branchId: string, branchCode: string) {
+  return {
+    sql: `(
+      i.branch_id = ?
+      OR EXISTS (
+        SELECT 1 FROM stock_moves sm_assoc
+        WHERE sm_assoc.tenant_id = i.tenant_id
+          AND sm_assoc.item_id = i.id
+          AND (
+            sm_assoc.branch_id = ?
+            OR (sm_assoc.branch_id IS NULL AND (UPPER(sm_assoc.location) = UPPER(?) OR UPPER(sm_assoc.location) = UPPER(?)))
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM stock_transfers st_assoc
+        JOIN stock_transfer_lines stl_assoc ON stl_assoc.transfer_id = st_assoc.id
+        WHERE st_assoc.tenant_id = i.tenant_id
+          AND stl_assoc.item_id = i.id
+          AND st_assoc.status IN ('completed', 'received', 'partially_received')
+          AND (st_assoc.to_branch = ? OR st_assoc.to_branch = ?)
+      )
+    )`,
+    params: [branchId, branchId, branchCode, branchId, branchId, branchCode],
+  };
+}
+
 export function registerItems(r: Router) {
   // List items with search, filters, pagination and stock
   r.get('/api/items', requirePerm('items.view'), async (ctx) => {
@@ -71,20 +117,84 @@ export function registerItems(r: Router) {
     const favoriteParam = ctx.query.favorite;
     const includeInactive = ctx.query.includeInactive === '1' || ctx.query.includeInactive === 'true';
 
-    let sql = `
-      SELECT i.*,
-             b.name AS branch_name,
-             b.code AS branch_code,
-             COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
-      FROM items i
-      LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
-      WHERE i.tenant_id = ?
-    `;
-    const params: unknown[] = [tenantId];
-
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      sql += ' AND i.branch_id = ?';
-      params.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
+    }
+
+    let sql: string;
+    const params: unknown[] = [];
+
+    if (targetBranch) {
+      sql = `
+        SELECT i.*,
+               ? AS branch_id,
+               ? AS branch_name,
+               ? AS branch_code,
+               COALESCE((
+                 SELECT json_agg(bc_row)
+                 FROM (
+                   SELECT DISTINCT ON (pb.barcode)
+                     pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                   FROM product_barcodes pb
+                   WHERE pb.tenant_id = i.tenant_id
+                     AND pb.product_id = i.id
+                     AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+                   ORDER BY pb.barcode, (pb.branch_id = ?) DESC, pb.created_at ASC
+                 ) bc_row
+               ), '[]'::json) AS all_barcodes,
+               COALESCE((
+                 SELECT SUM(sm.qty_milli)
+                 FROM stock_moves sm
+                 WHERE sm.item_id = i.id
+                   AND sm.tenant_id = i.tenant_id
+                   AND (
+                     sm.branch_id = ?
+                     OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+                   )
+               ), 0) AS current_stock_milli
+        FROM items i
+        WHERE i.tenant_id = ?
+      `;
+      params.push(
+        targetBranch.id, targetBranch.name, targetBranch.code,
+        targetBranch.id, targetBranch.id,
+        targetBranch.id, targetBranch.code, targetBranch.id,
+        tenantId,
+      );
+
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      sql += ` AND ${assoc.sql}`;
+      params.push(...assoc.params);
+    } else {
+      sql = `
+        SELECT i.*,
+               b.name AS branch_name,
+               b.code AS branch_code,
+               COALESCE((
+                 SELECT json_agg(bc_row)
+                 FROM (
+                   SELECT DISTINCT ON (pb.barcode)
+                     pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                   FROM product_barcodes pb
+                   WHERE pb.tenant_id = i.tenant_id
+                     AND pb.product_id = i.id
+                   ORDER BY pb.barcode, pb.created_at ASC
+                 ) bc_row
+               ), '[]'::json) AS all_barcodes,
+               COALESCE((
+                 SELECT SUM(sm.qty_milli)
+                 FROM stock_moves sm
+                 WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id
+               ), 0) AS current_stock_milli
+        FROM items i
+        LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
+        WHERE i.tenant_id = ?
+      `;
+      params.push(tenantId);
     }
 
     if (!includeInactive) {
@@ -92,11 +202,59 @@ export function registerItems(r: Router) {
     }
 
     if (barcode) {
-      sql += ' AND (i.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes pb WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND pb.barcode = ?))';
-      params.push(barcode, barcode);
+      if (targetBranch) {
+        sql += ` AND (
+          i.barcode = ?
+          OR EXISTS (
+            SELECT 1 FROM product_barcodes pb
+            WHERE pb.tenant_id = i.tenant_id
+              AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+              AND pb.product_id = i.id
+              AND pb.barcode = ?
+          )
+        )`;
+        params.push(barcode, targetBranch.id, barcode);
+      } else {
+        sql += ` AND (
+          i.barcode = ?
+          OR EXISTS (
+            SELECT 1 FROM product_barcodes pb
+            WHERE pb.tenant_id = i.tenant_id
+              AND pb.product_id = i.id
+              AND pb.barcode = ?
+          )
+        )`;
+        params.push(barcode, barcode);
+      }
     } else if (q) {
-      sql += ' AND (lower(i.name) LIKE ? OR lower(COALESCE(i.sku, \'\')) LIKE ? OR lower(COALESCE(i.barcode, \'\')) LIKE ? OR EXISTS (SELECT 1 FROM product_barcodes pb WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id AND lower(pb.barcode) LIKE ?))';
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+      if (targetBranch) {
+        sql += ` AND (
+          lower(i.name) LIKE ?
+          OR lower(COALESCE(i.sku, '')) LIKE ?
+          OR lower(COALESCE(i.barcode, '')) LIKE ?
+          OR EXISTS (
+            SELECT 1 FROM product_barcodes pb
+            WHERE pb.tenant_id = i.tenant_id
+              AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+              AND pb.product_id = i.id
+              AND lower(pb.barcode) LIKE ?
+          )
+        )`;
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`, targetBranch.id, `%${q}%`);
+      } else {
+        sql += ` AND (
+          lower(i.name) LIKE ?
+          OR lower(COALESCE(i.sku, '')) LIKE ?
+          OR lower(COALESCE(i.barcode, '')) LIKE ?
+          OR EXISTS (
+            SELECT 1 FROM product_barcodes pb
+            WHERE pb.tenant_id = i.tenant_id
+              AND pb.product_id = i.id
+              AND lower(pb.barcode) LIKE ?
+          )
+        )`;
+        params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+      }
     }
 
     if (category) {
@@ -120,21 +278,327 @@ export function registerItems(r: Router) {
     return { items: rows.map(formatItem) };
   });
 
+  // Generate a unique internal barcode (IBC) for a branch
+  const generateBarcodeHandler = async (ctx: Ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const rawBranch = (ctx.query?.branchId ?? ctx.body?.branchId ?? scope.branchId ?? '').toString().trim();
+    let branchId = scope.branchId;
+    if (rawBranch && rawBranch.toLowerCase() !== 'all') {
+      const br = await ctx.db.one<{ id: string }>(
+        'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, rawBranch, rawBranch],
+      );
+      if (br) branchId = br.id;
+    }
+    if (!branchId) {
+      const mainBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1",
+        [tenantId],
+      );
+      branchId = mainBr?.id || null;
+    }
+
+    // Check duplicates ONLY within this branch, and only for internal barcodes
+    let branchSql = '';
+    const sqlParams: unknown[] = [tenantId];
+    if (branchId) {
+      branchSql = ' AND branch_id = ?';
+      sqlParams.push(branchId);
+    }
+    const branchPbParams: unknown[] = [tenantId];
+    let pbBranchSql = '';
+    if (branchId) {
+      pbBranchSql = ' AND pb.branch_id = ?';
+      branchPbParams.push(branchId);
+    }
+
+    const existingRows = await ctx.db.query<{ barcode: string }>(
+      `SELECT barcode FROM items
+       WHERE tenant_id = ? ${branchSql} AND barcode IS NOT NULL AND (barcode LIKE '20%' AND length(barcode) = 13)
+       UNION
+       SELECT pb.barcode FROM product_barcodes pb
+       WHERE pb.tenant_id = ? ${pbBranchSql} AND (pb.barcode_type = 'INTERNAL' OR (pb.barcode LIKE '20%' AND length(pb.barcode) = 13))`,
+      [...sqlParams, ...branchPbParams],
+    );
+
+    const existingCodes = new Set<string>(existingRows.map((r: { barcode: string }) => r.barcode));
+    const generated = generateUniqueInternalBarcode(existingCodes, new Set<string>());
+    return {
+      barcode: generated,
+      barcodeType: 'INTERNAL',
+      branchId: branchId || null,
+    };
+  };
+
+  r.get('/api/items/generate-barcode', requirePerm('items.write'), generateBarcodeHandler);
+  r.post('/api/items/generate-barcode', requirePerm('items.write'), generateBarcodeHandler);
+
+  // Validate / duplicate-check barcode for a branch
+  r.get('/api/items/check-barcode', requirePerm('items.view'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const barcode = (ctx.query.barcode ?? '').toString().trim();
+    if (!barcode) throw bad('Barcode is required', 'VALIDATION', { field: 'barcode' });
+
+    const rawType = (ctx.query.barcodeType ?? '').toString().toUpperCase();
+    const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL' || (barcode.startsWith('20') && barcode.length === 13)
+      ? 'INTERNAL'
+      : 'MANUFACTURER';
+
+    const rawBranch = (ctx.query.branchId ?? scope.branchId ?? '').toString().trim();
+    let branchId = scope.branchId;
+    if (rawBranch && rawBranch.toLowerCase() !== 'all') {
+      const br = await ctx.db.one<{ id: string }>(
+        'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, rawBranch, rawBranch],
+      );
+      if (br) branchId = br.id;
+    }
+
+    const excludeProductId = (ctx.query.productId ?? ctx.query.excludeId ?? '').toString().trim() || null;
+
+    let itemFilter = 'WHERE tenant_id = ? AND barcode = ?';
+    const itemParams: unknown[] = [tenantId, barcode];
+    if (branchId) {
+      itemFilter += ' AND branch_id = ?';
+      itemParams.push(branchId);
+    }
+    if (excludeProductId) {
+      itemFilter += ' AND id <> ?';
+      itemParams.push(excludeProductId);
+    }
+
+    if (barcodeType === 'INTERNAL') {
+      // Internal barcodes must be unique within the branch
+      const dupItem = await ctx.db.one<{ id: string; name: string }>(
+        `SELECT id, name FROM items ${itemFilter} LIMIT 1`,
+        itemParams,
+      );
+      if (dupItem) {
+        return {
+          available: false,
+          conflict: true,
+          barcodeType: 'INTERNAL',
+          branchId,
+          conflictingItem: { id: dupItem.id, name: dupItem.name },
+          message: `Internal barcode "${barcode}" is already used by "${dupItem.name}" in this branch.`,
+        };
+      }
+
+      let pbFilter = `WHERE pb.tenant_id = ? AND pb.barcode = ? AND pb.barcode_type = 'INTERNAL'`;
+      const pbParams: unknown[] = [tenantId, barcode];
+      if (branchId) {
+        pbFilter += ' AND pb.branch_id = ?';
+        pbParams.push(branchId);
+      }
+      if (excludeProductId) {
+        pbFilter += ' AND pb.product_id <> ?';
+        pbParams.push(excludeProductId);
+      }
+
+      const dupPb = await ctx.db.one<{ productId: string; name: string }>(
+        `SELECT pb.product_id, i.name
+         FROM product_barcodes pb
+         JOIN items i ON i.id = pb.product_id
+         ${pbFilter}
+         LIMIT 1`,
+        pbParams,
+      );
+      if (dupPb) {
+        return {
+          available: false,
+          conflict: true,
+          barcodeType: 'INTERNAL',
+          branchId,
+          conflictingItem: { id: dupPb.productId, name: dupPb.name },
+          message: `Internal barcode "${barcode}" is already registered to "${dupPb.name}" in this branch.`,
+        };
+      }
+
+      return { available: true, conflict: false, barcodeType: 'INTERNAL', branchId };
+    } else {
+      // Manufacturer Barcode: allowed across branches! Only check within the same branch
+      const dupItem = await ctx.db.one<{ id: string; name: string }>(
+        `SELECT id, name FROM items ${itemFilter} LIMIT 1`,
+        itemParams,
+      );
+      if (dupItem) {
+        return {
+          available: false,
+          conflict: true,
+          barcodeType: 'MANUFACTURER',
+          branchId,
+          conflictingItem: { id: dupItem.id, name: dupItem.name },
+          message: `Manufacturer barcode "${barcode}" is already assigned to "${dupItem.name}" in this branch.`,
+        };
+      }
+
+      let pbFilter = `WHERE pb.tenant_id = ? AND pb.barcode = ?`;
+      const pbParams: unknown[] = [tenantId, barcode];
+      if (branchId) {
+        pbFilter += ' AND pb.branch_id = ?';
+        pbParams.push(branchId);
+      }
+      if (excludeProductId) {
+        pbFilter += ' AND pb.product_id <> ?';
+        pbParams.push(excludeProductId);
+      }
+
+      const dupPb = await ctx.db.one<{ productId: string; name: string }>(
+        `SELECT pb.product_id, i.name
+         FROM product_barcodes pb
+         JOIN items i ON i.id = pb.product_id
+         ${pbFilter}
+         LIMIT 1`,
+        pbParams,
+      );
+      if (dupPb) {
+        return {
+          available: false,
+          conflict: true,
+          barcodeType: 'MANUFACTURER',
+          branchId,
+          conflictingItem: { id: dupPb.productId, name: dupPb.name },
+          message: `Manufacturer barcode "${barcode}" is already registered to "${dupPb.name}" in this branch.`,
+        };
+      }
+
+      return { available: true, conflict: false, barcodeType: 'MANUFACTURER', branchId };
+    }
+  });
+
+  // Validate / duplicate-check SKU for a branch
+  r.get('/api/items/check-sku', requirePerm('items.view'), async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const scope = await resolveBranchScope(ctx);
+    const sku = (ctx.query.sku ?? '').toString().trim();
+    if (!sku) throw bad('SKU is required', 'VALIDATION', { field: 'sku' });
+
+    const rawBranch = (ctx.query.branchId ?? scope.branchId ?? '').toString().trim();
+    let branchId = scope.branchId;
+    if (rawBranch && rawBranch.toLowerCase() !== 'all') {
+      const br = await ctx.db.one<{ id: string }>(
+        'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, rawBranch, rawBranch],
+      );
+      if (br) branchId = br.id;
+    }
+    if (!branchId) {
+      const fallbackBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1",
+        [tenantId],
+      );
+      branchId = fallbackBr?.id || null;
+    }
+
+    const excludeProductId = (ctx.query.productId ?? ctx.query.excludeId ?? '').toString().trim() || null;
+
+    let itemFilter = 'WHERE tenant_id = ? AND lower(sku) = lower(?)';
+    const itemParams: unknown[] = [tenantId, sku];
+    if (branchId) {
+      itemFilter += ' AND branch_id = ?';
+      itemParams.push(branchId);
+    }
+    if (excludeProductId) {
+      itemFilter += ' AND id <> ?';
+      itemParams.push(excludeProductId);
+    }
+
+    const dupItem = await ctx.db.one<{ id: string; name: string }>(
+      `SELECT id, name FROM items ${itemFilter} LIMIT 1`,
+      itemParams,
+    );
+    if (dupItem) {
+      return {
+        available: false,
+        conflict: true,
+        branchId,
+        conflictingItem: { id: dupItem.id, name: dupItem.name },
+        message: `SKU "${sku}" is already used by "${dupItem.name}" in this branch.`,
+      };
+    }
+
+    return { available: true, conflict: false, branchId };
+  });
+
   // Get single item by ID
   r.get('/api/items/:id', requirePerm('items.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    let sql = `SELECT i.*,
-              b.name AS branch_name,
-              b.code AS branch_code,
-              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
-       FROM items i
-       LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
-       WHERE i.tenant_id = ? AND i.id = ?`;
-    const params: unknown[] = [tenantId, ctx.params.id];
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      sql += ' AND i.branch_id = ?';
-      params.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
+    }
+
+    let sql: string;
+    let params: unknown[];
+
+    if (targetBranch) {
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      sql = `SELECT i.*,
+                    ? AS branch_id,
+                    ? AS branch_name,
+                    ? AS branch_code,
+                    COALESCE((
+                      SELECT json_agg(bc_row)
+                      FROM (
+                        SELECT DISTINCT ON (pb.barcode)
+                          pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                        FROM product_barcodes pb
+                        WHERE pb.tenant_id = i.tenant_id
+                          AND pb.product_id = i.id
+                          AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+                        ORDER BY pb.barcode, (pb.branch_id = ?) DESC, pb.created_at ASC
+                      ) bc_row
+                    ), '[]'::json) AS all_barcodes,
+                    COALESCE((
+                      SELECT SUM(sm.qty_milli)
+                      FROM stock_moves sm
+                      WHERE sm.item_id = i.id
+                        AND sm.tenant_id = i.tenant_id
+                        AND (
+                          sm.branch_id = ?
+                          OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+                        )
+                    ), 0) AS current_stock_milli
+             FROM items i
+             WHERE i.tenant_id = ? AND i.id = ?
+               AND ${assoc.sql}`;
+      params = [
+        targetBranch.id, targetBranch.name, targetBranch.code,
+        targetBranch.id, targetBranch.id,
+        targetBranch.id, targetBranch.code, targetBranch.id,
+        tenantId, ctx.params.id,
+        ...assoc.params,
+      ];
+    } else {
+      sql = `SELECT i.*,
+                    b.name AS branch_name,
+                    b.code AS branch_code,
+                    COALESCE((
+                      SELECT json_agg(bc_row)
+                      FROM (
+                        SELECT DISTINCT ON (pb.barcode)
+                          pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                        FROM product_barcodes pb
+                        WHERE pb.tenant_id = i.tenant_id
+                          AND pb.product_id = i.id
+                        ORDER BY pb.barcode, pb.created_at ASC
+                      ) bc_row
+                    ), '[]'::json) AS all_barcodes,
+                    COALESCE((
+                      SELECT SUM(sm.qty_milli)
+                      FROM stock_moves sm
+                      WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id
+                    ), 0) AS current_stock_milli
+             FROM items i
+             LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
+             WHERE i.tenant_id = ? AND i.id = ?`;
+      params = [tenantId, ctx.params.id];
     }
 
     const row = await ctx.db.one(sql, params);
@@ -149,38 +613,121 @@ export function registerItems(r: Router) {
     const code = (ctx.params.code ?? '').trim();
     if (!code) throw bad('Barcode is required', 'VALIDATION', { field: 'code' });
 
-    let branchFilter = '';
-    const branchParams: unknown[] = [];
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      branchFilter = ' AND i.branch_id = ?';
-      branchParams.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
     }
 
     const prefix12 = code.length === 13 ? code.slice(0, 12) : code;
-    const row = await ctx.db.one(
-      `SELECT i.*,
-              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
-       FROM items i
-       WHERE i.tenant_id = ? AND i.active = true ${branchFilter}
-         AND (
-           i.barcode = ?
-           OR (length(?) = 13 AND i.barcode = ?)
-           OR (length(i.barcode) = 13 AND substr(i.barcode, 1, 12) = ?)
-           OR EXISTS (
-             SELECT 1 FROM product_barcodes pb
-             WHERE pb.tenant_id = i.tenant_id AND pb.branch_id = i.branch_id AND pb.product_id = i.id
-               AND (pb.barcode = ? OR (length(?) = 13 AND pb.barcode = ?))
+    let row: any = null;
+
+    if (targetBranch) {
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      row = await ctx.db.one(
+        `SELECT i.*,
+                ? AS branch_id,
+                ? AS branch_name,
+                ? AS branch_code,
+                COALESCE((
+                  SELECT json_agg(bc_row)
+                  FROM (
+                    SELECT DISTINCT ON (pb.barcode)
+                      pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                    FROM product_barcodes pb
+                    WHERE pb.tenant_id = i.tenant_id
+                      AND pb.product_id = i.id
+                      AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+                    ORDER BY pb.barcode, (pb.branch_id = ?) DESC, pb.created_at ASC
+                  ) bc_row
+                ), '[]'::json) AS all_barcodes,
+                COALESCE((
+                  SELECT SUM(sm.qty_milli)
+                  FROM stock_moves sm
+                  WHERE sm.item_id = i.id
+                    AND sm.tenant_id = i.tenant_id
+                    AND (
+                      sm.branch_id = ?
+                      OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+                    )
+                ), 0) AS current_stock_milli
+         FROM items i
+         WHERE i.tenant_id = ? AND i.active = true
+           AND ${assoc.sql}
+           AND (
+             i.barcode = ?
+             OR (length(?) = 13 AND i.barcode = ?)
+             OR (length(i.barcode) = 13 AND substr(i.barcode, 1, 12) = ?)
+             OR EXISTS (
+               SELECT 1 FROM product_barcodes pb
+               WHERE pb.tenant_id = i.tenant_id
+                 AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+                 AND pb.product_id = i.id
+                 AND (pb.barcode = ? OR (length(?) = 13 AND pb.barcode = ?))
+             )
            )
-         )
-       LIMIT 1`,
-      [tenantId, ...branchParams, code, code, prefix12, prefix12, code, code, prefix12],
-    );
+         LIMIT 1`,
+        [
+          targetBranch.id, targetBranch.name, targetBranch.code,
+          targetBranch.id, targetBranch.id,
+          targetBranch.id, targetBranch.code, targetBranch.id,
+          tenantId,
+          ...assoc.params,
+          code, code, prefix12, prefix12,
+          targetBranch.id, code, code, prefix12,
+        ],
+      );
+    } else {
+      row = await ctx.db.one(
+        `SELECT i.*,
+                b.name AS branch_name,
+                b.code AS branch_code,
+                COALESCE((
+                  SELECT json_agg(bc_row)
+                  FROM (
+                    SELECT DISTINCT ON (pb.barcode)
+                      pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                    FROM product_barcodes pb
+                    WHERE pb.tenant_id = i.tenant_id
+                      AND pb.product_id = i.id
+                    ORDER BY pb.barcode, pb.created_at ASC
+                  ) bc_row
+                ), '[]'::json) AS all_barcodes,
+                COALESCE((
+                  SELECT SUM(sm.qty_milli)
+                  FROM stock_moves sm
+                  WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id
+                ), 0) AS current_stock_milli
+         FROM items i
+         LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
+         WHERE i.tenant_id = ? AND i.active = true
+           AND (
+             i.barcode = ?
+             OR (length(?) = 13 AND i.barcode = ?)
+             OR (length(i.barcode) = 13 AND substr(i.barcode, 1, 12) = ?)
+             OR EXISTS (
+               SELECT 1 FROM product_barcodes pb
+               WHERE pb.tenant_id = i.tenant_id AND pb.product_id = i.id
+                 AND (pb.barcode = ? OR (length(?) = 13 AND pb.barcode = ?))
+             )
+           )
+         LIMIT 1`,
+        [tenantId, code, code, prefix12, prefix12, code, code, prefix12],
+      );
+    }
+
     if (!row && code.length >= 8 && /^\d+$/.test(code)) {
-      let candidateSql = `SELECT id, barcode FROM items WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL`;
-      const candParams: unknown[] = [tenantId];
-      if (!scope.isSuperAdminAll && scope.branchId) {
-        candidateSql += ' AND branch_id = ?';
-        candParams.push(scope.branchId);
+      let candidateSql: string;
+      let candParams: unknown[];
+      if (targetBranch) {
+        const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+        candidateSql = `SELECT id, barcode FROM items i WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL AND ${assoc.sql}`;
+        candParams = [tenantId, ...assoc.params];
+      } else {
+        candidateSql = `SELECT id, barcode FROM items WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL`;
+        candParams = [tenantId];
       }
       const allRows = await ctx.db.query<{ id: string; barcode: string | null }>(candidateSql, candParams);
       const candidates = allRows.filter((r: { id: string; barcode: string | null }) => {
@@ -196,11 +743,70 @@ export function registerItems(r: Router) {
         return diffs === 1;
       });
       if (candidates.length === 1) {
-        const candidateRow = await ctx.db.one(
-          `SELECT i.*, COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
-           FROM items i WHERE i.id = ? AND i.tenant_id = ?`,
-          [candidates[0].id, tenantId],
-        );
+        let candidateRow: any;
+        if (targetBranch) {
+          candidateRow = await ctx.db.one(
+            `SELECT i.*,
+                    ? AS branch_id,
+                    ? AS branch_name,
+                    ? AS branch_code,
+                    COALESCE((
+                      SELECT json_agg(bc_row)
+                      FROM (
+                        SELECT DISTINCT ON (pb.barcode)
+                          pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                        FROM product_barcodes pb
+                        WHERE pb.tenant_id = i.tenant_id
+                          AND pb.product_id = i.id
+                          AND (pb.branch_id = ? OR pb.branch_id = i.branch_id OR pb.branch_id IS NULL)
+                        ORDER BY pb.barcode, (pb.branch_id = ?) DESC, pb.created_at ASC
+                      ) bc_row
+                    ), '[]'::json) AS all_barcodes,
+                    COALESCE((
+                      SELECT SUM(sm.qty_milli)
+                      FROM stock_moves sm
+                      WHERE sm.item_id = i.id
+                        AND sm.tenant_id = i.tenant_id
+                        AND (
+                          sm.branch_id = ?
+                          OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+                        )
+                    ), 0) AS current_stock_milli
+             FROM items i WHERE i.id = ? AND i.tenant_id = ?`,
+            [
+              targetBranch.id, targetBranch.name, targetBranch.code,
+              targetBranch.id, targetBranch.id,
+              targetBranch.id, targetBranch.code, targetBranch.id,
+              candidates[0].id, tenantId,
+            ],
+          );
+        } else {
+          candidateRow = await ctx.db.one(
+            `SELECT i.*,
+                    b.name AS branch_name,
+                    b.code AS branch_code,
+                    COALESCE((
+                      SELECT json_agg(bc_row)
+                      FROM (
+                        SELECT DISTINCT ON (pb.barcode)
+                          pb.id, pb.barcode, pb.barcode_type AS "barcodeType", pb.barcode_type, pb.branch_id AS "branchId"
+                        FROM product_barcodes pb
+                        WHERE pb.tenant_id = i.tenant_id
+                          AND pb.product_id = i.id
+                        ORDER BY pb.barcode, pb.created_at ASC
+                      ) bc_row
+                    ), '[]'::json) AS all_barcodes,
+                    COALESCE((
+                      SELECT SUM(sm.qty_milli)
+                      FROM stock_moves sm
+                      WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id
+                    ), 0) AS current_stock_milli
+             FROM items i
+             LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
+             WHERE i.id = ? AND i.tenant_id = ?`,
+            [candidates[0].id, tenantId],
+          );
+        }
         if (candidateRow) return { item: formatItem(candidateRow) };
       }
     }
@@ -213,24 +819,39 @@ export function registerItems(r: Router) {
   r.get('/api/items/:id/barcodes', requirePerm('items.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    let itemSql = 'SELECT id, branch_id FROM items WHERE id = ? AND tenant_id = ?';
-    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      itemSql += ' AND branch_id = ?';
-      itemParams.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
+    }
+
+    let itemSql = 'SELECT id, branch_id FROM items i WHERE id = ? AND tenant_id = ?';
+    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    if (targetBranch) {
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      itemSql += ` AND ${assoc.sql}`;
+      itemParams.push(...assoc.params);
     }
     const item = await ctx.db.one<{ id: string; branchId?: string; branch_id?: string }>(itemSql, itemParams);
     if (!item) throw notFound('Item');
 
-    const rows = await ctx.db.query(
-      `SELECT id, barcode, barcode_type, created_at FROM product_barcodes WHERE tenant_id = ? AND product_id = ? ORDER BY created_at ASC`,
-      [tenantId, item.id],
-    );
+    let bcSql = 'SELECT id, barcode, barcode_type, branch_id, created_at FROM product_barcodes WHERE tenant_id = ? AND product_id = ?';
+    const bcParams: unknown[] = [tenantId, item.id];
+    if (targetBranch) {
+      bcSql += ' AND (branch_id = ? OR branch_id = ? OR branch_id IS NULL)';
+      bcParams.push(targetBranch.id, item.branchId ?? item.branch_id);
+    }
+    bcSql += ' ORDER BY created_at ASC';
+
+    const rows = await ctx.db.query(bcSql, bcParams);
     const barcodes = rows.map((r: any) => ({
       id: r.id,
       barcode: r.barcode,
       barcodeType: r.barcodeType ?? r.barcode_type,
       barcode_type: r.barcodeType ?? r.barcode_type,
+      branchId: r.branchId ?? r.branch_id ?? null,
       createdAt: r.createdAt ?? r.created_at,
     }));
     return { barcodes };
@@ -241,19 +862,30 @@ export function registerItems(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    let itemSql = 'SELECT id, name, branch_id FROM items WHERE id = ? AND tenant_id = ?';
-    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      itemSql += ' AND branch_id = ?';
-      itemParams.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
+    }
+
+    let itemSql = 'SELECT id, name, branch_id FROM items i WHERE id = ? AND tenant_id = ?';
+    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    if (targetBranch) {
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      itemSql += ` AND ${assoc.sql}`;
+      itemParams.push(...assoc.params);
     }
     const item = await ctx.db.one<{ id: string; name: string; branchId?: string; branch_id?: string }>(itemSql, itemParams);
     if (!item) throw notFound('Item');
-    const branchId = item.branchId ?? item.branch_id ?? scope.branchId;
+    const branchId = b.branchId || b.branch_id || targetBranch?.id || item.branchId || item.branch_id || scope.branchId;
 
     const barcode = V.str(b.barcode, 'Barcode', { required: true, max: 60 }).trim();
     const rawType = (b.barcodeType || '').toString().toUpperCase();
-    const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL' ? 'INTERNAL' : 'MANUFACTURER';
+    const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL'
+      ? 'INTERNAL'
+      : (rawType === 'MANUFACTURER' ? 'MANUFACTURER' : (barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER'));
 
     // Verify barcode uniqueness against other items in the same branch
     const existingItem = await ctx.db.one<{ id: string; name: string }>(
@@ -264,21 +896,31 @@ export function registerItems(r: Router) {
       throw conflict(`Barcode "${barcode}" is already used by item "${existingItem.name}" in this branch.`);
     }
 
-    const existingMapping = await ctx.db.one<{ productId: string }>(
-      'SELECT product_id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND product_id <> ?',
-      [tenantId, branchId, barcode, item.id],
-    );
-    if (existingMapping) {
-      throw conflict(`Barcode "${barcode}" is already registered to another item in this branch.`);
+    if (barcodeType === 'INTERNAL') {
+      const existingMapping = await ctx.db.one<{ productId: string }>(
+        "SELECT product_id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND product_id <> ? AND barcode_type = 'INTERNAL'",
+        [tenantId, branchId, barcode, item.id],
+      );
+      if (existingMapping) {
+        throw conflict(`Internal barcode "${barcode}" is already registered to another item in this branch.`);
+      }
     }
 
-    const bcId = newId('bc');
-    await ctx.db.exec(
-      `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT (tenant_id, branch_id, barcode) DO NOTHING`,
-      [bcId, tenantId, branchId, item.id, barcode, barcodeType],
+    // Check if this product already has this barcode registered
+    const existingSelf = await ctx.db.one<{ id: string }>(
+      'SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND product_id = ? AND barcode = ?',
+      [tenantId, branchId, item.id, barcode],
     );
+
+    let bcId = existingSelf?.id;
+    if (!bcId) {
+      bcId = newId('bc');
+      await ctx.db.exec(
+        `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [bcId, tenantId, branchId, item.id, barcode, barcodeType],
+      );
+    }
 
     const barcodeRecord = { id: bcId, barcode, barcode_type: barcodeType, barcodeType };
     return {
@@ -296,7 +938,22 @@ export function registerItems(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const branchId = b.branchId || b.branch_id || scope.branchId;
+    let branchId: string | null = null;
+    const candidateBranch = (b.branchId || b.branch_id || scope.branchId || '').toString().trim();
+    if (candidateBranch && candidateBranch.toLowerCase() !== 'all') {
+      const br = await ctx.db.one<{ id: string }>(
+        'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, candidateBranch, candidateBranch],
+      );
+      if (br) branchId = br.id;
+    }
+    if (!branchId) {
+      const fallbackBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1",
+        [tenantId],
+      );
+      branchId = fallbackBr?.id || null;
+    }
     if (!branchId) {
       throw bad('Branch ID is required to create an item.', 'BRANCH_REQUIRED');
     }
@@ -320,6 +977,11 @@ export function registerItems(r: Router) {
     const imageUrl = (b.imageUrl ?? b.image) ? String(b.imageUrl ?? b.image).trim() : null;
 
     if (barcode) {
+      const rawType = (b.barcodeType || '').toString().toUpperCase();
+      const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL'
+        ? 'INTERNAL'
+        : (rawType === 'MANUFACTURER' ? 'MANUFACTURER' : (barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER'));
+
       const existing = await ctx.db.one<{ id: string; name: string }>(
         'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND barcode = ?',
         [tenantId, branchId, barcode],
@@ -327,11 +989,21 @@ export function registerItems(r: Router) {
       if (existing) {
         throw conflict(`Item "${existing.name}" already uses this barcode in this branch.`);
       }
+
+      if (barcodeType === 'INTERNAL') {
+        const existingPb = await ctx.db.one<{ productId: string }>(
+          "SELECT product_id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND barcode_type = 'INTERNAL'",
+          [tenantId, branchId, barcode],
+        );
+        if (existingPb) {
+          throw conflict(`Internal barcode "${barcode}" is already registered to another item in this branch.`);
+        }
+      }
     }
 
     if (sku) {
       const existingSku = await ctx.db.one<{ id: string; name: string }>(
-        'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND sku = ?',
+        'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND lower(sku) = lower(?)',
         [tenantId, branchId, sku],
       );
       if (existingSku) {
@@ -342,21 +1014,25 @@ export function registerItems(r: Router) {
     const id = newId('i');
 
     await ctx.db.tx(async (q) => {
+      const rawType = (b.barcodeType || '').toString().toUpperCase();
+      const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL'
+        ? 'INTERNAL'
+        : (rawType === 'MANUFACTURER' ? 'MANUFACTURER' : (barcode && barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER'));
+
       await q.exec(
         `INSERT INTO items (
-          id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
+          id, tenant_id, branch_id, name, sku, barcode, barcode_type, hsn, unit, category,
           price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
           reorder_milli, preferred_supplier_id, favorite, custom, active, image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
-        [id, tenantId, branchId, name, sku, barcode, hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
+        [id, tenantId, branchId, name, sku, barcode, barcode ? barcodeType : 'INTERNAL', hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
       );
 
       if (barcode) {
         await q.exec(
           `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-           VALUES (?, ?, ?, ?, ?, 'MANUFACTURER')
-           ON CONFLICT (tenant_id, branch_id, barcode) DO NOTHING`,
-          [newId('bc'), tenantId, branchId, id, barcode],
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [newId('bc'), tenantId, branchId, id, barcode, barcodeType],
         );
       }
 
@@ -386,15 +1062,24 @@ export function registerItems(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    let itemSql = 'SELECT * FROM items WHERE id = ? AND tenant_id = ?';
-    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    let targetBranch: { id: string; name: string; code: string } | null = null;
     if (!scope.isSuperAdminAll && scope.branchId) {
-      itemSql += ' AND branch_id = ?';
-      itemParams.push(scope.branchId);
+      targetBranch = (await ctx.db.one<{ id: string; name: string; code: string }>(
+        'SELECT id, name, code FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, scope.branchId, scope.branchId],
+      )) ?? { id: scope.branchId, name: 'Branch', code: scope.branchId };
+    }
+
+    let itemSql = 'SELECT * FROM items i WHERE id = ? AND tenant_id = ?';
+    const itemParams: unknown[] = [ctx.params.id, tenantId];
+    if (targetBranch) {
+      const assoc = buildBranchAssociationClause(targetBranch.id, targetBranch.code);
+      itemSql += ` AND ${assoc.sql}`;
+      itemParams.push(...assoc.params);
     }
     const item = await ctx.db.one(itemSql, itemParams);
     if (!item) throw notFound('Item');
-    const branchId = item.branchId ?? item.branch_id ?? scope.branchId;
+    const branchId = b.branchId || b.branch_id || targetBranch?.id || item.branchId || item.branch_id || scope.branchId;
 
     const name = b.name !== undefined ? V.str(b.name, 'Item name', { required: true, max: 120 }) : item.name;
     const priceMinor = b.priceMinor !== undefined ? V.int(b.priceMinor, 'Price (paise)', { min: 0 }) : Number(item.priceMinor ?? item.price_minor ?? 0);
@@ -416,6 +1101,11 @@ export function registerItems(r: Router) {
     const imageUrl = hasImage ? ((b.imageUrl ?? b.image) ? String(b.imageUrl ?? b.image).trim() : null) : (item.imageUrl ?? item.image_url ?? null);
 
     if (barcode && barcode !== item.barcode) {
+      const rawType = (b.barcodeType || '').toString().toUpperCase();
+      const barcodeType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL'
+        ? 'INTERNAL'
+        : (rawType === 'MANUFACTURER' ? 'MANUFACTURER' : (barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER'));
+
       const dup = await ctx.db.one<{ id: string; name: string }>(
         'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND id <> ?',
         [tenantId, branchId, barcode, item.id],
@@ -423,26 +1113,41 @@ export function registerItems(r: Router) {
       if (dup) {
         throw conflict(`Item "${dup.name}" already uses this barcode in this branch.`);
       }
+
+      if (barcodeType === 'INTERNAL') {
+        const existingPb = await ctx.db.one<{ productId: string }>(
+          "SELECT product_id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND product_id <> ? AND barcode_type = 'INTERNAL'",
+          [tenantId, branchId, barcode, item.id],
+        );
+        if (existingPb) {
+          throw conflict(`Internal barcode "${barcode}" is already registered to another item in this branch.`);
+        }
+      }
     }
 
     if (sku && sku !== item.sku) {
       const dupSku = await ctx.db.one<{ id: string; name: string }>(
-        'SELECT id, name FROM items WHERE tenant_id = ? AND sku = ? AND id <> ?',
-        [tenantId, sku, item.id],
+        'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND lower(sku) = lower(?) AND id <> ?',
+        [tenantId, branchId, sku, item.id],
       );
       if (dupSku) {
-        throw conflict(`Item "${dupSku.name}" already uses this SKU code.`);
+        throw conflict(`Item "${dupSku.name}" already uses this SKU code in this branch.`);
       }
     }
 
     await ctx.db.tx(async (q) => {
+      const rawType = (b.barcodeType || '').toString().toUpperCase();
+      const bType: 'INTERNAL' | 'MANUFACTURER' = rawType === 'INTERNAL'
+        ? 'INTERNAL'
+        : (rawType === 'MANUFACTURER' ? 'MANUFACTURER' : (item.barcode_type || (barcode && barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER')));
+
       await q.exec(
         `UPDATE items SET
-          name = ?, price_minor = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?,
+          name = ?, price_minor = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?, barcode_type = ?,
           hsn = ?, unit = ?, category = ?, tax_inclusive = ?, track_stock = ?, reorder_milli = ?,
           preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, image_url = ?, updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [name, priceMinor, costMinor, taxRateBp, sku, barcode, hsn, unit, category, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
+        [name, priceMinor, costMinor, taxRateBp, sku, barcode, barcode ? bType : (item.barcode_type || 'INTERNAL'), hsn, unit, category, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
       );
 
       // Keep product_barcodes table synchronized
@@ -454,11 +1159,13 @@ export function registerItems(r: Router) {
           );
         }
         if (barcode) {
-          const bType = barcode.startsWith('20') && barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER';
+          await q.exec(
+            'DELETE FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND product_id = ? AND barcode = ?',
+            [tenantId, branchId, item.id, barcode],
+          );
           await q.exec(
             `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT (tenant_id, branch_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
+             VALUES (?, ?, ?, ?, ?, ?)`,
             [newId('bc'), tenantId, branchId, item.id, barcode, bType],
           );
         }
@@ -469,10 +1176,32 @@ export function registerItems(r: Router) {
 
     const updated = await ctx.db.one(
       `SELECT i.*,
-              COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0) AS current_stock_milli
+              COALESCE(?, i.branch_id) AS branch_id,
+              COALESCE(?, b.name) AS branch_name,
+              COALESCE(?, b.code) AS branch_code,
+              COALESCE((
+                SELECT SUM(sm.qty_milli)
+                FROM stock_moves sm
+                WHERE sm.item_id = i.id
+                  AND sm.tenant_id = i.tenant_id
+                  AND (
+                    sm.branch_id = COALESCE(?, i.branch_id)
+                    OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(COALESCE(?, b.code, 'MAIN')) OR UPPER(sm.location) = UPPER(COALESCE(?, i.branch_id, 'MAIN'))))
+                  )
+              ), 0) AS current_stock_milli
        FROM items i
+       LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
        WHERE i.id = ? AND i.tenant_id = ?`,
-      [item.id, tenantId],
+      [
+        targetBranch?.id ?? null,
+        targetBranch?.name ?? null,
+        targetBranch?.code ?? null,
+        targetBranch?.id ?? null,
+        targetBranch?.code ?? null,
+        targetBranch?.id ?? null,
+        item.id,
+        tenantId,
+      ],
     );
     return { item: formatItem(updated) };
   });
