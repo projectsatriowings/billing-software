@@ -32,6 +32,7 @@ export interface BulkBarcodeModalProps {
   onClose: () => void;
   items: Item[];
   shopName?: string;
+  shopLogoUrl?: string | null;
 }
 
 function escapeHtml(str: string): string {
@@ -48,7 +49,7 @@ const formatPrice = (paise?: number | null) => {
   return '₹' + (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarcodeModalProps) {
+export function BulkBarcodeModal({ isOpen, onClose, items, shopName, shopLogoUrl }: BulkBarcodeModalProps) {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -58,6 +59,7 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
 
   // Label configuration: default to A4 Sheet (30 labels/page) so print matches preview grid
   const [selectedSizeId, setSelectedSizeId] = useState<string>('sheet-a4-30');
+  const [showShopLogo, setShowShopLogo] = useState<boolean>(true);
   const [showProductName, setShowProductName] = useState<boolean>(true);
   const [showPrice, setShowPrice] = useState<boolean>(true);
   const [showShopName, setShowShopName] = useState<boolean>(false);
@@ -270,6 +272,7 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
           const svgMarkup = renderBarcodeSvg(barcodeTrim, false);
           return `
             <div class="print-label-page">
+              ${showShopLogo && shopLogoUrl ? `<img src="${escapeHtml(shopLogoUrl)}" class="label-logo" alt="Logo" />` : ''}
               ${showShopName && shopName ? `<div class="label-shop">${escapeHtml(shopName)}</div>` : ''}
               ${showProductName ? `<div class="label-name">${escapeHtml(item.name)}</div>` : ''}
               ${showSku && item.sku ? `<div class="label-sku">SKU: ${escapeHtml(item.sku)}</div>` : ''}
@@ -304,6 +307,7 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                 cells.push(`
                   <td class="sheet-cell">
                     <div class="label-card">
+                      ${showShopLogo && shopLogoUrl ? `<img src="${escapeHtml(shopLogoUrl)}" class="label-logo" alt="Logo" />` : ''}
                       ${showShopName && shopName ? `<div class="label-shop">${escapeHtml(shopName)}</div>` : ''}
                       ${showProductName ? `<div class="label-name">${escapeHtml(item.name)}</div>` : ''}
                       ${showSku && item.sku ? `<div class="label-sku">SKU: ${escapeHtml(item.sku)}</div>` : ''}
@@ -453,6 +457,15 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
               background: #ffffff !important;
             }
             `
+            }
+            .label-logo {
+              max-height: ${isThermal ? Math.max(3.5, Math.round(heightMm * 0.16)) : Math.min(4.5, Math.max(2.8, Math.round(sheetCardHeightMm * 0.18)))}mm;
+              max-width: ${Math.round(widthMm * 0.45)}mm;
+              object-fit: contain;
+              margin-bottom: 0.3mm;
+              display: block;
+              margin-left: auto;
+              margin-right: auto;
             }
             .label-shop {
               font-size: 5.5pt;
@@ -836,6 +849,12 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
               <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} />
               Price
             </label>
+            {shopLogoUrl && (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', color: '#334155', fontWeight: 500 }}>
+                <input type="checkbox" checked={showShopLogo} onChange={(e) => setShowShopLogo(e.target.checked)} />
+                Store Logo
+              </label>
+            )}
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', color: '#334155', fontWeight: 500 }}>
               <input type="checkbox" checked={showShopName} onChange={(e) => setShowShopName(e.target.checked)} />
               Store Name
@@ -1583,6 +1602,22 @@ export function BulkBarcodeModal({ isOpen, onClose, items, shopName }: BulkBarco
                       >
                         #{idx + 1}
                       </div>
+
+                      {showShopLogo && shopLogoUrl && (
+                        <img
+                          src={shopLogoUrl}
+                          alt="Logo"
+                          style={{
+                            maxHeight: '18px',
+                            maxWidth: '65px',
+                            objectFit: 'contain',
+                            marginBottom: '2px',
+                            display: 'block',
+                            marginLeft: 'auto',
+                            marginRight: 'auto',
+                          }}
+                        />
+                      )}
 
                       {showShopName && shopName && (
                         <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', marginBottom: '2px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -1092,6 +1092,7 @@ export function App() {
   const [settingsUpiId, setSettingsUpiId] = useState('');
   const [settingsPrefix, setSettingsPrefix] = useState('');
   const [settingsOwnerEmail, setSettingsOwnerEmail] = useState('');
+  const [settingsLogoUrl, setSettingsLogoUrl] = useState('');
   const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
 
   // Settings: WhatsApp Bill Sharing (Section 9.1)
@@ -1667,6 +1668,7 @@ export function App() {
     setSettingsUpiId(s.upiId || '');
     setSettingsPrefix(s.invoicePrefix || 'INV');
     setSettingsOwnerEmail(s.ownerEmail || '');
+    setSettingsLogoUrl(s.logoUrl || '');
     setSettingsWhatsAppEnabled(s.whatsappEnabled !== false);
     setSettingsWhatsAppDefaultLang(s.whatsappDefaultLang || 'en');
     setSettingsWhatsAppIncludeLink(Boolean(s.whatsappIncludeLink));
@@ -2505,6 +2507,7 @@ export function App() {
           upiId: settingsUpiId || null,
           invoicePrefix: settingsPrefix || 'INV',
           ownerEmail: settingsOwnerEmail || null,
+          logoUrl: settingsLogoUrl || null,
           whatsappEnabled: settingsWhatsAppEnabled,
           whatsappDefaultLang: settingsWhatsAppDefaultLang,
           whatsappIncludeLink: settingsWhatsAppIncludeLink,
@@ -12128,6 +12131,106 @@ export function App() {
                   )}
 
                   <form onSubmit={handleSaveSettings}>
+                    {/* Store Brand Logo */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1.25rem',
+                        padding: '1rem 1.25rem',
+                        marginBottom: '1.25rem',
+                        background: '#f8fafc',
+                        borderRadius: '12px',
+                        border: '1px dashed #cbd5e1',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '74px',
+                          height: '74px',
+                          borderRadius: '10px',
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+                        }}
+                      >
+                        {settingsLogoUrl ? (
+                          <img
+                            src={settingsLogoUrl}
+                            alt="Store Logo"
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <StoreIcon size={34} style={{ color: '#94a3b8' }} />
+                        )}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.94rem', color: '#1e293b', marginBottom: '0.2rem' }}>
+                          Store / Shop Logo
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.6rem' }}>
+                          Upload your store brand logo. It will appear on printed barcode price stickers and receipt labels. Recommended: PNG or JPEG under 500 KB.
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <label
+                            className="btn btn-outline"
+                            style={{
+                              padding: '0.35rem 0.85rem',
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              margin: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                            }}
+                          >
+                            <span>📷 Choose Logo Image</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 500 * 1024) {
+                                  alert('Image size exceeds 500 KB. Please upload a smaller image.');
+                                  return;
+                                }
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  if (typeof reader.result === 'string') {
+                                    setSettingsLogoUrl(reader.result);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }}
+                            />
+                          </label>
+                          {settingsLogoUrl && (
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{
+                                padding: '0.35rem 0.8rem',
+                                fontSize: '0.82rem',
+                                background: '#fee2e2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                              }}
+                              onClick={() => setSettingsLogoUrl('')}
+                            >
+                              ✕ Remove Logo
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="form-group">
                         <label className="form-label">Store / Enterprise Name</label>
@@ -14279,6 +14382,7 @@ export function App() {
             isOpen={showPrintBarcodeModal}
             item={printBarcodeItem}
             shopName={shop?.name}
+            shopLogoUrl={shop?.logoUrl}
             onClose={() => {
               setShowPrintBarcodeModal(false);
               setPrintBarcodeItem(null);
@@ -14292,6 +14396,7 @@ export function App() {
             isOpen={showBulkBarcodeModal}
             items={items}
             shopName={shop?.name}
+            shopLogoUrl={shop?.logoUrl}
             onClose={() => setShowBulkBarcodeModal(false)}
           />
         )}

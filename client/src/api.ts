@@ -245,6 +245,7 @@ export interface Shop {
   loyaltyPointValueMinor?: number;
   loyaltyMinPointsRedeem?: number;
   ownerEmail?: string | null;
+  logoUrl?: string | null;
 }
 
 export interface DemoBusiness {

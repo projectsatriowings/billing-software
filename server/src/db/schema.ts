@@ -26,6 +26,7 @@ export const MIGRATIONS: Migration[] = [
         loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10,
         loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10,
         owner_email TEXT,
+        logo_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE TABLE users (
@@ -1504,6 +1505,12 @@ version: 29,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_sched_reports_tenant ON scheduled_sales_reports (tenant_id)`,
+    ],
+  },
+  {
+    version: 59,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT`,
     ],
   },
 ];
