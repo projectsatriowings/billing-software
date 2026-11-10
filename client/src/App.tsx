@@ -6961,6 +6961,7 @@ export function App() {
                     {displayTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
                     {displayTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
                     {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
+                    {displayTab === 'gst-filing-history' && 'GST Returns & Audit Filing History'}
                   </h1>
                   <span className="content-page-subtitle">
                     {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
@@ -6983,6 +6984,7 @@ export function App() {
                     {displayTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
                     {displayTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
                     {displayTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                    {displayTab === 'gst-filing-history' && 'Historical archive of submitted GSTR-1, GSTR-3B summaries, ARN receipts, and tax review logs'}
                   </span>
                 </div>
 
