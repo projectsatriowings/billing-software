@@ -569,6 +569,11 @@ export interface DashboardReport {
     todaySalesTotalMinor: number;
     todayCollectionsMinor: number;
     openShiftsCount: number;
+    allTimeSalesCount?: number;
+    allTimeSalesTotalMinor?: number;
+    allTimeGstMinor?: number;
+    allTimeReturnsCount?: number;
+    allTimeReturnsTotalMinor?: number;
   }[];
   shiftsSummary?: {
     openShiftsCount: number;
