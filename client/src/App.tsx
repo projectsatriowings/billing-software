@@ -6476,7 +6476,7 @@ export function App() {
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'payments' || activeTab === 'payables' ? 'active' : ''}`}
                         onClick={() => setActiveTab('payments')}
                       >
                         <span className="nav-icon">
@@ -6485,7 +6485,7 @@ export function App() {
                             <line x1="1" y1="10" x2="23" y2="10" />
                           </svg>
                         </span>
-                        <span className="nav-text">Payments</span>
+                        <span className="nav-text">Payments &amp; Payables</span>
                       </button>
 
                       <button
@@ -6520,36 +6520,6 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Cash &amp; Bank</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('payables')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
-                            <polyline points="17 18 23 18 23 12" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Payables</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('reports')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                            <line x1="2" y1="20" x2="22" y2="20" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Financial Reports</span>
                       </button>
                     </div>
                   )}
@@ -6605,23 +6575,7 @@ export function App() {
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-sales-register')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                            <line x1="8" y1="11" x2="16" y2="11" />
-                            <line x1="8" y1="15" x2="16" y2="15" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Sales Register</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'gst-gstr1' || activeTab === 'gst-sales-register' ? 'active' : ''}`}
                         onClick={() => setActiveTab('gst-gstr1')}
                       >
                         <span className="nav-icon">
@@ -6632,27 +6586,12 @@ export function App() {
                             <line x1="16" y1="17" x2="8" y2="17" />
                           </svg>
                         </span>
-                        <span className="nav-text">GSTR-1</span>
+                        <span className="nav-text">GSTR-1 (Sales Register)</span>
                       </button>
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-purchase-register')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="21 8 21 21 3 21 3 8" />
-                            <rect x="1" y="3" width="22" height="5" rx="1" />
-                            <line x1="10" y1="12" x2="14" y2="12" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Purchase Register</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' || activeTab === 'gst-purchase-register' ? 'active' : ''}`}
                         onClick={() => setActiveTab('gst-itc-reconciliation')}
                       >
                         <span className="nav-icon">
@@ -6664,7 +6603,7 @@ export function App() {
                             <path d="M3 7h18" />
                           </svg>
                         </span>
-                        <span className="nav-text">ITC Register &amp; Reconciliation</span>
+                        <span className="nav-text">ITC Register &amp; 2B Recon</span>
                       </button>
 
                       <button
@@ -6680,36 +6619,6 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">GSTR-3B Preparation</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-import-export')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="17 1 21 5 17 9" />
-                            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                            <polyline points="7 23 3 19 7 15" />
-                            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Import &amp; Export</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-filing-history')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Filing History</span>
                       </button>
                     </div>
                   )}
