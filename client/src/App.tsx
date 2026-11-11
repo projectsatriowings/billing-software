@@ -48,6 +48,7 @@ import {
   type PaymentAttempt,
   getActiveBranchScope,
   setActiveBranchScope,
+  selectActiveShiftCounter,
 } from './api';
 import { BranchProvider } from './contexts/BranchContext';
 import { moneyInWords } from '../../shared/money.ts';
@@ -137,7 +138,6 @@ import {
   ShoppingCartIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
-import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { BranchSelector } from './components/common/BranchSelector';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
@@ -249,7 +249,6 @@ export const PAGE_TITLES: Record<string, string> = {
 };
 
 export const TAB_PAGE_TITLES: Record<string, string> = {
-  'shifts': 'Cashier Shifts & Day-End Closing',
   'inventory': 'Inventory Hub',
   'items': 'Product Catalogue',
   'categories': 'Category Management',
@@ -551,7 +550,6 @@ export function App() {
   const [activeTab, setActiveTab] = useState<
     | 'dashboard'
     | 'pos'
-    | 'shifts'
     | 'items'
     | 'categories'
     | 'inventory'
@@ -1005,6 +1003,13 @@ export function App() {
       return '';
     }
   });
+  const [selectedCounterId, setSelectedCounterId] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('pos_selected_counter_id') || localStorage.getItem('pos_selected_counter_id') || '';
+    } catch {
+      return '';
+    }
+  });
   const [showCounterModal, setShowCounterModal] = useState<boolean>(false);
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -1062,6 +1067,51 @@ export function App() {
       } catch { }
     }
   }, [activeTab]);
+
+  // Synchronize and validate cashier counter selection with active branch counters
+  useEffect(() => {
+    if (!activeBranch || !activeBranch.counterDetails || activeBranch.counterDetails.length === 0) return;
+    const activeList = activeBranch.counterDetails.filter((c: any) => c.status !== 'DISABLED');
+    if (activeList.length === 0) return;
+
+    if (selectedCounterId) {
+      const match = activeList.find((c: any) => c.id === selectedCounterId);
+      if (!match) {
+        // Counter ID does not belong to active branch (e.g. branch switched or deleted) -> reset
+        setSelectedCounterId('');
+        setSelectedCounter('');
+        try {
+          sessionStorage.removeItem('pos_selected_counter_id');
+          sessionStorage.removeItem('pos_selected_counter');
+          sessionStorage.removeItem('pos_selected_counter_name');
+          localStorage.removeItem('pos_selected_counter_id');
+          localStorage.removeItem('pos_selected_counter');
+          localStorage.removeItem('pos_selected_counter_name');
+        } catch { }
+        if (user?.role === 'cashier') {
+          setShowCounterModal(true);
+        }
+      } else if (match.code !== selectedCounter) {
+        setSelectedCounter(match.code);
+        try {
+          sessionStorage.setItem('pos_selected_counter', match.code);
+          localStorage.setItem('pos_selected_counter', match.code);
+        } catch { }
+      }
+    } else if (selectedCounter) {
+      const match = activeList.find((c: any) => c.code.toUpperCase() === selectedCounter.toUpperCase() || c.name.toLowerCase() === selectedCounter.toLowerCase());
+      if (match) {
+        setSelectedCounterId(match.id);
+        setSelectedCounter(match.code);
+        try {
+          sessionStorage.setItem('pos_selected_counter_id', match.id);
+          sessionStorage.setItem('pos_selected_counter', match.code);
+          localStorage.setItem('pos_selected_counter_id', match.id);
+          localStorage.setItem('pos_selected_counter', match.code);
+        } catch { }
+      }
+    }
+  }, [activeBranch, selectedCounterId, selectedCounter, user?.role]);
 
   // Specialized Business Fields
   // Restaurant:
@@ -1598,7 +1648,7 @@ export function App() {
         if (res.user?.role === 'cashier') {
           setActiveTab('pos');
           try {
-            if (!sessionStorage.getItem('pos_selected_counter')) {
+            if (!sessionStorage.getItem('pos_selected_counter_id') && !localStorage.getItem('pos_selected_counter_id')) {
               setShowCounterModal(true);
             }
           } catch { }
@@ -2480,11 +2530,17 @@ export function App() {
     try {
       sessionStorage.removeItem('pos_selected_counter');
       localStorage.removeItem('pos_selected_counter');
+      sessionStorage.removeItem('pos_selected_counter_id');
+      localStorage.removeItem('pos_selected_counter_id');
+      sessionStorage.removeItem('pos_selected_counter_name');
+      localStorage.removeItem('pos_selected_counter_name');
       localStorage.removeItem('sa_selected_branch');
       localStorage.removeItem('selected_branch');
       sessionStorage.removeItem('sa_selected_branch');
       sessionStorage.removeItem('selected_branch');
     } catch { }
+    setSelectedCounter('');
+    setSelectedCounterId('');
     setUser(null);
     setShop(null);
     navigateTo('landing');
@@ -3667,6 +3723,25 @@ export function App() {
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
 
+    if (!selectedCounter) {
+      setShowCounterModal(true);
+      showToast('Please select a billing counter before proceeding with billing.', 'error');
+      return;
+    }
+
+    let checkoutCounterId = selectedCounterId;
+    if (activeBranch?.counterDetails && activeBranch.counterDetails.length > 0) {
+      const match = activeBranch.counterDetails.find(
+        (c) => (selectedCounterId ? c.id === selectedCounterId : (c.code === selectedCounter || c.name === selectedCounter)) && c.status === 'ACTIVE'
+      );
+      if (!match) {
+        setShowCounterModal(true);
+        showToast('Selected counter is disabled or does not belong to your branch. Please choose an active counter.', 'error');
+        return;
+      }
+      checkoutCounterId = match.id;
+    }
+
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
 
     setIsCheckingOut(true);
@@ -3769,7 +3844,8 @@ export function App() {
         body: JSON.stringify({
           lines,
           location: user?.assignedLocation || currentBranchCode || undefined,
-          counter: selectedCounter || 'Counter 1',
+          counter: selectedCounter,
+          counterId: checkoutCounterId || selectedCounterId || undefined,
           branchId: activeBranch?.id || user?.branchId || undefined,
           billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
           appliedPromotions: promoEvalResult?.appliedPromotions || [],
@@ -6129,35 +6205,7 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">POS Counter</span>
-
               </button>
-              {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
-              {user?.role === 'cashier' && (
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('shifts')}
-                  title="My Cashier Shift"
-                >
-                  <span className="nav-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-                      <circle cx="12" cy="12" r="2"></circle>
-                      <path d="M6 12h.01M18 12h.01"></path>
-                    </svg>
-                  </span>
-                  <span className="nav-text">My Cashier Shift</span>
-                  {activeShiftNumber ? (
-                    <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
-                      ● {activeShiftNumber}
-                    </span>
-                  ) : (
-                    <span className="nav-shift-badge closed">
-                      Closed
-                    </span>
-                  )}
-                </button>
-              )}
               {user.role !== 'cashier' && (
                 <button
                   type="button"
@@ -7058,11 +7106,10 @@ export function App() {
           {/* View Transition Stage (SPA Bento Transition) */}
           <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
             {/* Other Tab Headers */}
-            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && displayTab !== 'shifts' && (
+            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
               <header className="content-top-header">
                 <div className="content-header-left">
                   <h1 className="content-page-title">
-                    {displayTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
                     {displayTab === 'items' && 'Product & Stock Catalog'}
                     {displayTab === 'purchases' && 'Purchases & Stock Inward'}
                     {displayTab === 'invoices' && 'Sales Invoices & Bills'}
@@ -7084,7 +7131,6 @@ export function App() {
                     {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
                   </h1>
                   <span className="content-page-subtitle">
-                    {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
                     {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
                     {displayTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                     {displayTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
@@ -7134,7 +7180,6 @@ export function App() {
                   selectedBranch={selectedBranchScope}
                   onBranchChange={handleGlobalBranchChange}
                   onNavigateToPos={() => setActiveTab('pos')}
-                  onNavigateToShifts={() => setActiveTab('shifts')}
                   onNavigateToInventory={() => setActiveTab('inventory')}
                   onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
                   onNavigateToPurchases={() => {
@@ -9590,32 +9635,6 @@ export function App() {
                   </div>
                   , document.body)}
 
-              </div>
-            )}
-
-            {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
-            {displayTab === 'shifts' && user && (
-              <div className="tab-content-wrapper" key={`shifts-${selectedBranchScope}`}>
-                {user.role === 'manager' ? (
-                  <StoreManagerDashboard
-                    user={user}
-                    shop={shop}
-                    onNavigate={(tab) => {
-                      if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
-                        setShowInventoryDropdown(true);
-                      }
-                      setActiveTab(tab as any);
-                    }}
-                  />
-                ) : (
-                  <ShiftsDashboard
-                    user={user}
-                    shop={shop}
-                    selectedBranch={selectedBranchScope}
-                    branches={branches}
-                    onNavigateToPos={() => setActiveTab('pos')}
-                  />
-                )}
               </div>
             )}
 
@@ -14105,10 +14124,12 @@ export function App() {
             existingItems={items}
             branchId={activeBranch?.id || (selectedBranchScope !== 'all' ? selectedBranchScope : undefined)}
             shopName={shop?.name}
+            suppliers={parties.filter((p) => p.type === 'supplier')}
             onClose={() => setShowBulkImportModal(false)}
             onImportDone={() => {
               loadItems();
               loadCategories();
+              loadParties();
               showToast('Bulk import completed! Products updated.');
             }}
           />
@@ -15421,7 +15442,9 @@ export function App() {
             userRole={user.role}
             defaultLocation={currentBranchCode}
             defaultCounter={selectedCounter || 'Counter 1'}
+            defaultCounterId={selectedCounterId}
             branches={branches}
+            counterDetails={activeBranch?.counterDetails}
           />
         )}
 
@@ -15430,19 +15453,30 @@ export function App() {
           <SelectCounterModal
             isOpen={showCounterModal}
             onClose={() => setShowCounterModal(false)}
-            onSelectCounter={(counterCode, counterName) => {
+            onSelectCounter={(counterCode, counterName, counterId) => {
               setSelectedCounter(counterCode);
+              if (counterId) setSelectedCounterId(counterId);
               try {
                 sessionStorage.setItem('pos_selected_counter', counterCode);
                 localStorage.setItem('pos_selected_counter', counterCode);
+                if (counterId) {
+                  sessionStorage.setItem('pos_selected_counter_id', counterId);
+                  localStorage.setItem('pos_selected_counter_id', counterId);
+                }
                 if (counterName) {
                   sessionStorage.setItem('pos_selected_counter_name', counterName);
                   localStorage.setItem('pos_selected_counter_name', counterName);
                 }
               } catch { }
               showToast(`Billing Counter set to ${counterName || counterCode} (${counterCode})`);
+              selectActiveShiftCounter({
+                counterId,
+                counter: counterCode,
+                branchId: activeBranch?.id || user?.branchId || undefined,
+              }).catch(() => {});
             }}
             currentCounter={selectedCounter || activeBranch?.counters?.[0] || 'MAIN-C01'}
+            currentCounterId={selectedCounterId}
             branchName={currentBranchName}
             branchCode={currentBranchCode}
             cashierName={user.name || 'Cashier'}

@@ -263,12 +263,53 @@ export function registerShifts(r: Router) {
     const openingCashMinor = V.int(b.openingCashMinor ?? 0, 'Opening cash float (paise)', { min: 0 });
     let location = V.optStr(b.location, 'Location', 50) || ctx.user!.assignedLocation || 'MAIN';
     let counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
+    const inputCounterId = V.optStr(b.counterId ?? b.counter_id, 'counterId', 50);
     const notes = V.optStr(b.notes, 'Opening notes', 500);
 
     // If client mistakenly sends a counter identifier as location (e.g. "COUNTER-2"), normalize location back to user's branch
     if (/^counter[_\-\s]*\d+$/i.test(location) || /^express$/i.test(location)) {
       counter = location.replace(/\s+/g, '-').toUpperCase();
       location = ctx.user!.assignedLocation || 'MAIN';
+    }
+
+    let resolvedCounterId: string | null = null;
+    let resolvedCounterCode: string = counter;
+    let resolvedCounterName: string = counter;
+
+    let counterRow: any = null;
+    if (inputCounterId) {
+      counterRow = await ctx.db.one<any>(
+        'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND id = ?',
+        [tenantId, branchId, inputCounterId],
+      );
+    }
+    if (!counterRow && counter) {
+      counterRow = await ctx.db.one<any>(
+        'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND (upper(code) = upper(?) OR lower(name) = lower(?))',
+        [tenantId, branchId, counter, counter],
+      );
+    }
+
+    if (counterRow) {
+      if (counterRow.status === 'DISABLED') {
+        throw bad(`Billing counter "${counterRow.name}" is currently disabled. Please select an active counter.`, 'COUNTER_DISABLED');
+      }
+      resolvedCounterId = counterRow.id;
+      resolvedCounterCode = counterRow.code;
+      resolvedCounterName = counterRow.name;
+    } else {
+      const branchCounters = await ctx.db.query<any>(
+        "SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND status = 'ACTIVE' ORDER BY code ASC",
+        [tenantId, branchId],
+      );
+      if (branchCounters.length > 0) {
+        if (inputCounterId || (counter && counter !== 'COUNTER-1')) {
+          throw bad(`Billing counter "${counter || inputCounterId}" does not belong to this branch.`, 'INVALID_COUNTER');
+        }
+        resolvedCounterId = branchCounters[0].id;
+        resolvedCounterCode = branchCounters[0].code;
+        resolvedCounterName = branchCounters[0].name;
+      }
     }
 
     return ctx.db.tx(async (q) => {
@@ -302,9 +343,9 @@ export function registerShifts(r: Router) {
       await q.exec(
         `INSERT INTO shifts (
           id, tenant_id, branch_id, shift_number, user_id, status,
-          opened_at, opening_cash_minor, location, counter, note,
+          opened_at, opening_cash_minor, location, counter, counter_id, counter_name_snapshot, note,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           shiftId,
           tenantId,
@@ -314,7 +355,9 @@ export function registerShifts(r: Router) {
           now,
           openingCashMinor,
           location,
-          counter,
+          resolvedCounterCode,
+          resolvedCounterId,
+          resolvedCounterName,
           notes || null,
           now,
           now,
@@ -325,7 +368,7 @@ export function registerShifts(r: Router) {
         action: 'shift.open',
         entity: 'shift',
         entityId: shiftId,
-        detail: { shiftNumber, openingCashMinor, location, counter },
+        detail: { shiftNumber, openingCashMinor, location, counter: resolvedCounterCode, counterId: resolvedCounterId },
       });
 
       return {
@@ -336,7 +379,9 @@ export function registerShifts(r: Router) {
           userId,
           userName: ctx.user!.name,
           location,
-          counter,
+          counter: resolvedCounterCode,
+          counterId: resolvedCounterId,
+          counterNameSnapshot: resolvedCounterName,
           status: 'open',
           openedAt: now,
           openingCashMinor,
@@ -401,6 +446,8 @@ export function registerShifts(r: Router) {
         userRole: shift.userRole ?? shift.user_role,
         location: shift.location || 'MAIN',
         counter: shift.counter || 'COUNTER-1',
+        counterId: shift.counterId ?? shift.counter_id ?? null,
+        counterNameSnapshot: shift.counterNameSnapshot ?? shift.counter_name_snapshot ?? null,
         status: shift.status,
         openedAt: shift.openedAt ?? shift.opened_at,
         openingCashMinor: Number(shift.openingCashMinor ?? shift.opening_cash_minor ?? 0),
@@ -410,6 +457,67 @@ export function registerShifts(r: Router) {
       },
     };
   });
+
+  // Select or switch active counter for current cashier session
+  const handleSelectCounter = async (ctx: any) => {
+    const b = ctx.body ?? {};
+    const tenantId = ctx.user!.tenantId;
+    const userId = ctx.user!.id;
+    const inputCounterId = V.optStr(b.counterId ?? b.counter_id, 'counterId', 50);
+    const inputCounter = V.optStr(b.counter, 'counter', 50);
+    if (!inputCounterId && !inputCounter) {
+      throw bad('Counter is required', 'COUNTER_REQUIRED');
+    }
+
+    const scope = await resolveBranchScope(ctx);
+    const activeShift: any = await ctx.db.one(
+      "SELECT id, branch_id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' ORDER BY opened_at DESC LIMIT 1",
+      [tenantId, userId],
+    );
+
+    const branchId = V.optStr(b.branchId ?? b.branch_id, 'branchId') || (activeShift?.branchId ?? activeShift?.branch_id ?? scope.branchId);
+    if (!branchId) {
+      throw bad('Branch is required to select counter', 'BRANCH_REQUIRED');
+    }
+
+    let counterRow: any = null;
+    if (inputCounterId) {
+      counterRow = await ctx.db.one(
+        'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND id = ?',
+        [tenantId, branchId, inputCounterId],
+      );
+    }
+    if (!counterRow && inputCounter) {
+      counterRow = await ctx.db.one(
+        'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND (upper(code) = upper(?) OR lower(name) = lower(?))',
+        [tenantId, branchId, inputCounter, inputCounter],
+      );
+    }
+
+    if (!counterRow) {
+      throw bad(`Billing counter not found in this branch`, 'INVALID_COUNTER');
+    }
+    if (counterRow.status === 'DISABLED') {
+      throw bad(`Billing counter "${counterRow.name}" is currently disabled. Please select an active counter.`, 'COUNTER_DISABLED');
+    }
+
+    if (activeShift) {
+      await ctx.db.exec(
+        'UPDATE shifts SET counter_id = ?, counter = ?, counter_name_snapshot = ?, updated_at = now() WHERE id = ?',
+        [counterRow.id, counterRow.code, counterRow.name, activeShift.id],
+      );
+    }
+
+    return {
+      ok: true,
+      counterId: counterRow.id,
+      counter: counterRow.code,
+      counterName: counterRow.name,
+    };
+  };
+
+  r.post('/api/shifts/counter', requirePerm('shift'), handleSelectCounter);
+  r.post('/api/shifts/active/counter', requirePerm('shift'), handleSelectCounter);
 
   // 3. List shifts history
   r.get('/api/shifts', requirePerm('shift'), async (ctx) => {

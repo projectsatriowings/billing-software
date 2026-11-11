@@ -676,6 +676,8 @@ export interface Shift {
   userRole?: Role;
   location: string;
   counter?: string | null;
+  counterId?: string | null;
+  counterNameSnapshot?: string | null;
   status: ShiftStatus;
   openedAt: string;
   closedAt?: string | null;

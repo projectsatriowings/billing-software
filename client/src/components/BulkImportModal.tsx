@@ -26,6 +26,7 @@ import {
   type BulkImportResult,
   type Category,
   type Item,
+  type Party,
 } from '../api';
 import {
   generateShortSku,
@@ -279,6 +280,21 @@ const LayersIcon = ({ size = 14, color = 'currentColor' }: { size?: number; colo
   </svg>
 );
 
+const TruckIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <rect x="1" y="3" width="15" height="13" />
+    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+    <circle cx="5.5" cy="18.5" r="2.5" />
+    <circle cx="18.5" cy="18.5" r="2.5" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ size = 12, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
 // ── GST rate options ──────────────────────────────────────────────────────────
 export const GST_RATE_OPTIONS = [
   { bp: 0,    label: '0%',    value: '0' },
@@ -345,7 +361,7 @@ export type RowFilter = 'all' | 'new' | 'restock' | 'ambiguous' | 'duplicate' | 
 export type RowStatus = 'NEW_PRODUCT' | 'RESTOCK' | 'AMBIGUOUS' | 'DUPLICATE' | 'ERROR';
 
 export interface RowErrorItem {
-  field?: 'name' | 'sellingPrice' | 'costPrice' | 'gstRate' | 'unit' | 'sku' | 'openingStock' | 'category' | 'barcode';
+  field?: 'name' | 'sellingPrice' | 'costPrice' | 'gstRate' | 'unit' | 'sku' | 'openingStock' | 'category' | 'barcode' | 'reorderLevel';
   message: string;
   isDuplicate?: boolean;
 }
@@ -376,6 +392,8 @@ export interface GridRow {
   gstRate: string; // e.g. "5%", "12%"
   taxInclusive: boolean;
   openingStock: string;
+  reorderLevel: string;
+  reorderLevelModified?: boolean;
 
   // Matching & restock state
   status: RowStatus;
@@ -393,6 +411,7 @@ interface Props {
   existingItems?: Item[];
   shopName?: string;
   branchId?: string | null;
+  suppliers?: Party[];
   onClose: () => void;
   onImportDone: () => void;
 }
@@ -452,7 +471,7 @@ export function downloadExcelTemplate(): void {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function BulkImportModal({ categories, existingItems = [], shopName, branchId, onClose, onImportDone }: Props) {
+export function BulkImportModal({ categories, existingItems = [], shopName, branchId, suppliers, onClose, onImportDone }: Props) {
   const [step, setStep] = useState<WizardStep>('choose');
   const [importSource, setImportSource] = useState<string>('Uploaded File');
   const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'manual'>('upload');
@@ -461,6 +480,79 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
   const [parseError, setParseError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Global Supplier Selection State ─────────────────────────────────────────
+  const [suppliersList, setSuppliersList] = useState<Party[]>(suppliers || []);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [supplierSearchText, setSupplierSearchText] = useState('');
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+  const [supplierDropDirection, setSupplierDropDirection] = useState<'down' | 'up'>('down');
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isSupplierDropdownOpen && supplierDropdownRef.current) {
+      const rect = supplierDropdownRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      if (spaceBelow < 290 && spaceAbove > spaceBelow) {
+        setSupplierDropDirection('up');
+      } else {
+        setSupplierDropDirection('down');
+      }
+    }
+  }, [isSupplierDropdownOpen]);
+
+  const loadSuppliers = useCallback(async () => {
+    setLoadingSuppliers(true);
+    try {
+      const res = await api<{ parties: Party[] }>('/api/parties?type=supplier');
+      if (res && Array.isArray(res.parties)) {
+        const activeSuppliers = res.parties.filter((p) => p.type === 'supplier' && p.active !== false);
+        setSuppliersList(activeSuppliers);
+        if (activeSuppliers.length === 1 && !selectedSupplierId) {
+          setSelectedSupplierId(activeSuppliers[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load suppliers:', err);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  }, [selectedSupplierId]);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target as Node)) {
+        setIsSupplierDropdownOpen(false);
+      }
+    };
+    if (isSupplierDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSupplierDropdownOpen]);
+
+  const selectedSupplier = useMemo(() => {
+    return suppliersList.find((s) => s.id === selectedSupplierId) || null;
+  }, [suppliersList, selectedSupplierId]);
+
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearchText.trim()) return suppliersList;
+    const q = supplierSearchText.toLowerCase().trim();
+    return suppliersList.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.phone && s.phone.includes(q)) ||
+        (s.gstin && s.gstin.toLowerCase().includes(q)),
+    );
+  }, [suppliersList, supplierSearchText]);
 
   // Determine active branch scope for collision avoidance and barcode isolation
   const activeBranchId = useMemo(() => {
@@ -485,6 +577,36 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
 
   // Global preference: update prices on restock
   const [globalUpdatePrices, setGlobalUpdatePrices] = useState(true);
+
+  // Global preference: reorder level (default 20)
+  const [globalReorderLevel, setGlobalReorderLevel] = useState<string>('20');
+
+  // Selected rows for reorder level application
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
+
+  const showToast = useCallback((t: { type: 'success' | 'error'; message: string }) => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
+    setToast(t);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimeoutRef.current = null;
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Rows and filter
   const [rawRows, setRawRows] = useState<Omit<GridRow, 'status' | 'errors'>[]>([]);
@@ -536,6 +658,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
       hsn: it.hsn || null,
       packSize: extractPackSize(it.name)?.raw || it.unit,
       imageUrl: it.imageUrl || (it as any).image || null,
+      reorderMilli: it.reorderMilli ?? it.reorderLevelMilli ?? (it as any).reorder_milli ?? null,
     }));
   }, [branchScopedItems]);
 
@@ -684,6 +807,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
         }
       }
 
+      // Validate Reorder Level
+      const reorderTrim = (r.reorderLevel ?? '').trim();
+      if (reorderTrim) {
+        const reorderVal = parseFloat(reorderTrim);
+        if (!Number.isFinite(reorderVal) || reorderVal < 0) {
+          errors.push({ field: 'reorderLevel', message: 'Reorder level must be a non-negative number' });
+        }
+      }
+
       // 5. Validate GST Rate
       const gstTrim = r.gstRate.trim();
       const gstBp = parseGstToBp(gstTrim);
@@ -815,6 +947,29 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
     return validatedRows;
   }, [filter, validatedRows, newRows, restockRows, ambiguousRows, duplicateRows, errorRows]);
 
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((r) => selectedRowIds.has(r._id));
+  const someVisibleSelected = visibleRows.some((r) => selectedRowIds.has(r._id)) && !allVisibleSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedRowIds((prev) => {
+        const next = new Set(prev);
+        for (const r of visibleRows) {
+          next.delete(r._id);
+        }
+        return next;
+      });
+    } else {
+      setSelectedRowIds((prev) => {
+        const next = new Set(prev);
+        for (const r of visibleRows) {
+          next.add(r._id);
+        }
+        return next;
+      });
+    }
+  };
+
   // ── Ingesting Supplier Table Data (CSV or Excel) ───────────────────────────
 
   const ingestSupplierData = (lines: string[][], sourceLabel: string) => {
@@ -847,6 +1002,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
     const iInclusive= findCol(['price inclusive of gst', 'price inclusive', 'inclusive', 'incl']);
     const iStock    = findCol(['opening stock', 'current stock', 'stock', 'qty', 'quantity']);
     const iBarcode  = findCol(['barcode', 'ean', 'upc', 'gtin', 'bar code']);
+    const iReorder  = findCol(['reorder level', 'reorder qty', 'reorder quantity', 'reorder', 'min stock', 'minimum stock']);
     const iImage    = findCol([
       'drive link',
       'drive_link',
@@ -879,7 +1035,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
     };
 
     const parsed: Omit<GridRow, 'status' | 'errors'>[] = [];
-    let startRow = 2;
+    let startRow = 1;
     const seenImportSkus = new Set<string>();
 
     for (let li = 0; li < dataLines.length; li++) {
@@ -894,6 +1050,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
       const gst      = getVal(parts, iGst, 5);
       const incl     = getVal(parts, iInclusive, 6);
       const stock    = getVal(parts, iStock, 7);
+      const reorderRaw = getVal(parts, iReorder, -1);
       // Extract image URL: check iImage header first, or inspect all row cells for a web/Drive link
       let imageRaw = getVal(parts, iImage, -1);
       if (!imageRaw) {
@@ -994,6 +1151,18 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
 
       const natureInfo = classifyProductNature(name, catalogCandidates);
 
+      let initialReorder = globalReorderLevel || '20';
+      let initialReorderModified = false;
+      if (reorderRaw && !isNaN(parseFloat(reorderRaw)) && parseFloat(reorderRaw) >= 0) {
+        initialReorder = String(parseFloat(reorderRaw));
+        initialReorderModified = true;
+      } else if (matchResult.classification === 'RESTOCK' && matchResult.matchedItem) {
+        initialReorder = matchResult.matchedItem.reorderMilli != null
+          ? String(Math.round(matchResult.matchedItem.reorderMilli / 1000 * 100) / 100)
+          : '0';
+        initialReorderModified = false;
+      }
+
       parsed.push({
         _id: nextId.current++,
         rowNum: startRow++,
@@ -1018,6 +1187,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
         gstRate: gst || (matchedItem ? `${matchedItem.taxRateBp / 100}%` : '5%'),
         taxInclusive,
         openingStock: stock || '0',
+        reorderLevel: initialReorder,
+        reorderLevelModified: initialReorderModified,
         matchedItem,
         candidates: matchResult.candidates,
         resolution,
@@ -1031,6 +1202,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
     }
 
     setRawRows(parsed);
+    setSelectedRowIds(new Set());
     setBarcodeValidationActive(false);
     setImportSource(sourceLabel);
     setParseError('');
@@ -1114,7 +1286,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
 
       return {
         _id: nextId.current++,
-        rowNum: i + 2,
+        rowNum: i + 1,
         name,
         sku,
         isSkuManuallyEdited: false,
@@ -1136,6 +1308,8 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
         gstRate: '5%',
         taxInclusive: true,
         openingStock: '20',
+        reorderLevel: globalReorderLevel || '20',
+        reorderLevelModified: false,
         matchedItem: matchResult.matchedItem,
         candidates: matchResult.candidates,
         updatePrices: true,
@@ -1143,6 +1317,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
     });
 
     setRawRows(blanks);
+    setSelectedRowIds(new Set());
     setBarcodeValidationActive(false);
     setImportSource('Manual entry');
     setFilter('all');
@@ -1156,6 +1331,9 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
       prev.map((r) => {
         if (r._id !== id) return r;
         const updated = { ...r, [field]: val };
+        if (field === 'reorderLevel') {
+          updated.reorderLevelModified = true;
+        }
         if (field === 'sku') {
           updated.isSkuManuallyEdited = true;
         }
@@ -1261,6 +1439,10 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
           .filter((b) => b.barcode && b.barcode.trim() !== finalBc.trim())
           .map((b) => ({ barcode: b.barcode.trim(), barcodeType: b.barcodeType }));
 
+        const candReorder = candidate.reorderMilli != null
+          ? String(Math.round(candidate.reorderMilli / 1000 * 100) / 100)
+          : r.reorderLevel;
+
         return {
           ...r,
           resolution: 'LINK' as const,
@@ -1273,6 +1455,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
           category: candidateCatName,
           categoryId: candidateCat ? candidateCat.id : r.categoryId,
           unit: candidate.unit || r.unit,
+          reorderLevel: r.reorderLevelModified ? r.reorderLevel : candReorder,
         };
       })
     );
@@ -1340,10 +1523,15 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
 
   const removeRow = (id: number) => {
     setRawRows((prev) => prev.filter((r) => r._id !== id));
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   const addEmptyRow = () => {
-    const maxRowNum = rawRows.reduce((max, r) => Math.max(max, r.rowNum), 1);
+    const maxRowNum = rawRows.reduce((max, r) => Math.max(max, r.rowNum), 0);
     setRawRows((prev) => [
       ...prev,
       {
@@ -1369,11 +1557,55 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
         gstRate: '5%',
         taxInclusive: true,
         openingStock: '0',
+        reorderLevel: globalReorderLevel || '20',
+        reorderLevelModified: false,
         matchedItem: null,
         candidates: [],
         updatePrices: globalUpdatePrices,
       },
     ]);
+  };
+
+  const handleApplySelectedReorder = () => {
+    if (selectedRowIds.size === 0) {
+      showToast({
+        type: 'error',
+        message: 'Please select at least one product using the checkboxes.',
+      });
+      return;
+    }
+    const val = (globalReorderLevel || '').trim();
+    if (!val) {
+      showToast({
+        type: 'error',
+        message: 'Please enter a reorder level before applying.',
+      });
+      return;
+    }
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0) {
+      showToast({
+        type: 'error',
+        message: 'Reorder level must be a valid non-negative number.',
+      });
+      return;
+    }
+    const count = selectedRowIds.size;
+    const strVal = String(num);
+    setRawRows((prev) =>
+      prev.map((r) => {
+        if (!selectedRowIds.has(r._id)) return r;
+        return {
+          ...r,
+          reorderLevel: strVal,
+          reorderLevelModified: true,
+        };
+      })
+    );
+    showToast({
+      type: 'success',
+      message: `Reorder level applied successfully to ${count} selected product${count !== 1 ? 's' : ''}.`,
+    });
   };
 
   const toggleRowProductNature = (rowId: number) => {
@@ -1582,17 +1814,33 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
   const removeAllErrors = () => {
     const errIds = new Set(errorRows.map((r) => r._id));
     setRawRows((prev) => prev.filter((r) => !errIds.has(r._id)));
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      errIds.forEach((id) => next.delete(id));
+      return next;
+    });
   };
 
   const removeAllDuplicates = () => {
     const dupIds = new Set(duplicateRows.map((r) => r._id));
     setRawRows((prev) => prev.filter((r) => !dupIds.has(r._id)));
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      dupIds.forEach((id) => next.delete(id));
+      return next;
+    });
   };
 
   // ── Execute Import Submission ──────────────────────────────────────────────
 
   const handleExecuteImport = async () => {
     if (eligibleRows.length === 0) return;
+    if (!selectedSupplierId) {
+      setApiError('Please select a Supplier before proceeding to import.');
+      setStep('review');
+      setIsSupplierDropdownOpen(true);
+      return;
+    }
     const pendingBarcodes = eligibleRows.filter((r) => !r.matchedItem && (!r.barcode || !r.barcode.trim()));
     if (pendingBarcodes.length > 0) {
       setBarcodeValidationActive(true);
@@ -1628,6 +1876,16 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
           }
         }
 
+        let reorderMilli: number | null = null;
+        const rReorderTrim = (r.reorderLevel ?? '').trim();
+        if (rReorderTrim !== '' && !isNaN(Number(rReorderTrim))) {
+          reorderMilli = Math.max(0, Math.round(parseFloat(rReorderTrim) * 1000));
+        } else if (isRestock && r.matchedItem && !r.reorderLevelModified) {
+          reorderMilli = r.matchedItem.reorderMilli ?? null;
+        } else {
+          reorderMilli = 0;
+        }
+
         return {
           name: r.name.trim(),
           sku: r.sku.trim() || null,
@@ -1645,13 +1903,14 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
           taxRateBp,
           taxInclusive: r.taxInclusive,
           openingQtyMilli: stock,
+          reorderMilli,
           isRestock,
           matchedItemId: isRestock && r.matchedItem ? r.matchedItem.id : null,
           updatePrices: r.updatePrices,
         };
       });
 
-      const res = await bulkImportItems(payloadRows, importBatchId.current, activeBranchId);
+      const res = await bulkImportItems(payloadRows, importBatchId.current, activeBranchId, selectedSupplierId);
       setImportResult(res);
       setStep('results');
     } catch (err: any) {
@@ -1704,6 +1963,90 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
 
   return (
     <>
+      {/* Toast Notification Container (Top-Right of Screen) */}
+      {toast && (
+        <div
+          id="bulk-import-toast"
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: '1.25rem',
+            right: '1.25rem',
+            zIndex: 100000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.625rem',
+            padding: '0.75rem 1rem',
+            borderRadius: '0.625rem',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            backgroundColor: toast.type === 'success' ? '#f0fdf4' : '#fef2f2',
+            border: toast.type === 'success' ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+            color: toast.type === 'success' ? '#166534' : '#991b1b',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            animation: 'bulkToastIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+            maxWidth: '440px',
+            pointerEvents: 'auto',
+          }}
+        >
+          {toast.type === 'success' ? (
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                backgroundColor: '#dcfce7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <CheckCircleIcon size={18} color="#16a34a" />
+            </div>
+          ) : (
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: '50%',
+                backgroundColor: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <AlertCircleIcon size={18} color="#dc2626" />
+            </div>
+          )}
+          <span style={{ lineHeight: 1.4, flex: 1 }}>{toast.message}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="Close notification"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '2px',
+              marginLeft: '0.25rem',
+              cursor: 'pointer',
+              color: toast.type === 'success' ? '#16a34a' : '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 0.75,
+              transition: 'opacity 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.75')}
+          >
+            <CloseXIcon size={14} />
+          </button>
+        </div>
+      )}
+
       <div
         className="modal-overlay"
         style={{
@@ -1908,6 +2251,16 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
           <style>{`
             @keyframes bulkSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             .bulk-spin { animation: bulkSpin 0.9s linear infinite; }
+            @keyframes bulkToastIn {
+              from {
+                opacity: 0;
+                transform: translateY(-8px) scale(0.96);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+              }
+            }
             .bulk-table-input:focus {
               border-color: #6366f1 !important;
               box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18) !important;
@@ -2310,11 +2663,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0.55rem',
-                overflow: 'hidden',
+                overflow: 'visible',
               }}
             >
               {/* TOP SUMMARY FILTER BAR */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', flexShrink: 0, padding: '0.2rem 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', flexShrink: 0, padding: '0.2rem 0', position: 'relative', zIndex: 50 }}>
                 <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
                     id="bulk-filter-all"
@@ -2471,7 +2824,255 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                   )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.82rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                  {/* ── Global Supplier Selector ── */}
+                  <div ref={supplierDropdownRef} style={{ position: 'relative', display: 'inline-block', zIndex: isSupplierDropdownOpen ? 9999 : 'auto' }}>
+                    <button
+                      id="bulk-global-supplier-btn"
+                      type="button"
+                      onClick={() => setIsSupplierDropdownOpen(!isSupplierDropdownOpen)}
+                      style={{
+                        fontSize: '0.78rem',
+                        padding: '0.35rem 0.75rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        borderRadius: '8px',
+                        border: selectedSupplier
+                          ? '1.5px solid #10b981'
+                          : '1.5px solid #f59e0b',
+                        background: selectedSupplier ? '#f0fdf4' : '#fffbeb',
+                        color: selectedSupplier ? '#065f46' : '#92400e',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: selectedSupplier ? '0 1px 2px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(245, 158, 11, 0.2)',
+                      }}
+                      title={selectedSupplier ? `Selected Supplier: ${selectedSupplier.name}` : 'Supplier is mandatory for bulk product import'}
+                    >
+                      <TruckIcon size={14} color={selectedSupplier ? '#059669' : '#d97706'} />
+                      <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedSupplier ? (
+                          <span>Supplier: <strong>{selectedSupplier.name}</strong></span>
+                        ) : (
+                          <span>Select Supplier <strong style={{ color: '#dc2626' }}>*</strong></span>
+                        )}
+                      </span>
+                      <ChevronDownIcon size={12} color={selectedSupplier ? '#059669' : '#d97706'} />
+                    </button>
+
+                    {isSupplierDropdownOpen && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: supplierDropDirection === 'up' ? 'auto' : 'calc(100% + 4px)',
+                          bottom: supplierDropDirection === 'up' ? 'calc(100% + 4px)' : 'auto',
+                          zIndex: 9999,
+                          width: '320px',
+                          maxWidth: 'calc(100vw - 32px)',
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '10px',
+                          boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.2), 0 8px 12px -6px rgba(0, 0, 0, 0.12)',
+                          padding: '0.55rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.45rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0.35rem 0.35rem', borderBottom: '1px solid #f1f5f9' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Import Supplier <span style={{ color: '#dc2626' }}>*</span>
+                          </span>
+                          {selectedSupplier && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSupplierId('');
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#dc2626',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                padding: 0,
+                              }}
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            id="bulk-supplier-search-input"
+                            type="text"
+                            value={supplierSearchText}
+                            onChange={(e) => setSupplierSearchText(e.target.value)}
+                            placeholder="Search suppliers..."
+                            autoFocus
+                            style={{
+                              width: '100%',
+                              padding: '0.35rem 0.55rem',
+                              fontSize: '0.8rem',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              outline: 'none',
+                              background: '#f8fafc',
+                              boxSizing: 'border-box',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {loadingSuppliers ? (
+                            <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                              <RefreshCwIcon size={13} color="#6366f1" spinning />
+                              <span>Loading suppliers...</span>
+                            </div>
+                          ) : filteredSuppliers.length === 0 ? (
+                            <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.78rem', color: '#94a3b8' }}>
+                              {supplierSearchText.trim() ? 'No matching suppliers' : 'No active suppliers found in directory'}
+                            </div>
+                          ) : (
+                            filteredSuppliers.map((s) => {
+                              const isSelected = s.id === selectedSupplierId;
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSupplierId(s.id);
+                                    setIsSupplierDropdownOpen(false);
+                                    setSupplierSearchText('');
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '0.4rem 0.55rem',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: isSelected ? '#ecfdf5' : 'transparent',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'background 0.1s ease',
+                                    width: '100%',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: isSelected ? '#065f46' : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {s.name}
+                                    </div>
+                                    {(s.phone || s.gstin) && (
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '1px' }}>
+                                        {s.phone && <span>{s.phone}</span>}
+                                        {s.phone && s.gstin && <span> • </span>}
+                                        {s.gstin && <span>GST: {s.gstin}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {isSelected && <CheckIcon size={14} color="#059669" />}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Global Reorder Level Control ── */}
+                  <div
+                    id="bulk-global-reorder-container"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      background: '#f8fafc',
+                      padding: '0.22rem 0.55rem',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>
+                      Global Reorder Level:
+                    </span>
+                    <input
+                      id="bulk-global-reorder-input"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={globalReorderLevel}
+                      onChange={(e) => setGlobalReorderLevel(e.target.value)}
+                      placeholder="20"
+                      style={{
+                        width: '56px',
+                        padding: '0.2rem 0.35rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        outline: 'none',
+                        color: 'var(--text-main)',
+                      }}
+                    />
+                    <button
+                      id="bulk-apply-reorder-selected-btn"
+                      type="button"
+                      onClick={handleApplySelectedReorder}
+                      disabled={selectedRowIds.size === 0}
+                      className="btn btn-secondary"
+                      style={{
+                        fontSize: '0.76rem',
+                        padding: '0.25rem 0.65rem',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        cursor: selectedRowIds.size === 0 ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                        background: selectedRowIds.size > 0 ? '#4f46e5' : '#f1f5f9',
+                        color: selectedRowIds.size > 0 ? '#ffffff' : '#94a3b8',
+                        border: selectedRowIds.size > 0 ? '1px solid #4338ca' : '1px solid #cbd5e1',
+                        transition: 'all 0.15s ease',
+                        boxShadow: selectedRowIds.size > 0 ? '0 1px 3px rgba(79, 70, 229, 0.25)' : 'none',
+                      }}
+                      title={
+                        selectedRowIds.size === 0
+                          ? 'Select products using checkboxes to apply this reorder level'
+                          : `Apply reorder level ${globalReorderLevel} to ${selectedRowIds.size} selected product(s)`
+                      }
+                    >
+                      Apply to Selected
+                    </button>
+                    <span
+                      id="bulk-reorder-selected-count"
+                      style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        color: selectedRowIds.size > 0 ? '#4f46e5' : '#94a3b8',
+                        background: selectedRowIds.size > 0 ? '#eef2ff' : '#f1f5f9',
+                        padding: '2px 7px',
+                        borderRadius: '10px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {selectedRowIds.size} selected
+                    </span>
+                  </div>
+
                   <button
                     id="bulk-refresh-cats-btn"
                     type="button"
@@ -2668,6 +3269,19 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: '#f8f7ff' }}>
                     <tr>
+                      <th style={{ ...thStyle, width: 36, minWidth: 36, textAlign: 'center', padding: '0.45rem 0.25rem' }}>
+                        <input
+                          id="bulk-select-all-checkbox"
+                          ref={(el) => {
+                            if (el) el.indeterminate = someVisibleSelected;
+                          }}
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={handleToggleSelectAll}
+                          style={{ accentColor: 'var(--primary)', cursor: 'pointer', width: '15px', height: '15px', display: 'inline-block', verticalAlign: 'middle' }}
+                          title={allVisibleSelected ? 'Deselect all visible rows' : 'Select all visible rows'}
+                        />
+                      </th>
                       <th style={thStyle}>ROW</th>
                       <th style={thStyle}>STATUS</th>
                       <th style={{ ...thStyle, width: 62, minWidth: 60, textAlign: 'center' }}>IMAGE</th>
@@ -2684,18 +3298,19 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                       <th style={{ ...thStyle, minWidth: 80 }}>INCOMING</th>
                       <th style={{ ...thStyle, minWidth: 80 }}>CURRENT</th>
                       <th style={{ ...thStyle, minWidth: 80 }}>FINAL STOCK</th>
+                      <th style={{ ...thStyle, minWidth: 85 }}>REORDER</th>
                       <th style={{ ...thStyle, width: 35 }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleRows.length === 0 ? (
                       <tr>
-                        <td colSpan={17} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                        <td colSpan={19} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                           No rows match the selected &quot;{filter}&quot; filter.
                         </td>
                       </tr>
                     ) : (
-                      visibleRows.map((row) => {
+                      visibleRows.map((row, idx) => {
                         const incomingStock = parseFloat(row.openingStock) || 0;
                         const existingStock = row.matchedItem ? row.matchedItem.currentStockMilli / 1000 : 0;
                         const finalStock = existingStock + incomingStock;
@@ -2721,12 +3336,32 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                             <tr
                               style={{
                                 borderBottom: row.errors.length > 0 || row.matchedItem || (row.candidates && row.candidates.length > 1) ? 'none' : '1px solid var(--border)',
-                                background: '#ffffff',
+                                background: selectedRowIds.has(row._id) ? '#f8f9ff' : '#ffffff',
                               }}
                             >
+                              {/* SELECT CHECKBOX */}
+                              <td style={{ padding: '0.45rem 0.25rem', textAlign: 'center' }}>
+                                <input
+                                  id={`bulk-row-select-${row._id}`}
+                                  type="checkbox"
+                                  checked={selectedRowIds.has(row._id)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setSelectedRowIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) next.add(row._id);
+                                      else next.delete(row._id);
+                                      return next;
+                                    });
+                                  }}
+                                  style={{ accentColor: 'var(--primary)', cursor: 'pointer', width: '15px', height: '15px', display: 'inline-block', verticalAlign: 'middle' }}
+                                  title={`Select row ${idx + 1}`}
+                                />
+                              </td>
+
                               {/* ROW # */}
                               <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                {row.rowNum}
+                                {idx + 1}
                               </td>
 
                               {/* STATUS BADGE */}
@@ -3245,6 +3880,31 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                                 {finalStock} {row.unit}
                               </td>
 
+                              {/* REORDER LEVEL */}
+                              <td style={{ padding: '0.45rem 0.35rem' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={row.reorderLevel}
+                                    placeholder="20"
+                                    onChange={(e) => updateRowField(row._id, 'reorderLevel', e.target.value)}
+                                    style={{
+                                      ...cellInputStyle,
+                                      width: '52px',
+                                      fontWeight: 600,
+                                      textAlign: 'center',
+                                      borderColor: row.errors.some((err) => err.field === 'reorderLevel') ? '#ef4444' : undefined,
+                                      background: row.errors.some((err) => err.field === 'reorderLevel') ? '#fff1f2' : '#ffffff',
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>
+                                    {row.unit}
+                                  </span>
+                                </div>
+                              </td>
+
                               {/* ACTIONS */}
                               <td style={{ padding: '0.45rem 0.35rem', textAlign: 'center' }}>
                                 <button
@@ -3273,7 +3933,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                             {/* INLINE NOTICE / ERROR / AMBIGUITY ROW */}
                             {(row.errors.length > 0 || row.matchedItem || (row.candidates && row.candidates.length > 1) || row.resolution) && (
                               <tr style={{ borderBottom: '1px solid var(--border)', background: '#ffffff' }}>
-                                <td colSpan={17} style={{ padding: '0.2rem 0.6rem 0.55rem 2.8rem', fontSize: '0.78rem' }}>
+                                <td colSpan={19} style={{ padding: '0.2rem 0.6rem 0.55rem 2.8rem', fontSize: '0.78rem' }}>
                                   {/* Restock details for single-match products */}
                                   {row.matchedItem && (!row.candidates || row.candidates.length <= 1) && (
                                     <div style={{ color: '#047857', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -3590,7 +4250,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
                 <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
                   <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
                     <LayersIcon size={16} color="#6366f1" />
@@ -3619,6 +4279,17 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                   <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0284c7' }}>{totalInwardStock}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Total Inward Units</div>
                 </div>
+                <div style={{ ...statCardStyle, background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.4rem' }}>
+                    <TruckIcon size={16} color="#d97706" />
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {selectedSupplier?.name || 'Selected Supplier'}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {selectedSupplier?.gstin ? `GST: ${selectedSupplier.gstin}` : 'Linked Supplier'}
+                  </div>
+                </div>
               </div>
 
               {/* Explanatory notes */}
@@ -3629,10 +4300,16 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                 </div>
                 <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.8 }}>
                   <li>
+                    All <strong style={{ color: '#4f46e5' }}>{eligibleRows.length} imported product rows</strong> and inward stock movements will be linked to supplier <strong style={{ color: '#b45309' }}>{selectedSupplier?.name}</strong>.
+                  </li>
+                  <li>
                     <strong style={{ color: '#16a34a' }}>{restockRows.length} existing products</strong> will have incoming quantities added to current available inventory without duplicating products or modifying their existing barcodes.
                   </li>
                   <li>
                     <strong style={{ color: '#4338ca' }}>{newRows.length} new products</strong> will be registered with auto-generated unique SKUs and internal EAN barcodes.
+                  </li>
+                  <li>
+                    Branch inventory reorder levels will be saved for all imported products.
                   </li>
                   {globalUpdatePrices && (
                     <li>
@@ -3770,6 +4447,12 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                     </div>
                     <div style={{ fontSize: '0.84rem', color: '#047857', marginTop: '0.2rem' }}>
                       Successfully imported {importResult.created} new product{importResult.created !== 1 ? 's' : ''}, restocked {importResult.restocked} existing product{importResult.restocked !== 1 ? 's' : ''}, and saved {importResult.barcodesSaved ?? 0} barcode mapping{importResult.barcodesSaved !== 1 ? 's' : ''}!
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#059669', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                      <span>Linked Supplier: <strong>{importResult.supplierName || selectedSupplier?.name || 'Selected Supplier'}</strong></span>
+                      {importResult.purchaseNumber && (
+                        <span>• Purchase Order: <strong>{importResult.purchaseNumber}</strong></span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3930,6 +4613,24 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                         <strong>{errorRows.length + duplicateRows.length + ambiguousRows.length} row(s)</strong> will be skipped unless resolved
                       </span>
                     </span>
+                  ) : !selectedSupplierId ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.35rem 0.8rem',
+                        borderRadius: '20px',
+                        background: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        color: '#b45309',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertTriangleIcon size={14} color="#d97706" />
+                      <span>Select a Supplier above to proceed</span>
+                    </span>
                   ) : (
                     <span
                       style={{
@@ -3946,7 +4647,7 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                       }}
                     >
                       <CheckCircleIcon size={14} color="#10b981" />
-                      <span>All <strong>{eligibleRows.length}</strong> rows ready to import</span>
+                      <span>Supplier: <strong>{selectedSupplier?.name}</strong> • All <strong>{eligibleRows.length}</strong> rows ready</span>
                     </span>
                   )}
                 </span>
@@ -3954,6 +4655,11 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                 <button
                   id="bulk-review-import-btn"
                   onClick={() => {
+                    if (!selectedSupplierId) {
+                      setApiError('Please select a Supplier before proceeding to import.');
+                      setIsSupplierDropdownOpen(true);
+                      return;
+                    }
                     const hasPendingBarcodes = validatedRows.some(
                       (r) => !r.matchedItem && r.status !== 'RESTOCK' && (!r.barcode || !r.barcode.trim())
                     );
@@ -3963,17 +4669,17 @@ export function BulkImportModal({ categories, existingItems = [], shopName, bran
                     }
                     setStep('confirm');
                   }}
-                  disabled={eligibleRows.length === 0}
+                  disabled={eligibleRows.length === 0 || !selectedSupplierId}
                   style={{
-                    background: eligibleRows.length > 0 ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : '#cbd5e1',
+                    background: eligibleRows.length > 0 && selectedSupplierId ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : '#cbd5e1',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '10px',
                     padding: '0.65rem 1.4rem',
                     fontWeight: 700,
                     fontSize: '0.9rem',
-                    cursor: eligibleRows.length > 0 ? 'pointer' : 'not-allowed',
-                    boxShadow: eligibleRows.length > 0 ? '0 4px 14px rgba(99, 102, 241, 0.35)' : 'none',
+                    cursor: eligibleRows.length > 0 && selectedSupplierId ? 'pointer' : 'not-allowed',
+                    boxShadow: eligibleRows.length > 0 && selectedSupplierId ? '0 4px 14px rgba(99, 102, 241, 0.35)' : 'none',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.5rem',

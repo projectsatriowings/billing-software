@@ -131,13 +131,14 @@ export function registerSalesAnalysis(r: Router) {
 
       if (counterFilter && counterFilter !== 'ALL') {
         clauses.push(`(
+          ${alias}.counter_id = ? OR ${alias}.counter = ? OR ${alias}.device_id = ? OR
           EXISTS (
             SELECT 1 FROM payments p
-            JOIN shifts s ON s.id = p.shift_id
-            WHERE p.invoice_id = ${alias}.id AND s.location = ?
-          ) OR ${alias}.device_id = ?
+            LEFT JOIN shifts s ON s.id = p.shift_id
+            WHERE p.invoice_id = ${alias}.id AND (p.counter_id = ? OR s.counter_id = ? OR s.location = ?)
+          )
         )`);
-        params.push(counterFilter, counterFilter);
+        params.push(counterFilter, counterFilter, counterFilter, counterFilter, counterFilter, counterFilter);
       }
 
       if (categoryFilter && categoryFilter !== 'ALL') {
@@ -975,18 +976,13 @@ export function registerSalesAnalysis(r: Router) {
 
     // 12. Dynamic Filter Options
     const countersListRows = await ctx.db.query<any>(
-      `SELECT DISTINCT COALESCE(s.location, 'Counter 1') AS loc
-       FROM shifts s
-       WHERE s.tenant_id = ? AND s.location IS NOT NULL`,
+      `SELECT id, name, code FROM counters WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY code ASC`,
       [tenantId],
     );
     const counters = [
       { id: 'ALL', name: 'All counters' },
-      ...countersListRows.map((r) => ({ id: r.loc, name: r.loc === 'MAIN' ? 'Main Billing Counter (MAIN)' : r.loc })),
+      ...countersListRows.map((r) => ({ id: r.id, name: `${r.name || r.code} (${r.code})` })),
     ];
-    if (counters.length === 1) {
-      counters.push({ id: 'Counter 1', name: 'Counter 1' });
-    }
 
     const categoriesListRows = await ctx.db.query<any>(
       `SELECT DISTINCT category FROM items WHERE tenant_id = ? AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category ASC`,

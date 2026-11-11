@@ -429,14 +429,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
     setDrawerMode('add_counter');
     setEditingId(null);
     setFormName('');
-    setFormUsername('');
-    setFormEmail('');
-    setFormPassword(generateClientPassword());
-    setShowPassword(false);
-    setFormSendEmail(false);
-    setFormMustChangePassword(false); // Counter default OFF
-    setUsernameAvailability({ checked: false, available: true });
-    setEmailAvailability({ checked: false, available: true });
+    setFormCode('');
     setDrawerError(null);
     setFormDirty(false);
 
@@ -444,29 +437,10 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
       const next = await fetchBranchCountersNextCode();
       setFormCode(next.code);
       setSuggestedCode(next.code);
-      setSuggestedUsername(next.suggestedUsername);
     } catch {
-      setFormCode('POR-C02');
-      setSuggestedUsername('sks_por_c2');
+      setFormCode('C01');
     }
 
-    setIsDrawerOpen(true);
-  };
-
-  // Open Drawer: Edit Counter
-  const openEditCounterDrawer = (counter: BranchCounterItem) => {
-    setDrawerMode('edit_counter');
-    setEditingId(counter.id);
-    setFormName(counter.name);
-    setFormCode(counter.code);
-    setFormUsername(counter.loginUsername || '');
-    setFormEmail(counter.email || '');
-    setFormPassword('');
-    setShowPassword(false);
-    setUsernameAvailability({ checked: true, available: true });
-    setEmailAvailability({ checked: true, available: true });
-    setDrawerError(null);
-    setFormDirty(false);
     setIsDrawerOpen(true);
   };
 
@@ -479,10 +453,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
     setFormEmail('');
     setFormPassword(generateClientPassword());
     setShowPassword(false);
-    setFormDefaultCounterId(counters.find((c) => c.status !== 'DISABLED')?.id || '');
-    setFormPhone('');
-    setFormSendEmail(true);
-    setFormMustChangePassword(true); // Cashier default ON
     setUsernameAvailability({ checked: false, available: true });
     setEmailAvailability({ checked: false, available: true });
     setDrawerError(null);
@@ -499,9 +469,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
     setFormEmail(cashier.email || '');
     setFormPassword('');
     setShowPassword(false);
-    setFormDefaultCounterId(cashier.defaultCounter?.id || '');
-    setFormPhone(cashier.phone || '');
-    setFormSendEmail(false);
     setUsernameAvailability({ checked: true, available: true });
     setEmailAvailability({ checked: true, available: true });
     setDrawerError(null);
@@ -678,18 +645,12 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
   // Is Create/Save button enabled
   const isFormValid = useMemo(() => {
     if (!formName.trim() || formName.trim().length < 2) return false;
-    if (!signinBoxStatus.ok) return false;
 
     if (drawerMode === 'add_counter') {
-      if (!formCode.trim() || formCode.trim().length < 3) return false;
-      if (!formPassword || formPassword.length < 8 || !pwRules.number) return false;
-      let score = 0;
-      if (pwRules.length) score++;
-      if (pwRules.casing) score++;
-      if (pwRules.number) score++;
-      if (pwRules.symbol) score++;
-      if (score < 3) return false;
+      return Boolean(formCode.trim() && formCode.trim().length >= 2);
     }
+
+    if (!signinBoxStatus.ok) return false;
 
     if (drawerMode === 'add_cashier') {
       if (!formPassword || formPassword.length < 8 || !pwRules.number) return false;
@@ -716,27 +677,11 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
         const payload: BranchCounterInput = {
           name: formName.trim(),
           code: formCode.trim().toUpperCase(),
-          username: formUsername.trim().toLowerCase() || null,
-          email: formEmail.trim().toLowerCase() || null,
-          password: formPassword,
-          sendEmail: Boolean(formSendEmail && formEmail.trim()),
-          mustChangePassword: formMustChangePassword,
         };
-        const res = await createBranchCounter(payload);
-        const emailMsg = res.emailSent ? ' · sign-in details emailed' : '';
-        showToast(`${payload.name} created${emailMsg}`);
+        await createBranchCounter(payload);
+        showToast(`Counter ${payload.name} created`);
         setIsDrawerOpen(false);
         setActiveTab('counters');
-        await loadData();
-      } else if (drawerMode === 'edit_counter' && editingId) {
-        await updateBranchCounter(editingId, {
-          name: formName.trim(),
-          code: formCode.trim().toUpperCase(),
-          username: formUsername.trim().toLowerCase() || null,
-          email: formEmail.trim().toLowerCase() || null,
-        });
-        showToast(`Counter ${formName} updated`);
-        setIsDrawerOpen(false);
         await loadData();
       } else if (drawerMode === 'add_cashier') {
         const payload: BranchCashierInput = {
@@ -744,14 +689,9 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
           username: formUsername.trim().toLowerCase() || null,
           email: formEmail.trim().toLowerCase() || null,
           password: formPassword,
-          defaultCounterId: formDefaultCounterId || null,
-          phone: formPhone.trim() || null,
-          sendEmail: Boolean(formSendEmail && formEmail.trim()),
-          mustChangePassword: formMustChangePassword,
         };
-        const res = await createBranchCashier(payload);
-        const emailMsg = res.emailSent ? ' · sign-in details emailed' : '';
-        showToast(`Cashier ${payload.name} created${emailMsg}`);
+        await createBranchCashier(payload);
+        showToast(`Cashier ${payload.name} created`);
         setIsDrawerOpen(false);
         setActiveTab('cashiers');
         await loadData();
@@ -760,8 +700,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
           name: formName.trim(),
           username: formUsername.trim().toLowerCase() || null,
           email: formEmail.trim().toLowerCase() || null,
-          defaultCounterId: formDefaultCounterId || null,
-          phone: formPhone.trim() || null,
         });
         showToast(`Cashier ${formName} updated`);
         setIsDrawerOpen(false);
@@ -997,9 +935,9 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
         </div>
 
         {/* ==================================================================
-            B) THREE STAT CARDS
+            B) SUMMARY STAT CARDS
             ================================================================== */}
-        <div className="um-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="um-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           {/* 1. Counters */}
           <div className="um-stat-card">
             <div className="um-stat-card-header">
@@ -1026,18 +964,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
             <div className="um-stat-hint">
               {summary.cashiers.active} active · {summary.cashiers.invited} invited
             </div>
-          </div>
-
-          {/* 3. Counters Without Cashier */}
-          <div className="um-stat-card">
-            <div className="um-stat-card-header">
-              <div className="um-stat-icon-tile amber">
-                <Icons.AlertTriangle />
-              </div>
-              <span className="um-stat-label">Counters Without Cashier</span>
-            </div>
-            <div className="um-stat-value">{summary.countersWithoutCashier}</div>
-            <div className="um-stat-hint">No cashier set as their default</div>
           </div>
         </div>
 
@@ -1081,7 +1007,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 <input
                   type="text"
                   className="um-search-input"
-                  placeholder="Search by counter name, code or login"
+                  placeholder="Search by counter name or code"
                   value={cntSearch}
                   onChange={(e) => setCntSearch(e.target.value)}
                   aria-label="Search counters"
@@ -1096,7 +1022,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
               >
                 <option value="ALL">All statuses</option>
                 <option value="ACTIVE">Active</option>
-                <option value="DISABLED">Disabled</option>
+                <option value="DISABLED">Inactive</option>
               </select>
             </div>
 
@@ -1104,11 +1030,8 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
               <table className="um-table">
                 <thead>
                   <tr>
-                    <th>Counter</th>
-                    <th>Counter Login</th>
-                    <th>Cashiers</th>
+                    <th>Counter Name</th>
                     <th>Status</th>
-                    <th>Last Active</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
@@ -1116,7 +1039,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   {loading ? (
                     [1, 2, 3].map((k) => (
                       <tr key={`skel-cnt-${k}`}>
-                        <td colSpan={6} style={{ padding: '20px 24px' }}>
+                        <td colSpan={3} style={{ padding: '20px 24px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                             <div className="um-skeleton-pulse" style={{ width: 40, height: 40, borderRadius: 10 }} />
                             <div style={{ flex: 1 }}>
@@ -1129,7 +1052,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                     ))
                   ) : loadError ? (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={3}>
                         <div className="um-empty-state" style={{ padding: '40px 24px' }}>
                           <h3 className="um-empty-title" style={{ color: '#B42318' }}>Failed to load counters</h3>
                           <p className="um-empty-sub">{loadError}</p>
@@ -1146,7 +1069,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                     </tr>
                   ) : filteredCounters.length === 0 ? (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={3}>
                         <div className="um-empty-state">
                           <h3 className="um-empty-title">No counters found</h3>
                           <p className="um-empty-sub">Try a different search or filter, or add a new counter.</p>
@@ -1156,7 +1079,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   ) : (
                     filteredCounters.map((cnt) => (
                       <tr key={cnt.id}>
-                        {/* Counter: grey tile + name + code */}
+                        {/* Counter Name: icon tile + name + code */}
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div
@@ -1183,85 +1106,17 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                           </div>
                         </td>
 
-                        {/* Counter Login */}
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            {cnt.loginUsername && (
-                              <span className="um-user-handle" style={{ fontSize: '13.5px' }}>
-                                @{cnt.loginUsername}
-                              </span>
-                            )}
-                            {cnt.email && (
-                              <span style={{ fontSize: '13px', color: '#5F5B76' }}>
-                                {cnt.email}
-                              </span>
-                            )}
-                            {!cnt.loginUsername && !cnt.email && <span style={{ color: '#8C88A2' }}>—</span>}
-                          </div>
-                        </td>
-
-                        {/* Cashiers assigned as default */}
-                        <td>
-                          {cnt.cashiers.length > 0 ? (
-                            <span style={{ fontWeight: 600, color: '#1A1830' }}>
-                              {cnt.cashiers.join(', ')}
-                            </span>
-                          ) : (
-                            <span className="um-warning-text">
-                              <Icons.AlertCircle />
-                              <span>None yet</span>
-                            </span>
-                          )}
-                        </td>
-
                         {/* Status */}
                         <td>
                           <span className={`um-status-pill ${cnt.status.toLowerCase()}`}>
                             <span className="um-status-dot" />
-                            <span>{cnt.status === 'ACTIVE' ? 'Active' : 'Disabled'}</span>
+                            <span>{cnt.status === 'ACTIVE' ? 'Active' : 'Inactive'}</span>
                           </span>
                         </td>
 
-                        {/* Last Active */}
-                        <td>
-                          <span style={{ color: '#5F5B76' }}>{formatDate(cnt.lastActiveAt)}</span>
-                        </td>
-
-                        {/* Actions */}
+                        {/* Actions: Toggle Active/Inactive & Delete */}
                         <td>
                           <div className="um-row-actions">
-                            <button
-                              type="button"
-                              className="um-action-btn edit"
-                              onClick={() => openEditCounterDrawer(cnt)}
-                              aria-label="Edit counter"
-                              title="Edit counter"
-                            >
-                              <Icons.Pencil />
-                              <span className="um-tooltip">Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="um-action-btn key"
-                              onClick={() => handleResetPassword(cnt.id, cnt.name, cnt.email)}
-                              aria-label="Reset password"
-                              title="Reset password"
-                            >
-                              <Icons.Key />
-                              <span className="um-tooltip">Reset password</span>
-                            </button>
-                            {cnt.email && (
-                              <button
-                                type="button"
-                                className="um-action-btn mail"
-                                onClick={() => handleResend(cnt)}
-                                aria-label="Resend sign-in details"
-                                title="Resend sign-in details"
-                              >
-                                <Icons.Send />
-                                <span className="um-tooltip">Resend email</span>
-                              </button>
-                            )}
                             {cnt.status === 'DISABLED' ? (
                               <button
                                 type="button"
@@ -1323,7 +1178,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 <input
                   type="text"
                   className="um-search-input"
-                  placeholder="Search by name, username, email or counter"
+                  placeholder="Search by name, username or email"
                   value={cshSearch}
                   onChange={(e) => setCshSearch(e.target.value)}
                   aria-label="Search cashiers"
@@ -1348,7 +1203,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 <thead>
                   <tr>
                     <th>Cashier</th>
-                    <th>Default Counter</th>
                     <th>Status</th>
                     <th>Last Sign-In</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
@@ -1358,7 +1212,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   {loading ? (
                     [1, 2, 3].map((k) => (
                       <tr key={`skel-csh-${k}`}>
-                        <td colSpan={5} style={{ padding: '20px 24px' }}>
+                        <td colSpan={4} style={{ padding: '20px 24px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                             <div className="um-skeleton-pulse" style={{ width: 40, height: 40, borderRadius: 20 }} />
                             <div style={{ flex: 1 }}>
@@ -1371,7 +1225,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                     ))
                   ) : loadError ? (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={4}>
                         <div className="um-empty-state" style={{ padding: '40px 24px' }}>
                           <h3 className="um-empty-title" style={{ color: '#B42318' }}>Failed to load cashiers</h3>
                           <p className="um-empty-sub">{loadError}</p>
@@ -1388,7 +1242,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                     </tr>
                   ) : filteredCashiers.length === 0 ? (
                     <tr>
-                      <td colSpan={5}>
+                      <td colSpan={4}>
                         <div className="um-empty-state">
                           <h3 className="um-empty-title">No cashiers found</h3>
                           <p className="um-empty-sub">Try a different search or filter, or add a new cashier.</p>
@@ -1427,20 +1281,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                                 </span>
                               </div>
                             </div>
-                          </td>
-
-                          {/* Default Counter */}
-                          <td>
-                            {csh.defaultCounter ? (
-                              <div className="um-branch-cell">
-                                <span className="um-branch-name" style={{ fontSize: '13.5px' }}>{csh.defaultCounter.name}</span>
-                                <div>
-                                  <span className="um-mono-chip">{csh.defaultCounter.code}</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <span style={{ color: '#5F5B76', fontWeight: 500 }}>Any counter</span>
-                            )}
                           </td>
 
                           {/* Status */}
@@ -1557,15 +1397,13 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 <div className="um-drawer-title-group">
                   <h2 id="branch-drawer-title">
                     {drawerMode === 'add_counter' && 'Add counter'}
-                    {drawerMode === 'edit_counter' && 'Edit counter'}
                     {drawerMode === 'add_cashier' && 'Add cashier'}
                     {drawerMode === 'edit_cashier' && 'Edit cashier'}
                   </h2>
                   <p>
-                    {drawerMode === 'add_counter' && 'A counter account signs in on the billing terminal with a username or email ID.'}
-                    {drawerMode === 'edit_counter' && 'Update the counter account name, code or sign-in ID.'}
-                    {drawerMode === 'add_cashier' && 'Cashiers sign in with their username or email ID, plus this password.'}
-                    {drawerMode === 'edit_cashier' && 'Update cashier details, sign-in ID or default counter.'}
+                    {drawerMode === 'add_counter' && 'Add a billing counter station to your branch.'}
+                    {drawerMode === 'add_cashier' && 'Cashiers sign in with their username or email ID, plus password.'}
+                    {drawerMode === 'edit_cashier' && 'Update cashier details or sign-in ID.'}
                   </p>
                 </div>
                 <button
@@ -1608,52 +1446,52 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 </div>
 
                 {/* 2a. COUNTER ONLY: Counter Name & Counter Code */}
-                {(drawerMode === 'add_counter' || drawerMode === 'edit_counter') && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div className="um-form-group">
-                      <label className="um-form-label" htmlFor="bm-counter-name">Counter name *</label>
-                      <input
-                        id="bm-counter-name"
-                        type="text"
-                        className="um-form-input"
-                        placeholder="e.g. Counter 2"
-                        value={formName}
-                        onChange={(e) => {
-                          setFormName(e.target.value);
-                          setFormDirty(true);
-                        }}
-                        required
-                        minLength={2}
-                      />
-                    </div>
+                {drawerMode === 'add_counter' && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="um-form-group">
+                        <label className="um-form-label" htmlFor="bm-counter-name">Counter name *</label>
+                        <input
+                          id="bm-counter-name"
+                          type="text"
+                          className="um-form-input"
+                          placeholder="e.g. Counter 2"
+                          value={formName}
+                          onChange={(e) => {
+                            setFormName(e.target.value);
+                            setFormDirty(true);
+                          }}
+                          required
+                          minLength={2}
+                        />
+                      </div>
 
-                    <div className="um-form-group">
-                      <label className="um-form-label" htmlFor="bm-counter-code">Counter code *</label>
-                      <input
-                        id="bm-counter-code"
-                        type="text"
-                        className="um-form-input mono"
-                        placeholder="e.g. POR-C02"
-                        value={formCode}
-                        onChange={(e) => {
-                          setFormCode(e.target.value.toUpperCase());
-                          setFormDirty(true);
-                        }}
-                        required
-                        minLength={3}
-                        maxLength={12}
-                      />
+                      <div className="um-form-group">
+                        <label className="um-form-label" htmlFor="bm-counter-code">Counter code *</label>
+                        <input
+                          id="bm-counter-code"
+                          type="text"
+                          className="um-form-input mono"
+                          placeholder="e.g. POR-C02"
+                          value={formCode}
+                          onChange={(e) => {
+                            setFormCode(e.target.value.toUpperCase());
+                            setFormDirty(true);
+                          }}
+                          required
+                          minLength={2}
+                          maxLength={20}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-                {(drawerMode === 'add_counter' || drawerMode === 'edit_counter') && (
-                  <div className="um-field-helper" style={{ marginTop: '-12px' }}>Unique within your branch.</div>
+                    <div className="um-field-helper" style={{ marginTop: '-12px' }}>Unique within your branch.</div>
+                  </>
                 )}
 
-                {/* 2b. CASHIER ONLY: Full Name */}
+                {/* 2b. CASHIER ONLY: Cashier Name */}
                 {(drawerMode === 'add_cashier' || drawerMode === 'edit_cashier') && (
                   <div className="um-form-group">
-                    <label className="um-form-label" htmlFor="bm-cashier-name">Full name *</label>
+                    <label className="um-form-label" htmlFor="bm-cashier-name">Cashier name *</label>
                     <input
                       id="bm-cashier-name"
                       type="text"
@@ -1670,101 +1508,102 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                   </div>
                 )}
 
-                {/* 3. SIGN-IN ID GROUP BOX */}
-                <div className={`um-signin-group-box ${signinBoxStatus.ok ? 'valid' : ''}`}>
-                  <h3 className="um-signin-group-title">Sign-in ID *</h3>
-                  <p className="um-signin-group-sub">
-                    Add a username, an email ID, or both. Whichever you add can be used to sign in; the other is optional.
-                  </p>
+                {/* 3. CASHIER ONLY: SIGN-IN ID GROUP BOX */}
+                {(drawerMode === 'add_cashier' || drawerMode === 'edit_cashier') && (
+                  <div className={`um-signin-group-box ${signinBoxStatus.ok ? 'valid' : ''}`}>
+                    <h3 className="um-signin-group-title">Sign-in ID *</h3>
+                    <p className="um-signin-group-sub">
+                      Add a username, an email ID, or both. Whichever you add can be used to sign in; the other is optional.
+                    </p>
 
-                  {/* Username */}
-                  <div className="um-form-group">
-                    <label className="um-form-label" htmlFor="bm-username">
-                      <span>Username {Boolean(formEmail.trim()) && <span style={{ color: '#5F5B76', fontWeight: 400 }}>(optional)</span>}</span>
-                    </label>
-                    <div className="um-input-prefix-wrap">
-                      <span className="um-input-prefix">@</span>
-                      <input
-                        id="bm-username"
-                        type="text"
-                        className="um-form-input has-prefix"
-                        placeholder="username"
-                        value={formUsername}
-                        autoCapitalize="none"
-                        autoComplete="off"
-                        spellCheck="false"
-                        onChange={(e) => {
-                          const val = e.target.value.toLowerCase().replace(/\s+/g, '');
-                          setFormUsername(val);
-                          setFormDirty(true);
-                        }}
-                      />
-                      {!formUsername && (drawerMode.includes('counter') ? suggestedUsername : cashierUsernameSuggestion) && (
-                        <button
-                          type="button"
-                          className="um-suggestion-btn"
-                          onClick={() => {
-                            const sugg = drawerMode.includes('counter') ? suggestedUsername : cashierUsernameSuggestion;
-                            setFormUsername(sugg);
+                    {/* Username */}
+                    <div className="um-form-group">
+                      <label className="um-form-label" htmlFor="bm-username">
+                        <span>Username {Boolean(formEmail.trim()) && <span style={{ color: '#5F5B76', fontWeight: 400 }}>(optional)</span>}</span>
+                      </label>
+                      <div className="um-input-prefix-wrap">
+                        <span className="um-input-prefix">@</span>
+                        <input
+                          id="bm-username"
+                          type="text"
+                          className="um-form-input has-prefix"
+                          placeholder="username"
+                          value={formUsername}
+                          autoCapitalize="none"
+                          autoComplete="off"
+                          spellCheck="false"
+                          onChange={(e) => {
+                            const val = e.target.value.toLowerCase().replace(/\s+/g, '');
+                            setFormUsername(val);
                             setFormDirty(true);
                           }}
-                        >
-                          Use @{drawerMode.includes('counter') ? suggestedUsername : cashierUsernameSuggestion}
-                        </button>
+                        />
+                        {!formUsername && cashierUsernameSuggestion && (
+                          <button
+                            type="button"
+                            className="um-suggestion-btn"
+                            onClick={() => {
+                              setFormUsername(cashierUsernameSuggestion);
+                              setFormDirty(true);
+                            }}
+                          >
+                            Use @{cashierUsernameSuggestion}
+                          </button>
+                        )}
+                      </div>
+
+                      {formUsername.trim() ? (
+                        usernameAvailability.error ? (
+                          <div className="um-field-helper error">{usernameAvailability.error}</div>
+                        ) : usernameAvailability.available && usernameAvailability.checked ? (
+                          <div className="um-field-helper success">@{formUsername.trim()} is available.</div>
+                        ) : null
+                      ) : (
+                        <div className="um-field-helper">
+                          Letters, numbers, dot or underscore · 4–20 characters.
+                        </div>
                       )}
                     </div>
 
-                    {formUsername.trim() ? (
-                      usernameAvailability.error ? (
-                        <div className="um-field-helper error">{usernameAvailability.error}</div>
-                      ) : usernameAvailability.available && usernameAvailability.checked ? (
-                        <div className="um-field-helper success">@{formUsername.trim()} is available.</div>
-                      ) : null
-                    ) : (
-                      <div className="um-field-helper">
-                        Letters, numbers, dot or underscore · 4–20 characters.
-                      </div>
-                    )}
-                  </div>
+                    <div className="um-or-divider">—— OR ——</div>
 
-                  <div className="um-or-divider">—— OR ——</div>
-
-                  {/* Email ID */}
-                  <div className="um-form-group">
-                    <label className="um-form-label" htmlFor="bm-email">
-                      <span>Email ID {Boolean(formUsername.trim()) && <span style={{ color: '#5F5B76', fontWeight: 400 }}>(optional)</span>}</span>
-                    </label>
-                    <input
-                      id="bm-email"
-                      type="email"
-                      className="um-form-input"
-                      placeholder="name@yourstore.com"
-                      value={formEmail}
-                      onChange={(e) => {
-                        setFormEmail(e.target.value);
-                        setFormDirty(true);
-                      }}
-                    />
-                    {formEmail.trim() ? (
-                      emailAvailability.error ? (
-                        <div className="um-field-helper error">{emailAvailability.error}</div>
+                    {/* Email ID */}
+                    <div className="um-form-group">
+                      <label className="um-form-label" htmlFor="bm-email">
+                        <span>Email ID {Boolean(formUsername.trim()) && <span style={{ color: '#5F5B76', fontWeight: 400 }}>(optional)</span>}</span>
+                      </label>
+                      <input
+                        id="bm-email"
+                        type="email"
+                        className="um-form-input"
+                        placeholder="name@yourstore.com"
+                        value={formEmail}
+                        onChange={(e) => {
+                          setFormEmail(e.target.value);
+                          setFormDirty(true);
+                        }}
+                      />
+                      {formEmail.trim() ? (
+                        emailAvailability.error ? (
+                          <div className="um-field-helper error">{emailAvailability.error}</div>
+                        ) : (
+                          <div className="um-field-helper success">Email is available.</div>
+                        )
                       ) : (
-                        <div className="um-field-helper success">Email is available.</div>
-                      )
-                    ) : (
-                      <div className="um-field-helper">Needed if you want to email the sign-in details.</div>
-                    )}
-                  </div>
+                        <div className="um-field-helper">Needed if you want to email the sign-in details.</div>
+                      )}
+                    </div>
 
-                  {/* Status Bar */}
-                  <div className={`um-signin-status-bar ${signinBoxStatus.type}`}>
-                    {signinBoxStatus.ok && <Icons.Check />}
-                    <span>{signinBoxStatus.message}</span>
+                    {/* Status Bar */}
+                    <div className={`um-signin-status-bar ${signinBoxStatus.type}`}>
+                      {signinBoxStatus.ok && <Icons.Check />}
+                      <span>{signinBoxStatus.message}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* 4. PASSWORD (Create mode only) */}
-                {(drawerMode === 'add_counter' || drawerMode === 'add_cashier') && (
+                {/* 4. CASHIER ONLY: PASSWORD (Create mode only) */}
+                {drawerMode === 'add_cashier' && (
                   <div className="um-form-group">
                     <div className="um-form-label">
                       <span>Password *</span>
@@ -1866,7 +1705,7 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                 )}
 
                 {/* Edit mode: Reset password button */}
-                {(drawerMode === 'edit_counter' || drawerMode === 'edit_cashier') && editingId && (
+                {drawerMode === 'edit_cashier' && editingId && (
                   <div style={{ padding: '12px 0', borderTop: '1px solid #ECEAF4', borderBottom: '1px solid #ECEAF4' }}>
                     <button
                       type="button"
@@ -1875,87 +1714,6 @@ export const BranchUserManagementView: React.FC<BranchUserManagementViewProps> =
                     >
                       Reset password for {formName}
                     </button>
-                  </div>
-                )}
-
-                {/* 5. CASHIER ONLY: Default counter & Mobile */}
-                {(drawerMode === 'add_cashier' || drawerMode === 'edit_cashier') && (
-                  <>
-                    <div className="um-form-group">
-                      <label className="um-form-label" htmlFor="bm-default-counter">Default counter</label>
-                      <select
-                        id="bm-default-counter"
-                        className="um-select"
-                        value={formDefaultCounterId}
-                        onChange={(e) => {
-                          setFormDefaultCounterId(e.target.value);
-                          setFormDirty(true);
-                        }}
-                      >
-                        <option value="">Any counter in this branch</option>
-                        {activeCounters.map((cnt) => (
-                          <option key={cnt.id} value={cnt.id}>
-                            {cnt.name} ({cnt.code})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="um-field-helper">The cashier can still sign in at any active counter of this branch.</div>
-                    </div>
-
-                    <div className="um-form-group">
-                      <label className="um-form-label" htmlFor="bm-cashier-phone">Mobile number (optional)</label>
-                      <input
-                        id="bm-cashier-phone"
-                        type="tel"
-                        className="um-form-input"
-                        placeholder="+91 98xxx xxxxx"
-                        value={formPhone}
-                        onChange={(e) => {
-                          setFormPhone(e.target.value);
-                          setFormDirty(true);
-                        }}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* 6. OPTIONS BOX (Create mode only) */}
-                {(drawerMode === 'add_counter' || drawerMode === 'add_cashier') && (
-                  <div className="um-options-box">
-                    <label className="um-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="um-checkbox-input"
-                        checked={formSendEmail}
-                        disabled={!formEmail.trim()}
-                        onChange={(e) => setFormSendEmail(e.target.checked)}
-                      />
-                      <div className="um-checkbox-text">
-                        <span className="um-checkbox-title">Email the sign-in details</span>
-                        <span className="um-checkbox-hint">
-                          {!formEmail.trim()
-                            ? 'Add an email ID to send the details. Otherwise, share them yourself.'
-                            : `Sends the email ID and password to ${formEmail.trim()}.`}
-                        </span>
-                      </div>
-                    </label>
-
-                    <label className="um-checkbox-label">
-                      <input
-                        type="checkbox"
-                        className="um-checkbox-input"
-                        checked={formMustChangePassword}
-                        onChange={(e) => setFormMustChangePassword(e.target.checked)}
-                      />
-                      <div className="um-checkbox-text">
-                        <span className="um-checkbox-title">Ask to change password on first sign-in</span>
-                        <span className="um-checkbox-hint">
-                          {drawerMode === 'add_cashier'
-                            ? 'Recommended, so only the cashier knows it.'
-                            : 'Usually off for shared counter logins.'}
-                        </span>
-                      </div>
-                    </label>
                   </div>
                 )}
 

@@ -95,7 +95,9 @@ export function registerBranches(r: Router) {
     const rows = await ctx.db.query<any>(
       `SELECT b.*, u.name AS manager_name, u.email AS manager_email, u.username AS manager_username,
       (SELECT count(*):: int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
-    (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
+      (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active,
+      (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters,
+      (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'status', c.status) ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counter_details
        FROM branches b
        LEFT JOIN users u ON (u.branch_id = b.id OR u.id = b.manager_id) AND lower(u.role) IN ('manager', 'store_manager') AND u.deleted_at IS NULL
        ${ whereClause }
@@ -124,7 +126,9 @@ export function registerBranches(r: Router) {
       const syncedRows = await ctx.db.query<any>(
     `SELECT b.*, u.name AS manager_name, u.email AS manager_email, u.username AS manager_username,
               (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
-              (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
+              (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active,
+              (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters,
+              (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'status', c.status) ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counter_details
          FROM branches b
          LEFT JOIN users u ON (u.branch_id = b.id OR u.id = b.manager_id) AND lower(u.role) IN ('manager', 'store_manager') AND u.deleted_at IS NULL
          WHERE b.tenant_id = ?
@@ -210,8 +214,10 @@ r.post('/api/branches', requirePerm('settings'), async (ctx) => {
 
   const row = await ctx.db.one<any>(
       `SELECT b.*, u.name AS manager_name, u.email AS manager_email, u.username AS manager_username,
-    (SELECT count(*):: int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
-  (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
+      (SELECT count(*):: int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
+      (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active,
+      (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters,
+      (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'status', c.status) ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counter_details
        FROM branches b
        LEFT JOIN users u ON u.id = b.manager_id
        WHERE b.id = ? `,
@@ -378,7 +384,9 @@ r.post('/api/branches', requirePerm('settings'), async (ctx) => {
       const updated = await q.one<any>(
   `SELECT b.*, u.name AS manager_name, u.email AS manager_email, u.username AS manager_username,
               (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id) AS counters_total,
-              (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active
+              (SELECT count(*)::int FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS counters_active,
+              (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters,
+              (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'status', c.status) ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counter_details
          FROM branches b
          LEFT JOIN users u ON u.id = b.manager_id
          WHERE b.id = ?`,

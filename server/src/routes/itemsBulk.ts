@@ -30,6 +30,8 @@ export interface BulkImportRow {
   taxRateBp?: number | null;
   taxInclusive?: boolean | null;
   openingQtyMilli?: number | null; // quantity supplied in this import
+  reorderMilli?: number | null;
+  reorderLevel?: number | null;
 
   // Restock & matching fields
   isRestock?: boolean;
@@ -41,6 +43,7 @@ interface ValidatedRow extends Omit<BulkImportRow, 'additionalBarcodes'> {
   _rowIndex: number;            // 1-based
   additionalBarcodes?: { barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER' }[];
   imageUrl?: string | null;
+  reorderMilli?: number | null;
 }
 
 interface RowResult {
@@ -85,6 +88,9 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
 
   const openingQtyRaw = toNum(raw.openingQtyMilli ?? raw.openingStockMilli);
   if (openingQtyRaw !== null && openingQtyRaw < 0) errors.push('Stock quantity cannot be negative');
+
+  const reorderRaw = toNum(raw.reorderMilli ?? raw.reorderLevel);
+  if (reorderRaw !== null && reorderRaw < 0) errors.push('Reorder level cannot be negative');
 
   const taxRateBpRaw = toNum(raw.taxRateBp);
   if (taxRateBpRaw !== null && !VALID_GST_RATES_BP.has(taxRateBpRaw)) {
@@ -176,6 +182,7 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
       taxRateBp: taxRateBpRaw ?? 500,
       taxInclusive: raw.taxInclusive === false || raw.taxInclusive === 'false' ? false : true,
       openingQtyMilli: openingQtyRaw !== null ? Math.round(openingQtyRaw) : 0,
+      reorderMilli: reorderRaw !== null ? Math.round(reorderRaw) : null,
       isRestock,
       matchedItemId,
       updatePrices: Boolean(raw.updatePrices),
@@ -224,6 +231,22 @@ export function registerItemsBulk(r: Router) {
     if (!Array.isArray(b.rows)) throw bad('rows must be an array', 'VALIDATION', { field: 'rows' });
     if (b.rows.length === 0) throw bad('rows array is empty', 'VALIDATION', { field: 'rows' });
     if (b.rows.length > 500) throw bad('Cannot import more than 500 products at a time', 'VALIDATION', { field: 'rows' });
+
+    // ── Supplier validation (Global supplier selection is mandatory) ────────
+    const supplierId = toStr(b.supplierId || b.partyId);
+    if (!supplierId) {
+      throw bad('Supplier is required for bulk product import. Please select a supplier.', 'VALIDATION', { field: 'supplierId' });
+    }
+    const supplier = await ctx.db.one<{ id: string; name: string; type: string; active: boolean; gstin: string | null }>(
+      `SELECT id, name, type, active, gstin FROM parties WHERE id = ? AND tenant_id = ? AND type = 'supplier'`,
+      [supplierId, tenantId],
+    );
+    if (!supplier) {
+      throw bad('Selected supplier was not found or is invalid', 'VALIDATION', { field: 'supplierId' });
+    }
+    if (!supplier.active) {
+      throw bad(`Supplier "${supplier.name}" is deactivated. Please select an active supplier.`, 'VALIDATION', { field: 'supplierId' });
+    }
 
     // ── Idempotency check ───────────────────────────────────────────────────
     const importBatchId = b.importBatchId ? String(b.importBatchId).trim() : null;
@@ -534,6 +557,8 @@ export function registerItemsBulk(r: Router) {
     let restocked = 0;
     let skipped = results.filter((r) => r.status === 'skipped').length;
     let barcodesSaved = 0;
+    let purchaseId: string | null = null;
+    let purchaseNumber: string | null = null;
 
     await ctx.db.tx(async (q) => {
       // 1. Create missing categories if not already existing or deleted
@@ -556,16 +581,113 @@ export function registerItemsBulk(r: Router) {
         }
       }
 
+      // ── Step 6.1: Initialize Purchase record for inward stock & restock shipments ──
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      const hasIncomingStock = validRestocks.some((r) => (r.openingQtyMilli ?? 0) > 0) ||
+        rowsReadyForInsert.some((r) => (r.openingQtyMilli ?? 0) > 0);
+
+      if (hasIncomingStock) {
+        purchaseId = newId('pur');
+        const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
+          `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
+           VALUES (?, ?, 'PUR', 2)
+           ON CONFLICT (tenant_id, branch_id, series) DO UPDATE SET next_no = number_series.next_no + 1
+           RETURNING (next_no - 1) AS assigned_no`,
+          [tenantId, branchId],
+        );
+        const seqNo = Number(seriesRow?.assignedNo ?? seriesRow?.assigned_no ?? 1);
+        purchaseNumber = `PUR-${1000 + seqNo}`;
+
+        await q.exec(
+          `INSERT INTO purchases (
+            id, tenant_id, branch_id, supplier_id, purchase_number, bill_no, supplier_invoice_number,
+            supplier_invoice_date, purchase_date, bdate, status,
+            subtotal_minor, discount_minor, taxable_minor, tax_minor,
+            cgst_minor, sgst_minor, igst_minor, itc_minor,
+            other_charges_minor, other_charges_gst_minor, other_charges_gst_bp,
+            round_off_minor, total_minor, paid_minor, balance_minor,
+            note, created_by, idempotency_key, created_at
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, 'posted',
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0,
+            0, 0, 0, 0,
+            ?, ?, ?, now()
+          )`,
+          [
+            purchaseId, tenantId, branchId, supplierId, purchaseNumber, importId, importId,
+            todayStr, todayStr, todayStr,
+            `Bulk import from ${supplier.name} (${importId})`, ctx.user!.id, importId,
+          ],
+        );
+      }
+
+      let purchaseSubtotal = 0;
+      let purchaseTaxable = 0;
+      let purchaseTax = 0;
+      let purchaseCgst = 0;
+      let purchaseSgst = 0;
+      let purchaseTotal = 0;
+      let purchaseLinesCount = 0;
+
       // 2. Process Restocks
       for (const row of validRestocks) {
         const itemId = row.matchedItemId!;
         try {
-          // If incoming stock > 0, record inventory stock-in movement
+          // If incoming stock > 0, record inventory stock-in movement and purchase line
           if ((row.openingQtyMilli ?? 0) > 0) {
+            const qtyMilli = row.openingQtyMilli!;
+            const costMinor = row.costMinor ?? 0;
+            const taxRateBp = row.taxRateBp ?? 500;
+            const lineSubtotal = Math.round((costMinor * qtyMilli) / 1000);
+            let lineTaxable = lineSubtotal;
+            let lineTax = 0;
+            if (taxRateBp > 0) {
+              if (row.taxInclusive) {
+                lineTaxable = Math.round(lineSubtotal / (1 + taxRateBp / 10000));
+                lineTax = lineSubtotal - lineTaxable;
+              } else {
+                lineTaxable = lineSubtotal;
+                lineTax = Math.round((lineTaxable * taxRateBp) / 10000);
+              }
+            }
+            const lineTotal = lineTaxable + lineTax;
+            const lineCgst = Math.round(lineTax / 2);
+            const lineSgst = lineTax - lineCgst;
+
+            let lineId: string | null = null;
+            if (purchaseId) {
+              lineId = newId('prl');
+              await q.exec(
+                `INSERT INTO purchase_lines (
+                  id, tenant_id, branch_id, purchase_id, item_id, name, hsn, unit,
+                  qty_milli, billed_qty_milli, received_qty_milli,
+                  cost_minor, discount_minor, tax_rate_bp,
+                  taxable_minor, tax_minor, cgst_minor, sgst_minor, igst_minor, total_minor
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?)`,
+                [
+                  lineId, tenantId, branchId, purchaseId, itemId, row.name, row.hsn || null, row.unit || 'pcs',
+                  qtyMilli, qtyMilli, qtyMilli,
+                  costMinor, taxRateBp,
+                  lineTaxable, lineTax, lineCgst, lineSgst, lineTotal,
+                ],
+              );
+              purchaseSubtotal += lineSubtotal;
+              purchaseTaxable += lineTaxable;
+              purchaseTax += lineTax;
+              purchaseCgst += lineCgst;
+              purchaseSgst += lineSgst;
+              purchaseTotal += lineTotal;
+              purchaseLinesCount++;
+            }
+
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, 'purchase', 'import', ?, ?, 'Bulk import restock shipment', ?)`,
-              [newId('sm'), tenantId, branchId, itemId, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, unit_cost_minor, reason, notes, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'purchase', 'purchase', ?, ?, ?, 'Bulk import restock shipment', ?, ?)`,
+              [newId('sm'), tenantId, branchId, itemId, firstLocation, qtyMilli, purchaseId || importId, lineId, costMinor, `Supplier: ${supplier.name}`, ctx.user!.id],
             );
           }
 
@@ -585,16 +707,18 @@ export function registerItemsBulk(r: Router) {
           const finalRestockCategory = row.category && row.category.trim() ? row.category.trim() : null;
           const finalRestockImageUrl = row.imageUrl && row.imageUrl.trim() ? row.imageUrl.trim() : null;
 
-          // Always persist product metadata (SKU, HSN, Category, Image)
+          // Always persist product metadata (SKU, HSN, Category, Image) and preserve existing preferred supplier
           await q.exec(
             `UPDATE items
              SET sku = COALESCE(NULLIF(?, ''), sku),
                  hsn = COALESCE(NULLIF(?, ''), hsn),
                  category = COALESCE(NULLIF(?, ''), category),
                  image_url = COALESCE(NULLIF(?, ''), image_url),
+                 preferred_supplier_id = COALESCE(preferred_supplier_id, ?),
+                 reorder_milli = COALESCE(?, reorder_milli),
                  updated_at = now()
              WHERE id = ? AND tenant_id = ?`,
-            [finalRestockSku, finalRestockHsn, finalRestockCategory, finalRestockImageUrl, itemId, tenantId],
+            [finalRestockSku, finalRestockHsn, finalRestockCategory, finalRestockImageUrl, supplierId, row.reorderMilli ?? null, itemId, tenantId],
           );
 
           // If price updates requested, update product pricing
@@ -749,18 +873,19 @@ export function registerItemsBulk(r: Router) {
 
         await q.exec('SAVEPOINT sp_bulk_row');
         try {
-          // Insert item
+          // Insert item with preferred supplier
           await q.exec(
             `INSERT INTO items (
               id, tenant_id, branch_id, name, sku, barcode, barcode_type, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-              reorder_milli, favorite, custom, active, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, false, '{}'::jsonb, true, ?)`,
+              reorder_milli, preferred_supplier_id, favorite, custom, active, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?, false, '{}'::jsonb, true, ?)`,
             [
               id, tenantId, branchId, row.name, finalSku, finalBarcode, finalBarcode ? barcodeType : 'INTERNAL', row.hsn || null,
               row.unit || 'pcs', row.category || null,
               row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true,
-                          row.imageUrl || null,
+              row.reorderMilli ?? 0,
+              supplierId, row.imageUrl || null,
             ],
           );
 
@@ -807,12 +932,57 @@ export function registerItemsBulk(r: Router) {
             }
           }
 
-          // Record opening stock if provided
+          // Record opening stock if provided and record purchase line
           if ((row.openingQtyMilli ?? 0) > 0) {
+            const qtyMilli = row.openingQtyMilli!;
+            const costMinor = row.costMinor ?? 0;
+            const taxRateBp = row.taxRateBp ?? 500;
+            const lineSubtotal = Math.round((costMinor * qtyMilli) / 1000);
+            let lineTaxable = lineSubtotal;
+            let lineTax = 0;
+            if (taxRateBp > 0) {
+              if (row.taxInclusive) {
+                lineTaxable = Math.round(lineSubtotal / (1 + taxRateBp / 10000));
+                lineTax = lineSubtotal - lineTaxable;
+              } else {
+                lineTaxable = lineSubtotal;
+                lineTax = Math.round((lineTaxable * taxRateBp) / 10000);
+              }
+            }
+            const lineTotal = lineTaxable + lineTax;
+            const lineCgst = Math.round(lineTax / 2);
+            const lineSgst = lineTax - lineCgst;
+
+            let lineId: string | null = null;
+            if (purchaseId) {
+              lineId = newId('prl');
+              await q.exec(
+                `INSERT INTO purchase_lines (
+                  id, tenant_id, branch_id, purchase_id, item_id, name, hsn, unit,
+                  qty_milli, billed_qty_milli, received_qty_milli,
+                  cost_minor, discount_minor, tax_rate_bp,
+                  taxable_minor, tax_minor, cgst_minor, sgst_minor, igst_minor, total_minor
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, ?)`,
+                [
+                  lineId, tenantId, branchId, purchaseId, id, row.name, row.hsn || null, row.unit || 'pcs',
+                  qtyMilli, qtyMilli, qtyMilli,
+                  costMinor, taxRateBp,
+                  lineTaxable, lineTax, lineCgst, lineSgst, lineTotal,
+                ],
+              );
+              purchaseSubtotal += lineSubtotal;
+              purchaseTaxable += lineTaxable;
+              purchaseTax += lineTax;
+              purchaseCgst += lineCgst;
+              purchaseSgst += lineSgst;
+              purchaseTotal += lineTotal;
+              purchaseLinesCount++;
+            }
+
             await q.exec(
-              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, unit_cost_minor, reason, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, 'opening', 'import', ?, ?, 'Bulk import opening stock', ?)`,
-              [newId('sm'), tenantId, branchId, id, firstLocation, row.openingQtyMilli, importId, row.costMinor ?? 0, ctx.user!.id],
+              `INSERT INTO stock_moves (id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, unit_cost_minor, reason, notes, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'opening', 'purchase', ?, ?, ?, 'Bulk import opening stock', ?, ?)`,
+              [newId('sm'), tenantId, branchId, id, firstLocation, qtyMilli, purchaseId || importId, lineId, costMinor, `Supplier: ${supplier.name}`, ctx.user!.id],
             );
           }
 
@@ -834,6 +1004,23 @@ export function registerItemsBulk(r: Router) {
         }
       }
 
+      // Finalize purchase totals if lines were recorded
+      if (purchaseId) {
+        if (purchaseLinesCount > 0) {
+          await q.exec(
+            `UPDATE purchases
+             SET subtotal_minor = ?, taxable_minor = ?, tax_minor = ?,
+                 cgst_minor = ?, sgst_minor = ?, total_minor = ?, balance_minor = ?
+             WHERE id = ?`,
+            [purchaseSubtotal, purchaseTaxable, purchaseTax, purchaseCgst, purchaseSgst, purchaseTotal, purchaseTotal, purchaseId],
+          );
+        } else {
+          await q.exec('DELETE FROM purchases WHERE id = ?', [purchaseId]);
+          purchaseId = null;
+          purchaseNumber = null;
+        }
+      }
+
       // 4. Record in imports table
       const totalSkipped = b.rows.length - (created + restocked);
       await q.exec(
@@ -847,7 +1034,18 @@ export function registerItemsBulk(r: Router) {
         action: 'item.bulk_import',
         entity: 'item',
         entityId: importId,
-        detail: { importId, totalRows: b.rows.length, created, restocked, skipped: totalSkipped, barcodesSaved },
+        detail: {
+          importId,
+          purchaseId,
+          purchaseNumber,
+          supplierId,
+          supplierName: supplier.name,
+          totalRows: b.rows.length,
+          created,
+          restocked,
+          skipped: totalSkipped,
+          barcodesSaved,
+        },
       });
     });
 
@@ -856,6 +1054,10 @@ export function registerItemsBulk(r: Router) {
 
     return {
       importId,
+      purchaseId,
+      purchaseNumber,
+      supplierId,
+      supplierName: supplier.name,
       totalRows: b.rows.length,
       created,
       restocked,
