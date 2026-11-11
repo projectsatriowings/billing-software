@@ -24,7 +24,6 @@ import {
   FilterIcon,
   AlertTriangleIcon,
 } from '../inventory/InventoryIcons.tsx';
-import { WhatsAppIcon } from '../terminal/PaymentIcons.tsx';
 
 export interface RecentBillsBentoViewProps {
   invoices: Invoice[];
@@ -46,8 +45,8 @@ export interface RecentBillsBentoViewProps {
   openReturnModal: (id: string) => void;
   handleOpenVoidModal: (params: { id: string; number: string; totalCreditMinor: number; advanceAmountMinor: number }) => void;
   openCollectPayment: (party: Party, invoiceId?: string) => void;
-  openWhatsAppResend: (inv: Invoice) => void;
-  handleOpenCreditNoteWhatsApp: (params: any) => void;
+  openWhatsAppResend?: (inv: Invoice) => void;
+  handleOpenCreditNoteWhatsApp?: (params: any) => void;
   onNavigateToPos: () => void;
 }
 
@@ -692,35 +691,6 @@ export const RecentBillsBentoView: React.FC<RecentBillsBentoViewProps> = ({
                           >
                             <RotateCcwIcon size={13} />
                             <span>Return / CN</span>
-                          </button>
-                        )}
-
-                        {/* 5. WhatsApp Resend */}
-                        {shop?.whatsappEnabled !== false && (
-                          <button
-                            type="button"
-                            className="bento-act-btn whatsapp"
-                            disabled={inv.status === 'cancelled' || inv.status === 'voided'}
-                            onClick={() => {
-                              if (inv.kind === 'credit_note') {
-                                handleOpenCreditNoteWhatsApp({
-                                  id: inv.id,
-                                  number: inv.number,
-                                  originalInvoiceNumber: 'Original Bill',
-                                  phone: inv.customerPhone || '',
-                                  customerName: inv.customerName,
-                                  totalCreditMinor: inv.totalMinor,
-                                  settlementSummary: 'Credit Note Settlement',
-                                  shareToken: inv.shareToken,
-                                });
-                              } else {
-                                openWhatsAppResend(inv);
-                              }
-                            }}
-                            title="Send receipt to customer on WhatsApp"
-                          >
-                            <WhatsAppIcon size={13} />
-                            <span>WhatsApp</span>
                           </button>
                         )}
 
