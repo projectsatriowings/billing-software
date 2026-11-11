@@ -1093,6 +1093,8 @@ export function App() {
   const [settingsPrefix, setSettingsPrefix] = useState('');
   const [settingsOwnerEmail, setSettingsOwnerEmail] = useState('');
   const [settingsLogoUrl, setSettingsLogoUrl] = useState('');
+  const [logoPreviewTab, setLogoPreviewTab] = useState<'favicon' | 'app' | 'label'>('favicon');
+  const [isDraggingLogo, setIsDraggingLogo] = useState<boolean>(false);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
 
   // Settings: WhatsApp Bill Sharing (Section 9.1)
@@ -1736,6 +1738,40 @@ export function App() {
       initSettingsForm(shop);
     }
   }, [user?.id, shop?.id]);
+
+  // Dynamically update website favicon and browser tab title to match store brand
+  useEffect(() => {
+    // 1. Dynamic Favicon
+    let faviconLink: HTMLLinkElement | null = document.getElementById('app-favicon') as HTMLLinkElement | null;
+    if (!faviconLink) {
+      faviconLink = document.querySelector("link[rel*='icon']");
+    }
+    if (!faviconLink) {
+      faviconLink = document.createElement('link');
+      faviconLink.id = 'app-favicon';
+      faviconLink.rel = 'shortcut icon';
+      document.head.appendChild(faviconLink);
+    }
+    if (shop?.logoUrl) {
+      faviconLink.href = shop.logoUrl;
+      faviconLink.type = 'image/png';
+    } else {
+      faviconLink.href = '/favicon.ico';
+    }
+
+    // 2. Apple Touch Icon (mobile homescreen)
+    const appleIcon: HTMLLinkElement | null = document.getElementById('app-apple-touch-icon') as HTMLLinkElement | null;
+    if (appleIcon && shop?.logoUrl) {
+      appleIcon.href = shop.logoUrl;
+    }
+
+    // 3. Dynamic Browser Tab Title
+    if (shop?.name) {
+      document.title = `${shop.name} | Cloud POS & Billing`;
+    } else {
+      document.title = 'Adaptive Billing | India-First Cloud POS & GST Invoicing';
+    }
+  }, [shop?.logoUrl, shop?.name]);
 
 
   // Real-time Promotions Evaluation Engine & BOGO Auto-Free Insertion
@@ -2489,6 +2525,47 @@ export function App() {
     setUser(null);
     setShop(null);
     navigateTo('landing');
+  };
+
+  const handleLogoFileUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        // High quality downscale to max 320x320 for sharp favicon and fast save
+        const maxDim = 320;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setSettingsLogoUrl(canvas.toDataURL('image/png'));
+        } else {
+          setSettingsLogoUrl((ev.target?.result as string) || '');
+        }
+      };
+      img.onerror = () => {
+        setSettingsLogoUrl((ev.target?.result as string) || '');
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -5892,17 +5969,37 @@ export function App() {
                 className="sidebar-brand"
                 onClick={() => navigateTo('landing')}
                 style={{ cursor: 'pointer' }}
-                title="Adaptive Billing · Cloud POS & GST"
+                title={`${shop?.name || 'Adaptive Billing'} · Cloud POS & GST`}
               >
-                <div className="sidebar-brand-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 2L2 22h20L12 2z" />
-                    <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
-                  </svg>
+                <div
+                  className="sidebar-brand-icon"
+                  style={shop?.logoUrl ? { background: '#ffffff', padding: '3px' } : undefined}
+                >
+                  {shop?.logoUrl ? (
+                    <img
+                      src={shop.logoUrl}
+                      alt={shop.name || 'Store Logo'}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        borderRadius: '7px',
+                      }}
+                    />
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2L2 22h20L12 2z" />
+                      <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
+                    </svg>
+                  )}
                 </div>
                 <div className="sidebar-brand-text">
-                  <span className="sidebar-brand-title">Adaptive Billing</span>
-                  <span className="sidebar-brand-subtitle">Cloud POS &amp; GST</span>
+                  <span className="sidebar-brand-title" title={shop?.name || 'Adaptive Billing'}>
+                    {shop?.name || 'Adaptive Billing'}
+                  </span>
+                  <span className="sidebar-brand-subtitle">
+                    {shop?.businessType ? getBusinessLabel(shop.businessType) : 'Cloud POS & GST'}
+                  </span>
                 </div>
               </div>
 
@@ -6778,30 +6875,57 @@ export function App() {
                 {currentHeaderTitle}
               </h1>
             ) : displayTab === 'dashboard' && user ? (
-              <div className="top-dash-greeting-group-left">
-                <h1 className="header-greeting-title">
-                  {dashboardGreeting}, {userFirstName}
-                </h1>
-                <div className="header-meta-line">
-                  <span className="header-meta-item header-shop-name">{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
-                  <span className="header-meta-sep">·</span>
-                  <span className="header-meta-item header-gstin-wrap">
-                    <span className="header-gstin-label">GSTIN </span>
-                    <span className="header-gstin-val">{shop?.gstin || '33AAAAA0000A1Z9'}</span>
-                  </span>
-                  <span className="header-meta-sep">·</span>
-                  <span className="header-meta-item header-date-wrap">
-                    <CalendarIcon size={15} className="header-calendar-icon" />
-                    <span>
-                      {new Date().toLocaleDateString('en-GB', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        timeZone: 'Asia/Kolkata',
-                      })}
+              <div className="top-dash-greeting-group-left" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                {shop?.logoUrl && (
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '12px',
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '3px',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                    }}
+                    title={shop.name}
+                  >
+                    <img
+                      src={shop.logoUrl}
+                      alt={shop.name}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+                <div>
+                  <h1 className="header-greeting-title">
+                    {dashboardGreeting}, {userFirstName}
+                  </h1>
+                  <div className="header-meta-line">
+                    <span className="header-meta-item header-shop-name">{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
+                    <span className="header-meta-sep">·</span>
+                    <span className="header-meta-item header-gstin-wrap">
+                      <span className="header-gstin-label">GSTIN </span>
+                      <span className="header-gstin-val">{shop?.gstin || '33AAAAA0000A1Z9'}</span>
                     </span>
-                  </span>
+                    <span className="header-meta-sep">·</span>
+                    <span className="header-meta-item header-date-wrap">
+                      <CalendarIcon size={15} className="header-calendar-icon" />
+                      <span>
+                        {new Date().toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          timeZone: 'Asia/Kolkata',
+                        })}
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -6926,8 +7050,22 @@ export function App() {
                       🏢 <strong>{currentBranchName}</strong>
                     </span>
                   </div>
-                  <div className="header-store-chip">
-                    <span className="store-chip-dot"></span>
+                  <div className="header-store-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                    {shop?.logoUrl ? (
+                      <img
+                        src={shop.logoUrl}
+                        alt="Store Logo"
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '4px',
+                          objectFit: 'contain',
+                          background: '#ffffff',
+                        }}
+                      />
+                    ) : (
+                      <span className="store-chip-dot"></span>
+                    )}
                     <span className="store-chip-text">
                       {shop?.name} • <strong>{shop?.gstin || 'B2C Retail'}</strong>
                     </span>
@@ -6970,10 +7108,18 @@ export function App() {
                 <div className="bento-top-bar">
                   <div className="bento-top-left">
                     <div className="bento-pos-badge">
-                      <span className="bento-badge-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
+                      <span className="bento-badge-icon" style={shop?.logoUrl ? { background: '#ffffff', padding: '2px' } : undefined}>
+                        {shop?.logoUrl ? (
+                          <img
+                            src={shop.logoUrl}
+                            alt={shop.name || 'Store Logo'}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                          />
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                          </svg>
+                        )}
                       </span>
                       <div>
                         <div className="bento-badge-title-row">
@@ -12151,102 +12297,424 @@ export function App() {
                   )}
 
                   <form onSubmit={handleSaveSettings}>
-                    {/* Store Brand Logo */}
+                    {/* Advanced Brand Identity & Live Favicon Studio */}
                     <div
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1.25rem',
-                        padding: '1rem 1.25rem',
-                        marginBottom: '1.25rem',
-                        background: '#f8fafc',
-                        borderRadius: '12px',
-                        border: '1px dashed #cbd5e1',
+                        background: '#ffffff',
+                        borderRadius: '14px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 3px 12px rgba(15, 23, 42, 0.04)',
+                        padding: '1.25rem 1.5rem',
+                        marginBottom: '1.5rem',
                       }}
                     >
+                      {/* Header row with badges */}
                       <div
                         style={{
-                          width: '74px',
-                          height: '74px',
-                          borderRadius: '10px',
-                          background: '#ffffff',
-                          border: '1px solid #e2e8f0',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          overflow: 'hidden',
-                          flexShrink: 0,
-                          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.75rem',
+                          marginBottom: '1rem',
+                          paddingBottom: '0.75rem',
+                          borderBottom: '1px solid #f1f5f9',
                         }}
                       >
-                        {settingsLogoUrl ? (
-                          <img
-                            src={settingsLogoUrl}
-                            alt="Store Logo"
-                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                          />
-                        ) : (
-                          <StoreIcon size={34} style={{ color: '#94a3b8' }} />
-                        )}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.94rem', color: '#1e293b', marginBottom: '0.2rem' }}>
-                          Store / Shop Logo
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.6rem' }}>
-                          Upload your store brand logo. It will appear on printed barcode price stickers and receipt labels. Recommended: PNG or JPEG under 500 KB.
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <label
-                            className="btn btn-outline"
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span
                             style={{
-                              padding: '0.35rem 0.85rem',
-                              fontSize: '0.82rem',
-                              cursor: 'pointer',
-                              margin: 0,
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '7px',
+                              background: '#ede9fe',
+                              color: '#6d4aff',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '0.4rem',
+                              justifyContent: 'center',
                             }}
                           >
-                            <span>📷 Choose Logo Image</span>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                              style={{ display: 'none' }}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                if (file.size > 500 * 1024) {
-                                  alert('Image size exceeds 500 KB. Please upload a smaller image.');
-                                  return;
-                                }
-                                const reader = new FileReader();
-                                reader.onload = () => {
-                                  if (typeof reader.result === 'string') {
-                                    setSettingsLogoUrl(reader.result);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              }}
-                            />
-                          </label>
-                          {settingsLogoUrl && (
-                            <button
-                              type="button"
-                              className="btn"
+                            <StoreIcon size={16} />
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '0.96rem', color: '#0f172a' }}>
+                              Store Brand Logo &amp; Website Favicon Studio
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                              Your logo automatically syncs across the browser tab favicon, dashboard, sidebar, and printed labels.
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.45rem',
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '9999px',
+                            background: settingsLogoUrl ? '#ecfdf5' : '#f8fafc',
+                            border: `1px solid ${settingsLogoUrl ? '#a7f3d0' : '#e2e8f0'}`,
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: settingsLogoUrl ? '#065f46' : '#64748b',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: settingsLogoUrl ? '#10b981' : '#94a3b8',
+                              boxShadow: settingsLogoUrl ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : 'none',
+                            }}
+                          />
+                          <span>{settingsLogoUrl ? 'Live: Favicon, Dashboard, Sidebar & Labels' : 'Default Brand Active'}</span>
+                        </div>
+                      </div>
+
+                      {/* Main 2-column Studio Grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(280px, 1fr) minmax(320px, 1.2fr)',
+                          gap: '1.25rem',
+                          alignItems: 'stretch',
+                        }}
+                      >
+                        {/* Column 1: Upload & Drag Drop Zone */}
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingLogo(true);
+                          }}
+                          onDragLeave={() => setIsDraggingLogo(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingLogo(false);
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) handleLogoFileUpload(file);
+                          }}
+                          style={{
+                            background: isDraggingLogo ? '#eff6ff' : '#f8fafc',
+                            border: `2px dashed ${isDraggingLogo ? '#3b82f6' : '#cbd5e1'}`,
+                            borderRadius: '12px',
+                            padding: '1.1rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {/* Logo container */}
+                          <div
+                            style={{
+                              width: '84px',
+                              height: '84px',
+                              borderRadius: '14px',
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              marginBottom: '0.8rem',
+                              padding: '6px',
+                            }}
+                          >
+                            {settingsLogoUrl ? (
+                              <img
+                                src={settingsLogoUrl}
+                                alt="Store Logo"
+                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                              />
+                            ) : (
+                              <StoreIcon size={38} style={{ color: '#94a3b8' }} />
+                            )}
+                          </div>
+
+                          <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b', marginBottom: '0.2rem' }}>
+                            {settingsLogoUrl ? 'Brand Logo Uploaded' : 'Drag & Drop Logo Image Here'}
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: '0.8rem', maxWidth: '240px' }}>
+                            Auto-optimizes PNG, JPG, WebP, SVG for instant web rendering &amp; thermal prints.
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <label
+                              className="btn btn-primary"
                               style={{
-                                padding: '0.35rem 0.8rem',
-                                fontSize: '0.82rem',
-                                background: '#fee2e2',
-                                color: '#dc2626',
-                                border: '1px solid #fecaca',
+                                padding: '0.4rem 0.9rem',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                margin: 0,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                borderRadius: '8px',
                               }}
-                              onClick={() => setSettingsLogoUrl('')}
                             >
-                              ✕ Remove Logo
-                            </button>
-                          )}
+                              <span>📷 {settingsLogoUrl ? 'Change Logo' : 'Upload Logo'}</span>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleLogoFileUpload(file);
+                                }}
+                              />
+                            </label>
+                            {settingsLogoUrl && (
+                              <button
+                                type="button"
+                                className="btn"
+                                style={{
+                                  padding: '0.4rem 0.8rem',
+                                  fontSize: '0.8rem',
+                                  background: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '8px',
+                                }}
+                                onClick={() => setSettingsLogoUrl('')}
+                              >
+                                ✕ Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Column 2: Live Multi-Surface Preview */}
+                        <div
+                          style={{
+                            background: '#f8fafc',
+                            borderRadius: '12px',
+                            border: '1px solid #e2e8f0',
+                            padding: '1rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Live Multi-Surface Preview
+                            </span>
+                            {/* Preview switcher tabs */}
+                            <div style={{ display: 'inline-flex', background: '#e2e8f0', borderRadius: '7px', padding: '2px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('favicon')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'favicon' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'favicon' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'favicon' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                🌐 Favicon
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('app')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'app' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'app' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'app' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                📊 App &amp; Sidebar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('label')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'label' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'label' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'label' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                🏷️ Label
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Preview Viewport */}
+                          <div
+                            style={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minHeight: '130px',
+                            }}
+                          >
+                            {/* Preview 1: Website Favicon & Browser Tab */}
+                            {logoPreviewTab === 'favicon' && (
+                              <div
+                                style={{
+                                  width: '100%',
+                                  background: '#e2e8f0',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                                  border: '1px solid #cbd5e1',
+                                }}
+                              >
+                                {/* Browser Chrome Window Header */}
+                                <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: '6px' }}>
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                                  <div
+                                    style={{
+                                      marginLeft: '6px',
+                                      background: '#ffffff',
+                                      borderRadius: '6px 6px 0 0',
+                                      padding: '4px 10px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '7px',
+                                      maxWidth: '240px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 600,
+                                      color: '#0f172a',
+                                      boxShadow: '0 -1px 3px rgba(0,0,0,0.04)',
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '3px',
+                                        background: '#f1f5f9',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {settingsLogoUrl ? (
+                                        <img src={settingsLogoUrl} alt="Favicon" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                      ) : (
+                                        <span style={{ fontSize: '10px' }}>⚡</span>
+                                      )}
+                                    </div>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {settingsName || 'Your Store'} | Cloud POS
+                                    </span>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.7rem', marginLeft: 'auto' }}>✕</span>
+                                  </div>
+                                </div>
+                                {/* Mock URL address bar */}
+                                <div style={{ background: '#ffffff', padding: '6px 12px', borderTop: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700 }}>🔒</span>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                    https://{((settingsName || 'store').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'mybrand'}.billing.app
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Preview 2: App Sidebar & Top Header */}
+                            {logoPreviewTab === 'app' && (
+                              <div
+                                style={{
+                                  width: '100%',
+                                  background: '#1e1b4b',
+                                  borderRadius: '8px',
+                                  padding: '10px 14px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '8px',
+                                    background: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '2px',
+                                    overflow: 'hidden',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {settingsLogoUrl ? (
+                                    <img src={settingsLogoUrl} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                  ) : (
+                                    <StoreIcon size={20} style={{ color: '#6d4aff' }} />
+                                  )}
+                                </div>
+                                <div style={{ overflow: 'hidden', flex: 1 }}>
+                                  <div style={{ color: '#ffffff', fontWeight: 800, fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {settingsName || 'Adaptive Billing'}
+                                  </div>
+                                  <div style={{ color: '#c7d2fe', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {getBusinessLabel(settingsType)} · POS &amp; GST
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Preview 3: Barcode Label Sticker */}
+                            {logoPreviewTab === 'label' && (
+                              <div
+                                style={{
+                                  background: '#ffffff',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  padding: '8px 12px',
+                                  width: '190px',
+                                  textAlign: 'center',
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                                }}
+                              >
+                                {settingsLogoUrl && (
+                                  <div style={{ marginBottom: '2px', display: 'flex', justifyContent: 'center' }}>
+                                    <img src={settingsLogoUrl} alt="Logo" style={{ maxHeight: '18px', maxWidth: '60px', objectFit: 'contain' }} />
+                                  </div>
+                                )}
+                                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                                  {settingsName || 'STORE NAME'}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
+                                  Sample Product
+                                </div>
+                                <div style={{ fontSize: '0.55rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '1px', margin: '2px 0' }}>
+                                  ||| | |||| ||| || |
+                                </div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 900, color: '#0f172a' }}>
+                                  ₹199.00
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
