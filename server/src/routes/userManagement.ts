@@ -1214,9 +1214,21 @@ export function registerUserManagement(r: Router) {
       [cnt.id, tenantId],
     );
 
+    const hasInvoices = await ctx.db.one(
+      'SELECT 1 FROM invoices WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasShifts = await ctx.db.one(
+      'SELECT 1 FROM shifts WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasHistory = Boolean(hasInvoices || hasShifts);
+
     return {
       name: cnt.name,
       code: cnt.code,
+      hasHistory,
+      canDelete: !hasHistory,
       loginUsername: cnt.login_username || cnt.loginUsername || null,
       defaultCashiersCount: defaultCashiers.length,
     };
@@ -1232,6 +1244,25 @@ export function registerUserManagement(r: Router) {
       [counterId, tenantId],
     );
     if (!cnt) throw notFound('Counter');
+
+    const hasInvoices = await ctx.db.one(
+      'SELECT 1 FROM invoices WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasShifts = await ctx.db.one(
+      'SELECT 1 FROM shifts WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasPayments = await ctx.db.one(
+      'SELECT 1 FROM payments WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    if (hasInvoices || hasShifts || hasPayments) {
+      throw conflict(
+        `Cannot delete "${cnt.name}" because it has existing billing transactions or shifts. Please deactivate (disable) the counter instead.`,
+        'COUNTER_HAS_HISTORY',
+      );
+    }
 
     let defaultCashiersCount = 0;
     await ctx.db.tx(async (q) => {

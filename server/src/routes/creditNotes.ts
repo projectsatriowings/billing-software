@@ -485,14 +485,14 @@ export function registerCreditNotes(r: Router) {
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor, paid_minor, balance_minor,
           advance_amount_minor, refund_amount_minor, refund_mode, refund_reference,
-          rule_version, calc, share_token, idempotency_key, note, linked_invoice_id, created_by, created_at
+          rule_version, calc, share_token, idempotency_key, note, linked_invoice_id, created_by, location, counter, counter_id, counter_name_snapshot, created_at
         ) VALUES (
           ?, ?, ?, ?, ?, 'credit_note', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, 0, ?, ?, ?, ?,
           ?, ?, ?, 0, 0,
           ?, ?, ?, ?,
-          '1.0', ?::jsonb, ?, ?, ?, ?, ?, NOW()
+          '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
         )`,
         [
           cnId,
@@ -526,6 +526,10 @@ export function registerCreditNotes(r: Router) {
           overallNote || null,
           origInv.id,
           ctx.user!.id,
+          origInv.location || 'MAIN',
+          origInv.counter || 'COUNTER-1',
+          origInv.counter_id ?? origInv.counterId ?? null,
+          origInv.counter_name_snapshot ?? origInv.counterNameSnapshot ?? null,
         ],
       );
 

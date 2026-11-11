@@ -21,7 +21,9 @@ interface OpenShiftModalProps {
   userRole: string;
   defaultLocation?: string;
   defaultCounter?: string;
-  branches?: Array<{ code: string; name: string; counters?: string[] }>;
+  defaultCounterId?: string;
+  branches?: Array<{ id?: string; code: string; name: string; counters?: string[]; counterDetails?: any[] }>;
+  counterDetails?: any[];
 }
 
 export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
@@ -32,7 +34,9 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
   userRole,
   defaultLocation,
   defaultCounter,
+  defaultCounterId,
   branches,
+  counterDetails,
 }) => {
   const [openingRupees, setOpeningRupees] = useState<string>('1000');
   const [location, setLocation] = useState<string>(() => {
@@ -63,9 +67,28 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
 
   // Resolve counters available for the current branch
   const activeBranchObj = branches?.find((b) => (b.code || '').toUpperCase() === location.toUpperCase());
-  const branchCounters: string[] = activeBranchObj?.counters && Array.isArray(activeBranchObj.counters) && activeBranchObj.counters.length > 0
-    ? activeBranchObj.counters
-    : ['COUNTER-1', 'COUNTER-2'];
+  const detailsList = counterDetails || activeBranchObj?.counterDetails;
+  const activeDetails = detailsList ? detailsList.filter((c: any) => c.status !== 'DISABLED') : null;
+
+  const branchCounters: Array<{ code: string; name: string; id?: string }> = React.useMemo(() => {
+    if (activeDetails && activeDetails.length > 0) {
+      return activeDetails.map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name || c.code,
+      }));
+    }
+    const rawCounters = activeBranchObj?.counters && Array.isArray(activeBranchObj.counters) && activeBranchObj.counters.length > 0
+      ? activeBranchObj.counters
+      : ['COUNTER-1'];
+    return rawCounters.map((c: string) => {
+      const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
+      return {
+        code: c,
+        name: m ? `Counter ${m[1]}` : c,
+      };
+    });
+  }, [activeDetails, activeBranchObj]);
 
   const parsedRupees = parseFloat(openingRupees) || 0;
   const openingCashMinor = Math.round(parsedRupees * 100);
@@ -80,12 +103,19 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
       return;
     }
 
+    const matchedCounter = branchCounters.find(
+      (c) => (defaultCounterId && c.id === defaultCounterId) || c.code === counter || c.name === counter
+    );
+    const counterCode = matchedCounter?.code || counter.trim() || 'COUNTER-1';
+    const counterId = matchedCounter?.id;
+
     setIsSubmitting(true);
     try {
       const res = await openShift({
         openingCashMinor,
         location: location.trim() || 'MAIN',
-        counter: counter.trim() || 'COUNTER-1',
+        counter: counterCode,
+        counterId,
         notes: notes.trim() || undefined,
       });
       onSuccess(res.shift);
@@ -298,19 +328,11 @@ export const OpenShiftModal: React.FC<OpenShiftModalProps> = ({
                       value={counter}
                       onChange={(e) => setCounter(e.target.value)}
                     >
-                      {branchCounters.map((c) => {
-                        const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
-                        const label = m ? `Counter ${m[1]}` : c;
-                        return (
-                          <option key={c} value={c}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                      {!branchCounters.includes('COUNTER-1') && <option value="COUNTER-1">Counter 1</option>}
-                      {!branchCounters.includes('COUNTER-2') && <option value="COUNTER-2">Counter 2</option>}
-                      {!branchCounters.includes('COUNTER-3') && <option value="COUNTER-3">Counter 3</option>}
-                      {!branchCounters.includes('EXPRESS') && <option value="EXPRESS">Express Checkout</option>}
+                      {branchCounters.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

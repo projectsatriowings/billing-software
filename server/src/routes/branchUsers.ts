@@ -5,6 +5,7 @@ import { hashPassword, newId, verifyPassword } from '../security.ts';
 import { parseEmail } from '../shopFields.ts';
 import { j, type DB } from '../db/index.ts';
 import { enqueueUserEmail, getOwnerEmailForTenant, enqueueDeletionAlertEmail } from '../services/mailer.ts';
+import { invalidateTodayDashboardCache } from './dashboard.ts';
 
 /**
  * Resolves the logged-in Store Manager's branch strictly from their session/record.
@@ -226,60 +227,26 @@ export function registerBranchUsers(r: Router) {
     const status = ctx.query.status ? String(ctx.query.status).trim().toUpperCase() : '';
 
     const counterRows = await ctx.db.query<any>(
-      `SELECT c.id, c.name, c.code, c.login_username, c.status, c.last_active_at, c.created_at,
-              u.email AS counter_email,
-              el.status AS last_email_status, el.error_message AS last_email_error, el.sent_at AS last_email_sent_at
+      `SELECT c.id, c.name, c.code, c.status, c.created_at
        FROM counters c
-       LEFT JOIN users u ON u.counter_id = c.id AND u.role = 'counter' AND u.deleted_at IS NULL
-       LEFT JOIN LATERAL (
-         SELECT status, error_message, sent_at
-         FROM email_logs
-         WHERE user_id = u.id
-         ORDER BY created_at DESC
-         LIMIT 1
-       ) el ON true
        WHERE c.tenant_id = ? AND c.branch_id = ?
        ORDER BY c.code ASC`,
       [tenantId, branch.id],
     );
 
-    // Get all cashiers in this branch to map default counters
-    const cashierRows = await ctx.db.query<{ name: string; counter_id: string | null }>(
-      `SELECT name, counter_id FROM users WHERE tenant_id = ? AND branch_id = ? AND role = 'cashier' AND deleted_at IS NULL`,
-      [tenantId, branch.id],
-    );
-
-    const cashierMap = new Map<string, string[]>();
-    for (const c of cashierRows) {
-      const cId = (c as any).counterId || (c as any).counter_id;
-      if (cId) {
-        if (!cashierMap.has(cId)) cashierMap.set(cId, []);
-        cashierMap.get(cId)!.push(c.name);
-      }
-    }
-
     let counters = counterRows.map((r) => ({
       id: r.id,
       name: r.name,
       code: r.code,
-      loginUsername: r.login_username || r.loginUsername || null,
-      email: r.counter_email || null,
-      status: r.status as 'ACTIVE' | 'DISABLED',
-      lastActiveAt: r.last_active_at || r.lastActiveAt || null,
-      cashiers: cashierMap.get(r.id) || [],
+      status: (r.status as 'ACTIVE' | 'DISABLED') || 'ACTIVE',
       createdAt: r.created_at || r.createdAt,
-      lastEmailStatus: r.lastEmailStatus || r.last_email_status || null,
-      lastEmailError: r.lastEmailError || r.last_email_error || null,
-      lastEmailSentAt: r.lastEmailSentAt || r.last_email_sent_at || null,
     }));
 
     if (search) {
       counters = counters.filter((c) => {
         const mName = c.name.toLowerCase().includes(search);
         const mCode = c.code.toLowerCase().includes(search);
-        const mUser = c.loginUsername ? c.loginUsername.toLowerCase().includes(search) : false;
-        const mEmail = c.email ? c.email.toLowerCase().includes(search) : false;
-        return mName || mCode || mUser || mEmail;
+        return mName || mCode;
       });
     }
 
@@ -291,7 +258,7 @@ export function registerBranchUsers(r: Router) {
   });
 
   // -------------------------------------------------------------------------
-  // 4. CREATE COUNTER (Scoped to manager's branch)
+  // 4. CREATE COUNTER (Scoped to manager's branch - Name & Code only)
   // -------------------------------------------------------------------------
   r.post('/api/branch/counters', async (ctx) => {
     const branch = await requireStoreManagerBranch(ctx);
@@ -302,116 +269,71 @@ export function registerBranchUsers(r: Router) {
     if (name.length < 2) throw bad('Counter name must be at least 2 characters.', 'VALIDATION');
 
     const code = V.str(b.code, 'Counter code', { required: true, max: 20 }).trim().toUpperCase();
-    if (!/^[A-Z0-9-]+$/.test(code) || code.length < 3 || code.length > 12) {
-      throw bad('Counter code must be 3–12 uppercase letters, numbers or hyphens.', 'INVALID_CODE');
+    if (!/^[A-Z0-9-]+$/.test(code) || code.length < 2 || code.length > 20) {
+      throw bad('Counter code must be uppercase letters, numbers or hyphens.', 'INVALID_CODE');
     }
 
     // Check code uniqueness within this branch
     const dupCode = await ctx.db.one(
-      'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND code = ?',
+      'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND upper(code) = ?',
       [tenantId, branch.id, code],
     );
     if (dupCode) {
       throw conflict('A counter with this code already exists in your branch.', 'CODE_TAKEN');
     }
 
-    let username = (b.username || b.loginUsername) ? String(b.username || b.loginUsername).trim().toLowerCase() : null;
-    let email = b.email ? String(b.email).trim().toLowerCase() : null;
-
-    if (!username && !email) {
-      throw bad('Add a username, an email ID, or both to create a counter sign-in account.', 'VALIDATION');
+    // Check name uniqueness within this branch
+    const dupName = await ctx.db.one(
+      'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+      [tenantId, branch.id, name],
+    );
+    if (dupName) {
+      throw conflict('A counter with this name already exists in your branch.', 'NAME_TAKEN');
     }
-
-    if (username) {
-      const uErr = validateUsernameFormat(username);
-      if (uErr) throw bad(uErr, 'INVALID_USERNAME');
-
-      const dupUser = await ctx.db.one('SELECT id FROM users WHERE tenant_id = ? AND lower(username) = ?', [tenantId, username]);
-      if (dupUser) throw conflict('This username is already taken.', 'USERNAME_TAKEN');
-
-      const dupCnt = await ctx.db.one('SELECT id FROM counters WHERE tenant_id = ? AND lower(login_username) = ?', [tenantId, username]);
-      if (dupCnt) throw conflict('This username is already taken by another counter.', 'USERNAME_TAKEN');
-    }
-
-    if (email) {
-      try {
-        email = parseEmail(email);
-      } catch {
-        throw bad('Enter a valid email, like counter@store.com', 'INVALID_EMAIL');
-      }
-      const dupEmail = await ctx.db.one('SELECT id FROM users WHERE tenant_id = ? AND lower(email) = ?', [tenantId, email]);
-      if (dupEmail) throw conflict('This email ID is already in use.', 'EMAIL_TAKEN');
-    }
-
-    const password = V.str(b.password, 'Password', { required: true, max: 128 });
-    const pwErr = validatePasswordRules(password);
-    if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD');
-
-    const sendEmail = Boolean(b.sendEmail && email);
-    const mustChangePassword = b.mustChangePassword !== undefined ? Boolean(b.mustChangePassword) : true;
 
     const counterId = newId('cnt');
-    const userId = newId('u');
-    const passwordHash = hashPassword(password);
 
     await ctx.db.tx(async (q) => {
-      // 1. Insert into counters
       await q.exec(
-        `INSERT INTO counters (id, tenant_id, branch_id, name, code, login_username, status, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?, now(), now())`,
-        [counterId, tenantId, branch.id, name, code, username, ctx.user!.id],
+        `INSERT INTO counters (id, tenant_id, branch_id, name, code, status, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, now(), now())`,
+        [counterId, tenantId, branch.id, name, code, ctx.user!.id],
       );
 
-      // 2. Insert into users as counter account
-      await q.exec(
-        `INSERT INTO users (id, tenant_id, name, username, email, password_hash, role, status, active, branch_id, counter_id, must_change_password, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'counter', 'INVITED', true, ?, ?, ?, ?, now(), now())`,
-        [userId, tenantId, name, username, email, passwordHash, branch.id, counterId, mustChangePassword, ctx.user!.id],
-      );
+      // Keep branch.counters JSON array in sync
+      const brRow = await q.one<any>('SELECT counters FROM branches WHERE id = ?', [branch.id]);
+      let cntList: string[] = [];
+      try {
+        cntList = Array.isArray(brRow?.counters) ? brRow.counters : JSON.parse(brRow?.counters || '[]');
+      } catch {
+        cntList = [];
+      }
+      if (!cntList.includes(code)) {
+        cntList.push(code);
+        await q.exec('UPDATE branches SET counters = ?::jsonb WHERE id = ?', [j(cntList), branch.id]);
+      }
 
       await audit(q, ctx, {
         action: 'counter.create',
         entity: 'counter',
         entityId: counterId,
-        detail: { name, code, username, email, branchId: branch.id, sendEmail },
+        detail: { name, code, branchId: branch.id },
       });
     });
 
-    if (sendEmail && email) {
-      await enqueueUserEmail(ctx.db, {
-        tenantId,
-        userId: userId,
-        toEmail: email,
-        type: 'WELCOME',
-        createdBy: ctx.user!.id,
-        templateData: {
-          name,
-          roleName: 'Counter account',
-          branchName: branch.name,
-          branchCode: branch.code,
-          username,
-          email,
-          password,
-          mustChangePassword,
-        },
-      });
-    }
+    invalidateTodayDashboardCache(tenantId);
 
     return {
       ok: true,
       id: counterId,
       name,
       code,
-      loginUsername: username,
-      email,
       status: 'ACTIVE',
-      emailSent: sendEmail,
-      emailQueued: sendEmail,
     };
   });
 
   // -------------------------------------------------------------------------
-  // 5. EDIT COUNTER (Scoped to manager's branch)
+  // 5. EDIT COUNTER / TOGGLE STATUS (Scoped to manager's branch)
   // -------------------------------------------------------------------------
   r.patch('/api/branch/counters/:id', async (ctx) => {
     const branch = await requireStoreManagerBranch(ctx);
@@ -427,73 +349,75 @@ export function registerBranchUsers(r: Router) {
 
     const name = b.name !== undefined ? V.str(b.name, 'Counter name', { required: true, max: 80 }).trim() : existing.name;
     const code = b.code !== undefined ? V.str(b.code, 'Counter code', { required: true, max: 20 }).trim().toUpperCase() : existing.code;
+    const rawStatus = b.status !== undefined ? String(b.status).trim().toUpperCase() : undefined;
+    const status = rawStatus === 'ACTIVE' || rawStatus === 'DISABLED' ? rawStatus : existing.status;
 
     if (code !== existing.code) {
-      if (!/^[A-Z0-9-]+$/.test(code) || code.length < 3 || code.length > 12) {
-        throw bad('Counter code must be 3–12 uppercase letters, numbers or hyphens.', 'INVALID_CODE');
+      if (!/^[A-Z0-9-]+$/.test(code) || code.length < 2 || code.length > 20) {
+        throw bad('Counter code must be uppercase letters, numbers or hyphens.', 'INVALID_CODE');
       }
       const dup = await ctx.db.one(
-        'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND code = ? AND id != ?',
+        'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND upper(code) = ? AND id != ?',
         [tenantId, branch.id, code, counterId],
       );
       if (dup) throw conflict('A counter with this code already exists in your branch.', 'CODE_TAKEN');
     }
 
-    const linkedUser = await ctx.db.one<any>(
-      `SELECT * FROM users WHERE counter_id = ? AND tenant_id = ? AND role = 'counter' AND deleted_at IS NULL`,
-      [counterId, tenantId],
-    );
-
-    const rawUsername = b.username !== undefined ? b.username : b.loginUsername;
-    let username = rawUsername !== undefined ? (rawUsername ? String(rawUsername).trim().toLowerCase() : null) : (existing.login_username || linkedUser?.username);
-    let email = b.email !== undefined ? (b.email ? String(b.email).trim().toLowerCase() : null) : linkedUser?.email;
-
-    if (username && username !== existing.login_username) {
-      const uErr = validateUsernameFormat(username);
-      if (uErr) throw bad(uErr, 'INVALID_USERNAME');
-
-      const dupU = await ctx.db.one(
-        'SELECT id FROM users WHERE tenant_id = ? AND lower(username) = ? AND id != ?',
-        [tenantId, username, linkedUser?.id || ''],
+    if (name !== existing.name) {
+      const dupName = await ctx.db.one(
+        'SELECT id FROM counters WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?) AND id != ?',
+        [tenantId, branch.id, name, counterId],
       );
-      if (dupU) throw conflict('This username is already taken.', 'USERNAME_TAKEN');
-    }
-
-    if (email && email !== linkedUser?.email) {
-      try {
-        email = parseEmail(email);
-      } catch {
-        throw bad('Enter a valid email, like counter@store.com', 'INVALID_EMAIL');
-      }
-      const dupE = await ctx.db.one(
-        'SELECT id FROM users WHERE tenant_id = ? AND lower(email) = ? AND id != ?',
-        [tenantId, email, linkedUser?.id || ''],
-      );
-      if (dupE) throw conflict('This email ID is already in use.', 'EMAIL_TAKEN');
+      if (dupName) throw conflict('A counter with this name already exists in your branch.', 'NAME_TAKEN');
     }
 
     await ctx.db.tx(async (q) => {
       await q.exec(
-        'UPDATE counters SET name = ?, code = ?, login_username = ?, updated_at = now() WHERE id = ?',
-        [name, code, username, counterId],
+        'UPDATE counters SET name = ?, code = ?, status = ?, updated_at = now() WHERE id = ?',
+        [name, code, status, counterId],
       );
-
-      if (linkedUser) {
-        await q.exec(
-          'UPDATE users SET name = ?, username = ?, email = ?, updated_at = now() WHERE id = ?',
-          [name, username, email, linkedUser.id],
-        );
-      }
 
       await audit(q, ctx, {
         action: 'counter.update',
         entity: 'counter',
         entityId: counterId,
-        detail: { name, code, username, email },
+        detail: { name, code, status },
       });
     });
 
-    return { ok: true, id: counterId, name, code, loginUsername: username, email };
+    invalidateTodayDashboardCache(tenantId);
+
+    return { ok: true, id: counterId, name, code, status };
+  });
+
+  r.patch('/api/branch/counters/:id/status', async (ctx) => {
+    const branch = await requireStoreManagerBranch(ctx);
+    const tenantId = ctx.user!.tenantId;
+    const counterId = ctx.params.id;
+    const rawStatus = V.str(ctx.body?.status, 'Status', { required: true }).trim().toUpperCase();
+    if (rawStatus !== 'ACTIVE' && rawStatus !== 'DISABLED') {
+      throw bad('Status must be ACTIVE or DISABLED', 'VALIDATION');
+    }
+
+    const counter = await ctx.db.one<any>(
+      'SELECT id, name, code FROM counters WHERE id = ? AND tenant_id = ? AND branch_id = ?',
+      [counterId, tenantId, branch.id],
+    );
+    if (!counter) throw notFound('Counter');
+
+    await ctx.db.tx(async (q) => {
+      await q.exec('UPDATE counters SET status = ?, updated_at = now() WHERE id = ?', [rawStatus, counterId]);
+      await audit(q, ctx, {
+        action: rawStatus === 'ACTIVE' ? 'counter.enable' : 'counter.disable',
+        entity: 'counter',
+        entityId: counterId,
+        detail: { name: counter.name, status: rawStatus },
+      });
+    });
+
+    invalidateTodayDashboardCache(tenantId);
+
+    return { ok: true, id: counterId, status: rawStatus };
   });
 
   // -------------------------------------------------------------------------
@@ -604,37 +528,21 @@ export function registerBranchUsers(r: Router) {
     const pwErr = validatePasswordRules(password);
     if (pwErr) throw bad(pwErr, 'WEAK_PASSWORD');
 
-    const defaultCounterId = b.defaultCounterId ? String(b.defaultCounterId).trim() : null;
-    if (defaultCounterId) {
-      const cnt = await ctx.db.one<any>(
-        'SELECT id, status FROM counters WHERE id = ? AND branch_id = ? AND tenant_id = ?',
-        [defaultCounterId, branch.id, tenantId],
-      );
-      if (!cnt) throw notFound('Default Counter');
-      if (cnt.status === 'DISABLED') {
-        throw bad('Cannot assign a disabled counter as default counter.', 'VALIDATION');
-      }
-    }
-
-    const phone = b.phone ? String(b.phone).trim() : null;
-    const sendEmail = Boolean(b.sendEmail && email);
-    const mustChangePassword = b.mustChangePassword !== undefined ? Boolean(b.mustChangePassword) : true;
-
     const cashierId = newId('u');
     const passwordHash = hashPassword(password);
 
     await ctx.db.tx(async (q) => {
       await q.exec(
         `INSERT INTO users (id, tenant_id, name, username, email, phone, password_hash, role, status, active, branch_id, counter_id, must_change_password, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'cashier', 'INVITED', true, ?, ?, ?, ?, now(), now())`,
-        [cashierId, tenantId, name, username, email, phone, passwordHash, branch.id, defaultCounterId, mustChangePassword, ctx.user!.id],
+         VALUES (?, ?, ?, ?, ?, NULL, ?, 'cashier', 'INVITED', true, ?, NULL, false, ?, now(), now())`,
+        [cashierId, tenantId, name, username, email, passwordHash, branch.id, ctx.user!.id],
       );
 
       await audit(q, ctx, {
         action: 'cashier.create',
         entity: 'user',
         entityId: cashierId,
-        detail: { name, username, email, branchId: branch.id, defaultCounterId, sendEmail },
+        detail: { name, username, email, branchId: branch.id },
       });
     });
 
@@ -644,10 +552,7 @@ export function registerBranchUsers(r: Router) {
       name,
       username,
       email,
-      phone,
-      defaultCounterId,
       status: 'INVITED',
-      emailSent: sendEmail,
     };
   });
 
@@ -1013,16 +918,22 @@ export function registerBranchUsers(r: Router) {
     );
     if (!cnt) throw notFound('Counter');
 
-    const defaultCashiers = await ctx.db.query<any>(
-      `SELECT id, name FROM users WHERE counter_id = ? AND tenant_id = ? AND branch_id = ? AND role = 'cashier' AND deleted_at IS NULL`,
-      [cnt.id, tenantId, branch.id],
+    const hasInvoices = await ctx.db.one(
+      'SELECT 1 FROM invoices WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
     );
+    const hasShifts = await ctx.db.one(
+      'SELECT 1 FROM shifts WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasHistory = Boolean(hasInvoices || hasShifts);
 
     return {
       name: cnt.name,
       code: cnt.code,
-      loginUsername: cnt.login_username || cnt.loginUsername || null,
-      defaultCashiersCount: defaultCashiers.length,
+      hasHistory,
+      canDelete: !hasHistory,
+      defaultCashiersCount: 0,
     };
   });
 
@@ -1037,32 +948,44 @@ export function registerBranchUsers(r: Router) {
     );
     if (!cnt) throw notFound('Counter');
 
-    let defaultCashiersCount = 0;
-    await ctx.db.tx(async (q) => {
-      const defaultCashiers = await q.query<any>(
-        `SELECT id, name FROM users WHERE counter_id = ? AND tenant_id = ? AND branch_id = ?`,
-        [cnt.id, tenantId, branch.id],
+    const hasInvoices = await ctx.db.one(
+      'SELECT 1 FROM invoices WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasShifts = await ctx.db.one(
+      'SELECT 1 FROM shifts WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    const hasPayments = await ctx.db.one(
+      'SELECT 1 FROM payments WHERE tenant_id = ? AND (counter = ? OR counter = ?) LIMIT 1',
+      [tenantId, cnt.code, cnt.name],
+    );
+    if (hasInvoices || hasShifts || hasPayments) {
+      throw conflict(
+        `Cannot delete "${cnt.name}" because it has existing billing transactions or shift history. Deactivate the counter instead.`,
+        'COUNTER_HAS_HISTORY',
       );
-      defaultCashiersCount = defaultCashiers.length;
+    }
 
+    await ctx.db.tx(async (q) => {
       // 1. Audit BEFORE deleting
       await audit(q, ctx, {
         action: 'DELETE',
         entity: 'counter',
         entityId: cnt.id,
-        detail: { name: cnt.name, code: cnt.code, branchId: branch.id, cashiersCount: defaultCashiers.length },
+        detail: { name: cnt.name, code: cnt.code, branchId: branch.id },
       });
 
-      // 2. Snapshot counter name into bills, payments, and shifts
+      // 2. Snapshot counter name into bills, payments, and shifts if any
       const cName = cnt.name || cnt.code;
       await q.exec('UPDATE invoices SET counter_name_snapshot = COALESCE(counter_name_snapshot, ?) WHERE counter = ? OR counter = ?', [cName, cnt.code, cnt.name]);
       await q.exec('UPDATE payments SET counter_name_snapshot = COALESCE(counter_name_snapshot, ?) WHERE counter = ? OR counter = ?', [cName, cnt.code, cnt.name]);
       await q.exec('UPDATE shifts SET counter_name_snapshot = COALESCE(counter_name_snapshot, ?) WHERE counter = ? OR counter = ?', [cName, cnt.code, cnt.name]);
 
-      // 3. Reset cashiers default counter to NULL
+      // 3. Reset cashiers default counter to NULL if referencing this counter
       await q.exec('UPDATE users SET counter_id = NULL WHERE counter_id = ? AND branch_id = ?', [cnt.id, branch.id]);
 
-      // 4. Delete linked counter login users
+      // 4. Delete linked counter login users if any existed
       const linked = await q.query<any>(
         `SELECT id FROM users WHERE counter_id = ? OR (tenant_id = ? AND branch_id = ? AND role = 'counter' AND (lower(username) = lower(?) OR lower(name) = lower(?)))`,
         [cnt.id, tenantId, branch.id, cnt.login_username || cnt.loginUsername || '', cnt.name],
@@ -1074,7 +997,20 @@ export function registerBranchUsers(r: Router) {
 
       // 5. Delete counter
       await q.exec('DELETE FROM counters WHERE id = ? AND tenant_id = ? AND branch_id = ?', [cnt.id, tenantId, branch.id]);
+
+      // 6. Keep branch.counters JSON array in sync
+      const brRow = await q.one<any>('SELECT counters FROM branches WHERE id = ?', [branch.id]);
+      let cntList: string[] = [];
+      try {
+        cntList = Array.isArray(brRow?.counters) ? brRow.counters : JSON.parse(brRow?.counters || '[]');
+      } catch {
+        cntList = [];
+      }
+      cntList = cntList.filter((c) => c !== cnt.code && c !== cnt.name);
+      await q.exec('UPDATE branches SET counters = ?::jsonb WHERE id = ?', [j(cntList), branch.id]);
     });
+
+    invalidateTodayDashboardCache(tenantId);
 
     // Send alert email to store owner
     try {
@@ -1091,7 +1027,7 @@ export function registerBranchUsers(r: Router) {
           deletedByUserName: ctx.user!.name,
           deletedByUserRole: ctx.user!.role,
           impactDetails: {
-            cashiersCount: defaultCashiersCount,
+            cashiersCount: 0,
           },
         });
       }
