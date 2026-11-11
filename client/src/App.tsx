@@ -6700,7 +6700,54 @@ export function App() {
       <main className="main-content">
         {/* Top Global Bar Matching Image 2 */}
         <div className={`top-global-bar ${hideBusinessBar ? 'no-divider' : ''} ${displayTab === 'dashboard' ? 'dashboard-top-bar' : ''}`}>
-          {displayTab === 'inventory' || activeTab === 'inventory' ? (
+          {displayTab === 'pos' || activeTab === 'pos' ? (
+            <div className="top-pos-header-left">
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : displayTab === 'inventory' || activeTab === 'inventory' ? (
             <div className="top-inventory-header-left">
               <h1 className="top-inventory-title">
                 Inventory Hub
@@ -6925,37 +6972,7 @@ export function App() {
                       </svg>
                     </span>
                     <div>
-                      <div className="bento-badge-title-row">
-                        <span className="bento-badge-title">POS Billing Counter</span>
-                        <span className="bento-branch-chip" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
-                          <span className="bento-branch-chip-label">Branch:</span>
-                          <span>{currentBranchName}</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="bento-counter-chip"
-                          onClick={() => setShowCounterModal(true)}
-                          title="Active Checkout Counter • Click to switch counter"
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                            <line x1="8" y1="21" x2="16" y2="21" />
-                            <line x1="12" y1="17" x2="12" y2="21" />
-                          </svg>
-                          <span>
-                            {(() => {
-                              const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
-                              if (match) return `${match.name} (${match.code})`;
-                              return selectedCounter || activeBranch?.counters?.[0] || 'Select Counter';
-                            })()}
-                          </span>
-                          <span className="bento-counter-chip-action">Change</span>
-                        </button>
-                      </div>
+                      <div className="bento-badge-title">POS Billing Counter</div>
                       <div className="bento-badge-sub">High-Speed Bento Billing Terminal</div>
                     </div>
                   </div>

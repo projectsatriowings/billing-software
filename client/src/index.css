@@ -34719,3 +34719,135 @@ select.expense-input-control {
 .calc-result-amount.text-amber {
   color: #b45309;
 }
+
+
+/* ==========================================================================
+   TOP GLOBAL BAR - POS BRANCH & LOCKED CHECKOUT COUNTER BENTO CARDS
+   ========================================================================== */
+.top-pos-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-left: 20px;
+}
+
+.top-pos-bento-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.42rem 0.85rem;
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  user-select: none;
+  transition: all 0.18s ease;
+}
+
+.top-pos-branch-badge {
+  border-color: #e0e7ff;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
+}
+
+.top-pos-counter-badge {
+  border-color: #ede9fe;
+  background: linear-gradient(135deg, #ffffff 0%, #faf8ff 100%);
+}
+
+.top-pos-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.top-pos-badge-icon.branch {
+  background: #eff6ff;
+  color: #3b82f6;
+  border: 1px solid #dbeafe;
+}
+
+.top-pos-badge-icon.counter {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ede9fe;
+}
+
+.top-pos-badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.top-pos-badge-label {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.top-pos-badge-val-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  line-height: 1.25;
+}
+
+.top-pos-badge-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.top-pos-code-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4338ca;
+  background: #e0e7ff;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid #c7d2fe;
+}
+
+.top-pos-lock-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.2;
+}
+
+.top-pos-lock-tag svg {
+  color: #059669;
+}
+
+@media (max-width: 768px) {
+  .top-pos-header-left {
+    margin-left: 10px;
+    gap: 0.5rem;
+  }
+  .top-pos-bento-badge {
+    padding: 0.35rem 0.65rem;
+  }
+  .top-pos-badge-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .top-pos-badge-val {
+    font-size: 0.8rem;
+  }
+}
