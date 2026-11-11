@@ -151,6 +151,7 @@ import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
 import { SelectCounterModal } from './components/shifts/SelectCounterModal.tsx';
+import { RecentBillsBentoView } from './components/invoices/RecentBillsBentoView.tsx';
 import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
@@ -6883,6 +6884,60 @@ export function App() {
                 </div>
               </div>
             </div>
+          ) : (displayTab === 'invoices' || activeTab === 'invoices') && user?.role === 'cashier' ? (
+            <div className="top-invoices-header-left">
+              <div className="top-invoices-title-group">
+                <h1 className="top-invoices-title">
+                  Recent Bills
+                </h1>
+                <span className="top-invoices-subtitle">
+                  Live POS transactions, receipts & customer returns
+                </span>
+              </div>
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : displayTab === 'inventory' || activeTab === 'inventory' ? (
               <div className="top-inventory-header-left">
                 <h1 className="top-inventory-title">
@@ -10965,375 +11020,34 @@ export function App() {
               />
             )}
 
-            {/* TAB 3: BILLS & INVOICES */}
-            {displayTab === 'invoices' && (() => {
-              const displayedInvoices = invoices.filter((inv) => {
-                const matchDate = !invoiceFilterDate || inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
-                const matchBranch = !invoiceBranchFilter || invoiceBranchFilter === 'all' || inv.branchId === invoiceBranchFilter || (inv as any).location === invoiceBranchFilter;
-                return matchDate && matchBranch;
-              });
-              return (
-                <div className="card" key={`invoices-${selectedBranchScope}`}>
-                  {branches.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', padding: '0.65rem 0.85rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Sales:
-                      </span>
-                      {(user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN') ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInvoiceBranchFilter('all');
-                              handleGlobalBranchChange('all');
-                            }}
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? 700 : 500,
-                              background: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#f3f0ff' : '#ffffff',
-                              border: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                              color: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#6d4aff' : '#334155',
-                              padding: '0.25rem 0.6rem',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            All Branches (Overall) ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
-                          </button>
-                          {branches.map((b) => {
-                            const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                            const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                            const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                            const isSelected = selectedBranchScope === b.id || selectedBranchScope === b.code || invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
-                            return (
-                              <button
-                                key={b.id}
-                                type="button"
-                                onClick={() => {
-                                  setInvoiceBranchFilter(b.id);
-                                  handleGlobalBranchChange(b.code || b.id);
-                                }}
-                                style={{
-                                  fontSize: '0.75rem',
-                                  fontWeight: isSelected ? 700 : 500,
-                                  background: isSelected ? '#f3f0ff' : '#ffffff',
-                                  border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                                  color: isSelected ? '#6d4aff' : '#334155',
-                                  padding: '0.25rem 0.6rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
-                              </button>
-                            );
-                          })}
-                        </>
-                      ) : (
-                        (() => {
-                          const myBranch = branches.find(b => b.id === user.branchId || b.code === user.assignedLocation) || branches[0];
-                          const bSales = invoices.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                          const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                          return (
-                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#166534', background: '#dcfce7', padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #86efac' }}>
-                              🏢 {myBranch?.name || user.assignedLocation}: {formatRupees(bSalesTotal)} ({bSales.length} bills)
-                            </div>
-                          );
-                        })()
-                      )}
-                    </div>
-                  )}
-                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
-                        View issued sales invoices, audit trails, and print thermal receipts
-                        {invoiceFilterDate && (
-                          <span
-                            className="badge badge-emerald"
-                            style={{ marginLeft: '10px', cursor: 'pointer', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 }}
-                            onClick={() => setInvoiceFilterDate('')}
-                            title="Click to clear date filter"
-                          >
-                            📅 Filtered: {invoiceFilterDate} ✕
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {branches.length > 0 && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Filter Branch:</span>
-                        <select
-                          value={invoiceBranchFilter}
-                          onChange={(e) => setInvoiceBranchFilter(e.target.value)}
-                          style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
-                        >
-                          <option value="all">All Branches</option>
-                          {branches.map(b => (
-                            <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Invoice No</th>
-                        {branches.length > 0 && <th>Branch</th>}
-                        <th>Date & Time</th>
-                        <th>Customer / Reference</th>
-                        <th>Total Amount</th>
-                        <th>Taxable</th>
-                        <th>GST</th>
-                        <th>Payment Method</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedInvoices.map((inv) => (
-                        <tr key={inv.id}>
-                          <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>
-                            <button
-                              type="button"
-                              onClick={() => openInvoiceDetail(inv.id)}
-                              style={{ background: 'none', border: 'none', color: '#6d4aff', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-                              title="View bill details & returns"
-                            >
-                              {inv.number}
-                            </button>
-                            {inv.kind === 'credit_note' && (
-                              <span className="badge" style={{ marginLeft: '6px', background: '#e0e7ff', color: '#4338ca', fontSize: '0.65rem' }}>
-                                CREDIT NOTE
-                              </span>
-                            )}
-                            {inv.status === 'voided' && (
-                              <span className="badge" style={{ marginLeft: '6px', background: '#fee2e2', color: '#b91c1c', fontSize: '0.65rem' }}>
-                                VOIDED
-                              </span>
-                            )}
-                          </td>
-                          {branches.length > 0 && (
-                            <td>
-                              <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                background: '#f1f5f9',
-                                color: '#475569',
-                                padding: '0.2rem 0.45rem',
-                                borderRadius: '6px',
-                                border: '1px solid #e2e8f0',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                🏢 {branches.find(b => b.id === inv.branchId || b.code === (inv as any).location)?.code || 'MAIN'}
-                              </span>
-                            </td>
-                          )}
-                          <td>{new Date(inv.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                          <td>
-                            <div style={{ fontWeight: 600 }}>{inv.customerName || 'Walk-in Customer'}</div>
-                            {inv.customerPhone && (
-                              <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                📞 {inv.customerPhone}
-                              </div>
-                            )}
-                            {/* Returned Badge (Section 4.1) */}
-                            {inv.fullyReturned ? (
-                              <div style={{ marginTop: '4px' }}>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: '#fef3c7',
-                                    color: '#92400e',
-                                    border: '1px solid #fde68a',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                  }}
-                                  onClick={() => openInvoiceDetail(inv.id)}
-                                  title="Every line on this bill is fully returned"
-                                >
-                                  Fully Returned • {inv.creditNotes?.map((c) => c.number).join(', ') || 'CN'}
-                                </span>
-                              </div>
-                            ) : (inv.returnedMinor && inv.returnedMinor > 0) ? (
-                              <div style={{ marginTop: '4px' }}>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: '#e0f2fe',
-                                    color: '#0369a1',
-                                    border: '1px solid #bae6fd',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                  }}
-                                  onClick={() => openInvoiceDetail(inv.id)}
-                                  title="Click to view linked credit notes"
-                                >
-                                  Returned {formatRupees(inv.returnedMinor)} • {inv.creditNotes?.map((c) => c.number).join(', ')}
-                                </span>
-                              </div>
-                            ) : null}
-                            {inv.whatsappSendCount && inv.whatsappSendCount > 0 ? (
-                              <div style={{ fontSize: '0.72rem', color: '#16a34a', marginTop: '3px', fontWeight: 500 }}>
-                                WhatsApp sent ×{inv.whatsappSendCount} • last {new Date(inv.whatsappLastSentAt!).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} • {inv.whatsappLastLanguage === 'ta' ? 'Tamil' : inv.whatsappLastLanguage === 'hi' ? 'Hindi' : 'English'}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>{formatRupees(inv.totalMinor)}</td>
-                          <td className="mono">{formatRupees(inv.taxableMinor)}</td>
-                          <td className="mono">{formatRupees(inv.cgstMinor + inv.sgstMinor)}</td>
-                          <td>
-                            {inv.payments.map((p, idx) => (
-                              <span key={idx} className="badge badge-emerald" style={{ marginRight: '4px' }}>
-                                {p.method}
-                              </span>
-                            ))}
-                          </td>
-                          <td style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
-                              onClick={() => openInvoiceDetail(inv.id)}
-                              title="View bill lines and linked returns"
-                            >
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
-                            </button>
-                            <a
-                              href={inv.kind === 'credit_note' ? `/api/credit-notes/${inv.id}/print?paper=thermal80&autoprint=true` : `/api/invoices/${inv.id}/print?paper=thermal80&autoprint=true`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem', textDecoration: 'none' }}
-                            >
-                              🖨️ Thermal
-                            </a>
-                            <a
-                              href={inv.kind === 'credit_note' ? `/api/credit-notes/${inv.id}/print?paper=a4` : `/api/invoices/${inv.id}/print?paper=a4`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem', textDecoration: 'none' }}
-                            >
-                              📄 A4 GST
-                            </a>
-
-                            {/* Return / Credit Note action button (Section 4.1) */}
-                            {inv.kind !== 'credit_note' && inv.status !== 'cancelled' && (
-                              <button
-                                type="button"
-                                className="btn"
-                                disabled={Boolean(inv.fullyReturned)}
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: inv.fullyReturned ? '#f1f5f9' : '#e0e7ff',
-                                  color: inv.fullyReturned ? '#94a3b8' : '#4338ca',
-                                  borderColor: inv.fullyReturned ? '#cbd5e1' : '#c7d2fe',
-                                  cursor: inv.fullyReturned ? 'not-allowed' : 'pointer',
-                                }}
-                                onClick={() => openReturnModal(inv.id)}
-                                title={inv.fullyReturned ? 'Fully returned' : 'Issue sales return / credit note'}
-                              >
-                                🔄 Return / CN
-                              </button>
-                            )}
-
-                            {/* Void action: Owner or Manager only, on credit notes (Section 11.2) */}
-                            {inv.kind === 'credit_note' && inv.status !== 'voided' && (user?.role === 'owner' || user?.role === 'manager') && (
-                              <button
-                                type="button"
-                                className="btn"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: '#fee2e2',
-                                  color: '#b91c1c',
-                                  borderColor: '#fca5a5',
-                                }}
-                                onClick={() => handleOpenVoidModal({ id: inv.id, number: inv.number, totalCreditMinor: inv.totalMinor, advanceAmountMinor: 0 })}
-                                title="Void this credit note (Owner/Manager only)"
-                              >
-                                🚫 Void
-                              </button>
-                            )}
-
-                            {inv.balanceMinor > 0 && inv.status === 'posted' && inv.partyId && (
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: '#f59e0b',
-                                  borderColor: '#d97706',
-                                }}
-                                onClick={() => {
-                                  const cust = parties.find((p) => p.id === inv.partyId) || {
-                                    id: inv.partyId!,
-                                    name: inv.customerName || 'Customer',
-                                    phone: inv.customerPhone,
-                                    type: 'customer',
-                                    creditLimitMinor: 0,
-                                  };
-                                  openCollectPayment(cust, inv.id);
-                                }}
-                                title="Collect payment towards this bill"
-                              >
-                                💰 Collect
-                              </button>
-                            )}
-                            {shop?.whatsappEnabled !== false && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  color: inv.status === 'cancelled' || inv.status === 'voided' ? '#94a3b8' : '#15803d',
-                                  borderColor: inv.status === 'cancelled' || inv.status === 'voided' ? '#e2e8f0' : '#86efac',
-                                  background: inv.status === 'cancelled' || inv.status === 'voided' ? '#f8fafc' : '#f0fdf4',
-                                  fontWeight: 600,
-                                }}
-                                disabled={inv.status === 'cancelled' || inv.status === 'voided'}
-                                title={inv.status === 'cancelled' || inv.status === 'voided' ? 'Document cancelled / voided' : 'Resend on WhatsApp'}
-                                onClick={() => {
-                                  if (inv.kind === 'credit_note') {
-                                    handleOpenCreditNoteWhatsApp({
-                                      id: inv.id,
-                                      number: inv.number,
-                                      originalInvoiceNumber: 'Original Bill',
-                                      phone: inv.customerPhone || '',
-                                      customerName: inv.customerName,
-                                      totalCreditMinor: inv.totalMinor,
-                                      settlementSummary: 'Credit Note Settlement',
-                                      shareToken: inv.shareToken,
-                                    });
-                                  } else {
-                                    openWhatsAppResend(inv);
-                                  }
-                                }}
-                              >
-                                💬 WhatsApp
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
+            {/* TAB 3: BILLS & INVOICES (BENTO DESIGN) */}
+            {displayTab === 'invoices' && (
+              <RecentBillsBentoView
+                key={`invoices-${selectedBranchScope}`}
+                invoices={invoices}
+                user={user}
+                shop={shop}
+                branches={branches}
+                parties={parties}
+                activeBranch={activeBranch}
+                currentBranchName={currentBranchName}
+                currentBranchCode={currentBranchCode}
+                selectedBranchScope={selectedBranchScope}
+                invoiceFilterDate={invoiceFilterDate}
+                setInvoiceFilterDate={setInvoiceFilterDate}
+                invoiceBranchFilter={invoiceBranchFilter}
+                setInvoiceBranchFilter={setInvoiceBranchFilter}
+                handleGlobalBranchChange={handleGlobalBranchChange}
+                formatRupees={formatRupees}
+                openInvoiceDetail={openInvoiceDetail}
+                openReturnModal={openReturnModal}
+                handleOpenVoidModal={handleOpenVoidModal}
+                openCollectPayment={openCollectPayment}
+                openWhatsAppResend={openWhatsAppResend}
+                handleOpenCreditNoteWhatsApp={handleOpenCreditNoteWhatsApp}
+                onNavigateToPos={() => setActiveTab('pos')}
+              />
+            )}
 
             {/* TAB: DISCOUNTS & PROMOTIONS */}
             {activeTab === 'promotions' && (
@@ -13979,7 +13693,7 @@ export function App() {
                   className="btn btn-primary"
                   style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}
                 >
-                  🖨️ Thermal Slip
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={12} /> Thermal</span> Slip
                 </a>
                 <a
                   href={`/api/invoices/${printModalInvoiceId}/print?paper=a4`}
@@ -13988,7 +13702,7 @@ export function App() {
                   className="btn btn-secondary"
                   style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}
                 >
-                  📄 A4 GST Copy
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><FileTextIcon size={12} /> A4</span> GST Copy
                 </a>
                 <button
                   className="btn btn-secondary"
@@ -19793,7 +19507,11 @@ export function App() {
                   <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
                     Issued on {invoiceDetailData?.invoice?.bdate ? new Date(invoiceDetailData.invoice.bdate).toLocaleDateString('en-IN') : '—'}
                     {invoiceDetailData?.invoice?.customerName && ` • Customer: ${invoiceDetailData.invoice.customerName}`}
-                    {invoiceDetailData?.invoice?.customerPhone && ` (📞 ${invoiceDetailData.invoice.customerPhone})`}
+                    {invoiceDetailData?.invoice?.customerPhone && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '6px', fontSize: '0.82rem', color: '#64748b' }}>
+                        <PhoneIcon size={12} /> {invoiceDetailData.invoice.customerPhone}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
@@ -19915,7 +19633,7 @@ export function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                         <div>
                           <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#1e293b' }}>
-                            🔄 Returns & Credit Notes
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RotateCcwIcon size={14} /> Returns & Credit Notes</span>
                           </h4>
                           {invoiceDetailData.creditNotes && invoiceDetailData.creditNotes.length > 0 && (
                             <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
@@ -19945,7 +19663,7 @@ export function App() {
                             }}
                             title={invoiceDetailData.invoice.fullyReturned ? 'Fully returned' : 'Issue a return against this bill'}
                           >
-                            🔄 Issue Return / Credit Note
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RotateCcwIcon size={13} /> Issue Return / Credit Note</span>
                           </button>
                         )}
                       </div>
@@ -20025,7 +19743,7 @@ export function App() {
                                         shareToken: cn.shareToken,
                                       })}
                                     >
-                                      💬 WhatsApp
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><WhatsAppIcon size={13} /> WhatsApp</span>
                                     </button>
                                   )}
                                   {cn.status !== 'voided' && (user?.role === 'owner' || user?.role === 'manager') && (
@@ -20048,7 +19766,7 @@ export function App() {
                                       })}
                                       title="Void this credit note (Owner/Manager only)"
                                     >
-                                      🚫 Void
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><XCircleIcon size={12} /> Void</span>
                                     </button>
                                   )}
                                 </div>
@@ -20057,7 +19775,7 @@ export function App() {
                               {/* Voided Details Banner */}
                               {cn.status === 'voided' && (
                                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '0.4rem 0.6rem', fontSize: '0.76rem', color: '#b91c1c', marginBottom: '0.5rem' }}>
-                                  ⚠️ <b>Voided</b> on {new Date(cn.voidedAt).toLocaleString('en-IN')}{cn.voidedByName ? ` by ${cn.voidedByName}` : ''}: "{cn.voidReason || 'No reason provided'}"
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={13} /> <b>Voided</b></span> on {new Date(cn.voidedAt).toLocaleString('en-IN')}{cn.voidedByName ? ` by ${cn.voidedByName}` : ''}: "{cn.voidReason || 'No reason provided'}"
                                 </div>
                               )}
 
