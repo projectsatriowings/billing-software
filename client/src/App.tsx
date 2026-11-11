@@ -2562,6 +2562,77 @@ export function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleRemoveLogo = async () => {
+    if (!confirm('Are you sure you want to remove your store brand logo?')) return;
+    setSettingsLogoUrl('');
+    try {
+      setIsSavingSettings(true);
+      const updated = await api<Shop>('/api/shop', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: settingsName,
+          businessType: settingsType,
+          gstin: settingsGstin || null,
+          phone: settingsPhone || null,
+          address: settingsAddress || null,
+          upiId: settingsUpiId || null,
+          invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
+          logoUrl: null,
+          whatsappEnabled: settingsWhatsAppEnabled,
+          whatsappDefaultLang: settingsWhatsAppDefaultLang,
+          whatsappIncludeLink: settingsWhatsAppIncludeLink,
+          loyaltyEnabled: settingsLoyaltyEnabled,
+          loyaltyPointsPer100: Math.max(0, Number(settingsLoyaltyPointsPer100) || 0),
+          loyaltyPointValueMinor: Math.round((Number(settingsLoyaltyPointValueRupees) || 0.10) * 100),
+          loyaltyMinPointsRedeem: Math.max(0, Number(settingsLoyaltyMinRedeem) || 0),
+        }),
+      });
+      setShop(updated);
+      initSettingsForm(updated);
+      showToast('Store logo permanently removed!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove logo on server');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleSaveLogoDirectly = async (logoToSave?: string) => {
+    const targetLogo = logoToSave !== undefined ? logoToSave : settingsLogoUrl;
+    try {
+      setIsSavingSettings(true);
+      const updated = await api<Shop>('/api/shop', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: settingsName,
+          businessType: settingsType,
+          gstin: settingsGstin || null,
+          phone: settingsPhone || null,
+          address: settingsAddress || null,
+          upiId: settingsUpiId || null,
+          invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
+          logoUrl: targetLogo || null,
+          whatsappEnabled: settingsWhatsAppEnabled,
+          whatsappDefaultLang: settingsWhatsAppDefaultLang,
+          whatsappIncludeLink: settingsWhatsAppIncludeLink,
+          loyaltyEnabled: settingsLoyaltyEnabled,
+          loyaltyPointsPer100: Math.max(0, Number(settingsLoyaltyPointsPer100) || 0),
+          loyaltyPointValueMinor: Math.round((Number(settingsLoyaltyPointValueRupees) || 0.10) * 100),
+          loyaltyMinPointsRedeem: Math.max(0, Number(settingsLoyaltyMinRedeem) || 0),
+        }),
+      });
+      setShop(updated);
+      initSettingsForm(updated);
+      showToast('Store logo saved successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save logo');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsSavedMsg('');
@@ -12441,7 +12512,26 @@ export function App() {
                                 }}
                               />
                             </label>
-                            {settingsLogoUrl && (
+                            {settingsLogoUrl !== (shop?.logoUrl || '') && (
+                              <button
+                                type="button"
+                                className="btn"
+                                style={{
+                                  padding: '0.4rem 0.85rem',
+                                  fontSize: '0.8rem',
+                                  background: '#10b981',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => handleSaveLogoDirectly()}
+                              >
+                                💾 Save Logo
+                              </button>
+                            )}
+                            {Boolean(settingsLogoUrl || shop?.logoUrl) && (
                               <button
                                 type="button"
                                 className="btn"
@@ -12452,8 +12542,10 @@ export function App() {
                                   color: '#dc2626',
                                   border: '1px solid #fecaca',
                                   borderRadius: '8px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
                                 }}
-                                onClick={() => setSettingsLogoUrl('')}
+                                onClick={handleRemoveLogo}
                               >
                                 ✕ Remove
                               </button>
