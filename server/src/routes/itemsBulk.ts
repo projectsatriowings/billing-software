@@ -128,7 +128,7 @@ function validateRow(raw: Record<string, unknown>, rowIndex: number): { errors: 
   const unit = toStr(raw.unit) || 'pcs';
   if (unit.length > 20) errors.push('Unit is too long (max 20 characters)');
 
-  const isRestock = Boolean(raw.isRestock);
+  const isRestock = Boolean(raw.isRestock || raw.matchedItemId);
   const matchedItemId = toStr(raw.matchedItemId);
   if (isRestock && !matchedItemId) {
     errors.push('Matched product ID is required for restock');
@@ -203,7 +203,22 @@ export function registerItemsBulk(r: Router) {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const branchId = (typeof b.branchId === 'string' && b.branchId.trim()) ? b.branchId.trim() : scope.branchId;
+    const rawBranch = (typeof b.branchId === 'string' && b.branchId.trim()) ? b.branchId.trim() : scope.branchId;
+    let branchId = scope.branchId;
+    if (rawBranch && rawBranch.toLowerCase() !== 'all') {
+      const br = await ctx.db.one<{ id: string }>(
+        'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+        [tenantId, rawBranch, rawBranch],
+      );
+      if (br) branchId = br.id;
+    }
+    if (!branchId) {
+      const fallbackBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1",
+        [tenantId],
+      );
+      branchId = fallbackBr?.id || null;
+    }
     if (!branchId) throw bad('Branch is required for bulk product import', 'BRANCH_REQUIRED');
 
     if (!Array.isArray(b.rows)) throw bad('rows must be an array', 'VALIDATION', { field: 'rows' });
@@ -255,11 +270,11 @@ export function registerItemsBulk(r: Router) {
 
     // Verify all restock matched items belong to this tenant
     const matchedItemIds = [...new Set(restockRows.map((r) => r.matchedItemId!))];
-    const existingMatchedItems = new Map<string, { id: string; name: string; sku: string | null; barcode: string | null; hsn: string | null }>();
+    const existingMatchedItems = new Map<string, { id: string; name: string; sku: string | null; barcode: string | null; barcode_type?: string | null; hsn: string | null }>();
     if (matchedItemIds.length > 0) {
       const placeholders = matchedItemIds.map(() => '?').join(', ');
-      const rows = await ctx.db.query<{ id: string; name: string; sku: string | null; barcode: string | null; hsn: string | null }>(
-        `SELECT id, name, sku, barcode, hsn FROM items WHERE tenant_id = ? AND id IN (${placeholders})`,
+      const rows = await ctx.db.query<{ id: string; name: string; sku: string | null; barcode: string | null; barcode_type?: string | null; hsn: string | null }>(
+        `SELECT id, name, sku, barcode, barcode_type, hsn FROM items WHERE tenant_id = ? AND id IN (${placeholders})`,
         [tenantId, ...matchedItemIds],
       );
       for (const item of rows) {
@@ -330,10 +345,10 @@ export function registerItemsBulk(r: Router) {
     if (barcodesToCheck.length > 0) {
       const placeholders = barcodesToCheck.map(() => '?').join(', ');
       const existing = await ctx.db.query<{ barcode: string; name: string }>(
-        `SELECT barcode, name FROM items WHERE tenant_id = ? AND barcode IN (${placeholders}) AND barcode IS NOT NULL
+        `SELECT barcode, name FROM items WHERE tenant_id = ? AND branch_id = ? AND barcode IN (${placeholders}) AND barcode IS NOT NULL
          UNION
-         SELECT pb.barcode, i.name FROM product_barcodes pb JOIN items i ON i.id = pb.product_id WHERE pb.tenant_id = ? AND pb.barcode IN (${placeholders})`,
-        [tenantId, ...barcodesToCheck, tenantId, ...barcodesToCheck],
+         SELECT pb.barcode, i.name FROM product_barcodes pb JOIN items i ON i.id = pb.product_id WHERE pb.tenant_id = ? AND pb.branch_id = ? AND pb.barcode IN (${placeholders})`,
+        [tenantId, branchId, ...barcodesToCheck, tenantId, branchId, ...barcodesToCheck],
       );
       for (const e of existing) existingBarcodes.set(e.barcode, e.name);
     }
@@ -343,8 +358,8 @@ export function registerItemsBulk(r: Router) {
     if (skusToCheck.length > 0) {
       const placeholders = skusToCheck.map(() => '?').join(', ');
       const existing = await ctx.db.query<{ sku: string; name: string }>(
-        `SELECT sku, name FROM items WHERE tenant_id = ? AND lower(sku) IN (${placeholders}) AND sku IS NOT NULL`,
-        [tenantId, ...skusToCheck.map((s) => s.toLowerCase())],
+        `SELECT sku, name FROM items WHERE tenant_id = ? AND branch_id = ? AND lower(sku) IN (${placeholders}) AND sku IS NOT NULL`,
+        [tenantId, branchId, ...skusToCheck.map((s) => s.toLowerCase())],
       );
       for (const e of existing) existingSkus.set(e.sku.toLowerCase(), e.name);
     }
@@ -365,7 +380,7 @@ export function registerItemsBulk(r: Router) {
           rowIndex: row._rowIndex,
           status: 'skipped',
           name: row.name,
-          reason: `SKU "${row.sku}" already exists — used by existing product "${existingName}"`,
+          reason: `SKU "${row.sku}" already exists in this branch — used by existing product "${existingName}"`,
         });
       } else {
         validNewRows.push(row);
@@ -455,15 +470,26 @@ export function registerItemsBulk(r: Router) {
           const catName = row.category.trim();
           const newCatId = newId('cat');
           try {
-            await ctx.db.exec(
-              'INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true) ON CONFLICT (tenant_id, lower(name)) DO NOTHING',
-              [newCatId, tenantId, catName],
+            const existingCat = await ctx.db.one<{ id: string; name: string; active: boolean }>(
+              'SELECT id, name, active FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+              [tenantId, branchId, catName],
             );
-            const createdCat = { id: newCatId, name: catName, active: true };
-            catById.set(newCatId, createdCat);
-            catByName.set(catName.toLowerCase(), createdCat);
-            row.categoryId = newCatId;
-            row.category = catName;
+            if (existingCat) {
+              row.categoryId = existingCat.id;
+              row.category = existingCat.name;
+              catById.set(existingCat.id, existingCat);
+              catByName.set(catName.toLowerCase(), existingCat);
+            } else {
+              await ctx.db.exec(
+                'INSERT INTO categories (id, tenant_id, branch_id, name, active) VALUES (?, ?, ?, ?, true)',
+                [newCatId, tenantId, branchId, catName],
+              );
+              const createdCat = { id: newCatId, name: catName, active: true };
+              catById.set(newCatId, createdCat);
+              catByName.set(catName.toLowerCase(), createdCat);
+              row.categoryId = newCatId;
+              row.category = catName;
+            }
           } catch {
             // ignore
           }
@@ -485,20 +511,20 @@ export function registerItemsBulk(r: Router) {
       }
     }
 
-    // Fetch existing SKUs for auto-SKU generator collision avoidance
-    const allTenantSkus = new Set(
-      (await ctx.db.query<{ sku: string }>('SELECT lower(sku) as sku FROM items WHERE tenant_id = ? AND sku IS NOT NULL', [tenantId]))
+    // Fetch existing SKUs for auto-SKU generator collision avoidance (within current branch)
+    const allBranchSkus = new Set(
+      (await ctx.db.query<{ sku: string }>('SELECT lower(sku) as sku FROM items WHERE tenant_id = ? AND branch_id = ? AND sku IS NOT NULL', [tenantId, branchId]))
         .map((r) => r.sku)
     );
     const seenImportSkus = new Set<string>();
 
-    // Fetch existing Barcodes for auto-barcode generator collision avoidance
-    const allTenantBarcodes = new Set(
+    // Fetch existing Barcodes for auto-barcode generator collision avoidance (within current branch)
+    const allBranchBarcodes = new Set(
       (await ctx.db.query<{ barcode: string }>(
-        `SELECT barcode FROM items WHERE tenant_id = ? AND barcode IS NOT NULL
+        `SELECT barcode FROM items WHERE tenant_id = ? AND branch_id = ? AND barcode IS NOT NULL AND (barcode LIKE '20%' OR length(barcode) = 13)
          UNION
-         SELECT barcode FROM product_barcodes WHERE tenant_id = ?`,
-        [tenantId, tenantId],
+         SELECT barcode FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND (barcode_type = 'INTERNAL' OR (barcode LIKE '20%' OR length(barcode) = 13))`,
+        [tenantId, branchId, tenantId, branchId],
       )).map((r) => r.barcode)
     );
     const seenImportBarcodes = new Set<string>();
@@ -513,13 +539,20 @@ export function registerItemsBulk(r: Router) {
       // 1. Create missing categories if not already existing or deleted
       for (const row of rowsReadyForInsert) {
         if (row.category && !catByName.has(row.category.toLowerCase())) {
-          const catId = newId('cat');
-          await q.exec(
-            `INSERT INTO categories (id, tenant_id, name, active) VALUES (?, ?, ?, true)
-             ON CONFLICT (tenant_id, lower(name)) DO NOTHING`,
-            [catId, tenantId, row.category],
+          const existingCat = await q.one<{ id: string; name: string; active: boolean }>(
+            'SELECT id, name, active FROM categories WHERE tenant_id = ? AND branch_id = ? AND lower(name) = lower(?)',
+            [tenantId, branchId, row.category],
           );
-          catByName.set(row.category.toLowerCase(), { id: catId, name: row.category, active: true });
+          if (existingCat) {
+            catByName.set(row.category.toLowerCase(), { id: existingCat.id, name: existingCat.name, active: true });
+          } else {
+            const catId = newId('cat');
+            await q.exec(
+              'INSERT INTO categories (id, tenant_id, branch_id, name, active) VALUES (?, ?, ?, ?, true)',
+              [catId, tenantId, branchId, row.category],
+            );
+            catByName.set(row.category.toLowerCase(), { id: catId, name: row.category, active: true });
+          }
         }
       }
 
@@ -541,10 +574,10 @@ export function registerItemsBulk(r: Router) {
           // Synchronize SKU: use provided SKU, or retain existing, or generate short SKU if missing
           let finalRestockSku = row.sku && row.sku.trim() ? row.sku.trim() : (matchedItemInfo?.sku || null);
           if (!finalRestockSku) {
-            finalRestockSku = generateUniqueShortSku(row.name, allTenantSkus, seenImportSkus);
+            finalRestockSku = generateUniqueShortSku(row.name, allBranchSkus, seenImportSkus);
           }
           if (finalRestockSku) {
-            allTenantSkus.add(finalRestockSku.toLowerCase());
+            allBranchSkus.add(finalRestockSku.toLowerCase());
             seenImportSkus.add(finalRestockSku);
           }
 
@@ -575,20 +608,22 @@ export function registerItemsBulk(r: Router) {
           }
 
           // matchedItemInfo already fetched above
-          const oldPrimaryBarcode = matchedItemInfo?.barcode || null;
+          const oldPrimaryBarcode = matchedItemInfo?.barcode ? matchedItemInfo.barcode.trim() : null;
+          const oldPrimaryBarcodeType = matchedItemInfo?.barcode_type || 'INTERNAL';
           const newBarcodeTrim = row.barcode ? row.barcode.trim() : null;
 
           // If row specifies a barcode or explicitly cleared, update primary barcode on items table
           if (newBarcodeTrim !== oldPrimaryBarcode) {
             if (newBarcodeTrim) {
               const conflictItem = await q.one<{ id: string; name: string }>(
-                'SELECT id, name FROM items WHERE tenant_id = ? AND barcode = ? AND id <> ?',
-                [tenantId, newBarcodeTrim, itemId],
+                'SELECT id, name FROM items WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND id <> ?',
+                [tenantId, branchId, newBarcodeTrim, itemId],
               );
               if (!conflictItem) {
+                const bType = row.barcodeType || (newBarcodeTrim.startsWith('20') && newBarcodeTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
                 await q.exec(
-                  'UPDATE items SET barcode = ?, updated_at = now() WHERE id = ? AND tenant_id = ?',
-                  [newBarcodeTrim, itemId, tenantId],
+                  'UPDATE items SET barcode = ?, barcode_type = ?, updated_at = now() WHERE id = ? AND tenant_id = ?',
+                  [newBarcodeTrim, bType, itemId, tenantId],
                 );
               }
             } else if (row.barcode === null || row.barcode === '') {
@@ -605,8 +640,8 @@ export function registerItemsBulk(r: Router) {
               );
               if (!keepInAdditional) {
                 await q.exec(
-                  'DELETE FROM product_barcodes WHERE tenant_id = ? AND product_id = ? AND barcode = ?',
-                  [tenantId, itemId, oldPrimaryBarcode],
+                  'DELETE FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND product_id = ? AND barcode = ?',
+                  [tenantId, branchId, itemId, oldPrimaryBarcode],
                 );
               }
             }
@@ -614,30 +649,45 @@ export function registerItemsBulk(r: Router) {
 
           // Register new barcode in product_barcodes table
           if (newBarcodeTrim) {
-            const bType =
-              row.barcodeType ||
-              (newBarcodeTrim.startsWith('20') && newBarcodeTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
-            const existingBc = await q.one<{ id: string; product_id: string }>(
-              'SELECT id, product_id FROM product_barcodes WHERE tenant_id = ? AND barcode = ?',
-              [tenantId, newBarcodeTrim],
+            const existingBc = await q.one<{ id: string; product_id: string; barcode_type: string }>(
+              'SELECT id, product_id, barcode_type FROM product_barcodes WHERE tenant_id = ? AND (branch_id = ? OR branch_id IS NULL) AND barcode = ?',
+              [tenantId, branchId, newBarcodeTrim],
             );
             if (!existingBc) {
+              const bType = row.barcodeType || (newBarcodeTrim.startsWith('20') && newBarcodeTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
               await q.exec(
-                `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT (tenant_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
-                [newId('bc'), tenantId, itemId, newBarcodeTrim, bType],
+                `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [newId('bc'), tenantId, branchId, itemId, newBarcodeTrim, bType],
+              );
+              await q.exec(
+                'UPDATE items SET barcode_type = ? WHERE id = ? AND tenant_id = ?',
+                [bType, itemId, tenantId],
               );
               barcodesSaved++;
             } else if (existingBc.product_id !== itemId) {
+              const bType = row.barcodeType || existingBc.barcode_type;
               await q.exec(
                 'UPDATE product_barcodes SET product_id = ?, barcode_type = ? WHERE id = ?',
                 [itemId, bType, existingBc.id],
               );
+              await q.exec(
+                'UPDATE items SET barcode_type = ? WHERE id = ? AND tenant_id = ?',
+                [bType, itemId, tenantId],
+              );
             } else {
+              // Existing barcode already belongs to this product.
+              // PRESERVE the existing barcode_type! Do NOT convert existing IBC into MBC during restocking!
+              const preservedType = (newBarcodeTrim === oldPrimaryBarcode)
+                ? existingBc.barcode_type
+                : (row.barcodeType || existingBc.barcode_type);
               await q.exec(
                 'UPDATE product_barcodes SET barcode_type = ? WHERE id = ?',
-                [bType, existingBc.id],
+                [preservedType, existingBc.id],
+              );
+              await q.exec(
+                'UPDATE items SET barcode_type = ? WHERE id = ? AND tenant_id = ?',
+                [preservedType, itemId, tenantId],
               );
             }
           }
@@ -647,16 +697,15 @@ export function registerItemsBulk(r: Router) {
               const abTrim = ab.barcode.trim();
               if (abTrim && abTrim !== row.barcode?.trim()) {
                 const existingAb = await q.one<{ id: string; productId: string }>(
-                  'SELECT id, product_id FROM product_barcodes WHERE tenant_id = ? AND barcode = ?',
-                  [tenantId, abTrim],
+                  'SELECT id, product_id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ?',
+                  [tenantId, branchId, abTrim],
                 );
                 if (!existingAb) {
                   const abType = ab.barcodeType || (abTrim.startsWith('20') && abTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
                   await q.exec(
-                    `INSERT INTO product_barcodes (id, tenant_id, product_id, barcode, barcode_type)
-                     VALUES (?, ?, ?, ?, ?)
-                     ON CONFLICT (tenant_id, barcode) DO NOTHING`,
-                    [newId('bc'), tenantId, itemId, abTrim, abType],
+                    `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [newId('bc'), tenantId, branchId, itemId, abTrim, abType],
                   );
                   barcodesSaved++;
                 }
@@ -681,14 +730,14 @@ export function registerItemsBulk(r: Router) {
       for (const row of rowsReadyForInsert) {
         const id = newId('i');
         // Ensure compact short SKU
-        const finalSku = row.sku ? row.sku.trim() : generateUniqueShortSku(row.name, allTenantSkus, seenImportSkus);
-        allTenantSkus.add(finalSku.toLowerCase());
+        const finalSku = row.sku ? row.sku.trim() : generateUniqueShortSku(row.name, allBranchSkus, seenImportSkus);
+        allBranchSkus.add(finalSku.toLowerCase());
 
         // Ensure Barcode (manufacturer if given, or generate internal EAN-13)
         let finalBarcode = row.barcode ? row.barcode.trim() : null;
         let barcodeType: 'INTERNAL' | 'MANUFACTURER' = row.barcodeType || 'MANUFACTURER';
         if (!finalBarcode) {
-          finalBarcode = generateUniqueInternalBarcode(allTenantBarcodes, seenImportBarcodes);
+          finalBarcode = generateUniqueInternalBarcode(allBranchBarcodes, seenImportBarcodes);
           seenImportBarcodes.add(finalBarcode);
           barcodeType = 'INTERNAL';
         } else if (!row.barcodeType) {
@@ -703,12 +752,12 @@ export function registerItemsBulk(r: Router) {
           // Insert item
           await q.exec(
             `INSERT INTO items (
-              id, tenant_id, branch_id, name, sku, barcode, hsn, unit, category,
+              id, tenant_id, branch_id, name, sku, barcode, barcode_type, hsn, unit, category,
               price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
-              reorder_milli, min_stock_milli, favorite, custom, active, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, 0, false, '{}'::jsonb, true, ?)`,
+              reorder_milli, favorite, custom, active, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, 0, false, '{}'::jsonb, true, ?)`,
             [
-              id, tenantId, branchId, row.name, finalSku, finalBarcode, row.hsn || null,
+              id, tenantId, branchId, row.name, finalSku, finalBarcode, finalBarcode ? barcodeType : 'INTERNAL', row.hsn || null,
               row.unit || 'pcs', row.category || null,
               row.priceMinor, row.costMinor ?? 0, row.taxRateBp ?? 500, row.taxInclusive ?? true,
                           row.imageUrl || null,
@@ -717,12 +766,22 @@ export function registerItemsBulk(r: Router) {
 
           // Insert into product_barcodes table (if barcode mapping fails, rolls back item creation)
           if (finalBarcode) {
-            await q.exec(
-              `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-               VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT (tenant_id, branch_id, barcode) DO UPDATE SET product_id = EXCLUDED.product_id, barcode_type = EXCLUDED.barcode_type`,
-              [newId('bc'), tenantId, branchId, id, finalBarcode, barcodeType],
+            const existingPb = await q.one<{ id: string }>(
+              'SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ?',
+              [tenantId, branchId, finalBarcode],
             );
+            if (existingPb) {
+              await q.exec(
+                'UPDATE product_barcodes SET product_id = ?, barcode_type = ? WHERE id = ?',
+                [id, barcodeType, existingPb.id],
+              );
+            } else {
+              await q.exec(
+                `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [newId('bc'), tenantId, branchId, id, finalBarcode, barcodeType],
+              );
+            }
             barcodesSaved++;
           }
 
@@ -731,13 +790,18 @@ export function registerItemsBulk(r: Router) {
               const abTrim = ab.barcode.trim();
               if (abTrim && abTrim !== finalBarcode) {
                 const abType = ab.barcodeType || (abTrim.startsWith('20') && abTrim.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
-                await q.exec(
-                  `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
-                   VALUES (?, ?, ?, ?, ?, ?)
-                   ON CONFLICT (tenant_id, branch_id, barcode) DO NOTHING`,
-                  [newId('bc'), tenantId, branchId, id, abTrim, abType],
+                const existingAb = await q.one<{ id: string }>(
+                  'SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ?',
+                  [tenantId, branchId, abTrim],
                 );
-                barcodesSaved++;
+                if (!existingAb) {
+                  await q.exec(
+                    `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [newId('bc'), tenantId, branchId, id, abTrim, abType],
+                  );
+                  barcodesSaved++;
+                }
                 seenImportBarcodes.add(abTrim);
               }
             }

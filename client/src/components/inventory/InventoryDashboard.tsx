@@ -3,10 +3,18 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 import type { Item, Party, Role, InventoryDashboardStats, InventoryInsights, Category } from '../../api.ts';
 import {
+  formatIndianCurrency,
+  formatStockQuantity,
+  determineStockStatus,
+  calculateInventorySummary,
+  parseNumberSafe,
+} from '../../../../shared/inventorySummary.ts';
+import {
   fetchInventoryDashboard,
   fetchInventoryItems,
   fetchInventoryInsights,
   can,
+  formatStockDuration,
 } from '../../api.ts';
 import { StatCard } from '../common/BentoUI.tsx';
 import { AnimatedCounter } from '../common/AnimatedCounter.tsx';
@@ -38,12 +46,12 @@ import {
   BarChart3Icon,
   LightbulbIcon,
   ArrowRightIcon,
-  BrainIcon,
   ImageIcon,
   RefreshCwIcon,
 } from './InventoryIcons.tsx';
 
 interface InventoryDashboardProps {
+  selectedBranch?: string;
   shop?: any;
   branches?: import('../../api.ts').Branch[];
   items: Item[];
@@ -62,6 +70,7 @@ interface InventoryDashboardProps {
 }
 
 export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
+  selectedBranch,
   shop,
   branches = [],
   items,
@@ -111,20 +120,37 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [selectedLedgerItemId, setSelectedLedgerItemId] = useState<string | undefined>(undefined);
 
   const isOwnerOrManager = can(userRole, 'stock.adjust');
-  const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(userRole || '');
+  const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(userRole || '') || String(userRole).toUpperCase() === 'SUPER_ADMIN';
 
   // Load dashboard stats
   const loadDashboardStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const res = await fetchInventoryDashboard();
+      const res = await fetchInventoryDashboard(selectedBranch);
       setStats(res.stats);
     } catch (err) {
       console.error('Failed to load inventory stats:', err);
+      if (items && items.length > 0) {
+        const fallback = calculateInventorySummary(items);
+        setStats({
+          totalActiveProducts: fallback.totalActive,
+          inStockCount: fallback.inStockCount,
+          lowStockCount: fallback.lowStockCount,
+          outOfStockCount: fallback.outOfStockCount,
+          zeroStockCount: fallback.zeroStockCount,
+          negativeStockCount: fallback.negativeStockCount,
+          unconfiguredCount: fallback.unconfiguredCount,
+          distinctCategoryCount: fallback.distinctCategoryCount,
+          totalStockValueMinor: isAuthorizedForCost ? fallback.totalStockValueMinor : null,
+          categoryBreakdown: [],
+          recentMovements: [],
+          replenishmentNeeded: [],
+        });
+      }
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [selectedBranch, items, isAuthorizedForCost]);
 
   // Load Phase 3 insights
   const loadInsights = useCallback(async () => {
@@ -148,8 +174,10 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         sort: sortField,
+        branchId: selectedBranch,
         limit: pageSize,
         offset: (page - 1) * pageSize,
+        branch: selectedBranch,
       });
       setTableItems(res.items || []);
       setTotalItems(res.total || 0);
@@ -158,34 +186,45 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     } finally {
       setItemsLoading(false);
     }
-  }, [searchQuery, categoryFilter, statusFilter, sortField, page, pageSize]);
+  }, [searchQuery, categoryFilter, statusFilter, sortField, selectedBranch, page, pageSize]);
 
-  const prevItemsCountRef = useRef<number | null>(null);
-
-  // Load dashboard high-level KPI stats on mount
+  // Load dashboard high-level KPI stats on mount or when active branch changes
   useEffect(() => {
     loadDashboardStats();
-  }, [loadDashboardStats]);
-
-  // Lazily load tab-specific data only when that subtab is active
-  useEffect(() => {
-    if (activeSubTab === 'overview') {
-      loadTableItems();
-    } else if (activeSubTab === 'insights') {
+    loadTableItems();
+    if (activeSubTab === 'insights') {
       loadInsights();
     }
-  }, [activeSubTab, loadTableItems, loadInsights]);
+  }, [selectedBranch, loadDashboardStats, loadTableItems, loadInsights, activeSubTab]);
 
-  // When products are added, imported, or deleted in the catalog, refresh stats and table without duplicate calls
+  // Listen to global branch switching and billing events
   useEffect(() => {
-    if (prevItemsCountRef.current !== null && prevItemsCountRef.current !== items?.length) {
+    const handleBranchChanged = () => {
       loadDashboardStats();
-      if (activeSubTab === 'overview') {
-        loadTableItems();
+      loadTableItems();
+      if (activeSubTab === 'insights') {
+        loadInsights();
       }
+    };
+    const handleBillCompleted = () => {
+      loadDashboardStats();
+      loadTableItems();
+    };
+    window.addEventListener('branch_scope_changed', handleBranchChanged);
+    window.addEventListener('bill_completed', handleBillCompleted);
+    return () => {
+      window.removeEventListener('branch_scope_changed', handleBranchChanged);
+      window.removeEventListener('bill_completed', handleBillCompleted);
+    };
+  }, [loadDashboardStats, loadTableItems, loadInsights, activeSubTab]);
+
+  // When products are added, imported, edited, or deleted in the catalog, refresh stats and table
+  useEffect(() => {
+    loadDashboardStats();
+    if (activeSubTab === 'overview') {
+      loadTableItems();
     }
-    prevItemsCountRef.current = items?.length ?? null;
-  }, [items?.length, loadDashboardStats, loadTableItems, activeSubTab]);
+  }, [items, loadDashboardStats, loadTableItems, activeSubTab]);
 
   const handleRefreshAll = () => {
     loadDashboardStats();
@@ -214,10 +253,12 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   // Service business notice
   const isServiceBusiness = businessType === 'service';
 
-  const totalProducts = stats?.totalActiveProducts || 0;
-  const inStockCount = stats?.inStockCount || 0;
-  const lowStockCount = stats?.lowStockCount || 0;
-  const outOfStockCount = stats?.outOfStockCount || 0;
+  const totalProducts = stats?.totalActiveProducts ?? (items && items.length > 0 ? calculateInventorySummary(items).totalActive : 0);
+  const inStockCount = stats?.inStockCount ?? 0;
+  const lowStockCount = stats?.lowStockCount ?? 0;
+  const outOfStockCount = stats?.outOfStockCount ?? 0;
+  const unconfiguredCount = stats?.unconfiguredCount ?? 0;
+  const distinctCategoryCount = stats?.distinctCategoryCount ?? (stats?.categoryBreakdown && stats.categoryBreakdown.length > 0 ? stats.categoryBreakdown.length : (categoriesList && categoriesList.length > 0 ? categoriesList.filter((c) => c.active).length : categories.length));
   const inStockPct = totalProducts > 0 ? Math.round((inStockCount / totalProducts) * 100) : 0;
   const lowStockPct = totalProducts > 0 ? Math.round((lowStockCount / totalProducts) * 100) : 0;
   const outOfStockPct = totalProducts > 0 ? Math.max(0, 100 - inStockPct - lowStockPct) : 0;
@@ -288,11 +329,15 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             }}
           >
             {isAuthorizedForCost ? (
-              <AnimatedCounter
-                value={(stats?.totalStockValueMinor || 0) / 100}
-                formatter={(val) => val.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
-                triggerKey={stats?.totalStockValueMinor}
-              />
+              statsLoading ? (
+                <span className="skeleton-line" style={{ display: 'inline-block', width: '160px', height: '36px', borderRadius: '6px' }} />
+              ) : (
+                <AnimatedCounter
+                  value={(stats?.totalStockValueMinor || 0) / 100}
+                  formatter={(val) => formatIndianCurrency(val)}
+                  triggerKey={stats?.totalStockValueMinor}
+                />
+              )
             ) : (
               <span style={{ fontSize: '1rem', color: '#64748B' }}>Restricted (Staff)</span>
             )}
@@ -360,39 +405,95 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         </div>
 
         {/* HERO CARD 2: Restock Status */}
-        {stats && (stats.outOfStockCount > 0 || stats.lowStockCount > 0) ? (
+        {statsLoading ? (
           <div className="bento-hero-card">
             <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
               <div className="cat-kpi-header-left">
-                <div className={`cat-icon-badge ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}>
-                  {stats.outOfStockCount > 0 ? <AlertOctagonIcon size={16} /> : <AlertTriangleIcon size={16} />}
+                <div className="cat-icon-badge slate">
+                  <PackageIcon size={16} />
                 </div>
                 <div>
                   <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
-                    RESTOCK OPERATIONS
+                    RESTOCK STATUS
                   </span>
                   <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
-                    Supply replenishment required
+                    Monitoring inventory levels
                   </span>
                 </div>
               </div>
-              <span className={`kpi-sub-badge ${stats.outOfStockCount > 0 ? 'red' : 'amber'}`}>
-                {stats.outOfStockCount > 0 ? 'Critical' : 'Low Buffer'}
+            </div>
+            <div className="skeleton-line" style={{ width: '180px', height: '28px', borderRadius: '6px', margin: '0.25rem 0 0.5rem' }} />
+            <div className="skeleton-line" style={{ width: '220px', height: '16px', borderRadius: '4px', marginTop: 'auto' }} />
+          </div>
+        ) : totalProducts === 0 ? (
+          <div className="bento-hero-card">
+            <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
+              <div className="cat-kpi-header-left">
+                <div className="cat-icon-badge slate">
+                  <PackageIcon size={16} />
+                </div>
+                <div>
+                  <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
+                    RESTOCK STATUS
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
+                    Catalog status
+                  </span>
+                </div>
+              </div>
+              <span className="kpi-sub-badge slate">No Data</span>
+            </div>
+            <div
+              style={{
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                fontSize: '22px',
+                fontWeight: 700,
+                color: '#64748B',
+                lineHeight: 1.2,
+                margin: '0.25rem 0 0.5rem',
+              }}
+            >
+              No inventory data
+            </div>
+            <div className="cat-kpi-footer" style={{ marginTop: 'auto', borderTop: 'none', paddingTop: 0 }}>
+              <span style={{ color: '#64748B', fontSize: '13px' }}>
+                Add products to begin tracking stock levels
+              </span>
+            </div>
+          </div>
+        ) : (outOfStockCount > 0 || lowStockCount > 0) ? (
+          <div className="bento-hero-card">
+            <div className="cat-kpi-header" style={{ marginBottom: '14px' }}>
+              <div className="cat-kpi-header-left">
+                <div className={`cat-icon-badge ${outOfStockCount > 0 ? 'red' : 'amber'}`}>
+                  {outOfStockCount > 0 ? <AlertOctagonIcon size={16} /> : <AlertTriangleIcon size={16} />}
+                </div>
+                <div>
+                  <span className="cat-kpi-title" style={{ display: 'block', fontSize: '13px', fontWeight: 600, letterSpacing: '0.5px' }}>
+                    RESTOCK STATUS
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 500 }}>
+                    {outOfStockCount > 0 ? 'Supply replenishment required' : 'Low stock alert'}
+                  </span>
+                </div>
+              </div>
+              <span className={`kpi-sub-badge ${outOfStockCount > 0 ? 'red' : 'amber'}`}>
+                {outOfStockCount > 0 ? 'Critical' : 'Low Stock'}
               </span>
             </div>
 
             <div style={{ fontSize: '18px', fontWeight: 700, margin: '0.25rem 0 1rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {stats.outOfStockCount > 0 && (
+              {outOfStockCount > 0 && (
                 <span style={{ color: '#B91C1C' }}>
-                  <strong>{stats.outOfStockCount}</strong> Out of Stock
+                  <strong>{outOfStockCount}</strong> Out of Stock
                 </span>
               )}
-              {stats.outOfStockCount > 0 && stats.lowStockCount > 0 && (
+              {outOfStockCount > 0 && lowStockCount > 0 && (
                 <span style={{ color: '#CBD5E1' }}>•</span>
               )}
-              {stats.lowStockCount > 0 && (
+              {lowStockCount > 0 && (
                 <span style={{ color: '#B45309' }}>
-                  <strong>{stats.lowStockCount}</strong> Low Buffer
+                  <strong>{lowStockCount}</strong> Low Stock
                 </span>
               )}
             </div>
@@ -406,18 +507,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   borderRadius: '10px',
                   fontSize: '13px',
                   fontWeight: 600,
-                  background: stats.outOfStockCount > 0 ? '#DC2626' : '#D97706',
+                  background: outOfStockCount > 0 ? '#DC2626' : '#D97706',
                   boxShadow: 'none',
                 }}
                 onClick={() => {
                   setActiveSubTab('overview');
-                  setStatusFilter(stats.outOfStockCount > 0 ? 'out_of_stock' : 'low_stock');
+                  setStatusFilter(outOfStockCount > 0 ? 'out_of_stock' : 'low_stock');
                   setPage(1);
                 }}
               >
                 Review Items <ArrowRightIcon size={12} />
               </button>
-              {stats.replenishmentNeeded.length > 0 && (
+              {stats?.replenishmentNeeded && stats.replenishmentNeeded.length > 0 && (
                 <button
                   type="button"
                   className="cat-btn-outline"
@@ -484,10 +585,14 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           icon={<PackageIcon size={16} />}
           iconVariant="purple"
           label="ACTIVE ITEMS"
-          statusPill={{ text: `${categories.length} Cats`, variant: 'purple' }}
-          count={statsLoading ? '--' : <AnimatedCounter value={stats?.totalActiveProducts ?? 0} triggerKey={stats?.totalActiveProducts} />}
+          statusPill={{ text: `${distinctCategoryCount} Cats`, variant: 'purple' }}
+          count={statsLoading ? <span className="skeleton-line" style={{ display: 'inline-block', width: '48px', height: '24px', borderRadius: '4px' }} /> : <AnimatedCounter value={totalProducts} triggerKey={totalProducts} />}
           countColor="#0F172A"
-          hint={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery ? '✓ Showing all items' : 'In product master'}
+          hint={
+            statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery
+              ? (unconfiguredCount > 0 ? `${unconfiguredCount} without reorder level` : '✓ Showing all items')
+              : 'In product master'
+          }
           isSelected={statusFilter === 'all' && categoryFilter === 'ALL' && !searchQuery}
           useSansFont={true}
           onClick={() => {
@@ -506,9 +611,13 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           iconVariant="green"
           label="IN-STOCK"
           statusPill={{ text: `${inStockPct}%`, variant: 'green' }}
-          count={statsLoading ? '--' : <AnimatedCounter value={stats?.inStockCount ?? 0} triggerKey={stats?.inStockCount} />}
-          countColor={(stats?.inStockCount || 0) > 0 ? '#15803D' : '#0F172A'}
-          hint={statusFilter === 'in_stock' ? '✓ Filter active (Click to reset)' : 'Sufficient shelf stock'}
+          count={statsLoading ? <span className="skeleton-line" style={{ display: 'inline-block', width: '48px', height: '24px', borderRadius: '4px' }} /> : <AnimatedCounter value={inStockCount} triggerKey={inStockCount} />}
+          countColor={inStockCount > 0 ? '#15803D' : '#0F172A'}
+          hint={
+            statusFilter === 'in_stock'
+              ? '✓ Filter active (Click to reset)'
+              : (unconfiguredCount > 0 ? `${unconfiguredCount} without reorder level` : 'Sufficient shelf stock')
+          }
           isSelected={statusFilter === 'in_stock'}
           useSansFont={true}
           onClick={() => {
@@ -524,9 +633,9 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           icon={<AlertTriangleIcon size={16} />}
           iconVariant="amber"
           label="LOW STOCK"
-          statusPill={(stats?.lowStockCount || 0) > 0 ? { text: 'Alert', variant: 'amber' } : { text: 'OK', variant: 'green' }}
-          count={statsLoading ? '--' : <AnimatedCounter value={stats?.lowStockCount ?? 0} triggerKey={stats?.lowStockCount} />}
-          countColor={(stats?.lowStockCount || 0) > 0 ? '#B45309' : '#0F172A'}
+          statusPill={lowStockCount > 0 ? { text: 'Alert', variant: 'amber' } : { text: 'OK', variant: 'green' }}
+          count={statsLoading ? <span className="skeleton-line" style={{ display: 'inline-block', width: '48px', height: '24px', borderRadius: '4px' }} /> : <AnimatedCounter value={lowStockCount} triggerKey={lowStockCount} />}
+          countColor={lowStockCount > 0 ? '#B45309' : '#0F172A'}
           hint={statusFilter === 'low_stock' ? '✓ Filter active (Click to reset)' : 'At or below reorder'}
           isSelected={statusFilter === 'low_stock'}
           useSansFont={true}
@@ -546,18 +655,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           statusPill={
             (stats?.negativeStockCount || 0) > 0
               ? { text: `${stats?.negativeStockCount} Neg`, variant: 'purple' }
-              : (stats?.outOfStockCount || 0) > 0
+              : outOfStockCount > 0
               ? { text: 'Alert', variant: 'red' }
               : { text: 'OK', variant: 'green' }
           }
-          count={statsLoading ? '--' : <AnimatedCounter value={stats?.outOfStockCount ?? 0} triggerKey={stats?.outOfStockCount} />}
-          countColor={(stats?.outOfStockCount || 0) > 0 ? '#B91C1C' : '#0F172A'}
+          count={statsLoading ? <span className="skeleton-line" style={{ display: 'inline-block', width: '48px', height: '24px', borderRadius: '4px' }} /> : <AnimatedCounter value={outOfStockCount} triggerKey={outOfStockCount} />}
+          countColor={outOfStockCount > 0 ? '#B91C1C' : '#0F172A'}
           hint={
             statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'
               ? '✓ Filter active (Click to reset)'
               : (stats?.negativeStockCount || 0) > 0
-              ? `Zero: ${stats?.zeroStockCount ?? 0} | Neg: ${stats?.negativeStockCount}`
-              : 'Zero or negative'
+                ? `Zero: ${stats?.zeroStockCount ?? 0} | Neg: ${stats?.negativeStockCount}`
+                : 'Zero or negative'
           }
           isSelected={statusFilter === 'out_of_stock' || statusFilter === 'zero_stock' || statusFilter === 'negative_stock'}
           useSansFont={true}
@@ -573,7 +682,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       </div>
 
       {/* 4. Empty state banner when 0 items */}
-      {totalProducts === 0 && !statsLoading && (
+      {totalProducts === 0 && !statsLoading && tableItems.length === 0 && (
         <div className="inventory-empty-banner">
           <div className="inventory-empty-icon-box">
             <PackageIcon size={28} />
@@ -728,17 +837,17 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                 <option value="ALL">All Categories</option>
                 {categoriesList && categoriesList.length > 0
                   ? categoriesList
-                      .filter((c) => c.active)
-                      .map((c) => (
-                        <option key={c.id} value={c.name}>
-                          {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
-                        </option>
-                      ))
-                  : categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    .filter((c) => c.active)
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.parentName ? `${c.parentName} → ${c.name}` : c.name}
                       </option>
-                    ))}
+                    ))
+                  : categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
               </select>
 
               {/* Status Filter */}
@@ -793,17 +902,17 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   {statusFilter === 'out_of_stock'
                     ? 'No Out of Stock Items'
                     : statusFilter === 'low_stock'
-                    ? 'No Low Stock Items'
-                    : statusFilter !== 'all' || categoryFilter !== 'ALL' || searchQuery
-                    ? 'No Matching Items Found'
-                    : 'No Items in Inventory'}
+                      ? 'No Low Stock Items'
+                      : statusFilter !== 'all' || categoryFilter !== 'ALL' || searchQuery
+                        ? 'No Matching Items Found'
+                        : 'No Items in Inventory'}
                 </h3>
                 <p>
                   {statusFilter === 'out_of_stock'
                     ? 'Great news! All products in your catalog are currently in stock. None are out of stock or negative.'
                     : statusFilter === 'low_stock'
-                    ? 'All inventory items are currently above their minimum reorder levels.'
-                    : 'No inventory items matched your current search or filter criteria.'}
+                      ? 'All inventory items are currently above their minimum reorder levels.'
+                      : 'No inventory items matched your current search or filter criteria.'}
                 </p>
                 {(statusFilter !== 'all' || categoryFilter !== 'ALL' || searchQuery) && (
                   <button
@@ -832,7 +941,6 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                     <th style={{ minWidth: '100px', textAlign: 'right' }}>Current Stock</th>
                     <th style={{ minWidth: '110px' }}>Status</th>
                     <th style={{ minWidth: '95px', textAlign: 'right' }}>Reorder Level</th>
-                    <th style={{ minWidth: '85px', textAlign: 'right' }}>Min Buffer</th>
                     {isAuthorizedForCost && <th style={{ minWidth: '85px', textAlign: 'right' }}>Unit Cost</th>}
                     {isAuthorizedForCost && <th style={{ minWidth: '95px', textAlign: 'right' }}>Total Value</th>}
                     <th style={{ minWidth: '110px' }}>Supplier</th>
@@ -843,7 +951,6 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   {tableItems.map((item) => {
                     const currentUnits = item.currentStockMilli / 1000;
                     const reorderUnits = (item.reorderMilli || 0) / 1000;
-                    const minUnits = (item.minStockMilli || 0) / 1000;
                     const unit = item.unit || 'pcs';
 
                     return (
@@ -934,33 +1041,37 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <span
-                            className={`stock-number-pill ${
-                              currentUnits < 0 ? 'negative' : currentUnits === 0 ? 'zero' : ''
-                            }`}
+                            className={`stock-number-pill ${currentUnits < 0 ? 'negative' : currentUnits === 0 ? 'zero' : ''
+                              }`}
                           >
-                            {currentUnits.toFixed(1)} {unit}
+                            {formatStockQuantity(currentUnits, unit)}
                           </span>
                         </td>
                         <td>
-                          <span
-                            className={`status-pill ${
-                              currentUnits < 0
-                                ? 'purple'
-                                : currentUnits === 0
-                                ? 'red'
-                                : item.stockStatus === 'low_stock'
-                                ? 'amber'
-                                : 'green'
-                            }`}
-                          >
-                            {currentUnits < 0
-                              ? 'Negative Stock'
-                              : currentUnits === 0
-                              ? 'Out of Stock'
-                              : item.stockStatus === 'low_stock'
-                              ? 'Low Stock'
-                              : 'In Stock'}
-                          </span>
+                          {(() => {
+                            const status = determineStockStatus(currentUnits, reorderUnits);
+                            return (
+                              <span
+                                className={`status-pill ${
+                                  status === 'negative_stock'
+                                    ? 'purple'
+                                    : status === 'out_of_stock'
+                                    ? 'red'
+                                    : status === 'low_stock'
+                                    ? 'amber'
+                                    : 'green'
+                                }`}
+                              >
+                                {status === 'negative_stock'
+                                  ? 'Negative Stock'
+                                  : status === 'out_of_stock'
+                                  ? 'Out of Stock'
+                                  : status === 'low_stock'
+                                  ? 'Low Stock'
+                                  : 'In Stock'}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           {reorderUnits > 0 ? (
@@ -972,7 +1083,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                 setShowReorderModal(true);
                               }}
                             >
-                              {reorderUnits.toFixed(1)} {unit}
+                              {formatStockQuantity(reorderUnits, unit)}
                               <Edit3Icon size={12} style={{ display: 'inline', marginLeft: 4, verticalAlign: 'middle', opacity: 0.7 }} />
                             </span>
                           ) : (
@@ -987,23 +1098,19 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                               >
                                 + Set Reorder
                               </button>
-                              {minUnits === 0 && (
-                                <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>Not Configured</span>
-                              )}
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>Not Configured</span>
                             </div>
                           )}
                         </td>
-                        <td style={{ textAlign: 'right', color: 'var(--text-muted)' }} className="mono">
-                          {minUnits > 0 ? `${minUnits.toFixed(1)} ${unit}` : '--'}
-                        </td>
+
                         {isAuthorizedForCost && (
-                          <td style={{ textAlign: 'right', color: 'var(--text-muted)' }} className="mono">
-                            ₹{(item.costMinor / 100).toFixed(2)}
+                          <td style={{ textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+                            {formatIndianCurrency(item.costMinor / 100)}
                           </td>
                         )}
                         {isAuthorizedForCost && (
-                          <td style={{ textAlign: 'right', fontWeight: 700 }} className="mono">
-                            ₹{(((item.stockValueMinor || 0)) / 100).toFixed(2)}
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                            {formatIndianCurrency((item.stockValueMinor || 0) / 100)}
                           </td>
                         )}
                         <td>
@@ -1299,30 +1406,10 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       {/* SUB-VIEW 5: Insights & Risk Intelligence (Phase 3) */}
       {activeSubTab === 'insights' && (
         <div className="inv-subview-content">
-          {/* Methodology & Grounding Banner */}
-          <div className="insights-methodology-banner">
-            <BrainIcon size={26} style={{ color: "var(--primary)", flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div className="insights-methodology-title">
-                Grounded Inventory Intelligence & Risk Analytics
-              </div>
-              <div className="insights-methodology-text">
-                Every metric, velocity run-rate, dead capital calculation, and variance score is computed
-                deterministically from your authoritative PostgreSQL stock ledger (<code>stock_moves</code>) and actual
-                30–90 day customer transactions. No synthetic estimations or black-box guesses.
-              </div>
-              <div className="insights-methodology-meta">
-                <span>Costing: <strong>{insights?.costingMethod || 'Current Item Master Cost (INR)'}</strong></span>
-                <span>Ledger: <strong>Authoritative stock_moves</strong></span>
-                <span>Sync: <strong>Neon PostgreSQL Live</strong></span>
-              </div>
-            </div>
-          </div>
-
           {insightsLoading ? (
             <div className="table-loading-spinner">
               <div className="spinner"></div>
-              <p>Analyzing stockout runways, movement velocity, and audit history...</p>
+              <p>Checking stock alerts, sales rates, and inventory status...</p>
             </div>
           ) : !insights ? (
             <div className="table-empty-state">
@@ -1335,22 +1422,22 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* Row 1: Stockout Risk Radar + Slow Moving Dead Stock */}
+              {/* Row 1: Stock Alert & Days Remaining + Slow Moving Dead Stock */}
               <div className="insights-grid">
-                {/* 1. Stockout Risk Radar */}
+                {/* 1. Stock Alert & Days Remaining */}
                 <div className="insights-panel-card">
                   <div className="insights-panel-header">
                     <h3>
-                      <AlertOctagonIcon size={18} style={{ color: "#ef4444", display: "inline", marginRight: "6px", verticalAlign: "middle" }} />Stockout-Risk Radar & Consumption Runway
+                      <AlertOctagonIcon size={18} style={{ color: "#ef4444", display: "inline", marginRight: "6px", verticalAlign: "middle" }} />Stock Alert & Days Remaining
                     </h3>
-                    <span className="badge-live-sync">30-Day Sales Velocity</span>
+                    <span className="badge-live-sync">Average Daily Sales</span>
                   </div>
                   <div className="insights-panel-body">
                     {insights.stockoutRisks.length === 0 ? (
                       <div className="table-empty-state" style={{ padding: '2rem 1rem' }}>
                         <CheckCircleIcon size={36} style={{ color: "#10b981", marginBottom: "0.5rem" }} />
-                        <h4>No Immediate Stockout Risks</h4>
-                        <p>All items maintain sufficient inventory cover based on current 30-day velocity.</p>
+                        <h4>No Stock Alerts</h4>
+                        <p>All products have sufficient stock based on recent sales.</p>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1372,19 +1459,18 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                 {item.name}
                               </span>
                               <span
-                                className={`runway-badge ${
-                                  item.riskLevel === 'out_of_stock' || item.riskLevel === 'critical'
-                                    ? 'critical'
-                                    : 'high'
-                                }`}
+                                className={`runway-badge ${item.riskLevel === 'out_of_stock' || item.riskLevel === 'critical'
+                                  ? 'critical'
+                                  : 'high'
+                                  }`}
                               >
                                 {item.riskLevel === 'out_of_stock'
-                                  ? 'Depleted (0d)'
-                                  : `~${item.runwayDays} Days Runway`}
+                                  ? 'Out of Stock (0d)'
+                                  : `Stock Lasts ~${formatStockDuration(item.runwayDays)}`}
                               </span>
                             </div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              Stock: <strong>{item.currentStockUnits.toFixed(1)} {item.unit}</strong> • Velocity: <strong>{item.dailyVelocityUnits.toFixed(1)} {item.unit}/day</strong> ({item.sold30dUnits.toFixed(1)} {item.unit} sold across {item.ordersCount} orders)
+                              Stock: <strong>{item.currentStockUnits.toFixed(1)} {item.unit}</strong> • Average Sales: <strong>{item.dailyVelocityUnits.toFixed(1)} {item.unit}/day</strong> ({item.sold30dUnits.toFixed(1)} {item.unit} sold across {item.ordersCount} orders)
                             </div>
                             <div style={{ fontSize: '0.78rem', color: '#b91c1c', background: '#fef2f2', padding: '0.35rem 0.5rem', borderRadius: '4px' }}>
                               {item.explainableReason}
@@ -1400,7 +1486,7 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                     className="btn-action-small primary"
                                     onClick={() => onNavigateToPurchases(undefined, item.itemId)}
                                   >
-                                    Order Reorder →
+                                    Order Stock →
                                   </button>
                                 )}
                               </div>
@@ -1412,20 +1498,20 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Slow-Moving & Dead Stock Analyzer */}
+                {/* 2. Unsold Stock Alert */}
                 <div className="insights-panel-card">
                   <div className="insights-panel-header">
                     <h3>
-                      <ClockIcon size={18} style={{ color: "#f59e0b", display: "inline", marginRight: "6px", verticalAlign: "middle" }} />Stagnant Capital & Dead-Stock Analyzer
+                      <ClockIcon size={18} style={{ color: "#f59e0b", display: "inline", marginRight: "6px", verticalAlign: "middle" }} />Unsold Stock Alert
                     </h3>
-                    <span className="badge-live-sync">60-Day Inactivity</span>
+                    <span className="badge-live-sync">No Sales for 60 Days</span>
                   </div>
                   <div className="insights-panel-body">
                     {insights.slowMovingItems.length === 0 ? (
                       <div className="table-empty-state" style={{ padding: '2rem 1rem' }}>
                         <CheckCircleIcon size={36} style={{ color: "#10b981", marginBottom: "0.5rem" }} />
-                        <h4>Healthy Inventory Turnover</h4>
-                        <p>No stagnant products detected with zero sales in the past 60 days.</p>
+                        <h4>All Products Are Selling Well</h4>
+                        <p>No unsold products found with zero sales in the last 60 days.</p>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1447,16 +1533,16 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                 {item.name}
                               </span>
                               {item.tiedCapitalMinor !== null && (
-                                <span className="dead-capital-badge">
-                                  ₹{(item.tiedCapitalMinor / 100).toFixed(2)} Tied
+                                <span className="dead-capital-badge" title="Money invested in unsold stock">
+                                  ₹{(item.tiedCapitalMinor / 100).toFixed(2)} Money Stuck
                                 </span>
                               )}
                             </div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              Idle Stock: <strong>{item.currentStockUnits.toFixed(1)} {item.unit}</strong> • Category: {item.category || 'General'}
+                              Unsold Stock: <strong>{item.currentStockUnits.toFixed(1)} {item.unit}</strong> • Category: {item.category || 'General'}
                             </div>
                             <div style={{ fontSize: '0.78rem', color: '#92400e', background: '#fffbeb', padding: '0.35rem 0.5rem', borderRadius: '4px' }}>
-                              {item.explainableReason} Recommendation: Consider bundle promotion or supplier return.
+                              {item.explainableReason} Suggestion: Consider offering a discount or returning the stock to the supplier.
                             </div>
                           </div>
                         ))}
@@ -1622,9 +1708,8 @@ export const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 <span
-                                  className={`status-pill ${
-                                    c.accuracyPct >= 95 ? 'green' : c.accuracyPct >= 85 ? 'amber' : 'red'
-                                  }`}
+                                  className={`status-pill ${c.accuracyPct >= 95 ? 'green' : c.accuracyPct >= 85 ? 'amber' : 'red'
+                                    }`}
                                 >
                                   {c.accuracyPct}%
                                 </span>

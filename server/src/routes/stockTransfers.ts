@@ -4,6 +4,29 @@ import { bad, conflict, notFound, forbidden, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import type { StockTransfer, StockTransferLine, StockTransferStatus, StockMove } from '../../../shared/types.ts';
 
+async function resolveBranch(
+  db: { one: <T>(sql: string, params?: unknown[]) => Promise<T | null | undefined> },
+  tenantId: string,
+  branchParam?: string | null,
+): Promise<{ id: string; code: string; name: string } | null> {
+  if (!branchParam || !branchParam.trim()) return null;
+  const param = branchParam.trim();
+  const branch = await db.one<any>(
+    `SELECT id, code, name 
+     FROM branches 
+     WHERE tenant_id = ? 
+       AND (id = ? OR UPPER(code) = UPPER(?) OR UPPER(name) = UPPER(?))
+     LIMIT 1`,
+    [tenantId, param, param, param],
+  );
+  if (!branch) return null;
+  return {
+    id: branch.id,
+    code: branch.code,
+    name: branch.name,
+  };
+}
+
 export function registerStockTransfers(r: Router) {
   // 1. Get filtered list of stock transfers
   r.get('/api/stock-transfers', requireUser, async (ctx) => {
@@ -12,7 +35,11 @@ export function registerStockTransfers(r: Router) {
 
     const fromBranch = (ctx.query.fromBranch ?? '').trim().toUpperCase();
     const toBranch = (ctx.query.toBranch ?? '').trim().toUpperCase();
-    const branch = (ctx.query.branch ?? '').trim().toUpperCase();
+    const branch = (
+      (ctx.query.branch as string) ||
+      (ctx.req?.headers?.['x-branch-id'] as string) ||
+      ''
+    ).trim().toUpperCase();
     const status = (ctx.query.status ?? 'all').trim().toLowerCase();
     const search = (ctx.query.search ?? '').trim().toLowerCase();
     const fromDate = (ctx.query.from ?? '').trim();
@@ -37,16 +64,34 @@ export function registerStockTransfers(r: Router) {
     }
 
     if (branch && branch !== 'ALL') {
-      whereSql += ` AND (st.from_branch = ? OR st.to_branch = ?)`;
-      params.push(branch, branch);
+      const bFilter = await resolveBranch(ctx.db, tenantId, branch);
+      if (bFilter) {
+        whereSql += ` AND (st.from_branch = ? OR st.from_branch = ? OR st.to_branch = ? OR st.to_branch = ?)`;
+        params.push(bFilter.code, bFilter.id, bFilter.code, bFilter.id);
+      } else {
+        whereSql += ` AND (st.from_branch = ? OR st.to_branch = ?)`;
+        params.push(branch, branch);
+      }
     }
     if (fromBranch && fromBranch !== 'ALL') {
-      whereSql += ` AND st.from_branch = ?`;
-      params.push(fromBranch);
+      const fbFilter = await resolveBranch(ctx.db, tenantId, fromBranch);
+      if (fbFilter) {
+        whereSql += ` AND (st.from_branch = ? OR st.from_branch = ?)`;
+        params.push(fbFilter.code, fbFilter.id);
+      } else {
+        whereSql += ` AND st.from_branch = ?`;
+        params.push(fromBranch);
+      }
     }
     if (toBranch && toBranch !== 'ALL') {
-      whereSql += ` AND st.to_branch = ?`;
-      params.push(toBranch);
+      const tbFilter = await resolveBranch(ctx.db, tenantId, toBranch);
+      if (tbFilter) {
+        whereSql += ` AND (st.to_branch = ? OR st.to_branch = ?)`;
+        params.push(tbFilter.code, tbFilter.id);
+      } else {
+        whereSql += ` AND st.to_branch = ?`;
+        params.push(toBranch);
+      }
     }
     if (status && status !== 'all') {
       whereSql += ` AND st.status = ?`;
@@ -100,8 +145,8 @@ export function registerStockTransfers(r: Router) {
         st.updated_at,
         COALESCE((SELECT COUNT(*)::int FROM stock_transfer_lines stl WHERE stl.transfer_id = st.id), 0) AS items_count
        FROM stock_transfers st
-       LEFT JOIN branches fb ON fb.tenant_id = st.tenant_id AND fb.code = st.from_branch
-       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND tb.code = st.to_branch
+       LEFT JOIN branches fb ON fb.tenant_id = st.tenant_id AND (fb.code = st.from_branch OR fb.id = st.from_branch)
+       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND (tb.code = st.to_branch OR tb.id = st.to_branch)
        LEFT JOIN users u_req ON u_req.id = st.requested_by
        LEFT JOIN users u_app ON u_app.id = st.approved_by
        LEFT JOIN users u_disp ON u_disp.id = st.dispatched_by
@@ -151,11 +196,24 @@ export function registerStockTransfers(r: Router) {
   // 2. Next Transfer Number Preview
   r.get('/api/stock-transfers/next-number', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const series = await ctx.db.one<{ next_no: number }>(
-      `SELECT next_no FROM number_series WHERE tenant_id = ? AND series = 'TRF'`,
-      [tenantId],
-    );
-    const nextNo = Number(series?.next_no ?? 1);
+    const branchParam = ctx.query.branch as string | undefined;
+    let nextNo = 1;
+    if (branchParam) {
+      const fb = await resolveBranch(ctx.db, tenantId, branchParam);
+      if (fb) {
+        const series = await ctx.db.one<{ next_no: number }>(
+          `SELECT next_no FROM number_series WHERE tenant_id = ? AND branch_id = ? AND series = 'TRF'`,
+          [tenantId, fb.id],
+        );
+        nextNo = Number(series?.next_no ?? 1);
+      }
+    } else {
+      const series = await ctx.db.one<{ next_no: number }>(
+        `SELECT next_no FROM number_series WHERE tenant_id = ? AND series = 'TRF' ORDER BY next_no DESC LIMIT 1`,
+        [tenantId],
+      );
+      nextNo = Number(series?.next_no ?? 1);
+    }
     return {
       nextTransferNumber: `TRF-${String(nextNo).padStart(4, '0')}`,
     };
@@ -164,9 +222,18 @@ export function registerStockTransfers(r: Router) {
   // 3. Available stock per item for a specific branch
   r.get('/api/stock-transfers/branch-stock', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
-    const branch = (ctx.query.branch ?? 'MAIN').trim().toUpperCase();
+    const branchParam = ((ctx.query.branch as string) ?? 'MAIN').trim();
     const q = (ctx.query.q ?? '').trim().toLowerCase();
     const limit = Math.min(100, Math.max(1, V.int(ctx.query.limit ?? 50, 'Limit', { min: 1, max: 100 })));
+    const availableOnly = ctx.query.availableOnly === 'true' || ctx.query.availableOnly === '1';
+
+    const fb = await resolveBranch(ctx.db, tenantId, branchParam);
+    if (!fb) {
+      return {
+        branch: branchParam,
+        items: [],
+      };
+    }
 
     let querySql = `
       SELECT 
@@ -182,16 +249,66 @@ export function registerStockTransfers(r: Router) {
         COALESCE((
           SELECT SUM(sm.qty_milli)
           FROM stock_moves sm
-          WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.location = ?
+          WHERE sm.item_id = i.id 
+            AND sm.tenant_id = i.tenant_id 
+            AND (
+              sm.branch_id = ? 
+              OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+            )
         ), 0)::bigint AS available_stock_milli
       FROM items i
-      WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+      WHERE i.tenant_id = ? 
+        AND i.active = true 
+        AND i.track_stock = true
+        AND (
+          i.branch_id = ?
+          OR EXISTS (
+            SELECT 1 
+            FROM stock_moves sm2 
+            WHERE sm2.tenant_id = i.tenant_id 
+              AND sm2.item_id = i.id 
+              AND (
+                sm2.branch_id = ? 
+                OR (sm2.branch_id IS NULL AND (UPPER(sm2.location) = UPPER(?) OR UPPER(sm2.location) = UPPER(?)))
+              )
+          )
+        )
     `;
-    const params: unknown[] = [branch, tenantId];
+    const params: unknown[] = [
+      fb.id, fb.code, fb.id,
+      tenantId,
+      fb.id, fb.id, fb.code, fb.id,
+    ];
 
     if (q) {
-      querySql += ` AND (lower(i.name) LIKE ? OR lower(COALESCE(i.sku, '')) LIKE ? OR lower(COALESCE(i.barcode, '')) LIKE ?)`;
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      querySql += ` AND (
+        lower(i.name) LIKE ? 
+        OR lower(COALESCE(i.sku, '')) LIKE ? 
+        OR lower(COALESCE(i.barcode, '')) LIKE ?
+        OR EXISTS (
+          SELECT 1 
+          FROM product_barcodes pb 
+          WHERE pb.tenant_id = i.tenant_id 
+            AND pb.product_id = i.id 
+            AND (pb.branch_id = ? OR pb.branch_id IS NULL)
+            AND lower(pb.barcode) LIKE ?
+        )
+      )`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, fb.id, `%${q}%`);
+    }
+
+    if (availableOnly) {
+      querySql += ` AND (
+        SELECT COALESCE(SUM(sm_avail.qty_milli), 0)
+        FROM stock_moves sm_avail
+        WHERE sm_avail.item_id = i.id 
+          AND sm_avail.tenant_id = i.tenant_id 
+          AND (
+            sm_avail.branch_id = ? 
+            OR (sm_avail.branch_id IS NULL AND (UPPER(sm_avail.location) = UPPER(?) OR UPPER(sm_avail.location) = UPPER(?)))
+          )
+      ) > 0`;
+      params.push(fb.id, fb.code, fb.id);
     }
 
     querySql += ` ORDER BY i.name ASC LIMIT ?`;
@@ -200,7 +317,7 @@ export function registerStockTransfers(r: Router) {
     const rows = await ctx.db.query<any>(querySql, params);
 
     return {
-      branch,
+      branch: fb.code,
       items: rows.map((r) => ({
         id: r.id,
         name: r.name,
@@ -248,8 +365,8 @@ export function registerStockTransfers(r: Router) {
         st.created_at,
         st.updated_at
        FROM stock_transfers st
-       LEFT JOIN branches fb ON fb.tenant_id = st.tenant_id AND fb.code = st.from_branch
-       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND tb.code = st.to_branch
+       LEFT JOIN branches fb ON fb.tenant_id = st.tenant_id AND (fb.code = st.from_branch OR fb.id = st.from_branch)
+       LEFT JOIN branches tb ON tb.tenant_id = st.tenant_id AND (tb.code = st.to_branch OR tb.id = st.to_branch)
        LEFT JOIN users u_req ON u_req.id = st.requested_by
        LEFT JOIN users u_app ON u_app.id = st.approved_by
        LEFT JOIN users u_disp ON u_disp.id = st.dispatched_by
@@ -259,6 +376,16 @@ export function registerStockTransfers(r: Router) {
     );
 
     if (!row) throw notFound('Stock transfer not found');
+
+    const fromBranch = row.fromBranch ?? row.from_branch;
+    const toBranch = row.toBranch ?? row.to_branch;
+    const transferNumber = row.transferNumber ?? row.transfer_number;
+
+    const fb = await resolveBranch(ctx.db, tenantId, fromBranch);
+    const fbId = fb?.id || fromBranch;
+    const fbCode = fb?.code || fromBranch;
+
+    const tb = await resolveBranch(ctx.db, tenantId, toBranch);
 
     // Fetch lines
     const lineRows = await ctx.db.query<any>(
@@ -279,13 +406,18 @@ export function registerStockTransfers(r: Router) {
         COALESCE((
           SELECT SUM(sm.qty_milli)
           FROM stock_moves sm
-          WHERE sm.item_id = stl.item_id AND sm.tenant_id = stl.tenant_id AND sm.location = ?
+          WHERE sm.item_id = stl.item_id 
+            AND sm.tenant_id = stl.tenant_id 
+            AND (
+              sm.branch_id = ?
+              OR (sm.branch_id IS NULL AND (UPPER(sm.location) = UPPER(?) OR UPPER(sm.location) = UPPER(?)))
+            )
         ), 0)::bigint AS available_stock_milli
        FROM stock_transfer_lines stl
        JOIN items i ON i.id = stl.item_id AND i.tenant_id = stl.tenant_id
        WHERE stl.tenant_id = ? AND stl.transfer_id = ?
        ORDER BY stl.created_at ASC`,
-      [row.fromBranch ?? row.from_branch, tenantId, transferId],
+      [fbId, fbCode, fbId, tenantId, transferId],
     );
 
     const lines: StockTransferLine[] = lineRows.map((l) => ({
@@ -308,7 +440,7 @@ export function registerStockTransfers(r: Router) {
     // Fetch associated stock movements for both source and destination branches
     const moves = await ctx.db.query<any>(
       `SELECT 
-        sm.id, sm.seq, sm.item_id, sm.location, sm.qty_milli, sm.kind,
+        sm.id, sm.seq, sm.branch_id, sm.item_id, sm.location, sm.qty_milli, sm.kind,
         sm.ref_type, sm.ref_id, sm.ref_line_id, sm.batch_no, sm.expiry,
         sm.reason, sm.notes, sm.created_at,
         i.name AS item_name, i.sku AS item_sku, i.barcode AS item_barcode, i.unit AS item_unit
@@ -318,10 +450,6 @@ export function registerStockTransfers(r: Router) {
        ORDER BY sm.seq ASC`,
       [tenantId, transferId],
     );
-
-    const fromBranch = row.fromBranch ?? row.from_branch;
-    const toBranch = row.toBranch ?? row.to_branch;
-    const transferNumber = row.transferNumber ?? row.transfer_number;
 
     const sourceMoves: StockMove[] = [];
     const destinationMoves: StockMove[] = [];
@@ -349,9 +477,15 @@ export function registerStockTransfers(r: Router) {
         createdAt: m.createdAt ?? m.created_at,
       };
 
-      if (m.location === fromBranch) {
+      const mBranchId = m.branchId ?? m.branch_id;
+      const isSource =
+        (fb && (mBranchId === fb.id || m.location === fb.code || m.location === fb.id)) ||
+        m.location === fromBranch ||
+        Number(m.qtyMilli ?? m.qty_milli) < 0;
+
+      if (isSource) {
         sourceMoves.push(formatted);
-      } else if (m.location === toBranch || Number(m.qtyMilli ?? m.qty_milli) > 0) {
+      } else {
         destinationMoves.push(formatted);
       }
     }
@@ -413,13 +547,21 @@ export function registerStockTransfers(r: Router) {
     const tenantId = ctx.user!.tenantId;
     const body = ctx.body ?? {};
 
-    const fromBranch = V.str(body.fromBranch, 'Source Branch (From Branch)', { min: 1 }).trim().toUpperCase();
-    const toBranch = V.str(body.toBranch, 'Destination Branch (To Branch)', { min: 1 }).trim().toUpperCase();
+    const fromBranchParam = V.str(body.fromBranch, 'Source Branch (From Branch)', { min: 1 }).trim();
+    const toBranchParam = V.str(body.toBranch, 'Destination Branch (To Branch)', { min: 1 }).trim();
     const notes = typeof body.notes === 'string' ? body.notes.trim() : null;
     const transferDate = (body.transferDate ? String(body.transferDate).split('T')[0] : new Date().toISOString().split('T')[0]);
     const rawLines = Array.isArray(body.lines) ? body.lines : [];
 
-    if (fromBranch === toBranch) {
+    const fb = await resolveBranch(ctx.db, tenantId, fromBranchParam);
+    if (!fb) {
+      throw bad(`Source branch "${fromBranchParam}" does not exist in your store.`);
+    }
+    const tb = await resolveBranch(ctx.db, tenantId, toBranchParam);
+    if (!tb) {
+      throw bad(`Destination branch "${toBranchParam}" does not exist in your store.`);
+    }
+    if (fb.id === tb.id) {
       throw bad('Source branch and Destination branch cannot be the same. Please select different branches.');
     }
 
@@ -430,29 +572,19 @@ export function registerStockTransfers(r: Router) {
     // Role verification for branch
     if (ctx.user!.role === 'manager') {
       const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-      if (!allowed.includes(fromBranch)) {
-        throw forbidden(`You do not have permission to transfer stock out of branch ${fromBranch}.`);
+      if (!allowed.includes(fb.code) && !allowed.includes(fb.id)) {
+        throw forbidden(`You do not have permission to transfer stock out of branch ${fb.name} (${fb.code}).`);
       }
-    }
-
-    // Validate that both branches exist for this tenant
-    const branches = await ctx.db.query<any>(
-      `SELECT code, name FROM branches WHERE tenant_id = ? AND code IN (?, ?)`,
-      [tenantId, fromBranch, toBranch],
-    );
-    const validCodes = new Set(branches.map((b) => b.code.toUpperCase()));
-    if (!validCodes.has(fromBranch)) {
-      throw bad(`Source branch "${fromBranch}" does not exist in your store.`);
-    }
-    if (!validCodes.has(toBranch)) {
-      throw bad(`Destination branch "${toBranch}" does not exist in your store.`);
     }
 
     // Execute creation in a transaction
     return await ctx.db.tx(async (q) => {
       // 1. Atomically generate sequence transfer number: TRF-0001
-      const fromBrRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
-      const fromBranchId = fromBrRow?.id || fromBranch;
+      const fromBranchId = fb.id;
+      const fromBranchCode = fb.code;
+      const toBranchId = tb.id;
+      const toBranchCode = tb.code;
+
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
         `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
          VALUES (?, ?, 'TRF', 2)
@@ -469,7 +601,7 @@ export function registerStockTransfers(r: Router) {
         `INSERT INTO stock_transfers (
           id, tenant_id, transfer_number, from_branch, to_branch, status, transfer_date, requested_by, notes, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, now(), now())`,
-        [transferId, tenantId, transferNumber, fromBranch, toBranch, transferDate, ctx.user!.id, notes],
+        [transferId, tenantId, transferNumber, fromBranchCode, toBranchCode, transferDate, ctx.user!.id, notes],
       );
 
       // 3. Validate products & available stock, then insert stock_transfer_lines
@@ -488,27 +620,43 @@ export function registerStockTransfers(r: Router) {
         }
         const qtyMilli = Math.round(qty * 1000);
 
-        // Verify item exists
+        // Verify item exists and belongs to or has inventory in source branch
         const itemRow = await q.one<any>(
-          `SELECT id, name, unit, track_stock, track_batch FROM items WHERE tenant_id = ? AND id = ? AND active = true`,
+          `SELECT id, name, unit, track_stock, track_batch, branch_id FROM items WHERE tenant_id = ? AND id = ? AND active = true`,
           [tenantId, itemId],
         );
         if (!itemRow) {
           throw bad(`Product with ID ${itemId} was not found or is inactive.`);
         }
 
+        const belongs = (itemRow.branchId ?? itemRow.branch_id) === fromBranchId || await q.one(
+          `SELECT 1 FROM stock_moves WHERE tenant_id = ? AND item_id = ? AND (
+             branch_id = ? OR (branch_id IS NULL AND (UPPER(location) = UPPER(?) OR UPPER(location) = UPPER(?)))
+           ) LIMIT 1`,
+          [tenantId, itemId, fromBranchId, fromBranchCode, fromBranchId],
+        );
+        if (!belongs) {
+          throw bad(`Product "${itemRow.name}" does not belong to source branch ${fb.name} (${fb.code}).`);
+        }
+
         // Available stock check at fromBranch
         const stockRow = await q.one<{ stockMilli?: number; stock_milli?: number }>(
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS stock_milli
            FROM stock_moves
-           WHERE tenant_id = ? AND item_id = ? AND location = ?`,
-          [tenantId, itemId, fromBranch],
+           WHERE tenant_id = ? AND item_id = ? AND (
+             branch_id = ? OR (branch_id IS NULL AND (UPPER(location) = UPPER(?) OR UPPER(location) = UPPER(?)))
+           )`,
+          [tenantId, itemId, fromBranchId, fromBranchCode, fromBranchId],
         );
         const availableStockMilli = Number(stockRow?.stockMilli ?? stockRow?.stock_milli ?? 0);
 
+        if (availableStockMilli <= 0) {
+          throw bad(`Cannot transfer "${itemRow.name}": 0 available stock at source branch ${fb.name} (${fb.code}).`);
+        }
+
         if (availableStockMilli < qtyMilli) {
           throw bad(
-            `Insufficient stock for "${itemRow.name}" at source branch ${fromBranch}. Available: ${(availableStockMilli / 1000).toLocaleString('en-IN')}, Requested: ${qty.toLocaleString('en-IN')}`,
+            `Insufficient stock for "${itemRow.name}" at source branch ${fb.name} (${fb.code}). Available: ${(availableStockMilli / 1000).toLocaleString('en-IN')}, Requested: ${qty.toLocaleString('en-IN')}`,
           );
         }
 
@@ -527,8 +675,8 @@ export function registerStockTransfers(r: Router) {
         entityId: transferId,
         detail: {
           transferNumber,
-          fromBranch,
-          toBranch,
+          fromBranch: fromBranchCode,
+          toBranch: toBranchCode,
           itemsCount: rawLines.length,
           transferDate,
         },
@@ -570,11 +718,19 @@ export function registerStockTransfers(r: Router) {
       const toBranch = st.toBranch ?? st.to_branch;
       const transferNumber = st.transferNumber ?? st.transfer_number;
 
+      const fb = await resolveBranch(q, tenantId, fromBranch);
+      const fromBranchId = fb?.id || fromBranch;
+      const fromBranchCode = fb?.code || fromBranch;
+
+      const tb = await resolveBranch(q, tenantId, toBranch);
+      const toBranchId = tb?.id || toBranch;
+      const toBranchCode = tb?.code || toBranch;
+
       // Check user permissions for source branch
       if (ctx.user!.role === 'manager') {
         const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-        if (!allowed.includes(fromBranch)) {
-          throw forbidden(`You do not have dispatch authority for source branch ${fromBranch}.`);
+        if (!allowed.includes(fromBranchCode) && !allowed.includes(fromBranchId)) {
+          throw forbidden(`You do not have dispatch authority for source branch ${fromBranchCode}.`);
         }
       }
 
@@ -598,22 +754,22 @@ export function registerStockTransfers(r: Router) {
         const stockRow = await q.one<{ stockMilli?: number; stock_milli?: number }>(
           `SELECT COALESCE(SUM(qty_milli), 0)::bigint AS stock_milli
            FROM stock_moves
-           WHERE tenant_id = ? AND item_id = ? AND location = ?`,
-          [tenantId, lineItemId, fromBranch],
+           WHERE tenant_id = ? AND item_id = ? AND (
+             branch_id = ? OR (branch_id IS NULL AND (UPPER(location) = UPPER(?) OR UPPER(location) = UPPER(?)))
+           )`,
+          [tenantId, lineItemId, fromBranchId, fromBranchCode, fromBranchId],
         );
         const available = Number(stockRow?.stockMilli ?? stockRow?.stock_milli ?? 0);
         const required = Number(line.qtyMilli ?? line.qty_milli);
 
         if (available < required) {
           throw bad(
-            `Cannot dispatch: stock for "${lineItemName}" dropped below transfer quantity at ${fromBranch}. Available: ${available / 1000}, Required: ${required / 1000}`,
+            `Cannot dispatch: stock for "${lineItemName}" dropped below transfer quantity at ${fromBranchCode}. Available: ${available / 1000}, Required: ${required / 1000}`,
           );
         }
 
         // Append negative stock movement at source branch
         const moveId = newId('sm');
-        const fbRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
-        const fromBranchId = fbRow?.id || fromBranch;
         await q.exec(
           `INSERT INTO stock_moves (
             id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
@@ -623,13 +779,13 @@ export function registerStockTransfers(r: Router) {
             tenantId,
             fromBranchId,
             lineItemId,
-            fromBranch,
+            fromBranchCode,
             -required, // Negative movement at source branch
             transferId,
             line.id,
             lineBatchNo,
             lineExpiry,
-            `Transferred to ${toBranch} (${transferNumber})`,
+            `Transferred to ${toBranchCode} (${transferNumber})`,
             ctx.user!.id,
           ],
         );
@@ -689,11 +845,18 @@ export function registerStockTransfers(r: Router) {
       const toBranch = st.toBranch ?? st.to_branch;
       const transferNumber = st.transferNumber ?? st.transfer_number;
 
+      const fb = await resolveBranch(q, tenantId, fromBranch);
+      const fromBranchCode = fb?.code || fromBranch;
+
+      const tb = await resolveBranch(q, tenantId, toBranch);
+      const toBranchId = tb?.id || toBranch;
+      const toBranchCode = tb?.code || toBranch;
+
       // Check destination branch permission
       if (ctx.user!.role === 'manager') {
         const allowed = ctx.user!.allowedLocations || [ctx.user!.assignedLocation || 'MAIN'];
-        if (!allowed.includes(toBranch)) {
-          throw forbidden(`You do not have receiving authority for destination branch ${toBranch}.`);
+        if (!allowed.includes(toBranchCode) && !allowed.includes(toBranchId)) {
+          throw forbidden(`You do not have receiving authority for destination branch ${toBranchCode}.`);
         }
       }
 
@@ -768,8 +931,6 @@ export function registerStockTransfers(r: Router) {
         if (deltaToAddMilli > 0) {
           // Append positive stock movement at destination branch
           const moveId = newId('sm');
-          const tbRow = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, toBranch, toBranch]);
-          const toBranchId = tbRow?.id || toBranch;
           await q.exec(
             `INSERT INTO stock_moves (
               id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, batch_no, expiry, reason, notes, user_id, created_at
@@ -779,16 +940,66 @@ export function registerStockTransfers(r: Router) {
               tenantId,
               toBranchId,
               lineItemId,
-              toBranch,
+              toBranchCode,
               deltaToAddMilli, // Positive movement at destination branch
               transferId,
               line.id,
               lineBatchNo,
               lineExpiry,
-              `Received from ${fromBranch} (${transferNumber})`,
+              `Received from ${fromBranchCode} (${transferNumber})`,
               ctx.user!.id,
             ],
           );
+        }
+
+        // Destination branch product-inventory & barcode association synchronization:
+        // Ensure destination branch has access to product barcodes for POS scanning and catalogue lookup
+        const itemInfo = await q.one<{ barcode: string | null; barcode_type: string | null }>(
+          'SELECT barcode, barcode_type FROM items WHERE id = ? AND tenant_id = ?',
+          [lineItemId, tenantId],
+        );
+        if (itemInfo?.barcode) {
+          const bcType = itemInfo.barcode_type || (itemInfo.barcode.startsWith('20') && itemInfo.barcode.length === 13 ? 'INTERNAL' : 'MANUFACTURER');
+          const existingBc = await q.one(
+            'SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND product_id = ? AND barcode = ?',
+            [tenantId, toBranchId, lineItemId, itemInfo.barcode],
+          );
+          if (!existingBc) {
+            const conflictBc = await q.one(
+              "SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND product_id <> ? AND barcode_type = 'INTERNAL'",
+              [tenantId, toBranchId, itemInfo.barcode, lineItemId],
+            );
+            if (!conflictBc) {
+              await q.exec(
+                `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, now())`,
+                [newId('bc'), tenantId, toBranchId, lineItemId, itemInfo.barcode, bcType],
+              );
+            }
+          }
+        }
+        const itemBarcodes = await q.query<{ barcode: string; barcode_type: string }>(
+          'SELECT barcode, barcode_type FROM product_barcodes WHERE tenant_id = ? AND product_id = ?',
+          [tenantId, lineItemId],
+        );
+        for (const pbRow of itemBarcodes) {
+          const existingBc = await q.one(
+            'SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND product_id = ? AND barcode = ?',
+            [tenantId, toBranchId, lineItemId, pbRow.barcode],
+          );
+          if (!existingBc) {
+            const conflictBc = await q.one(
+              "SELECT id FROM product_barcodes WHERE tenant_id = ? AND branch_id = ? AND barcode = ? AND product_id <> ? AND barcode_type = 'INTERNAL'",
+              [tenantId, toBranchId, pbRow.barcode, lineItemId],
+            );
+            if (!conflictBc) {
+              await q.exec(
+                `INSERT INTO product_barcodes (id, tenant_id, branch_id, product_id, barcode, barcode_type, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, now())`,
+                [newId('bc'), tenantId, toBranchId, lineItemId, pbRow.barcode, pbRow.barcode_type || 'MANUFACTURER'],
+              );
+            }
+          }
         }
 
         // Update line record
@@ -820,8 +1031,8 @@ export function registerStockTransfers(r: Router) {
         entityId: transferId,
         detail: {
           transferNumber,
-          fromBranch,
-          toBranch,
+          fromBranch: fromBranchCode,
+          toBranch: toBranchCode,
           finalStatus,
           hasDiscrepancy,
         },
@@ -832,7 +1043,7 @@ export function registerStockTransfers(r: Router) {
         status: finalStatus,
         message: hasDiscrepancy
           ? `Transfer ${transferNumber} received with shortages recorded. Status updated to Partially Received.`
-          : `Transfer ${transferNumber} received in full. Stock added to ${toBranch} and status marked Completed.`,
+          : `Transfer ${transferNumber} received in full. Stock added to ${toBranchCode} and status marked Completed.`,
       };
     });
   });
@@ -860,6 +1071,10 @@ export function registerStockTransfers(r: Router) {
       const fromBranch = st.fromBranch ?? st.from_branch;
       const transferNumber = st.transferNumber ?? st.transfer_number;
 
+      const fb = await resolveBranch(q, tenantId, fromBranch);
+      const fromBranchIdRev = fb?.id || fromBranch;
+      const fromBranchCodeRev = fb?.code || fromBranch;
+
       // If it was in transit, restore deducted stock to source branch
       if (st.status === 'in_transit') {
         const lines = await q.query<any>(
@@ -871,8 +1086,6 @@ export function registerStockTransfers(r: Router) {
           const lineItemId = line.itemId ?? line.item_id;
           const lineQtyMilli = Number(line.qtyMilli ?? line.qty_milli);
           const moveId = newId('sm');
-          const fbRowRev = await q.one<any>('SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR code = ?) LIMIT 1', [tenantId, fromBranch, fromBranch]);
-          const fromBranchIdRev = fbRowRev?.id || fromBranch;
           await q.exec(
             `INSERT INTO stock_moves (
               id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, ref_line_id, reason, notes, user_id, created_at
@@ -882,7 +1095,7 @@ export function registerStockTransfers(r: Router) {
               tenantId,
               fromBranchIdRev,
               lineItemId,
-              fromBranch,
+              fromBranchCodeRev,
               lineQtyMilli, // Re-credit source branch
               transferId,
               line.id,

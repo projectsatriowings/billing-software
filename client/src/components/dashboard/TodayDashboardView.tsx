@@ -428,9 +428,12 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
           const enforcedCode = res.selectedBranch?.code || user.assignedLocation || 'MAIN';
           setSelectedBranchCode(enforcedCode);
           selectedBranchCodeRef.current = enforcedCode;
-        } else if (res.selectedBranch?.code) {
+        } else if (branchToLoad !== 'all' && res.selectedBranch?.code) {
           setSelectedBranchCode(res.selectedBranch.code);
           selectedBranchCodeRef.current = res.selectedBranch.code;
+        } else if (branchToLoad === 'all') {
+          setSelectedBranchCode('all');
+          selectedBranchCodeRef.current = 'all';
         }
       } catch (err: any) {
         console.error('Failed to load today dashboard:', err);
@@ -448,50 +451,25 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
     if (isSuperAdmin) {
       try {
         localStorage.setItem('sa_selected_branch', newBranchCode);
+        localStorage.setItem('selected_branch', newBranchCode);
       } catch {}
     }
-    if (newBranchCode === selectedBranchCode) return;
     setSelectedBranchCode(newBranchCode);
     selectedBranchCodeRef.current = newBranchCode;
-    const branchCached = branchDataMap.get(newBranchCode.toUpperCase());
-    if (branchCached) {
-      setData(branchCached);
-    } else {
-      // Prepare clean counter data for the selected branch to prevent cross-branch leakage
-      setData((prev) => {
-        if (!prev) return null;
-        const targetBranch = prev.branches?.find(
-          (b) => (b.code || '').toUpperCase() === newBranchCode.toUpperCase()
-        );
-        const targetCounters = targetBranch?.counters || [];
-        const initialCounters = targetCounters.map((c, i) => {
-          const m = c.trim().match(/^counter[_\-\s]*(\d+)$/i);
-          const name = m ? `Counter ${m[1]}` : c.trim();
-          return {
-            id: `counter-${i + 1}`,
-            code: c,
-            name,
-            amountMinor: 0,
-            formattedAmount: '₹0',
-          };
-        });
-
-        return {
-          ...prev,
-          countersToday: {
-            title: 'Counters Today',
-            subtitle: 'Collected from open till now',
-            branchCode: newBranchCode,
-            counters: initialCounters,
-            totalMinor: 0,
-            formattedTotal: '₹0',
-          },
-        };
-      });
-    }
     setChartAnimKey((k) => k + 1);
-    loadDashboard(newBranchCode, !branchCached);
+    loadDashboard(newBranchCode, true);
   };
+
+  useEffect(() => {
+    const onBranchChanged = (e: any) => {
+      const b = e.detail?.branch || e.detail;
+      if (b !== undefined) {
+        handleBranchChange(b);
+      }
+    };
+    window.addEventListener('branch_scope_changed', onBranchChanged);
+    return () => window.removeEventListener('branch_scope_changed', onBranchChanged);
+  }, []);
 
   // Initial load
   useEffect(() => {

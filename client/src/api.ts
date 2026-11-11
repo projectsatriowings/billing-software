@@ -41,6 +41,26 @@ export async function downloadFile(url: string, defaultFilename: string): Promis
   document.body.removeChild(a);
 }
 
+export function getActiveBranchScope(): string {
+  const br = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
+  return br || 'all';
+}
+
+export function setActiveBranchScope(branch: string) {
+  const val = (branch || 'all').trim();
+  if (val && val.toLowerCase() !== 'all') {
+    localStorage.setItem('sa_selected_branch', val);
+    localStorage.setItem('selected_branch', val);
+    sessionStorage.setItem('sa_selected_branch', val);
+    sessionStorage.setItem('selected_branch', val);
+  } else {
+    localStorage.setItem('sa_selected_branch', 'all');
+    localStorage.setItem('selected_branch', 'all');
+    sessionStorage.setItem('sa_selected_branch', 'all');
+    sessionStorage.setItem('selected_branch', 'all');
+  }
+}
+
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -50,7 +70,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const selectedBranch = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
+  const selectedBranch = getActiveBranchScope();
   if (selectedBranch && selectedBranch.toLowerCase() !== 'all') {
     headers['x-branch-id'] = selectedBranch;
   }
@@ -239,6 +259,8 @@ export interface Item {
   branchCode?: string | null;
   sku?: string;
   barcode?: string;
+  barcodeType?: 'INTERNAL' | 'MANUFACTURER' | null;
+  barcodes?: { id?: string; barcode: string; barcodeType: 'INTERNAL' | 'MANUFACTURER'; branchId?: string | null }[];
   hsn?: string;
   unit: string;
   category?: string;
@@ -246,10 +268,11 @@ export interface Item {
   costMinor: number;
   taxRateBp: number;
   taxInclusive: boolean;
+  trackStock?: boolean;
+  track_stock?: boolean;
   currentStockMilli: number;
   reorderMilli?: number;
   reorderLevelMilli?: number;
-  minStockMilli?: number;
   preferredSupplierId?: string | null;
   preferredSupplierName?: string | null;
   preferredSupplierPhone?: string | null;
@@ -278,6 +301,7 @@ export {
   type StockAdjustmentReason,
   type StockCountStatus,
   can,
+  formatStockDuration,
   type Role,
   type Perm,
 } from '../../shared/types.ts';
@@ -547,6 +571,11 @@ export interface DashboardReport {
     todaySalesTotalMinor: number;
     todayCollectionsMinor: number;
     openShiftsCount: number;
+    allTimeSalesCount?: number;
+    allTimeSalesTotalMinor?: number;
+    allTimeGstMinor?: number;
+    allTimeReturnsCount?: number;
+    allTimeReturnsTotalMinor?: number;
   }[];
   shiftsSummary?: {
     openShiftsCount: number;
@@ -746,24 +775,31 @@ export interface SupplierLedger {
   paymentHistory: SupplierPaymentRecord[];
 }
 
-export const fetchInventoryDashboard = () =>
-  api<{ stats: import('../../shared/types.ts').InventoryDashboardStats }>('/api/inventory/dashboard');
+export const fetchInventoryDashboard = (paramsOrBranchId?: string | { branch?: string }) => {
+  const branch = typeof paramsOrBranchId === 'string' ? paramsOrBranchId : paramsOrBranchId?.branch;
+  const queryStr = branch && branch !== 'all' ? `?branch=${encodeURIComponent(branch)}` : '';
+  return api<{ stats: import('../../shared/types.ts').InventoryDashboardStats }>(`/api/inventory/dashboard${queryStr}`);
+};
 
 export const fetchInventoryItems = (params: {
   q?: string;
   category?: string;
   status?: string;
   sort?: string;
+  branchId?: string;
   limit?: number;
   offset?: number;
+  branch?: string;
 } = {}) => {
   const sp = new URLSearchParams();
   if (params.q) sp.set('q', params.q);
   if (params.category && params.category !== 'ALL') sp.set('category', params.category);
   if (params.status && params.status !== 'all') sp.set('status', params.status);
   if (params.sort) sp.set('sort', params.sort);
+  if (params.branchId && params.branchId !== 'all') sp.set('branch', params.branchId);
   if (params.limit) sp.set('limit', String(params.limit));
   if (params.offset) sp.set('offset', String(params.offset));
+  if (params.branch) sp.set('branch', params.branch);
   const queryStr = sp.toString() ? `?${sp.toString()}` : '';
   return api<{ items: Item[]; total: number; limit: number; offset: number }>(`/api/inventory/items${queryStr}`);
 };
@@ -832,7 +868,7 @@ export const cancelStockCount = (id: string) =>
 
 export const updateItemReorder = (
   id: string,
-  data: { reorderMilli: number; minStockMilli?: number; preferredSupplierId?: string | null },
+  data: { reorderMilli: number; preferredSupplierId?: string | null },
 ) =>
   api<{ ok: boolean; item: any }>(`/api/inventory/items/${id}/reorder`, {
     method: 'PATCH',
@@ -866,6 +902,7 @@ export const fetchSalesAnalysis = (params: {
   counterId?: string;
   categoryId?: string;
   userId?: string;
+  branch?: string;
 } = {}) => {
   const sp = new URLSearchParams();
   if (params.from) sp.set('from', params.from);
@@ -874,8 +911,32 @@ export const fetchSalesAnalysis = (params: {
   if (params.counterId && params.counterId !== 'ALL') sp.set('counterId', params.counterId);
   if (params.categoryId && params.categoryId !== 'All categories' && params.categoryId !== 'ALL') sp.set('categoryId', params.categoryId);
   if (params.userId && params.userId !== 'ALL') sp.set('userId', params.userId);
+  if (params.branch && params.branch.toLowerCase() !== 'all') sp.set('branch', params.branch);
   const qs = sp.toString() ? `?${sp.toString()}` : '';
   return api<import('../../shared/types.ts').SalesAnalysisData>(`/api/sales-analysis${qs}`);
+};
+
+export const scheduleDailySalesReportEmail = (data: { email: string; branch?: string }) => {
+  return api<{ ok: boolean; message: string; reportSent?: boolean; email?: string }>(
+    '/api/sales-analysis/schedule-email',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+};
+
+export const fetchScheduledDailySalesReportEmail = (branch?: string) => {
+  const sp = new URLSearchParams();
+  if (branch && branch.toLowerCase() !== 'all') sp.set('branch', branch);
+  const qs = sp.toString() ? `?${sp.toString()}` : '';
+  return api<{
+    scheduled: boolean;
+    email: string;
+    isActive: boolean;
+    scheduledTime: string;
+    lastSentAt: string | null;
+  }>(`/api/sales-analysis/schedule-email${qs}`);
 };
 
 export type {
@@ -1317,11 +1378,37 @@ export interface BulkImportResult {
   results: BulkImportRowResult[];
 }
 
-export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string) =>
+export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string, branchId?: string | null) =>
   api<BulkImportResult>('/api/items/bulk-import', {
     method: 'POST',
-    body: JSON.stringify({ rows, importBatchId }),
+    body: JSON.stringify({ rows, importBatchId, branchId: branchId || undefined }),
   });
+
+export const generateInternalBarcodeApi = (branchId?: string) =>
+  api<{ barcode: string; barcodeType: string; branchId: string | null }>(
+    `/api/items/generate-barcode${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
+  );
+
+export const checkBarcodeApi = (barcode: string, options?: { branchId?: string; barcodeType?: string; productId?: string }) => {
+  const qp = new URLSearchParams();
+  qp.set('barcode', barcode);
+  if (options?.branchId) qp.set('branchId', options.branchId);
+  if (options?.barcodeType) qp.set('barcodeType', options.barcodeType);
+  if (options?.productId) qp.set('productId', options.productId);
+  return api<{ available: boolean; conflict?: boolean; message?: string; barcodeType?: string; branchId?: string | null }>(
+    `/api/items/check-barcode?${qp.toString()}`
+  );
+};
+
+export const checkSkuApi = (sku: string, options?: { branchId?: string; productId?: string }) => {
+  const qp = new URLSearchParams();
+  qp.set('sku', sku);
+  if (options?.branchId) qp.set('branchId', options.branchId);
+  if (options?.productId) qp.set('productId', options.productId);
+  return api<{ available: boolean; conflict?: boolean; message?: string; branchId?: string | null }>(
+    `/api/items/check-sku?${qp.toString()}`
+  );
+};
 
 export const fetchItemByBarcode = (code: string) =>
   api<{ item: Item }>(`/api/items/by-barcode/${encodeURIComponent(code)}`);
@@ -1679,8 +1766,8 @@ export const getStockTransfers = (params?: {
   }>(`/api/stock-transfers${qs ? `?${qs}` : ''}`);
 };
 
-export const getNextStockTransferNumber = () =>
-  api<{ nextTransferNumber: string }>('/api/stock-transfers/next-number');
+export const getNextStockTransferNumber = (branch?: string) =>
+  api<{ nextTransferNumber: string }>(branch ? `/api/stock-transfers/next-number?branch=${encodeURIComponent(branch)}` : '/api/stock-transfers/next-number');
 
 export const getBranchStock = (branch: string, q?: string, limit?: number) => {
   const query = new URLSearchParams();

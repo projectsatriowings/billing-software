@@ -836,3 +836,345 @@ export async function enqueuePasswordResetLinkEmail(
 
   return { logId, status: 'QUEUED' };
 }
+
+// ----------------------------------------------------------------------------
+// Daily Sales Report Email
+// ----------------------------------------------------------------------------
+
+export interface DailySalesReportEmailData {
+  storeName: string;
+  branchName?: string;
+  reportDate: string;
+  generatedAt: string;
+  summary: {
+    totalRevenueMinor: number;
+    grossSalesMinor?: number;
+    billsCount: number;
+    grossProfitMinor: number;
+    marginPct: number;
+    avgBillValueMinor: number;
+    returnsMinor: number;
+    returnsCount: number;
+    totalGstMinor: number;
+    pendingOrdersCount: number;
+  };
+  topProducts?: Array<{
+    name: string;
+    category?: string;
+    quantity: number;
+    revenueMinor: number;
+  }>;
+  categories?: Array<{
+    category: string;
+    netSalesMinor: number;
+    sharePct: number;
+  }>;
+  payments?: Array<{
+    mode: string;
+    amountMinor: number;
+    count: number;
+  }>;
+}
+
+function formatInrMinor(minor: number): string {
+  const val = (Number(minor) || 0) / 100;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(val);
+}
+
+export function buildDailySalesReportEmail(
+  data: DailySalesReportEmailData,
+  recipientEmail: string,
+): { subject: string; text: string; html: string } {
+  const store = data.storeName || 'SKS Super market';
+  const branchLabel = data.branchName || 'All Branches';
+  const subject = `Daily Sales Report - ${store} (${branchLabel}) - ${data.reportDate}`;
+
+  const rev = formatInrMinor(data.summary.totalRevenueMinor);
+  const profit = formatInrMinor(data.summary.grossProfitMinor);
+  const avgBill = formatInrMinor(data.summary.avgBillValueMinor);
+  const returns = formatInrMinor(data.summary.returnsMinor);
+  const gst = formatInrMinor(data.summary.totalGstMinor);
+  const margin = (data.summary.marginPct || 0).toFixed(1);
+
+  // Plain-text version
+  let text = `========================================================\n`;
+  text += `DAILY SALES REPORT - ${store.toUpperCase()}\n`;
+  text += `Branch: ${branchLabel}\n`;
+  text += `Report Date: ${data.reportDate}\n`;
+  text += `Generated At: ${data.generatedAt}\n`;
+  text += `========================================================\n\n`;
+  text += `EXECUTIVE SUMMARY\n`;
+  text += `-----------------\n`;
+  text += `* Total Net Revenue: ${rev}\n`;
+  text += `* Total Bills / Completed Orders: ${data.summary.billsCount}\n`;
+  text += `* Gross Profit: ${profit} (${margin}% Margin)\n`;
+  text += `* Average Order Value: ${avgBill}\n`;
+  text += `* Pending Orders: ${data.summary.pendingOrdersCount}\n`;
+  text += `* Total GST Collected: ${gst}\n`;
+  text += `* Returns / Refunds: ${returns} (${data.summary.returnsCount} items)\n\n`;
+
+  if (data.topProducts && data.topProducts.length > 0) {
+    text += `TOP PRODUCTS SOLD\n`;
+    text += `-----------------\n`;
+    data.topProducts.forEach((p, i) => {
+      text += `${i + 1}. ${p.name} - Qty: ${p.quantity} - Sales: ${formatInrMinor(p.revenueMinor)}\n`;
+    });
+    text += `\n`;
+  }
+
+  if (data.payments && data.payments.length > 0) {
+    text += `PAYMENT METHODS\n`;
+    text += `---------------\n`;
+    data.payments.forEach((pm) => {
+      text += `* ${pm.mode.toUpperCase()}: ${formatInrMinor(pm.amountMinor)} (${pm.count} txns)\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `This automated daily sales report was generated and dispatched to ${recipientEmail}.\n`;
+
+  // HTML version
+  const topProductsHtml = (data.topProducts || []).map((p, idx) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 10px 12px; font-size: 13px; color: #64748b; font-weight: 700;">#${idx + 1}</td>
+      <td style="padding: 10px 12px; font-size: 13px; color: #0f172a; font-weight: 600;">${escapeHtml(p.name)}</td>
+      <td style="padding: 10px 12px; font-size: 13px; color: #64748b;">${escapeHtml(p.category || 'General')}</td>
+      <td style="padding: 10px 12px; font-size: 13px; color: #0f172a; text-align: right; font-weight: 600;">${p.quantity}</td>
+      <td style="padding: 10px 12px; font-size: 13px; color: #0f172a; text-align: right; font-weight: 700; font-family: monospace;">${formatInrMinor(p.revenueMinor)}</td>
+    </tr>
+  `).join('');
+
+  const paymentsHtml = (data.payments || []).map((pm) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 9px 12px; font-size: 13px; color: #0f172a; font-weight: 600; text-transform: uppercase;">${escapeHtml(pm.mode)}</td>
+      <td style="padding: 9px 12px; font-size: 13px; color: #64748b; text-align: right;">${pm.count} bills</td>
+      <td style="padding: 9px 12px; font-size: 13px; color: #0f172a; text-align: right; font-weight: 700; font-family: monospace;">${formatInrMinor(pm.amountMinor)}</td>
+    </tr>
+  `).join('');
+
+  const categoriesHtml = (data.categories || []).map((cat) => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 9px 12px; font-size: 13px; color: #0f172a; font-weight: 600;">${escapeHtml(cat.category)}</td>
+      <td style="padding: 9px 12px; font-size: 13px; color: #64748b; text-align: right;">${cat.sharePct}%</td>
+      <td style="padding: 9px 12px; font-size: 13px; color: #0f172a; text-align: right; font-weight: 700; font-family: monospace;">${formatInrMinor(cat.netSalesMinor)}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin: 0; padding: 24px 12px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(15,23,42,0.08); border: 1px solid #e2e8f0;">
+    <!-- Header -->
+    <tr>
+      <td style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 28px 32px; color: #ffffff;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td>
+              <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2;">
+                ${escapeHtml(store)}
+              </div>
+              <div style="font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 500; margin-top: 4px;">
+                Daily Sales &amp; Closing Performance Report
+              </div>
+            </td>
+            <td style="text-align: right; vertical-align: top;">
+              <span style="display: inline-block; background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                ${escapeHtml(branchLabel)}
+              </span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Date Strip -->
+    <tr>
+      <td style="background: #f8fafc; padding: 12px 32px; border-bottom: 1px solid #e2e8f0; font-size: 12.5px; color: #475569;">
+        <strong>Report Date:</strong> ${escapeHtml(data.reportDate)} &nbsp;|&nbsp; 
+        <strong>Generated:</strong> ${escapeHtml(data.generatedAt)}
+      </td>
+    </tr>
+
+    <!-- Body -->
+    <tr>
+      <td style="padding: 28px 32px;">
+        <p style="margin: 0 0 20px; font-size: 15px; color: #334155; line-height: 1.5;">
+          Here is your daily store closing sales summary with consolidated revenue, order metrics, and inventory sales performance.
+        </p>
+
+        <!-- 4 KPI Cards Grid -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px;">
+          <tr>
+            <!-- Revenue -->
+            <td width="50%" style="padding: 0 8px 16px 0; vertical-align: top;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Total Net Revenue</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; font-family: monospace;">${rev}</div>
+                <div style="font-size: 11.5px; color: #10b981; font-weight: 600; margin-top: 2px;">Completed Transactions</div>
+              </div>
+            </td>
+            <!-- Profit -->
+            <td width="50%" style="padding: 0 0 16px 8px; vertical-align: top;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Gross Profit</div>
+                <div style="font-size: 22px; font-weight: 800; color: #10b981; margin-top: 4px; font-family: monospace;">${profit}</div>
+                <div style="font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px;">Margin: ${margin}%</div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <!-- Bills Count -->
+            <td width="50%" style="padding: 0 8px 0 0; vertical-align: top;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Orders Completed</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; font-family: monospace;">${data.summary.billsCount}</div>
+                <div style="font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px;">Pending: ${data.summary.pendingOrdersCount}</div>
+              </div>
+            </td>
+            <!-- Avg Bill -->
+            <td width="50%" style="padding: 0 0 0 8px; vertical-align: top;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Average Bill Value</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; font-family: monospace;">${avgBill}</div>
+                <div style="font-size: 11.5px; color: #64748b; font-weight: 600; margin-top: 2px;">Per ticket average</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Additional Financial Details -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background: #fdfdfd; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 24px; font-size: 13px;">
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px 16px; color: #64748b; font-weight: 600;">Total Tax Collected (GST):</td>
+            <td style="padding: 10px 16px; text-align: right; color: #0f172a; font-weight: 700; font-family: monospace;">${gst}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px; color: #64748b; font-weight: 600;">Returns &amp; Refunds:</td>
+            <td style="padding: 10px 16px; text-align: right; color: #ef4444; font-weight: 700; font-family: monospace;">${returns} (${data.summary.returnsCount} bills)</td>
+          </tr>
+        </table>
+
+        <!-- Top Products Sold -->
+        ${data.topProducts && data.topProducts.length > 0 ? `
+        <div style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 10px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;">
+            Top Products Sold
+          </h4>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+            <thead>
+              <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; text-align: left;">
+                <th style="padding: 8px 12px; font-size: 11.5px; color: #64748b; font-weight: 700;">#</th>
+                <th style="padding: 8px 12px; font-size: 11.5px; color: #64748b; font-weight: 700;">Product</th>
+                <th style="padding: 8px 12px; font-size: 11.5px; color: #64748b; font-weight: 700;">Category</th>
+                <th style="padding: 8px 12px; font-size: 11.5px; color: #64748b; font-weight: 700; text-align: right;">Qty</th>
+                <th style="padding: 8px 12px; font-size: 11.5px; color: #64748b; font-weight: 700; text-align: right;">Sales</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topProductsHtml}
+            </tbody>
+          </table>
+        </div>
+        ` : ''}
+
+        <!-- Payment Modes & Categories 2-col -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 12px;">
+          <tr>
+            ${data.payments && data.payments.length > 0 ? `
+            <td width="50%" style="vertical-align: top; padding-right: 8px;">
+              <h4 style="margin: 0 0 8px; font-size: 13px; color: #0f172a; font-weight: 700; text-transform: uppercase;">
+                Payment Methods
+              </h4>
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                <tbody>
+                  ${paymentsHtml}
+                </tbody>
+              </table>
+            </td>
+            ` : ''}
+            ${data.categories && data.categories.length > 0 ? `
+            <td width="50%" style="vertical-align: top; padding-left: 8px;">
+              <h4 style="margin: 0 0 8px; font-size: 13px; color: #0f172a; font-weight: 700; text-transform: uppercase;">
+                Sales by Category
+              </h4>
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                <tbody>
+                  ${categoriesHtml}
+                </tbody>
+              </table>
+            </td>
+            ` : ''}
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; text-align: center;">
+        <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+          This automated daily closing report was generated by your <strong>${escapeHtml(store)}</strong> POS billing system.<br/>
+          Dispatched to: <a href="mailto:${escapeHtml(recipientEmail)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(recipientEmail)}</a>
+        </div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+          &copy; ${new Date().getFullYear()} ${escapeHtml(store)}. All rights reserved.
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/** Send Daily Sales Report Email directly via configured SMTP */
+export async function sendDailySalesReportEmail(
+  toEmail: string,
+  data: DailySalesReportEmailData,
+): Promise<{ ok: boolean; message: string; messageId?: string }> {
+  const config = getMailerConfig();
+  if (!config.host || !config.user) {
+    throw new Error('SMTP is not configured on the server. Please set MAIL_HOST, MAIL_USER, and MAIL_PASS in .env.');
+  }
+  if (!config.pass) {
+    throw new Error('Gmail App Password is required in MAIL_PASS in .env.');
+  }
+
+  const t = getTransporter();
+  if (!t) throw new Error('Email transporter is unavailable.');
+
+  const { subject, text, html } = buildDailySalesReportEmail(data, toEmail);
+
+  try {
+    const info = await t.sendMail({
+      from: `"${config.fromName || data.storeName}" <${config.fromAddress}>`,
+      to: toEmail,
+      subject,
+      text,
+      html,
+    });
+
+    console.info(`[Mailer] Daily sales report email sent to ${toEmail} (ID: ${info.messageId})`);
+    return {
+      ok: true,
+      message: `Daily sales report sent successfully to ${toEmail}`,
+      messageId: info.messageId,
+    };
+  } catch (err: any) {
+    const norm = normalizeMailError(err);
+    console.error(`[Mailer] Failed to send daily sales report to ${toEmail}:`, norm);
+    throw new Error(norm);
+  }
+}

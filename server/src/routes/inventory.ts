@@ -4,7 +4,7 @@ import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
 import { resolveBranchScope } from '../branchScope.ts';
 import type { Queryable } from '../db/index.ts';
-import { DEFAULT_CONFIG, can, type Rules, type StockAdjustmentReason } from '../../../shared/types.ts';
+import { DEFAULT_CONFIG, can, formatStockDuration, type Rules, type StockAdjustmentReason } from '../../../shared/types.ts';
 import { PACKS } from '../../../shared/packs.ts';
 
 async function getTenantRules(q: Queryable, tenantId: string): Promise<Rules> {
@@ -30,7 +30,7 @@ export function registerInventory(r: Router) {
   r.get('/api/inventory/dashboard', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role) || String(ctx.user!.role).toUpperCase() === 'SUPER_ADMIN';
     const branchClause = (!scope.isSuperAdminAll && scope.branchId) ? ' AND i.branch_id = ?' : '';
     const branchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
 
@@ -47,26 +47,27 @@ export function registerInventory(r: Router) {
         SELECT 
           i.id,
           i.name,
-          i.reorder_milli,
-          COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
-          i.cost_minor,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
+          COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorized') AS category,
+          COALESCE(i.reorder_milli, 0) AS reorder_milli,
+          COALESCE(i.cost_minor, 0) AS cost_minor,
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND (sm.branch_id IS NOT DISTINCT FROM i.branch_id)), 0)::bigint AS stock_milli
         FROM items i
-        WHERE i.tenant_id = ? AND i.active = true AND i.track_stock = true
+        WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
       )
       SELECT
         COUNT(*)::int AS total_active,
-        COUNT(CASE WHEN stock_milli > 0 THEN 1 END)::int AS in_stock,
+        COUNT(CASE WHEN stock_milli > 0 AND (reorder_milli = 0 OR stock_milli > reorder_milli) THEN 1 END)::int AS in_stock,
         COUNT(CASE 
           WHEN stock_milli > 0 
-           AND (reorder_milli > 0 OR min_stock_milli > 0)
-           AND stock_milli <= GREATEST(reorder_milli, min_stock_milli)
+           AND reorder_milli > 0
+           AND stock_milli <= reorder_milli
           THEN 1 
         END)::int AS low_stock,
         COUNT(CASE WHEN stock_milli <= 0 THEN 1 END)::int AS out_of_stock,
         COUNT(CASE WHEN stock_milli = 0 THEN 1 END)::int AS zero_stock,
         COUNT(CASE WHEN stock_milli < 0 THEN 1 END)::int AS negative_stock,
-        COUNT(CASE WHEN (reorder_milli = 0 AND min_stock_milli = 0) THEN 1 END)::int AS unconfigured,
+        COUNT(CASE WHEN reorder_milli = 0 THEN 1 END)::int AS unconfigured,
+        COUNT(DISTINCT category)::int AS distinct_category_count,
         COALESCE(SUM(CASE WHEN stock_milli > 0 THEN (stock_milli * cost_minor / 1000) ELSE 0 END), 0)::bigint AS total_stock_value_minor
       FROM item_stock`,
       [tenantId, ...branchParams],
@@ -82,8 +83,8 @@ export function registerInventory(r: Router) {
       `WITH item_stock AS (
         SELECT 
           COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorized') AS category,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
-          i.cost_minor
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND (sm.branch_id IS NOT DISTINCT FROM i.branch_id)), 0)::bigint AS stock_milli,
+          COALESCE(i.cost_minor, 0) AS cost_minor
         FROM items i
         WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
       )
@@ -108,7 +109,7 @@ export function registerInventory(r: Router) {
         u.name AS user_name,
         COALESCE(inv.number, pur.purchase_number, pur.supplier_invoice_number, cn.number, adj.adjustment_number, sc.count_number, sm.ref_id) AS ref_number
        FROM stock_moves sm
-       JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id AND i.branch_id = sm.branch_id
+       JOIN items i ON i.id = sm.item_id AND i.tenant_id = sm.tenant_id
        LEFT JOIN users u ON u.id = sm.user_id
        LEFT JOIN invoices inv ON inv.id = sm.ref_id AND sm.ref_type = 'invoice'
        LEFT JOIN purchases pur ON pur.id = sm.ref_id AND sm.ref_type = 'purchase'
@@ -122,6 +123,8 @@ export function registerInventory(r: Router) {
     );
 
     // Replenishment items needing reorder
+    const supplierBranchFilter = (!scope.isSuperAdminAll && scope.branchId) ? 'AND (p.branch_id = ? OR p.branch_id IS NULL)' : '';
+    const supplierBranchParams = (!scope.isSuperAdminAll && scope.branchId) ? [scope.branchId] : [];
     const replenishmentRows = await ctx.db.query(
       `WITH item_stock AS (
         SELECT 
@@ -135,13 +138,12 @@ export function registerInventory(r: Router) {
           i.category,
           i.unit,
           i.reorder_milli,
-          COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
           i.preferred_supplier_id,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND (sm.branch_id IS NOT DISTINCT FROM i.branch_id)), 0)::bigint AS stock_milli
         FROM items i
         LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
         WHERE i.tenant_id = ? ${branchClause} AND i.active = true AND i.track_stock = true
-          AND (i.reorder_milli > 0 OR COALESCE(i.min_stock_milli, 0) > 0)
+          AND i.reorder_milli > 0
       )
       SELECT 
         s.id AS item_id,
@@ -155,17 +157,16 @@ export function registerInventory(r: Router) {
         s.unit,
         s.stock_milli AS current_stock_milli,
         s.reorder_milli,
-        s.min_stock_milli,
         p.id AS supplier_id,
         p.name AS supplier_name,
         p.phone AS supplier_phone,
-        GREATEST(1000, (GREATEST(s.reorder_milli, s.min_stock_milli) * 2 - s.stock_milli)) AS suggested_order_qty_milli
+        GREATEST(1000, (s.reorder_milli * 2 - s.stock_milli)) AS suggested_order_qty_milli
       FROM item_stock s
-      LEFT JOIN parties p ON p.id = s.preferred_supplier_id AND p.tenant_id = ? ${(!scope.isSuperAdminAll && scope.branchId) ? 'AND p.branch_id = ?' : ''}
-      WHERE s.stock_milli <= GREATEST(s.reorder_milli, s.min_stock_milli)
-      ORDER BY (s.stock_milli - GREATEST(s.reorder_milli, s.min_stock_milli)) ASC
+      LEFT JOIN parties p ON p.id = s.preferred_supplier_id AND p.tenant_id = ? ${supplierBranchFilter}
+      WHERE s.stock_milli <= s.reorder_milli
+      ORDER BY (s.stock_milli - s.reorder_milli) ASC
       LIMIT 15`,
-      [tenantId, ...branchParams, tenantId, ...branchParams],
+      [tenantId, ...branchParams, tenantId, ...supplierBranchParams],
     );
 
     return {
@@ -177,6 +178,7 @@ export function registerInventory(r: Router) {
         zeroStockCount: Number((counts as any)?.zeroStock ?? (counts as any)?.zero_stock ?? 0),
         negativeStockCount: Number((counts as any)?.negativeStock ?? (counts as any)?.negative_stock ?? 0),
         unconfiguredCount: Number((counts as any)?.unconfigured ?? 0),
+        distinctCategoryCount: Number((counts as any)?.distinctCategoryCount ?? (counts as any)?.distinct_category_count ?? categoryRows.length),
         totalStockValueMinor: isAuthorizedForCost ? Number((counts as any)?.totalStockValueMinor ?? (counts as any)?.total_stock_value_minor ?? 0) : null,
         costingMethod: 'Current Item Master Cost',
         valuationDate: new Date().toISOString(),
@@ -224,7 +226,6 @@ export function registerInventory(r: Router) {
           category: r.category,
           unit: r.unit ?? 'pcs',
           currentStockMilli: Number(r.currentStockMilli ?? r.current_stock_milli),
-          minStockMilli: Number(r.minStockMilli ?? r.min_stock_milli),
           reorderMilli: Number(r.reorderMilli ?? r.reorder_milli),
           suggestedOrderQtyMilli: Number(r.suggestedOrderQtyMilli ?? r.suggested_order_qty_milli),
           preferredSupplierId: r.supplierId ?? r.supplier_id ?? null,
@@ -248,7 +249,7 @@ export function registerInventory(r: Router) {
   r.get('/api/inventory/items', requirePerm('stock.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role);
+    const isAuthorizedForCost = ['owner', 'manager', 'accountant'].includes(ctx.user!.role) || String(ctx.user!.role).toUpperCase() === 'SUPER_ADMIN';
     const q = (ctx.query.q ?? '').trim().toLowerCase();
     const category = (ctx.query.category ?? '').trim();
     const status = (ctx.query.status ?? ctx.query.stockStatus ?? 'all').trim().toLowerCase();
@@ -276,9 +277,9 @@ export function registerInventory(r: Router) {
 
     let statusCondition = '';
     if (status === 'in_stock') {
-      statusCondition = `WHERE stock_milli > 0`;
+      statusCondition = `WHERE stock_milli > 0 AND (reorder_milli = 0 OR stock_milli > reorder_milli)`;
     } else if (status === 'low_stock') {
-      statusCondition = `WHERE stock_milli > 0 AND (reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli)`;
+      statusCondition = `WHERE stock_milli > 0 AND reorder_milli > 0 AND stock_milli <= reorder_milli`;
     } else if (status === 'out_of_stock') {
       statusCondition = `WHERE stock_milli <= 0`;
     } else if (status === 'zero_stock') {
@@ -286,7 +287,7 @@ export function registerInventory(r: Router) {
     } else if (status === 'negative_stock') {
       statusCondition = `WHERE stock_milli < 0`;
     } else if (status === 'unconfigured') {
-      statusCondition = `WHERE reorder_milli = 0 AND min_stock_milli = 0`;
+      statusCondition = `WHERE reorder_milli = 0`;
     }
 
     let orderSql = 'ORDER BY name ASC';
@@ -312,18 +313,17 @@ export function registerInventory(r: Router) {
           i.unit,
           i.category,
           i.price_minor,
-          i.cost_minor,
+          COALESCE(i.cost_minor, 0) AS cost_minor,
           i.reorder_milli,
-          COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
           i.preferred_supplier_id,
           p.name AS preferred_supplier_name,
           p.phone AS preferred_supplier_phone,
-          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND sm.branch_id = i.branch_id), 0)::bigint AS stock_milli,
+          COALESCE((SELECT SUM(sm.qty_milli) FROM stock_moves sm WHERE sm.item_id = i.id AND sm.tenant_id = i.tenant_id AND (sm.branch_id IS NOT DISTINCT FROM i.branch_id)), 0)::bigint AS stock_milli,
           i.created_at,
           i.updated_at
         FROM items i
         LEFT JOIN branches b ON b.id = i.branch_id AND b.tenant_id = i.tenant_id
-        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND p.branch_id = i.branch_id
+        LEFT JOIN parties p ON p.id = i.preferred_supplier_id AND p.tenant_id = i.tenant_id AND (p.branch_id = i.branch_id OR p.branch_id IS NULL)
         ${whereSql}
       ),
       item_stats AS (
@@ -363,13 +363,12 @@ export function registerInventory(r: Router) {
       items: rows.map((r: any) => {
         const stockMilli = Number(r.stockMilli ?? r.stock_milli);
         const reorderMilli = Number(r.reorderMilli ?? r.reorder_milli);
-        const minStockMilli = Number(r.minStockMilli ?? r.min_stock_milli);
-        const threshold = Math.max(reorderMilli, minStockMilli);
 
         let stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock' | 'negative_stock' = 'in_stock';
         if (stockMilli < 0) stockStatus = 'negative_stock';
         else if (stockMilli === 0) stockStatus = 'out_of_stock';
-        else if (threshold > 0 && stockMilli <= threshold) stockStatus = 'low_stock';
+        else if (reorderMilli > 0 && stockMilli <= reorderMilli) stockStatus = 'low_stock';
+        else stockStatus = 'in_stock';
 
         return {
           id: r.id,
@@ -387,8 +386,7 @@ export function registerInventory(r: Router) {
           costMinor: isAuthorizedForCost ? Number(r.costMinor ?? r.cost_minor ?? 0) : null,
           currentStockMilli: stockMilli,
           reorderMilli,
-          minStockMilli,
-          hasThreshold: threshold > 0,
+          hasThreshold: reorderMilli > 0,
           stockStatus,
           stockValueMinor: isAuthorizedForCost ? Number(r.stockValueMinor ?? r.stock_value_minor ?? 0) : null,
           preferredSupplierId: r.preferredSupplierId ?? r.preferred_supplier_id ?? null,
@@ -1278,25 +1276,23 @@ export function registerInventory(r: Router) {
     if (!item) throw notFound('Item');
 
     const reorderMilli = V.int(b.reorderMilli ?? b.reorderLevelMilli ?? 0, 'Reorder quantity', { min: 0 });
-    const minStockMilli = V.int(b.minStockMilli ?? 0, 'Minimum stock quantity', { min: 0 });
     const preferredSupplierId = V.optStr(b.preferredSupplierId, 'Preferred supplier', 60);
 
     await ctx.db.tx(async (q) => {
       await q.exec(
         `UPDATE items SET
           reorder_milli = ?,
-          min_stock_milli = ?,
           preferred_supplier_id = ?,
           updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [reorderMilli, minStockMilli, preferredSupplierId || null, item.id, tenantId],
+        [reorderMilli, preferredSupplierId || null, item.id, tenantId],
       );
 
       await audit(q, ctx, {
         action: 'item.reorder_update',
         entity: 'item',
         entityId: item.id,
-        detail: { name: item.name, reorderMilli, minStockMilli, preferredSupplierId },
+        detail: { name: item.name, reorderMilli, preferredSupplierId },
       });
     });
 
@@ -1314,7 +1310,6 @@ export function registerInventory(r: Router) {
         id: updated.id,
         name: updated.name,
         reorderMilli: Number(updated.reorder_milli),
-        minStockMilli: Number(updated.min_stock_milli),
         preferredSupplierId: updated.preferred_supplier_id,
         currentStockMilli: Number(updated.current_stock_milli),
       },
@@ -1367,7 +1362,6 @@ export function registerInventory(r: Router) {
           i.category,
           i.cost_minor,
           i.reorder_milli,
-          COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
           i.preferred_supplier_id,
           p.name AS preferred_supplier_name,
           i.created_at,
@@ -1417,22 +1411,27 @@ export function registerInventory(r: Router) {
         runwayDays = 0;
         riskLevel = 'out_of_stock';
         if (netSoldMilli > 0) {
-          explainableReason = `Completely depleted (0 ${unit}) with active net demand (${(netSoldMilli / 1000).toFixed(1)} ${unit} net across ${ordersCount} orders over ${daysActive}d observation period). Immediate replenishment required.`;
+          explainableReason = `This product is out of stock (0 ${unit}). Total sales: ${(netSoldMilli / 1000).toFixed(1)} ${unit} across ${ordersCount} orders in the last ${daysActive} days. Please restock immediately.`;
         } else {
-          explainableReason = `Stock is currently zero or negative. Immediate replenishment needed before customer checkout.`;
+          explainableReason = `This product is out of stock. Please restock immediately before customer checkout.`;
         }
       } else if (dailyVelocityMilli > 0) {
-        runwayDays = Number((stockMilli / dailyVelocityMilli).toFixed(1));
-        const historyNotice = !hasSufficientHistory ? ` (Preliminary: product active for ${daysActive} days)` : '';
-        if (runwayDays <= 3) {
+        const rawRunwayDays = stockMilli / dailyVelocityMilli;
+        runwayDays = rawRunwayDays >= 1 ? Number(rawRunwayDays.toFixed(1)) : Math.round(rawRunwayDays * 10000) / 10000;
+        const formattedDuration = formatStockDuration(runwayDays);
+        const historyNotice = !hasSufficientHistory ? ` (based on last ${daysActive} days of sales)` : '';
+        if (runwayDays < 1) {
           riskLevel = 'critical';
-          explainableReason = `Critical stockout within ${runwayDays} days! Selling ~${(dailyVelocityMilli / 1000).toFixed(1)} ${unit}/day${historyNotice}. Current stock (${(stockMilli / 1000).toFixed(1)} ${unit}) will not survive the week.`;
+          explainableReason = `Stock may run out today (lasts ~${formattedDuration}). Current stock (${(stockMilli / 1000).toFixed(1)} ${unit}) selling at ~${(dailyVelocityMilli / 1000).toFixed(1)} ${unit}/day${historyNotice}. Please order more immediately.`;
+        } else if (runwayDays <= 3) {
+          riskLevel = 'critical';
+          explainableReason = `Stock will run out in approximately ${formattedDuration}. Selling ~${(dailyVelocityMilli / 1000).toFixed(1)} ${unit}/day${historyNotice}. Current stock (${(stockMilli / 1000).toFixed(1)} ${unit}) will not last the week. Please order more immediately.`;
         } else if (runwayDays <= 7) {
           riskLevel = 'high';
-          explainableReason = `Estimated ${runwayDays} days of buffer remaining based on net velocity of ${(dailyVelocityMilli / 1000).toFixed(1)} ${unit}/day (${(netSoldMilli / 1000).toFixed(1)} ${unit} net sold over ${daysActive} days)${historyNotice}.`;
+          explainableReason = `Stock is sufficient for approximately ${formattedDuration} based on average sales of ${(dailyVelocityMilli / 1000).toFixed(1)} ${unit}/day (${(netSoldMilli / 1000).toFixed(1)} ${unit} total sales in the last ${daysActive} days)${historyNotice}. Please reorder soon.`;
         } else {
           riskLevel = 'moderate';
-          explainableReason = `Adequate short-term cover (~${runwayDays} days), but nearing reorder threshold.${historyNotice}`;
+          explainableReason = `Stock is sufficient for approximately ${formattedDuration}, but nearing reorder level.${historyNotice}`;
         }
       }
 
@@ -1510,22 +1509,24 @@ export function registerInventory(r: Router) {
         costMinor: isAuthorizedForCost ? costMinor : null,
         tiedCapitalMinor,
         lastSaleAt: r.lastSaleAt ?? r.last_sale_at ?? null,
-        explainableReason: `Zero sales recorded in the past 60 days. ${(stockMilli / 1000).toFixed(1)} ${r.unit || 'pcs'} idle in storage${tiedCapitalMinor ? ` (₹${(tiedCapitalMinor / 100).toFixed(2)} tied capital)` : ''}.`,
+        explainableReason: `No sales in the last 60 days. ${(stockMilli / 1000).toFixed(1)} ${r.unit || 'pcs'} remaining in stock${tiedCapitalMinor ? `, worth ₹${(tiedCapitalMinor / 100).toFixed(2)}` : ''}.`,
       };
     });
 
-    // 3. Duplicate Items & Barcode Collision Warnings
+    // 3. Duplicate Items & Barcode Collision Warnings (within the same branch)
     const barcodeDuplicates = await ctx.db.query(
       `SELECT 
         barcode,
+        branch_id,
         COUNT(*)::int AS count,
         json_agg(json_build_object('id', id, 'name', name, 'sku', sku)) AS items
       FROM items
       WHERE tenant_id = ? AND active = true AND barcode IS NOT NULL AND TRIM(barcode) != ''
-      GROUP BY barcode
+        ${itemBranchFilter}
+      GROUP BY branch_id, barcode
       HAVING COUNT(*) > 1
       LIMIT 10`,
-      [tenantId],
+      [tenantId, ...branchParams],
     );
 
     const nameDuplicates = await ctx.db.query(
@@ -1637,8 +1638,8 @@ export function registerInventory(r: Router) {
         warning: isExpired
           ? `Received batch "${b.batch_no}" expired on ${exp} (${qtyUnits.toFixed(1)} ${b.unit || 'pcs'} received inward). POS checkout does not record batch-level deductions; verify physical lot on shelf.`
           : isNearExpiry
-          ? `Received batch "${b.batch_no}" expires within 30 days (${exp}) (${qtyUnits.toFixed(1)} ${b.unit || 'pcs'} received inward).`
-          : `Received batch "${b.batch_no}" expires on ${exp}.`,
+            ? `Received batch "${b.batch_no}" expires within 30 days (${exp}) (${qtyUnits.toFixed(1)} ${b.unit || 'pcs'} received inward).`
+            : `Received batch "${b.batch_no}" expires on ${exp}.`,
       };
     }).filter((b) => b.status === 'expired' || b.status === 'expiring_soon');
 

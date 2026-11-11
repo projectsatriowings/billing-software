@@ -14,9 +14,9 @@ export interface BranchScope {
  *     - If specific branch ID or Code is provided:
  *       resolves to canonical branch ID and returns { branchId, isSuperAdminAll: false }
  * - Non-Super-Admin (manager, cashier, accountant, etc.):
- *     - Strictly scoped to their assigned user.branchId:
- *       returns { branchId: user.branchId, isSuperAdminAll: false }
- *     - If user has no branchId assigned, throws 400 NO_BRANCH error.
+ *     - Strictly scoped to their assigned user.branchId or user.assignedLocation:
+ *       returns { branchId: canonicalBranchId, isSuperAdminAll: false }
+ *     - If user has no branch linked, throws 400 NO_BRANCH error.
  */
 export async function resolveBranchScope(ctx: Ctx): Promise<BranchScope> {
   if (!ctx.user) throw unauthorized();
@@ -25,12 +25,16 @@ export async function resolveBranchScope(ctx: Ctx): Promise<BranchScope> {
   const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
 
   if (!isSuperAdmin) {
-    const userBranchId = user.branchId;
-    if (!userBranchId) {
+    const rawBranch = user.branchId || user.assignedLocation;
+    if (!rawBranch) {
       throw bad("Your account isn't linked to a branch. Contact your admin.", 'NO_BRANCH');
     }
+    const br = await ctx.db.one<{ id: string }>(
+      'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND (deleted_at IS NULL OR active = true) LIMIT 1',
+      [user.tenantId, rawBranch, rawBranch],
+    );
     return {
-      branchId: userBranchId,
+      branchId: br?.id ?? rawBranch,
       isSuperAdminAll: false,
     };
   }
@@ -53,7 +57,7 @@ export async function resolveBranchScope(ctx: Ctx): Promise<BranchScope> {
 
   // If rawParam is a branch code (e.g. 'MAIN', 'SKS_POR', 'SKS_TNAGAR'), resolve to canonical branch ID
   const br = await ctx.db.one<{ id: string }>(
-    'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND deleted_at IS NULL LIMIT 1',
+    'SELECT id FROM branches WHERE tenant_id = ? AND (id = ? OR UPPER(code) = UPPER(?)) AND (deleted_at IS NULL OR active = true) LIMIT 1',
     [user.tenantId, rawParam, rawParam],
   );
 
@@ -62,4 +66,3 @@ export async function resolveBranchScope(ctx: Ctx): Promise<BranchScope> {
     isSuperAdminAll: false,
   };
 }
-

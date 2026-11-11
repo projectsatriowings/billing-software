@@ -644,7 +644,6 @@ export function registerDashboard(r: Router) {
             i.name,
             i.unit,
             i.reorder_milli,
-            COALESCE(i.min_stock_milli, 0) AS min_stock_milli,
             COALESCE(sma.stock_milli, 0)::bigint AS stock_milli,
             COALESCE(ts.sold_today_milli, 0)::bigint AS sold_today_milli
           FROM items i
@@ -660,17 +659,16 @@ export function registerDashboard(r: Router) {
           name,
           unit,
           reorder_milli,
-          min_stock_milli,
           stock_milli,
           sold_today_milli
         FROM item_stock
         WHERE stock_milli <= 0
-           OR ((reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli))
+           OR (reorder_milli > 0 AND stock_milli <= reorder_milli)
            OR sold_today_milli > 0
         ORDER BY
           (CASE
             WHEN stock_milli <= 0 THEN 1
-            WHEN (reorder_milli > 0 OR min_stock_milli > 0) AND stock_milli <= GREATEST(reorder_milli, min_stock_milli) THEN 2
+            WHEN reorder_milli > 0 AND stock_milli <= reorder_milli THEN 2
             ELSE 3
           END) ASC,
           sold_today_milli DESC,
@@ -1044,15 +1042,11 @@ export function registerDashboard(r: Router) {
     const stockAttention = stockAttentionRows.map((r: any) => {
       const stockMilli = Number(r.stockMilli ?? r.stock_milli ?? 0);
       const reorderMilli = Number(r.reorderMilli ?? r.reorder_milli ?? 0);
-      const minStockMilli = Number(r.minStockMilli ?? r.min_stock_milli ?? 0);
       const soldTodayMilli = Number(r.soldTodayMilli ?? r.sold_today_milli ?? 0);
 
       const stockQty = Math.round((stockMilli / 1000) * 100) / 100;
       const reorderQty = reorderMilli > 0 ? Math.round((reorderMilli / 1000) * 100) / 100 : null;
-      const minStockQty = minStockMilli > 0 ? Math.round((minStockMilli / 1000) * 100) / 100 : null;
-      const threshold = reorderQty !== null || minStockQty !== null
-        ? Math.max(reorderQty ?? 0, minStockQty ?? 0)
-        : null;
+      const threshold = reorderQty;
       const soldToday = Math.round((soldTodayMilli / 1000) * 100) / 100;
 
       let status: 'out_of_stock' | 'sold_today' | 'below_reorder' | 'not_configured' = 'not_configured';

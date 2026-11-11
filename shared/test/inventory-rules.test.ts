@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { can, type Role } from '../types.ts';
+import { can, formatStockDuration, type Role } from '../types.ts';
 import { PACKS } from '../packs.ts';
 
 // ---------------------------------------------------------------------------
@@ -10,7 +10,7 @@ test('inventory rbac: cashiers can view stock but cannot perform stock adjustmen
   // Cashiers can view items and stock
   assert.equal(can('cashier', 'stock.view'), true, 'cashier should have stock.view');
   assert.equal(can('cashier', 'items.view'), true, 'cashier should have items.view');
-  
+
   // Cashiers CANNOT perform stock adjustments
   assert.equal(can('cashier', 'stock.adjust'), false, 'cashier must NOT have stock.adjust');
   assert.equal(can('cashier', 'purchases'), false, 'cashier must NOT have purchases');
@@ -371,27 +371,26 @@ test('sales velocity: observation window scales for newly created products', () 
 // ---------------------------------------------------------------------------
 // 10. Suggested Reorder Quantity Target Formula
 // ---------------------------------------------------------------------------
-test('reorder formula: max(1, 2 * max(reorder, min_stock) - current_stock)', () => {
-  const calculateSuggestedOrder = (currentStockMilli: number, reorderMilli: number, minStockMilli: number) => {
-    const threshold = Math.max(reorderMilli, minStockMilli);
-    const targetStock = threshold * 2;
+test('reorder formula: max(1, 2 * reorder - current_stock)', () => {
+  const calculateSuggestedOrder = (currentStockMilli: number, reorderMilli: number) => {
+    const targetStock = reorderMilli * 2;
     return Math.max(1000, targetStock - currentStockMilli);
   };
 
   // Example 1: Reorder = 25 units, Current = 10 units
   // Target = 25 * 2 = 50 units. Deficit = 50 - 10 = 40 units.
-  assert.equal(calculateSuggestedOrder(10000, 25000, 10000), 40000);
+  assert.equal(calculateSuggestedOrder(10000, 25000), 40000);
 
   // Example 2: Out of stock (0 units). Reorder = 20 units.
   // Target = 20 * 2 = 40 units. Suggested = 40 units.
-  assert.equal(calculateSuggestedOrder(0, 20000, 15000), 40000);
+  assert.equal(calculateSuggestedOrder(0, 20000), 40000);
 
   // Example 3: Negative stock (-5 units). Reorder = 20 units.
   // Target = 20 * 2 = 40 units. Suggested = 40 - (-5) = 45 units.
-  assert.equal(calculateSuggestedOrder(-5000, 20000, 10000), 45000);
+  assert.equal(calculateSuggestedOrder(-5000, 20000), 45000);
 
   // Example 4: Minimum order of 1 base unit (1000 milli) enforced
-  assert.equal(calculateSuggestedOrder(19500, 10000, 10000), 1000);
+  assert.equal(calculateSuggestedOrder(19500, 10000), 1000);
 });
 
 // ---------------------------------------------------------------------------
@@ -503,6 +502,36 @@ test('sales velocity: voided sales and cancelled credit notes do not contaminate
   assert.equal(grossSalesMilli, 5000, 'Only the posted sale of 5 units should be counted');
   assert.equal(returnsMilli, 1000, 'Only the posted return of 1 unit should be subtracted');
   assert.equal(netDemandMilli, 4000, 'Net demand must be 4 units (5 sold minus 1 returned)');
+});
+
+// ---------------------------------------------------------------------------
+// 14. Stock Duration Human-Readable Conversion (Days, Hours, Minutes)
+// ---------------------------------------------------------------------------
+test('stock duration: converts days to hours (<1d) and minutes (<1h) dynamically', () => {
+  // Test case 1: 0.4 days -> 9.6 Hours
+  assert.equal(formatStockDuration(0.4), '9.6 Hours');
+
+  // Test case 2: 0.5 days -> 12 Hours
+  assert.equal(formatStockDuration(0.5), '12 Hours');
+
+  // Test case 3: 0.75 days -> 18 Hours
+  assert.equal(formatStockDuration(0.75), '18 Hours');
+
+  // Test case 4: 1.5 days -> 1.5 Days
+  assert.equal(formatStockDuration(1.5), '1.5 Days');
+
+  // Test case 5: 1.0 day -> 1 Day
+  assert.equal(formatStockDuration(1.0), '1 Day');
+
+  // Test case 6: 0.02 days -> 29 Minutes
+  assert.equal(formatStockDuration(0.02), '29 Minutes');
+
+  // Test case 7: Boundary - 0.0001 days -> 1 Minute (never 0 for positive stock)
+  assert.equal(formatStockDuration(0.0001), '1 Minute');
+
+  // Test case 8: Out of stock / 0
+  assert.equal(formatStockDuration(0), '0 Days');
+  assert.equal(formatStockDuration(-1), '0 Days');
 });
 
 
