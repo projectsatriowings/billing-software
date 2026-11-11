@@ -480,8 +480,6 @@ export const RecentBillsBentoView: React.FC<RecentBillsBentoViewProps> = ({
                   <th>Date & Time</th>
                   <th>Customer / Contact</th>
                   <th style={{ textAlign: 'right' }}>Total Amount</th>
-                  <th style={{ textAlign: 'right' }}>Taxable</th>
-                  <th style={{ textAlign: 'right' }}>GST</th>
                   <th>Payment</th>
                   <th>Actions</th>
                 </tr>
@@ -581,20 +579,6 @@ export const RecentBillsBentoView: React.FC<RecentBillsBentoViewProps> = ({
                     <td style={{ textAlign: 'right' }}>
                       <span className="invoices-amount-total">
                         {formatRupees(inv.totalMinor)}
-                      </span>
-                    </td>
-
-                    {/* Taxable */}
-                    <td style={{ textAlign: 'right' }}>
-                      <span className="invoices-amount-sub">
-                        {formatRupees(inv.taxableMinor)}
-                      </span>
-                    </td>
-
-                    {/* GST */}
-                    <td style={{ textAlign: 'right' }}>
-                      <span className="invoices-amount-sub">
-                        {formatRupees(inv.cgstMinor + inv.sgstMinor)}
                       </span>
                     </td>
 
