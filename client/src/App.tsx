@@ -154,7 +154,6 @@ import { SelectCounterModal } from './components/shifts/SelectCounterModal.tsx';
 import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
-import { CashBankView } from './components/finance/CashBankView.tsx';
 import { ReceivablesView } from './components/finance/ReceivablesView.tsx';
 import { PayablesView } from './components/finance/PayablesView.tsx';
 import { GstOverviewView } from './components/gst/GstOverviewView.tsx';
@@ -188,7 +187,6 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
   '/purchases',
   '/payments',
   '/expenses',
-  '/cashbank',
   '/payables',
   '/receivables',
   '/reports',
@@ -210,7 +208,6 @@ export const HIDE_BUSINESS_BAR_TABS = new Set([
   'purchases',
   'payments',
   'expenses',
-  'cashbank',
   'payables',
   'receivables',
   'reports',
@@ -241,7 +238,6 @@ export const PAGE_TITLES: Record<string, string> = {
   '/purchases': 'Accounts & Finance',
   '/payments': 'Accounts & Finance',
   '/expenses': 'Accounts & Finance',
-  '/cashbank': 'Accounts & Finance',
   '/payables': 'Accounts & Finance',
   '/receivables': 'Accounts & Finance',
   '/reports': 'Accounts & Finance',
@@ -259,7 +255,6 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'purchases': 'Purchase Management',
   'payments': 'Payment Management',
   'expenses': 'Expense Management',
-  'cashbank': 'Financial Accounts',
   'payables': 'Accounts Payable',
   'receivables': 'Accounts Receivable',
   'reports': 'Management Reports',
@@ -565,7 +560,6 @@ export function App() {
     | 'settings'
     | 'payments'
     | 'expenses'
-    | 'cashbank'
     | 'receivables'
     | 'payables'
     | 'gst-overview'
@@ -594,7 +588,7 @@ export function App() {
   }, [activeTab, displayTab]);
 
   // Collapsible sidebar accordion sections
-  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
+  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'payables', 'reports'].includes(activeTab);
   const isGstTabActive = [
     'gst-overview',
     'gst-sales-register',
@@ -1714,7 +1708,7 @@ export function App() {
       } catch { }
       showToast("You don't have access to User Management");
     }
-    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
+    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
   }, [user, activeTab]);
@@ -6621,25 +6615,6 @@ export function App() {
                         </span>
                         <span className="nav-text">Expenses</span>
                       </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('cashbank')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="3" y1="21" x2="21" y2="21" />
-                            <line x1="4" y1="10" x2="20" y2="10" />
-                            <polyline points="12 3 2 10 22 10" />
-                            <line x1="6" y1="10" x2="6" y2="21" />
-                            <line x1="10" y1="10" x2="10" y2="21" />
-                            <line x1="14" y1="10" x2="14" y2="21" />
-                            <line x1="18" y1="10" x2="18" y2="21" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Cash &amp; Bank</span>
-                      </button>
                     </div>
                   )}
                 </>
@@ -7006,7 +6981,6 @@ export function App() {
                     {displayTab === 'settings' && 'Business Configuration & Settings'}
                     {displayTab === 'payments' && 'Supplier Payments & Disbursements'}
                     {displayTab === 'expenses' && 'Business Operational Expenses'}
-                    {displayTab === 'cashbank' && 'Cash & Bank Reconciliation'}
                     {displayTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
                     {displayTab === 'payables' && 'Accounts Payable & Vendor Balances'}
                     {displayTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
@@ -7029,7 +7003,6 @@ export function App() {
                     {displayTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
                     {displayTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
                     {displayTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
-                    {displayTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
                     {displayTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
                     {displayTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
                     {displayTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
@@ -14322,12 +14295,6 @@ export function App() {
                   selectedBranch={selectedBranchScope}
                   onBranchChange={handleGlobalBranchChange}
                 />
-              </div>
-            )}
-
-            {displayTab === 'cashbank' && (
-              <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-                <CashBankView key={selectedBranchScope} />
               </div>
             )}
 
