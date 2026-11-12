@@ -2457,7 +2457,7 @@ export function App() {
           localStorage.setItem('selected_branch', enforced);
           sessionStorage.setItem('sa_selected_branch', enforced);
           sessionStorage.setItem('selected_branch', enforced);
-        } catch {}
+        } catch { }
       } else {
         const saved = localStorage.getItem('sa_selected_branch') || 'all';
         setSelectedBranchScope(saved);
@@ -11512,802 +11512,802 @@ export function App() {
               </div>
             )}
 
-          {/* TAB: PURCHASES & STOCK INWARD */}
-          {displayTab === 'purchases' && (() => {
-            const filteredPurchases = purchases.filter((p) => {
-              if (purchaseStatusFilter === 'voided') {
-                if (p.status !== 'voided') return false;
-              } else if (purchaseStatusFilter === 'unpaid') {
-                if (p.status === 'voided' || (p.paidMinor || 0) > 0) return false;
-              } else if (purchaseStatusFilter === 'partial') {
-                if (p.status === 'voided' || (p.paidMinor || 0) === 0 || (p.balanceMinor || 0) === 0) return false;
-              } else if (purchaseStatusFilter === 'paid') {
-                if (p.status === 'voided' || (p.balanceMinor || 0) > 0) return false;
-              }
-              if (!purchaseSearch.trim()) return true;
-              const q = purchaseSearch.trim().toLowerCase();
+            {/* TAB: PURCHASES & STOCK INWARD */}
+            {displayTab === 'purchases' && (() => {
+              const filteredPurchases = purchases.filter((p) => {
+                if (purchaseStatusFilter === 'voided') {
+                  if (p.status !== 'voided') return false;
+                } else if (purchaseStatusFilter === 'unpaid') {
+                  if (p.status === 'voided' || (p.paidMinor || 0) > 0) return false;
+                } else if (purchaseStatusFilter === 'partial') {
+                  if (p.status === 'voided' || (p.paidMinor || 0) === 0 || (p.balanceMinor || 0) === 0) return false;
+                } else if (purchaseStatusFilter === 'paid') {
+                  if (p.status === 'voided' || (p.balanceMinor || 0) > 0) return false;
+                }
+                if (!purchaseSearch.trim()) return true;
+                const q = purchaseSearch.trim().toLowerCase();
+                return (
+                  (p.purchaseNumber && p.purchaseNumber.toLowerCase().includes(q)) ||
+                  (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(q)) ||
+                  (p.billNo && p.billNo.toLowerCase().includes(q)) ||
+                  (p.supplierName && p.supplierName.toLowerCase().includes(q)) ||
+                  (p.supplierGstin && p.supplierGstin.toLowerCase().includes(q)) ||
+                  (p.supplierPhone && p.supplierPhone.includes(q))
+                );
+              });
+
+              const nonVoidedPurchases = purchases.filter((p) => p.status !== 'voided');
+              const totalPurchasesVolume = nonVoidedPurchases.reduce((sum, p) => sum + (p.totalMinor || 0), 0);
+              const totalItcRecorded = nonVoidedPurchases.reduce((sum, p) => sum + (p.itcMinor || 0), 0);
+              const totalBalancePayable = nonVoidedPurchases.reduce((sum, p) => sum + (p.balanceMinor || 0), 0);
+              const openBillsCount = nonVoidedPurchases.filter((p) => (p.balanceMinor || 0) > 0).length;
+
               return (
-                (p.purchaseNumber && p.purchaseNumber.toLowerCase().includes(q)) ||
-                (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(q)) ||
-                (p.billNo && p.billNo.toLowerCase().includes(q)) ||
-                (p.supplierName && p.supplierName.toLowerCase().includes(q)) ||
-                (p.supplierGstin && p.supplierGstin.toLowerCase().includes(q)) ||
-                (p.supplierPhone && p.supplierPhone.includes(q))
-              );
-            });
-
-            const nonVoidedPurchases = purchases.filter((p) => p.status !== 'voided');
-            const totalPurchasesVolume = nonVoidedPurchases.reduce((sum, p) => sum + (p.totalMinor || 0), 0);
-            const totalItcRecorded = nonVoidedPurchases.reduce((sum, p) => sum + (p.itcMinor || 0), 0);
-            const totalBalancePayable = nonVoidedPurchases.reduce((sum, p) => sum + (p.balanceMinor || 0), 0);
-            const openBillsCount = nonVoidedPurchases.filter((p) => (p.balanceMinor || 0) > 0).length;
-
-            return (
-              <div>
-                {/* Purchases Metric Cards */}
-                <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
-                      <TruckIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#6366f1' }}>
-                        {formatRupees(totalPurchasesVolume)}
+                <div>
+                  {/* Purchases Metric Cards */}
+                  <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
+                        <TruckIcon size={24} />
                       </div>
-                      <div className="kpi-label">Total Inward Stock Volume</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      <LandmarkIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#10b981' }}>
-                        {formatRupees(totalItcRecorded)}
-                      </div>
-                      <div className="kpi-label">Input Tax Credit (ITC) Recorded</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                      <CreditCardIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#ef4444' }}>
-                        {formatRupees(totalBalancePayable)}
-                      </div>
-                      <div className="kpi-label">Supplier Payable Balance</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      <FileTextIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
-                      <div className="kpi-label">Open Supplier Bills</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main Purchases Table Card */}
-                <div className="card">
-                  <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
-                        Record supplier invoices, inward goods stock into ledger, and track input GST credit
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#6366f1' }}>
+                          {formatRupees(totalPurchasesVolume)}
+                        </div>
+                        <div className="kpi-label">Total Inward Stock Volume</div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {/* Status Filter Tabs */}
-                      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
-                        {([
-                          { id: 'ALL', label: 'All Bills' },
-                          { id: 'unpaid', label: 'Unpaid' },
-                          { id: 'partial', label: 'Part-Paid' },
-                          { id: 'paid', label: 'Paid' },
-                          { id: 'voided', label: 'Voided' },
-                        ] as const).map((st) => (
-                          <button
-                            key={st.id}
-                            type="button"
-                            style={{
-                              padding: '0.35rem 0.75rem',
-                              fontSize: '0.8rem',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              background: purchaseStatusFilter === st.id ? '#ffffff' : 'transparent',
-                              color: purchaseStatusFilter === st.id ? '#6d4aff' : '#64748b',
-                              boxShadow: purchaseStatusFilter === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                            }}
-                            onClick={() => setPurchaseStatusFilter(st.id)}
-                          >
-                            {st.label}
-                          </button>
-                        ))}
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <LandmarkIcon size={24} />
                       </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#10b981' }}>
+                          {formatRupees(totalItcRecorded)}
+                        </div>
+                        <div className="kpi-label">Input Tax Credit (ITC) Recorded</div>
+                      </div>
+                    </div>
 
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ width: '230px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                        placeholder="Search bill #, supplier, invoice #..."
-                        value={purchaseSearch}
-                        onChange={(e) => setPurchaseSearch(e.target.value)}
-                      />
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                        <CreditCardIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#ef4444' }}>
+                          {formatRupees(totalBalancePayable)}
+                        </div>
+                        <div className="kpi-label">Supplier Payable Balance</div>
+                      </div>
+                    </div>
 
-                      <button className="btn btn-primary" onClick={() => openNewPurchaseModal()}>
-                        + Inward Goods / New Bill
-                      </button>
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        <FileTextIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
+                        <div className="kpi-label">Open Supplier Bills</div>
+                      </div>
                     </div>
                   </div>
 
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Purchase # & Date</th>
-                        <th>Supplier Invoice # & Date</th>
-                        <th>Supplier / Vendor</th>
-                        <th>Status</th>
-                        <th>Taxable Amount</th>
-                        <th>GST (ITC)</th>
-                        <th>Total Amount</th>
-                        <th>Paid / Balance</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPurchases.map((p) => {
-                        const isVoided = p.status === 'voided';
-                        const isPaid = !isVoided && (p.balanceMinor || 0) === 0;
-                        const isPartPaid = !isVoided && (p.paidMinor || 0) > 0 && (p.balanceMinor || 0) > 0;
-                        const isUnpaid = !isVoided && (p.paidMinor || 0) === 0;
+                  {/* Main Purchases Table Card */}
+                  <div className="card">
+                    <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
+                          Record supplier invoices, inward goods stock into ledger, and track input GST credit
+                        </div>
+                      </div>
 
-                        return (
-                          <tr key={p.id} style={{ opacity: isVoided ? 0.65 : 1 }}>
-                            <td>
-                              <div style={{ fontWeight: 700, color: isVoided ? '#94a3b8' : '#6d4aff' }}>
-                                {p.purchaseNumber || (p.billNo ? `#${p.billNo}` : `Ref: ${p.id.slice(-6)}`)}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                {p.purchaseDate || p.bdate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : '—')}
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{p.supplierInvoiceNumber || p.billNo || '—'}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                {p.supplierInvoiceDate || p.bdate || '—'}
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{p.supplierName || 'Unknown Supplier'}</div>
-                              {p.supplierGstin ? (
-                                <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                  GSTIN: {p.supplierGstin}
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Status Filter Tabs */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
+                          {([
+                            { id: 'ALL', label: 'All Bills' },
+                            { id: 'unpaid', label: 'Unpaid' },
+                            { id: 'partial', label: 'Part-Paid' },
+                            { id: 'paid', label: 'Paid' },
+                            { id: 'voided', label: 'Voided' },
+                          ] as const).map((st) => (
+                            <button
+                              key={st.id}
+                              type="button"
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                fontSize: '0.8rem',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                background: purchaseStatusFilter === st.id ? '#ffffff' : 'transparent',
+                                color: purchaseStatusFilter === st.id ? '#6d4aff' : '#64748b',
+                                boxShadow: purchaseStatusFilter === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                              }}
+                              onClick={() => setPurchaseStatusFilter(st.id)}
+                            >
+                              {st.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ width: '230px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
+                          placeholder="Search bill #, supplier, invoice #..."
+                          value={purchaseSearch}
+                          onChange={(e) => setPurchaseSearch(e.target.value)}
+                        />
+
+                        <button className="btn btn-primary" onClick={() => openNewPurchaseModal()}>
+                          + Inward Goods / New Bill
+                        </button>
+                      </div>
+                    </div>
+
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Purchase # & Date</th>
+                          <th>Supplier Invoice # & Date</th>
+                          <th>Supplier / Vendor</th>
+                          <th>Status</th>
+                          <th>Taxable Amount</th>
+                          <th>GST (ITC)</th>
+                          <th>Total Amount</th>
+                          <th>Paid / Balance</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPurchases.map((p) => {
+                          const isVoided = p.status === 'voided';
+                          const isPaid = !isVoided && (p.balanceMinor || 0) === 0;
+                          const isPartPaid = !isVoided && (p.paidMinor || 0) > 0 && (p.balanceMinor || 0) > 0;
+                          const isUnpaid = !isVoided && (p.paidMinor || 0) === 0;
+
+                          return (
+                            <tr key={p.id} style={{ opacity: isVoided ? 0.65 : 1 }}>
+                              <td>
+                                <div style={{ fontWeight: 700, color: isVoided ? '#94a3b8' : '#6d4aff' }}>
+                                  {p.purchaseNumber || (p.billNo ? `#${p.billNo}` : `Ref: ${p.id.slice(-6)}`)}
                                 </div>
-                              ) : (
-                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Unregistered Supplier</div>
-                              )}
-                              {p.supplierPhone && (
-                                <div className="mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {p.supplierPhone}</span>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                  {p.purchaseDate || p.bdate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : '—')}
                                 </div>
-                              )}
-                            </td>
-                            <td>
-                              {isVoided ? (
-                                <span
-                                  className="badge"
-                                  style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
-                                  title={p.voidReason ? `Voided: ${p.voidReason}` : 'Voided'}
-                                >
-                                  <XCircleIcon size={12} /> Voided
-                                </span>
-                              ) : isPaid ? (
-                                <span className="badge badge-emerald">
-                                  <CheckCircleIcon size={12} /> Paid
-                                </span>
-                              ) : isPartPaid ? (
-                                <span className="badge badge-amber">
-                                  <ClockIcon size={12} /> Part-Paid
-                                </span>
-                              ) : (
-                                <span className="badge" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}>
-                                  <AlertTriangleIcon size={12} /> Unpaid
-                                </span>
-                              )}
-                            </td>
-                            <td className="mono">{formatRupees(p.taxableMinor)}</td>
-                            <td className="mono" style={{ color: '#6366f1' }}>
-                              {formatRupees(p.itcMinor ?? (p.cgstMinor + p.sgstMinor + p.igstMinor))}
-                            </td>
-                            <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>
-                              {formatRupees(p.totalMinor)}
-                            </td>
-                            <td>
-                              <div className="mono" style={{ color: '#10b981', fontSize: '0.85rem' }}>
-                                Paid: {formatRupees(p.paidMinor)}
-                              </div>
-                              {(p.balanceMinor || 0) > 0 && !isVoided && (
-                                <div className="mono" style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
-                                  Bal: {formatRupees(p.balanceMinor)}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{p.supplierInvoiceNumber || p.billNo || '—'}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                  {p.supplierInvoiceDate || p.bdate || '—'}
                                 </div>
-                              )}
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => handleViewPurchaseDetails(p.id)}
-                                >
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => window.open(`/api/purchases/${p.id}/print?format=a4`, '_blank')}
-                                  title="Print A4 Purchase Document"
-                                >
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span>
-                                </button>
-                                {!isVoided && (p.balanceMinor || 0) > 0 && can(user?.role as any, 'purchases.pay') && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
-                                    onClick={() => {
-                                      const sup = parties.find((part) => part.id === p.supplierId);
-                                      if (sup) {
-                                        handleOpenPaySupplier(sup);
-                                      } else {
-                                        handleOpenPaySupplier({
-                                          id: p.supplierId,
-                                          name: p.supplierName || 'Supplier',
-                                          phone: p.supplierPhone,
-                                          payableMinor: p.balanceMinor,
-                                          openPurchasesCount: 1,
-                                          type: 'supplier',
-                                          creditLimitMinor: 0,
-                                        });
-                                      }
-                                    }}
-                                    title="Pay supplier balance"
-                                  >
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CreditCardIcon size={13} /> Pay</span>
-                                  </button>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{p.supplierName || 'Unknown Supplier'}</div>
+                                {p.supplierGstin ? (
+                                  <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    GSTIN: {p.supplierGstin}
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Unregistered Supplier</div>
                                 )}
-                                {!isVoided && can(user?.role as any, 'purchases.void') && (
+                                {p.supplierPhone && (
+                                  <div className="mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {p.supplierPhone}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                {isVoided ? (
+                                  <span
+                                    className="badge"
+                                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                                    title={p.voidReason ? `Voided: ${p.voidReason}` : 'Voided'}
+                                  >
+                                    <XCircleIcon size={12} /> Voided
+                                  </span>
+                                ) : isPaid ? (
+                                  <span className="badge badge-emerald">
+                                    <CheckCircleIcon size={12} /> Paid
+                                  </span>
+                                ) : isPartPaid ? (
+                                  <span className="badge badge-amber">
+                                    <ClockIcon size={12} /> Part-Paid
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}>
+                                    <AlertTriangleIcon size={12} /> Unpaid
+                                  </span>
+                                )}
+                              </td>
+                              <td className="mono">{formatRupees(p.taxableMinor)}</td>
+                              <td className="mono" style={{ color: '#6366f1' }}>
+                                {formatRupees(p.itcMinor ?? (p.cgstMinor + p.sgstMinor + p.igstMinor))}
+                              </td>
+                              <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>
+                                {formatRupees(p.totalMinor)}
+                              </td>
+                              <td>
+                                <div className="mono" style={{ color: '#10b981', fontSize: '0.85rem' }}>
+                                  Paid: {formatRupees(p.paidMinor)}
+                                </div>
+                                {(p.balanceMinor || 0) > 0 && !isVoided && (
+                                  <div className="mono" style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
+                                    Bal: {formatRupees(p.balanceMinor)}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                   <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}
-                                    onClick={() => handleOpenVoidPurchase(p)}
-                                    title="Void this purchase and reverse stock inward"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                    onClick={() => handleViewPurchaseDetails(p.id)}
                                   >
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
                                   </button>
-                                )}
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                    onClick={() => window.open(`/api/purchases/${p.id}/print?format=a4`, '_blank')}
+                                    title="Print A4 Purchase Document"
+                                  >
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span>
+                                  </button>
+                                  {!isVoided && (p.balanceMinor || 0) > 0 && can(user?.role as any, 'purchases.pay') && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-primary"
+                                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
+                                      onClick={() => {
+                                        const sup = parties.find((part) => part.id === p.supplierId);
+                                        if (sup) {
+                                          handleOpenPaySupplier(sup);
+                                        } else {
+                                          handleOpenPaySupplier({
+                                            id: p.supplierId,
+                                            name: p.supplierName || 'Supplier',
+                                            phone: p.supplierPhone,
+                                            payableMinor: p.balanceMinor,
+                                            openPurchasesCount: 1,
+                                            type: 'supplier',
+                                            creditLimitMinor: 0,
+                                          });
+                                        }
+                                      }}
+                                      title="Pay supplier balance"
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CreditCardIcon size={13} /> Pay</span>
+                                    </button>
+                                  )}
+                                  {!isVoided && can(user?.role as any, 'purchases.void') && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}
+                                      onClick={() => handleOpenVoidPurchase(p)}
+                                      title="Void this purchase and reverse stock inward"
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {filteredPurchases.length === 0 && (
+                          <tr>
+                            <td colSpan={9} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#94a3b8' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                                <div
+                                  style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '14px',
+                                    background: 'rgba(99, 102, 241, 0.08)',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)',
+                                  }}
+                                >
+                                  <InboxIcon size={28} />
+                                </div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
+                                  No purchase bills found matching your filter
+                                </div>
+                                <div style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '380px', lineHeight: 1.5 }}>
+                                  Record supplier invoices to inward products into your stock ledger and track input GST credit.
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  style={{ marginTop: '0.4rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', fontWeight: 600 }}
+                                  onClick={() => openNewPurchaseModal()}
+                                >
+                                  <PlusIcon size={16} />
+                                  Record Your First Purchase Bill
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        );
-                      })}
-                      {filteredPurchases.length === 0 && (
-                        <tr>
-                          <td colSpan={9} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#94a3b8' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                              <div
-                                style={{
-                                  width: '54px',
-                                  height: '54px',
-                                  borderRadius: '14px',
-                                  background: 'rgba(99, 102, 241, 0.08)',
-                                  color: '#6366f1',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)',
-                                }}
-                              >
-                                <InboxIcon size={28} />
-                              </div>
-                              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
-                                No purchase bills found matching your filter
-                              </div>
-                              <div style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '380px', lineHeight: 1.5 }}>
-                                Record supplier invoices to inward products into your stock ledger and track input GST credit.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                style={{ marginTop: '0.4rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', fontWeight: 600 }}
-                                onClick={() => openNewPurchaseModal()}
-                              >
-                                <PlusIcon size={16} />
-                                Record Your First Purchase Bill
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          {/* TAB 5: REPORTS & ANALYTICS */}
-          {displayTab === 'reports' && report && (() => {
-            const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
-            const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
-            const activeBranchObj = branches.find(
-              (b) =>
-                b.id === selectedBranchScope ||
-                b.code === selectedBranchScope ||
-                (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
-            ) || branches[0];
-            const currentBranchTitle = isOverall
-              ? 'All Branches (Overall)'
-              : (activeBranchObj?.name || user.assignedLocation || 'Branch');
+            {/* TAB 5: REPORTS & ANALYTICS */}
+            {displayTab === 'reports' && report && (() => {
+              const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+              const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
+              const activeBranchObj = branches.find(
+                (b) =>
+                  b.id === selectedBranchScope ||
+                  b.code === selectedBranchScope ||
+                  (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
+              ) || branches[0];
+              const currentBranchTitle = isOverall
+                ? 'All Branches (Overall)'
+                : (activeBranchObj?.name || user.assignedLocation || 'Branch');
 
-            const visibleBranches = isOverall
-              ? branches
-              : branches.filter(
+              const visibleBranches = isOverall
+                ? branches
+                : branches.filter(
                   (b) =>
                     b.id === selectedBranchScope ||
                     b.code === selectedBranchScope ||
                     (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
                 );
-            const displayBranches = visibleBranches.length > 0 ? visibleBranches : (activeBranchObj ? [activeBranchObj] : branches);
+              const displayBranches = visibleBranches.length > 0 ? visibleBranches : (activeBranchObj ? [activeBranchObj] : branches);
 
-            return (
-              <div>
-                {/* Branch Scope Header & Drilldown Navigator */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    padding: '0.85rem 1.15rem',
-                    background: isOverall ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' : 'linear-gradient(90deg, #eff6ff 0%, #ffffff 100%)',
-                    border: isOverall ? '1.5px solid #bbf7d0' : '1.5px solid #bfdbfe',
-                    borderRadius: '12px',
-                    marginBottom: '1.25rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        background: isOverall ? '#10b981' : '#3b82f6',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Building2Icon size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b' }}>
-                        Financial Reports — {isOverall ? 'All Branches (Overall)' : (currentBranchTitle + ' (' + (activeBranchObj?.code || 'BRANCH') + ')')}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
-                        {isOverall
-                          ? 'Showing consolidated aggregate financials across all branches'
-                          : ('Showing isolated financial performance for ' + currentBranchTitle + ' only')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {isSuperAdmin ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Select Scope:</span>
-                      <button
-                        type="button"
-                        onClick={() => handleGlobalBranchChange('all')}
+              return (
+                <div>
+                  {/* Branch Scope Header & Drilldown Navigator */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                      padding: '0.85rem 1.15rem',
+                      background: isOverall ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' : 'linear-gradient(90deg, #eff6ff 0%, #ffffff 100%)',
+                      border: isOverall ? '1.5px solid #bbf7d0' : '1.5px solid #bfdbfe',
+                      borderRadius: '12px',
+                      marginBottom: '1.25rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div
                         style={{
-                          fontSize: '0.76rem',
-                          fontWeight: isOverall ? 700 : 500,
-                          background: isOverall ? '#10b981' : '#ffffff',
-                          color: isOverall ? '#ffffff' : '#334155',
-                          border: isOverall ? '1px solid #059669' : '1px solid #cbd5e1',
-                          padding: '0.3rem 0.75rem',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: isOverall ? '#10b981' : '#3b82f6',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                       >
-                        🌐 All Branches (Overall)
-                      </button>
-                      {branches.map((b) => {
-                        const isThisActive = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
-                        return (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => handleGlobalBranchChange(b.code || b.id)}
-                            style={{
-                              fontSize: '0.76rem',
-                              fontWeight: isThisActive ? 700 : 500,
-                              background: isThisActive ? '#3b82f6' : '#ffffff',
-                              color: isThisActive ? '#ffffff' : '#334155',
-                              border: isThisActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                              padding: '0.3rem 0.75rem',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            🏢 {b.name} ({b.code})
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        background: '#f1f5f9',
-                        padding: '0.35rem 0.75rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#334155',
-                      }}
-                    >
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                      Assigned Branch: {currentBranchTitle} ({activeBranchObj?.code || user.assignedLocation})
-                    </div>
-                  )}
-                </div>
-
-                {/* KPI Cards */}
-                <div className="kpi-grid">
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      <RupeeIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#10b981' }}>
-                        {formatRupees(report.today.totalMinor)}
+                        <Building2Icon size={20} />
                       </div>
-                      <div className="kpi-label">Today's Revenue ({isOverall ? 'All Branches' : currentBranchTitle})</div>
-                      {report.overall.totalMinor > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Cumulative Sales: <strong style={{ color: '#1e293b' }}>{formatRupees(report.overall.totalMinor)}</strong>
+                      <div>
+                        <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b' }}>
+                          Financial Reports — {isOverall ? 'All Branches (Overall)' : (currentBranchTitle + ' (' + (activeBranchObj?.code || 'BRANCH') + ')')}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                      <ReceiptIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{report.today.billCount}</div>
-                      <div className="kpi-label">Bills Generated Today</div>
-                      {report.overall.billCount > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Total Bills: <strong style={{ color: '#1e293b' }}>{report.overall.billCount}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      <LandmarkIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
-                      <div className="kpi-label">GST Collected Today</div>
-                      {report.gstPosition?.outputGstMinor !== undefined && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Output GST: <strong style={{ color: '#1e293b' }}>{formatRupees(report.gstPosition.outputGstMinor)}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
-                      <WalletIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#ea580c' }}>
-                        {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
-                      </div>
-                      <div className="kpi-label">Today's Customer Collections</div>
-                      {report.outstandingDuesMinor !== undefined && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Khata Dues: <strong style={{ color: '#b45309' }}>{formatRupees(report.outstandingDuesMinor)}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
-                      <PackageIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{report.overall.itemCount}</div>
-                      <div className="kpi-label">Active SKUs in Catalog</div>
-                      {report.overall.customerCount > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Customers: <strong style={{ color: '#1e293b' }}>{report.overall.customerCount}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Top Items & Payment Breakdown */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                  <div className="card">
-                    <div className="card-title">
-                      Top Selling Products {isOverall ? '— All Branches (Overall)' : ('in ' + currentBranchTitle)}
-                    </div>
-                    {report.topItems && report.topItems.length > 0 ? (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Product</th>
-                            <th>Qty Sold</th>
-                            <th>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.topItems.map((item, idx) => (
-                            <tr key={idx}>
-                              <td style={{ fontWeight: 600 }}>{item.name}</td>
-                              <td className="mono">{item.qtyMilli / 1000} units</td>
-                              <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
-                                {formatRupees(item.totalMinor)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
-                        <PackageIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
-                        <div style={{ fontSize: '0.85rem' }}>No sales recorded for this branch yet</div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="card">
-                    <div className="card-title">
-                      Payment Method Breakdown {isOverall ? '— All Branches (Overall)' : ('— ' + currentBranchTitle)}
-                    </div>
-                    {report.paymentBreakdown && report.paymentBreakdown.length > 0 ? (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Method</th>
-                            <th>Volume</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.paymentBreakdown.map((pay, idx) => (
-                            <tr key={idx}>
-                              <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
-                              <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
-                                {formatRupees(pay.totalMinor)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
-                        <WalletIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
-                        <div style={{ fontSize: '0.85rem' }}>No payments collected for this branch yet</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Branch-Wise Sales & Collections Performance */}
-                {branches.length > 0 && (
-                  <div className="card" style={{ marginTop: '1.25rem' }}>
-                    <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Building2Icon size={18} style={{ color: '#6d4aff' }} />
-                        <span>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
                           {isOverall
-                            ? 'Branch-Wise Sales & Operations Performance (All Branches)'
-                            : ('Branch Sales & Operations Performance — ' + currentBranchTitle)}
-                        </span>
+                            ? 'Showing consolidated aggregate financials across all branches'
+                            : ('Showing isolated financial performance for ' + currentBranchTitle + ' only')}
+                        </div>
                       </div>
-                      {isSuperAdmin && !isOverall && (
+                    </div>
+
+                    {isSuperAdmin ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Select Scope:</span>
                         <button
                           type="button"
                           onClick={() => handleGlobalBranchChange('all')}
                           style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '0.25rem 0.6rem',
+                            fontSize: '0.76rem',
+                            fontWeight: isOverall ? 700 : 500,
+                            background: isOverall ? '#10b981' : '#ffffff',
+                            color: isOverall ? '#ffffff' : '#334155',
+                            border: isOverall ? '1px solid #059669' : '1px solid #cbd5e1',
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '8px',
                             cursor: 'pointer',
-                            color: '#334155',
                           }}
                         >
-                          ← Switch to Overall (All Branches)
+                          🌐 All Branches (Overall)
                         </button>
+                        {branches.map((b) => {
+                          const isThisActive = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                              style={{
+                                fontSize: '0.76rem',
+                                fontWeight: isThisActive ? 700 : 500,
+                                background: isThisActive ? '#3b82f6' : '#ffffff',
+                                color: isThisActive ? '#ffffff' : '#334155',
+                                border: isThisActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+                                padding: '0.3rem 0.75rem',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              🏢 {b.name} ({b.code})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          background: '#f1f5f9',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#334155',
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                        Assigned Branch: {currentBranchTitle} ({activeBranchObj?.code || user.assignedLocation})
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KPI Cards */}
+                  <div className="kpi-grid">
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <RupeeIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#10b981' }}>
+                          {formatRupees(report.today.totalMinor)}
+                        </div>
+                        <div className="kpi-label">Today's Revenue ({isOverall ? 'All Branches' : currentBranchTitle})</div>
+                        {report.overall.totalMinor > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Cumulative Sales: <strong style={{ color: '#1e293b' }}>{formatRupees(report.overall.totalMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
+                        <ReceiptIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{report.today.billCount}</div>
+                        <div className="kpi-label">Bills Generated Today</div>
+                        {report.overall.billCount > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Total Bills: <strong style={{ color: '#1e293b' }}>{report.overall.billCount}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        <LandmarkIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
+                        <div className="kpi-label">GST Collected Today</div>
+                        {report.gstPosition?.outputGstMinor !== undefined && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Output GST: <strong style={{ color: '#1e293b' }}>{formatRupees(report.gstPosition.outputGstMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
+                        <WalletIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#ea580c' }}>
+                          {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
+                        </div>
+                        <div className="kpi-label">Today's Customer Collections</div>
+                        {report.outstandingDuesMinor !== undefined && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Khata Dues: <strong style={{ color: '#b45309' }}>{formatRupees(report.outstandingDuesMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                        <PackageIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{report.overall.itemCount}</div>
+                        <div className="kpi-label">Active SKUs in Catalog</div>
+                        {report.overall.customerCount > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Customers: <strong style={{ color: '#1e293b' }}>{report.overall.customerCount}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Items & Payment Breakdown */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                    <div className="card">
+                      <div className="card-title">
+                        Top Selling Products {isOverall ? '— All Branches (Overall)' : ('in ' + currentBranchTitle)}
+                      </div>
+                      {report.topItems && report.topItems.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Product</th>
+                              <th>Qty Sold</th>
+                              <th>Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {report.topItems.map((item, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>{item.name}</td>
+                                <td className="mono">{item.qtyMilli / 1000} units</td>
+                                <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
+                                  {formatRupees(item.totalMinor)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                          <PackageIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                          <div style={{ fontSize: '0.85rem' }}>No sales recorded for this branch yet</div>
+                        </div>
                       )}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-                      {displayBranches.map((b) => {
-                        const compData = report.branchComparison?.find((c) => c.id === b.id || c.code === b.code);
-                        const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                        const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                        const invSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                        const invGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
-                        const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
-                        const invReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
 
-                        const bSalesTotal = compData?.allTimeSalesTotalMinor ?? (invSalesTotal || compData?.todaySalesTotalMinor || 0);
-                        const bBillsCount = compData?.allTimeSalesCount ?? (bSales.length || compData?.todaySalesCount || 0);
-                        const bGst = compData?.allTimeGstMinor ?? invGst;
-                        const bReturnsTotal = compData?.allTimeReturnsTotalMinor ?? invReturnsTotal;
-                        const bReturnsCount = compData?.allTimeReturnsCount ?? bReturns.length;
+                    <div className="card">
+                      <div className="card-title">
+                        Payment Method Breakdown {isOverall ? '— All Branches (Overall)' : ('— ' + currentBranchTitle)}
+                      </div>
+                      {report.paymentBreakdown && report.paymentBreakdown.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Method</th>
+                              <th>Volume</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {report.paymentBreakdown.map((pay, idx) => (
+                              <tr key={idx}>
+                                <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
+                                <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
+                                  {formatRupees(pay.totalMinor)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                          <WalletIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                          <div style={{ fontSize: '0.85rem' }}>No payments collected for this branch yet</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                        const isSelectedBranch = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
-
-                        return (
-                          <div
-                            key={b.id}
+                  {/* Branch-Wise Sales & Collections Performance */}
+                  {branches.length > 0 && (
+                    <div className="card" style={{ marginTop: '1.25rem' }}>
+                      <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Building2Icon size={18} style={{ color: '#6d4aff' }} />
+                          <span>
+                            {isOverall
+                              ? 'Branch-Wise Sales & Operations Performance (All Branches)'
+                              : ('Branch Sales & Operations Performance — ' + currentBranchTitle)}
+                          </span>
+                        </div>
+                        {isSuperAdmin && !isOverall && (
+                          <button
+                            type="button"
+                            onClick={() => handleGlobalBranchChange('all')}
                             style={{
-                              background: isSelectedBranch ? '#f0fdf4' : '#f8fafc',
-                              borderRadius: '12px',
-                              border: isSelectedBranch ? '2px solid #10b981' : '1.5px solid #e2e8f0',
-                              padding: '1.1rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              background: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              padding: '0.25rem 0.6rem',
+                              cursor: 'pointer',
+                              color: '#334155',
                             }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                {isSelectedBranch && (
-                                  <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.68rem', fontWeight: 700 }}>
-                                    Active Filter
+                            ← Switch to Overall (All Branches)
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                        {displayBranches.map((b) => {
+                          const compData = report.branchComparison?.find((c) => c.id === b.id || c.code === b.code);
+                          const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                          const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                          const invSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                          const invGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
+                          const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
+                          const invReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+
+                          const bSalesTotal = compData?.allTimeSalesTotalMinor ?? (invSalesTotal || compData?.todaySalesTotalMinor || 0);
+                          const bBillsCount = compData?.allTimeSalesCount ?? (bSales.length || compData?.todaySalesCount || 0);
+                          const bGst = compData?.allTimeGstMinor ?? invGst;
+                          const bReturnsTotal = compData?.allTimeReturnsTotalMinor ?? invReturnsTotal;
+                          const bReturnsCount = compData?.allTimeReturnsCount ?? bReturns.length;
+
+                          const isSelectedBranch = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+
+                          return (
+                            <div
+                              key={b.id}
+                              style={{
+                                background: isSelectedBranch ? '#f0fdf4' : '#f8fafc',
+                                borderRadius: '12px',
+                                border: isSelectedBranch ? '2px solid #10b981' : '1.5px solid #e2e8f0',
+                                padding: '1.1rem',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                                <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                  {isSelectedBranch && (
+                                    <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.68rem', fontWeight: 700 }}>
+                                      Active Filter
+                                    </span>
+                                  )}
+                                  <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>
+                                    {b.code}
                                   </span>
-                                )}
-                                <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>
-                                  {b.code}
-                                </span>
+                                </div>
                               </div>
-                            </div>
-                            <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
-                              {formatRupees(bSalesTotal)}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
-                              <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bBillsCount}</strong></span>
-                              <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
-                            </div>
-                            {bReturnsTotal > 0 && (
-                              <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
-                                Returns: {formatRupees(bReturnsTotal)} ({bReturnsCount} credit notes)
+                              <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
+                                {formatRupees(bSalesTotal)}
                               </div>
-                            )}
-                            {isSuperAdmin && isOverall && (
+                              <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bBillsCount}</strong></span>
+                                <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
+                              </div>
+                              {bReturnsTotal > 0 && (
+                                <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
+                                  Returns: {formatRupees(bReturnsTotal)} ({bReturnsCount} credit notes)
+                                </div>
+                              )}
+                              {isSuperAdmin && isOverall && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                                  style={{
+                                    marginTop: '0.75rem',
+                                    width: '100%',
+                                    padding: '0.35rem 0.5rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    color: '#4338ca',
+                                    background: '#eef2ff',
+                                    border: '1px solid #c7d2fe',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  View {b.name} Report →
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
+                  <div className="card" style={{ marginTop: '1.25rem' }}>
+                    <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span>Customer Outstanding Dues & Ageing Report</span>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
+                          Total outstanding dues: <b style={{ color: '#b45309' }}>{formatRupees(duesSummary?.totalDuesMinor || 0)}</b> across credit customers | Total advance held: <b style={{ color: '#10b981' }}>{formatRupees(duesSummary?.totalAdvanceMinor || 0)}</b>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span className="badge badge-emerald">0-30d: {formatRupees(duesSummary?.ageing['0_30'] || 0)}</span>
+                        <span className="badge badge-amber">31-60d: {formatRupees(duesSummary?.ageing['31_60'] || 0)}</span>
+                        <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>60+d: {formatRupees(duesSummary?.ageing['61_plus'] || 0)}</span>
+                      </div>
+                    </div>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Customer Name</th>
+                          <th>Phone</th>
+                          <th>Oldest Unpaid Bill</th>
+                          <th>Outstanding Dues</th>
+                          <th>Advance Held</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(duesSummary?.topDebtors || []).map((debtor) => (
+                          <tr key={debtor.id}>
+                            <td style={{ fontWeight: 600 }}>{debtor.name}</td>
+                            <td className="mono">{debtor.phone || '—'}</td>
+                            <td>{debtor.oldestInvoiceDate ? new Date(debtor.oldestInvoiceDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</td>
+                            <td className="mono" style={{ fontWeight: 800, color: '#b45309' }}>
+                              {formatRupees(debtor.duesMinor)}
+                            </td>
+                            <td className="mono">{debtor.advanceMinor > 0 ? formatRupees(debtor.advanceMinor) : '—'}</td>
+                            <td>
                               <button
-                                type="button"
-                                onClick={() => handleGlobalBranchChange(b.code || b.id)}
-                                style={{
-                                  marginTop: '0.75rem',
-                                  width: '100%',
-                                  padding: '0.35rem 0.5rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                  color: '#4338ca',
-                                  background: '#eef2ff',
-                                  border: '1px solid #c7d2fe',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
+                                className="btn btn-primary"
+                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, background: '#f59e0b', borderColor: '#d97706' }}
+                                onClick={() => {
+                                  const partyObj = parties.find((p) => p.id === debtor.id) || {
+                                    id: debtor.id,
+                                    name: debtor.name,
+                                    phone: debtor.phone,
+                                    type: 'customer',
+                                    creditLimitMinor: 0,
+                                  };
+                                  openCollectPayment(partyObj);
                                 }}
                               >
-                                View {b.name} Report →
+                                💰 Collect Payment
                               </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-              {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
-              <div className="card" style={{ marginTop: '1.25rem' }}>
-                <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <span>Customer Outstanding Dues & Ageing Report</span>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
-                      Total outstanding dues: <b style={{ color: '#b45309' }}>{formatRupees(duesSummary?.totalDuesMinor || 0)}</b> across credit customers | Total advance held: <b style={{ color: '#10b981' }}>{formatRupees(duesSummary?.totalAdvanceMinor || 0)}</b>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    <span className="badge badge-emerald">0-30d: {formatRupees(duesSummary?.ageing['0_30'] || 0)}</span>
-                    <span className="badge badge-amber">31-60d: {formatRupees(duesSummary?.ageing['31_60'] || 0)}</span>
-                    <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>60+d: {formatRupees(duesSummary?.ageing['61_plus'] || 0)}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        {(!duesSummary?.topDebtors || duesSummary.topDebtors.length === 0) && (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
+                              No pending customer dues. All customer accounts are clear!
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Customer Name</th>
-                      <th>Phone</th>
-                      <th>Oldest Unpaid Bill</th>
-                      <th>Outstanding Dues</th>
-                      <th>Advance Held</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(duesSummary?.topDebtors || []).map((debtor) => (
-                      <tr key={debtor.id}>
-                        <td style={{ fontWeight: 600 }}>{debtor.name}</td>
-                        <td className="mono">{debtor.phone || '—'}</td>
-                        <td>{debtor.oldestInvoiceDate ? new Date(debtor.oldestInvoiceDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</td>
-                        <td className="mono" style={{ fontWeight: 800, color: '#b45309' }}>
-                          {formatRupees(debtor.duesMinor)}
-                        </td>
-                        <td className="mono">{debtor.advanceMinor > 0 ? formatRupees(debtor.advanceMinor) : '—'}</td>
-                        <td>
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, background: '#f59e0b', borderColor: '#d97706' }}
-                            onClick={() => {
-                              const partyObj = parties.find((p) => p.id === debtor.id) || {
-                                id: debtor.id,
-                                name: debtor.name,
-                                phone: debtor.phone,
-                                type: 'customer',
-                                creditLimitMinor: 0,
-                              };
-                              openCollectPayment(partyObj);
-                            }}
-                          >
-                            💰 Collect Payment
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {(!duesSummary?.topDebtors || duesSummary.topDebtors.length === 0) && (
-                      <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
-                          No pending customer dues. All customer accounts are clear!
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })()}
+              );
+            })()}
 
-                      {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
+            {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
             {displayTab === 'settings' && (
               <div>
                 {/* Section 1: Business Profile Editor */}
