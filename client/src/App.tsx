@@ -138,6 +138,7 @@ import {
   ShoppingCartIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
+import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { BranchSelector } from './components/common/BranchSelector';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
@@ -199,6 +200,7 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
 ];
 
 export const HIDE_BUSINESS_BAR_TABS = new Set([
+  'shifts',
   'items',
   'categories',
   'inventory',
@@ -249,6 +251,7 @@ export const PAGE_TITLES: Record<string, string> = {
 };
 
 export const TAB_PAGE_TITLES: Record<string, string> = {
+  'shifts': 'Cashier Shifts & Day-End Closing',
   'inventory': 'Inventory Hub',
   'items': 'Product Catalogue',
   'categories': 'Category Management',
@@ -552,6 +555,7 @@ export function App() {
   const [activeTabRaw, setActiveTabRaw] = useState<
     | 'dashboard'
     | 'pos'
+    | 'shifts'
     | 'items'
     | 'categories'
     | 'inventory'
@@ -579,7 +583,16 @@ export function App() {
     | 'gst-filing-history'
     | 'promotions'
     | 'user-management'
-  >('dashboard');
+  >(() => {
+    try {
+      const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u?.role === 'cashier') return 'pos';
+      }
+    } catch {}
+    return 'dashboard';
+  });
 
   // Strict role-based tab interceptor: Cashiers are strictly restricted to POS, Cashier Shift & Recent Bills
   const setActiveTab = useCallback(
@@ -600,27 +613,14 @@ export function App() {
       ? 'pos'
       : activeTabRaw;
 
-  const [displayTab, setDisplayTab] = useState<string>('dashboard');
-  const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
+  // displayTab is directly bound to activeTab, eliminating blank screen timeout race conditions
+  const displayTab = activeTab;
 
   useEffect(() => {
-    const targetTab = user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTab) ? 'pos' : activeTab;
-    if (targetTab !== displayTab) {
-      setIsViewExiting(true);
-      const timer = setTimeout(() => {
-        setDisplayTab(targetTab);
-        setIsViewExiting(false);
-      }, 100);
-      return () => clearTimeout(timer);
+    if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTabRaw)) {
+      setActiveTabRaw('pos');
     }
-  }, [activeTab, displayTab, user?.role]);
-
-  // Guard against any lingering forbidden tab for cashier role
-  useEffect(() => {
-    if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(displayTab)) {
-      setDisplayTab('pos');
-    }
-  }, [user?.role, displayTab]);
+  }, [user?.role, activeTabRaw]);
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
@@ -6245,6 +6245,34 @@ export function App() {
                 </span>
                 <span className="nav-text">POS Counter</span>
               </button>
+
+              {/* 3. Cashier Shifts: ONLY for Cashier */}
+              {user?.role === 'cashier' && (
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('shifts')}
+                  title="My Cashier Shift"
+                >
+                  <span className="nav-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                      <circle cx="12" cy="12" r="2"></circle>
+                      <path d="M6 12h.01M18 12h.01"></path>
+                    </svg>
+                  </span>
+                  <span className="nav-text">My Cashier Shift</span>
+                  {activeShiftNumber ? (
+                    <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
+                      ● {activeShiftNumber}
+                    </span>
+                  ) : (
+                    <span className="nav-shift-badge closed">
+                      Closed
+                    </span>
+                  )}
+                </button>
+              )}
               {user.role !== 'cashier' && (
                 <button
                   type="button"
@@ -7025,6 +7053,60 @@ export function App() {
                 </div>
               </div>
             </div>
+          ) : (displayTab === 'shifts' || activeTab === 'shifts') && user?.role === 'cashier' ? (
+            <div className="top-invoices-header-left">
+              <div className="top-invoices-title-group">
+                <h1 className="top-invoices-title">
+                  My Cashier Shift
+                </h1>
+                <span className="top-invoices-subtitle">
+                  Manage shift register, drawer cash float, and day-end closing
+                </span>
+              </div>
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : displayTab === 'inventory' || activeTab === 'inventory' ? (
               <div className="top-inventory-header-left">
                 <h1 className="top-inventory-title">
@@ -7443,9 +7525,9 @@ export function App() {
           </div>
 
           {/* View Transition Stage (SPA Bento Transition) */}
-          <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
+          <div key={displayTab} className={`app-view-stage ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
             {/* Other Tab Headers */}
-            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
+            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'shifts' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
               <header className="content-top-header">
                 <div className="content-header-left">
                   <h1 className="content-page-title">
@@ -9993,6 +10075,32 @@ export function App() {
                   </div>
                   , document.body)}
 
+              </div>
+            )}
+
+            {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
+            {displayTab === 'shifts' && user && (
+              <div className="tab-content-wrapper" key={`shifts-${selectedBranchScope}`}>
+                {user.role === 'manager' ? (
+                  <StoreManagerDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigate={(tab) => {
+                      if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                        setShowInventoryDropdown(true);
+                      }
+                      setActiveTab(tab as any);
+                    }}
+                  />
+                ) : (
+                  <ShiftsDashboard
+                    user={user}
+                    shop={shop}
+                    selectedBranch={selectedBranchScope}
+                    branches={branches}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                  />
+                )}
               </div>
             )}
 
