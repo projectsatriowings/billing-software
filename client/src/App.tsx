@@ -753,8 +753,35 @@ export function App() {
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  // Top header notifications popover state
+  // Top header notifications popover state and ref
   const [showTopNotifPopover, setShowTopNotifPopover] = useState(false);
+  const notifPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  // Close notifications popover on outside click or Escape key without blurring background
+  useEffect(() => {
+    if (!showTopNotifPopover) return;
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (
+        notifPopoverRef.current &&
+        !notifPopoverRef.current.contains(event.target as Node)
+      ) {
+        setShowTopNotifPopover(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowTopNotifPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showTopNotifPopover]);
 
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
@@ -7175,7 +7202,7 @@ export function App() {
                   canAccessOverall={user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN'}
                 />
               )}
-              <div className="top-notif-wrapper">
+              <div className="top-notif-wrapper" ref={notifPopoverRef}>
                 <button
                   type="button"
                   className={`top-notification-btn ${showTopNotifPopover ? 'active' : ''}`}
@@ -7211,13 +7238,7 @@ export function App() {
                 </button>
 
                 {showTopNotifPopover && (
-                  <>
-                    <div
-                      className="dropdown-backdrop"
-                      style={{ zIndex: 1050 }}
-                      onClick={() => setShowTopNotifPopover(false)}
-                    />
-                    <div className="top-notif-popover bento-notif-popover">
+                  <div className="top-notif-popover bento-notif-popover">
                       {/* Bento Popover Header */}
                       <div className="bento-notif-header">
                         <div className="bento-notif-title-row">
@@ -7491,8 +7512,7 @@ export function App() {
                         )}
                       </div>
                     </div>
-                  </>
-                )}
+                  )}
               </div>
               <div
                 className={`top-user-chip ${user?.role === 'cashier' ? 'readonly' : ''}`}
