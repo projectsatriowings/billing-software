@@ -1645,4 +1645,86 @@ version: 29,
          AND a.barcode = b.barcode`,
     ],
   },
+  {
+    version: 60,
+    statements: [
+      // 1. Remove global (tenant_id, code) constraint from counters if present
+      `ALTER TABLE counters DROP CONSTRAINT IF EXISTS counters_tenant_id_code_key`,
+
+      // 2. Safely deduplicate any identical code or name within the same branch
+      `DELETE FROM counters a
+       USING counters b
+       WHERE a.id > b.id
+         AND a.tenant_id = b.tenant_id
+         AND a.branch_id = b.branch_id
+         AND (upper(a.code) = upper(b.code) OR lower(a.name) = lower(b.name))`,
+
+      // 3. Composite unique index: counter code unique per branch
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_counters_tenant_branch_code
+       ON counters (tenant_id, branch_id, upper(code))`,
+
+      // 4. Composite unique index: counter name unique per branch
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_counters_tenant_branch_name
+       ON counters (tenant_id, branch_id, lower(name))`,
+    ],
+  },
+  {
+    version: 61,
+    statements: [
+      // 1. Add counter_id column to invoices, payments, and shifts referencing counters(id)
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS counter_id TEXT REFERENCES counters(id) ON DELETE SET NULL`,
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS counter_id TEXT REFERENCES counters(id) ON DELETE SET NULL`,
+      `ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counter_id TEXT REFERENCES counters(id) ON DELETE SET NULL`,
+
+      // 2. Create composite indexes on (tenant_id, branch_id, counter_id)
+      `CREATE INDEX IF NOT EXISTS idx_invoices_tenant_branch_counter_id ON invoices (tenant_id, branch_id, counter_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_payments_tenant_branch_counter_id ON payments (tenant_id, branch_id, counter_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shifts_tenant_branch_counter_id ON shifts (tenant_id, branch_id, counter_id)`,
+
+      // 3. Safe historical reconciliation: link existing rows with counter_id when exact match exists in the branch
+      `UPDATE invoices i
+       SET counter_id = c.id,
+           counter_name_snapshot = COALESCE(i.counter_name_snapshot, c.name)
+       FROM counters c
+       WHERE i.counter_id IS NULL
+         AND i.tenant_id = c.tenant_id
+         AND i.branch_id = c.branch_id
+         AND (upper(c.code) = upper(i.counter) OR lower(c.name) = lower(i.counter))`,
+
+      `UPDATE payments p
+       SET counter_id = c.id,
+           counter_name_snapshot = COALESCE(p.counter_name_snapshot, c.name)
+       FROM counters c
+       WHERE p.counter_id IS NULL
+         AND p.tenant_id = c.tenant_id
+         AND p.branch_id = c.branch_id
+         AND (upper(c.code) = upper(p.counter) OR lower(c.name) = lower(p.counter))`,
+
+      `UPDATE shifts s
+       SET counter_id = c.id,
+           counter_name_snapshot = COALESCE(s.counter_name_snapshot, c.name)
+       FROM counters c
+       WHERE s.counter_id IS NULL
+         AND s.tenant_id = c.tenant_id
+         AND s.branch_id = c.branch_id
+         AND (upper(c.code) = upper(s.counter) OR lower(c.name) = lower(s.counter))`,
+    ],
+  },
+  {
+    version: 62,
+    statements: [
+      // 1. Remove permanent counter assignments: drop NOT NULL and DEFAULT on users.assigned_counter
+      `ALTER TABLE users ALTER COLUMN assigned_counter DROP NOT NULL`,
+      `ALTER TABLE users ALTER COLUMN assigned_counter DROP DEFAULT`,
+
+      // 2. Clear permanent cashier-to-counter assignments so cashiers select their counter dynamically on login
+      `UPDATE users SET counter_id = NULL, assigned_counter = NULL`,
+
+      // 3. Clear lingering counter assignments on closed historical shifts
+      `UPDATE shifts SET counter_id = NULL WHERE status = 'closed'`,
+
+      // 4. Index for fast branch counter lookup by status
+      `CREATE INDEX IF NOT EXISTS idx_counters_tenant_branch_status ON counters (tenant_id, branch_id, status)`,
+    ],
+  },
 ];

@@ -72,7 +72,7 @@ export function registerParties(r: Router) {
   r.get('/api/parties', requirePerm('parties.view'), async (ctx) => {
     const tenantId = ctx.user!.tenantId;
     const scope = await resolveBranchScope(ctx);
-    const type = ctx.query.type; // customer or supplier
+    const type = ctx.query.type || ctx.query.kind; // customer or supplier
     const q = (ctx.query.q ?? '').trim().toLowerCase();
     const includeInactive = ctx.query.includeInactive === '1' || ctx.query.includeInactive === 'true';
 
@@ -88,7 +88,7 @@ export function registerParties(r: Router) {
     const params: unknown[] = [tenantId];
 
     if (!scope.isSuperAdminAll && scope.branchId) {
-      sql += ' AND p.branch_id = ?';
+      sql += ' AND (p.branch_id = ? OR p.branch_id IS NULL)';
       params.push(scope.branchId);
     }
 
@@ -556,15 +556,20 @@ export function registerParties(r: Router) {
     );
     if (!supplier) throw notFound('Supplier');
 
+    const supplierBranchId = supplier.branchId ?? supplier.branch_id ?? scope.branchId ?? null;
+    const purBranchClause = supplierBranchId ? ' AND (branch_id = ? OR branch_id IS NULL)' : '';
+    const payBranchClause = supplierBranchId ? ' AND (p.branch_id = ? OR p.branch_id IS NULL)' : '';
+    const purBranchParams = supplierBranchId ? [supplierBranchId] : [];
+
     // 1. Fetch all purchases
     const purchases = await ctx.db.query(
       `SELECT id, purchase_number, bill_no, supplier_invoice_number, supplier_invoice_date,
               purchase_date, bdate, total_minor, paid_minor, balance_minor, status,
               created_at, void_reason, voided_at
        FROM purchases
-       WHERE supplier_id = ? AND tenant_id = ? AND branch_id = ?
+       WHERE supplier_id = ? AND tenant_id = ?${purBranchClause}
        ORDER BY created_at ASC`,
-      [supplier.id, tenantId, supplier.branch_id],
+      [supplier.id, tenantId, ...purBranchParams],
     );
 
     // 2. Fetch all supplier payments
@@ -574,9 +579,9 @@ export function registerParties(r: Router) {
               u.name AS recorded_by_name
        FROM payments p
        LEFT JOIN users u ON p.created_by = u.id
-       WHERE p.party_id = ? AND p.tenant_id = ? AND p.branch_id = ? AND p.kind = 'supplier_payment'
+       WHERE p.party_id = ? AND p.tenant_id = ?${payBranchClause} AND p.kind = 'supplier_payment'
        ORDER BY p.created_at ASC`,
-      [supplier.id, tenantId, supplier.branch_id],
+      [supplier.id, tenantId, ...purBranchParams],
     );
 
     // 3. Interleave into chronological ledger
