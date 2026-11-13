@@ -138,6 +138,7 @@ import {
   ShoppingCartIcon,
 } from './components/inventory/InventoryIcons.tsx';
 import { SalesAnalysisView } from './components/sales/SalesAnalysisView';
+import { ShiftsDashboard } from './components/shifts/ShiftsDashboard.tsx';
 import { BranchSelector } from './components/common/BranchSelector';
 import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashboard';
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
@@ -199,6 +200,7 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
 ];
 
 export const HIDE_BUSINESS_BAR_TABS = new Set([
+  'shifts',
   'items',
   'categories',
   'inventory',
@@ -249,6 +251,7 @@ export const PAGE_TITLES: Record<string, string> = {
 };
 
 export const TAB_PAGE_TITLES: Record<string, string> = {
+  'shifts': 'Cashier Shifts & Day-End Closing',
   'inventory': 'Inventory Hub',
   'items': 'Product Catalogue',
   'categories': 'Category Management',
@@ -544,12 +547,15 @@ export const getBusinessLabel = (type?: string) => {
   }
 };
 
+export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices']);
+
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<
+  const [activeTabRaw, setActiveTabRaw] = useState<
     | 'dashboard'
     | 'pos'
+    | 'shifts'
     | 'items'
     | 'categories'
     | 'inventory'
@@ -577,20 +583,44 @@ export function App() {
     | 'gst-filing-history'
     | 'promotions'
     | 'user-management'
-  >('dashboard');
-  const [displayTab, setDisplayTab] = useState<string>('dashboard');
-  const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
+  >(() => {
+    try {
+      const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u?.role === 'cashier') return 'pos';
+      }
+    } catch {}
+    return 'dashboard';
+  });
+
+  // Strict role-based tab interceptor: Cashiers are strictly restricted to POS, Cashier Shift & Recent Bills
+  const setActiveTab = useCallback(
+    (tabOrFn: any) => {
+      setActiveTabRaw((prev: any) => {
+        const next = typeof tabOrFn === 'function' ? tabOrFn(prev) : tabOrFn;
+        if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(next)) {
+          return 'pos';
+        }
+        return next;
+      });
+    },
+    [user?.role]
+  );
+
+  const activeTab: typeof activeTabRaw =
+    user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTabRaw)
+      ? 'pos'
+      : activeTabRaw;
+
+  // displayTab is directly bound to activeTab, eliminating blank screen timeout race conditions
+  const displayTab = activeTab;
 
   useEffect(() => {
-    if (activeTab !== displayTab) {
-      setIsViewExiting(true);
-      const timer = setTimeout(() => {
-        setDisplayTab(activeTab);
-        setIsViewExiting(false);
-      }, 100);
-      return () => clearTimeout(timer);
+    if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTabRaw)) {
+      setActiveTabRaw('pos');
     }
-  }, [activeTab, displayTab]);
+  }, [user?.role, activeTabRaw]);
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
@@ -722,6 +752,36 @@ export function App() {
   const [myBusinesses, setMyBusinesses] = useState<DemoBusiness[]>([]);
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  // Top header notifications popover state and ref
+  const [showTopNotifPopover, setShowTopNotifPopover] = useState(false);
+  const notifPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  // Close notifications popover on outside click or Escape key without blurring background
+  useEffect(() => {
+    if (!showTopNotifPopover) return;
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (
+        notifPopoverRef.current &&
+        !notifPopoverRef.current.contains(event.target as Node)
+      ) {
+        setShowTopNotifPopover(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowTopNotifPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showTopNotifPopover]);
 
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
@@ -6087,20 +6147,22 @@ export function App() {
 
                         {/* Quick navigation actions */}
                         <div className="store-quick-actions">
-                          <button
-                            type="button"
-                            className="store-quick-action-btn"
-                            onClick={() => {
-                              setActiveTab('settings');
-                              setShowBusinessDropdown(false);
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                            </svg>
-                            Store Profile &amp; Settings
-                          </button>
+                          {user?.role !== 'cashier' && (
+                            <button
+                              type="button"
+                              className="store-quick-action-btn"
+                              onClick={() => {
+                                setActiveTab('settings');
+                                setShowBusinessDropdown(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                              </svg>
+                              Store Profile &amp; Settings
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="store-quick-action-btn"
@@ -6116,22 +6178,24 @@ export function App() {
                             </svg>
                             Open POS Quick Billing
                           </button>
-                          <button
-                            type="button"
-                            className="store-quick-action-btn"
-                            onClick={() => {
-                              setActiveTab('reports');
-                              setShowBusinessDropdown(false);
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
-                              <line x1="18" y1="20" x2="18" y2="10" />
-                              <line x1="12" y1="20" x2="12" y2="4" />
-                              <line x1="6" y1="20" x2="6" y2="14" />
-                              <line x1="2" y1="20" x2="22" y2="20" />
-                            </svg>
-                            Sales Reports &amp; Analytics
-                          </button>
+                          {user?.role !== 'cashier' && (
+                            <button
+                              type="button"
+                              className="store-quick-action-btn"
+                              onClick={() => {
+                                setActiveTab('reports');
+                                setShowBusinessDropdown(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                                <line x1="18" y1="20" x2="18" y2="10" />
+                                <line x1="12" y1="20" x2="12" y2="4" />
+                                <line x1="6" y1="20" x2="6" y2="14" />
+                                <line x1="2" y1="20" x2="22" y2="20" />
+                              </svg>
+                              Sales Reports &amp; Analytics
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -6145,22 +6209,24 @@ export function App() {
                       </div>
                     </div>
 
-                    <div className="dropdown-footer">
-                      <button
-                        className="btn btn-secondary"
-                        style={{ width: '100%', padding: '0.45rem', fontSize: '0.8rem', justifyContent: 'center' }}
-                        onClick={() => {
-                          setShowBusinessDropdown(false);
-                          setActiveTab('settings');
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-                          <circle cx="12" cy="12" r="3" />
-                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
-                        Store Profile &amp; Tax Settings
-                      </button>
-                    </div>
+                    {user?.role !== 'cashier' && (
+                      <div className="dropdown-footer">
+                        <button
+                          className="btn btn-secondary"
+                          style={{ width: '100%', padding: '0.45rem', fontSize: '0.8rem', justifyContent: 'center' }}
+                          onClick={() => {
+                            setShowBusinessDropdown(false);
+                            setActiveTab('settings');
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                          Store Profile &amp; Tax Settings
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -6206,6 +6272,34 @@ export function App() {
                 </span>
                 <span className="nav-text">POS Counter</span>
               </button>
+
+              {/* 3. Cashier Shifts: ONLY for Cashier */}
+              {user?.role === 'cashier' && (
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${activeTab === 'shifts' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('shifts')}
+                  title="My Cashier Shift"
+                >
+                  <span className="nav-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                      <circle cx="12" cy="12" r="2"></circle>
+                      <path d="M6 12h.01M18 12h.01"></path>
+                    </svg>
+                  </span>
+                  <span className="nav-text">My Cashier Shift</span>
+                  {activeShiftNumber ? (
+                    <span className="nav-shift-badge active" title={`Active Shift: ${activeShiftNumber}`}>
+                      ● {activeShiftNumber}
+                    </span>
+                  ) : (
+                    <span className="nav-shift-badge closed">
+                      Closed
+                    </span>
+                  )}
+                </button>
+              )}
               {user.role !== 'cashier' && (
                 <button
                   type="button"
@@ -6986,6 +7080,60 @@ export function App() {
                 </div>
               </div>
             </div>
+          ) : (displayTab === 'shifts' || activeTab === 'shifts') && user?.role === 'cashier' ? (
+            <div className="top-invoices-header-left">
+              <div className="top-invoices-title-group">
+                <h1 className="top-invoices-title">
+                  My Cashier Shift
+                </h1>
+                <span className="top-invoices-subtitle">
+                  Manage shift register, drawer cash float, and day-end closing
+                </span>
+              </div>
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : displayTab === 'inventory' || activeTab === 'inventory' ? (
               <div className="top-inventory-header-left">
                 <h1 className="top-inventory-title">
@@ -7054,34 +7202,327 @@ export function App() {
                   canAccessOverall={user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN'}
                 />
               )}
-              <button
-                type="button"
-                className="top-notification-btn"
-                aria-label="Notifications"
-                title={
-                  totalStockAlerts > 0
-                    ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock)`
-                    : 'Notifications'
-                }
-                onClick={() => {
-                  setActiveTab('inventory');
-                  setShowInventoryDropdown(true);
-                  setInventoryInitialTab(totalStockAlerts > 0 ? 'replenish' : 'overview');
-                }}
-              >
-                <span className="notif-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                  </svg>
-                </span>
-                {totalStockAlerts > 0 && (
-                  <span className="notif-badge">
-                    {totalStockAlerts}
+              <div className="top-notif-wrapper" ref={notifPopoverRef}>
+                <button
+                  type="button"
+                  className={`top-notification-btn ${showTopNotifPopover ? 'active' : ''}`}
+                  aria-label="Notifications"
+                  title={
+                    user?.role === 'cashier'
+                      ? 'Terminal Notifications'
+                      : totalStockAlerts > 0
+                        ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock)`
+                        : 'Notifications'
+                  }
+                  onClick={() => setShowTopNotifPopover((prev) => !prev)}
+                >
+                  <span className="notif-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
                   </span>
-                )}
-              </button>
-              <div className="top-user-chip" onClick={() => setActiveTab('settings')} title="Settings & Profile">
+                  {user?.role === 'cashier' ? (
+                    (!activeShiftNumber || totalStockAlerts > 0) && (
+                      <span className="notif-badge">
+                        {!activeShiftNumber ? 1 : totalStockAlerts}
+                      </span>
+                    )
+                  ) : (
+                    totalStockAlerts > 0 && (
+                      <span className="notif-badge">
+                        {totalStockAlerts}
+                      </span>
+                    )
+                  )}
+                </button>
+
+                {showTopNotifPopover && (
+                  <div className="top-notif-popover bento-notif-popover">
+                      {/* Bento Popover Header */}
+                      <div className="bento-notif-header">
+                        <div className="bento-notif-title-row">
+                          <span className="bento-notif-icon-bubble">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                          </span>
+                          <span className="bento-notif-title">Notifications</span>
+                        </div>
+                        <span className={`bento-notif-role-badge ${user?.role === 'cashier' ? 'cashier' : 'admin'}`}>
+                          {user?.role === 'cashier' ? 'Cashier Station' : 'Store Admin'}
+                        </span>
+                      </div>
+
+                      {/* Bento Popover Cards */}
+                      <div className="bento-notif-body">
+                        {user?.role === 'cashier' ? (
+                          <>
+                            {/* Card 1: Shift Status */}
+                            <div className={`bento-notif-card ${activeShiftNumber ? 'active-shift' : 'warning-shift'}`}>
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon">
+                                  {activeShiftNumber ? (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="10"></circle>
+                                      <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                  ) : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">
+                                    {activeShiftNumber ? `Shift #${activeShiftNumber} Active` : 'Shift is Closed'}
+                                  </span>
+                                  <span className={`bento-notif-status-pill ${activeShiftNumber ? 'live' : 'warn'}`}>
+                                    {activeShiftNumber ? 'Live Shift' : 'Action Required'}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                {activeShiftNumber
+                                  ? `Register drawer is active on ${selectedCounter || 'Assigned Counter'} at ${currentBranchName}.`
+                                  : 'Open a cashier register shift to record opening cash float and track bills.'}
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('shifts');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>{activeShiftNumber ? 'Manage Shift & Drawer' : 'Open Register Shift'}</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 2: Billing Counter Station */}
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon pos">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="9" cy="21" r="1"></circle>
+                                    <circle cx="20" cy="21" r="1"></circle>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">POS Billing Counter</span>
+                                  <span className="bento-notif-status-pill pos">Ready</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                High-speed retail barcode terminal for checkout, customer lookup, and thermal printing.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('pos');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>Go to Billing Counter</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 3: Recent Bills */}
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon invoices">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">Recent Invoices</span>
+                                  <span className="bento-notif-status-pill invoices">Receipts</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                Review recent shift transactions, reprint thermal receipts, and handle customer sales returns.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('invoices');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>View Recent Bills</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 4: Shelf Stock Advisory (Strictly Informational, NO navigation to Inventory) */}
+                            {totalStockAlerts > 0 ? (
+                              <div className="bento-notif-card stock-advisory">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon advisory">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Shelf Stock Advisory</span>
+                                    <span className="bento-notif-status-pill advisory">{totalStockAlerts} items</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  {totalStockAlerts} catalog items have low or zero floor stock ({outOfStockItems.length} out of stock, {lowStockItems.length} low stock). Inform Store Manager to replenish.
+                                </p>
+                                <span className="bento-notif-hint">
+                                  Inventory replenishment is managed by Store Managers.
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="bento-notif-card stock-advisory ok">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon ok">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Shelf Stock Healthy</span>
+                                    <span className="bento-notif-status-pill ok">Optimal</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  All tracked retail inventory items have sufficient floor stock levels.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Non-cashier notifications (Store Manager / Super Admin) */}
+                            {totalStockAlerts > 0 ? (
+                              <div className="bento-notif-card warning-shift">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon advisory">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">{totalStockAlerts} Inventory Alerts</span>
+                                    <span className="bento-notif-status-pill warn">Critical</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  {outOfStockItems.length} items out of stock and {lowStockItems.length} items below minimum safety levels.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="bento-notif-action-btn primary"
+                                  onClick={() => {
+                                    setActiveTab('inventory');
+                                    setShowInventoryDropdown(true);
+                                    setInventoryInitialTab('replenish');
+                                    setShowTopNotifPopover(false);
+                                  }}
+                                >
+                                  <span>Open Inventory Replenishment</span>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="bento-notif-card stock-advisory ok">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon ok">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Inventory Stock Healthy</span>
+                                    <span className="bento-notif-status-pill ok">Optimal</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  Catalog inventory is fully stocked. No restock orders are currently pending.
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon pos">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="9" cy="21" r="1"></circle>
+                                    <circle cx="20" cy="21" r="1"></circle>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">POS Quick Terminal</span>
+                                  <span className="bento-notif-status-pill pos">Active</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                Jump to high-speed POS billing counter for retail sales checkout.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('pos');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>Open POS Counter</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Bento Popover Footer */}
+                      <div className="bento-notif-footer">
+                        {user?.role === 'cashier' ? (
+                          <span className="bento-notif-footer-text">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" style={{ verticalAlign: '-1px', marginRight: '5px' }}>
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            Cashier Workspace: POS Counter · My Cashier Shift · Recent Bills
+                          </span>
+                        ) : (
+                          <span className="bento-notif-footer-text">
+                            Store Admin Workspace · Multi-branch Controls Active
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+              <div
+                className={`top-user-chip ${user?.role === 'cashier' ? 'readonly' : ''}`}
+                onClick={() => {
+                  if (user?.role !== 'cashier') {
+                    setActiveTab('settings');
+                  }
+                }}
+                title={user?.role === 'cashier' ? `Cashier on Duty: ${(user?.name || 'Cashier').replace(/\s*\([^)]*\)/g, '').trim()}` : 'Settings & Profile'}
+              >
                 <div className="top-user-avatar">
                   {(user?.name || 'User').replace(/\s*\([^)]*\)/g, '').trim().slice(0, 1).toUpperCase()}
                 </div>
@@ -7104,9 +7545,9 @@ export function App() {
           </div>
 
           {/* View Transition Stage (SPA Bento Transition) */}
-          <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
+          <div key={displayTab} className={`app-view-stage ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
             {/* Other Tab Headers */}
-            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
+            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'shifts' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
               <header className="content-top-header">
                 <div className="content-header-left">
                   <h1 className="content-page-title">
@@ -7157,7 +7598,10 @@ export function App() {
                   <div className="header-store-chip" title="Active Branch Scope">
                     <span className="store-chip-dot"></span>
                     <span className="store-chip-text">
-                      🏢 <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginRight: '5px', verticalAlign: '-1px' }}>
+                        <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 10h1M14 10h1M9 14h1M14 14h1M9 18h1M14 18h1" />
+                      </svg>
+                      <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
                     </span>
                   </div>
                   <div className="header-store-chip">
@@ -7305,27 +7749,43 @@ export function App() {
 
                     {/* Inventory Alert Trigger */}
                     {totalStockAlerts > 0 && (
-                      <button
-                        type="button"
-                        className="bento-alert-pill"
-                        onClick={() => setActiveTab('inventory')}
-                        title={`${totalStockAlerts} items have stock warnings`}
-                      >
-                        <span className="alert-ping">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                            <line x1="12" y1="9" x2="12" y2="13"></line>
-                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                          </svg>
-                        </span>
-                        <span>{totalStockAlerts} Stock Alerts</span>
-                        <span className="alert-arrow">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                            <polyline points="12 5 19 12 12 19"></polyline>
-                          </svg>
-                        </span>
-                      </button>
+                      user?.role === 'cashier' ? (
+                        <div
+                          className="bento-alert-pill bento-alert-pill-readonly"
+                          title={`${totalStockAlerts} items have floor stock warnings. Managed by Store Manager.`}
+                        >
+                          <span className="alert-ping">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                              <line x1="12" y1="9" x2="12" y2="13"></line>
+                              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                          </span>
+                          <span>{totalStockAlerts} Stock Alerts</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="bento-alert-pill"
+                          onClick={() => setActiveTab('inventory')}
+                          title={`${totalStockAlerts} items have stock warnings`}
+                        >
+                          <span className="alert-ping">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                              <line x1="12" y1="9" x2="12" y2="13"></line>
+                              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                          </span>
+                          <span>{totalStockAlerts} Stock Alerts</span>
+                          <span className="alert-arrow">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                              <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                          </span>
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -9638,8 +10098,34 @@ export function App() {
               </div>
             )}
 
+            {/* TAB: CASHIER SHIFTS & DAY-END CLOSING */}
+            {displayTab === 'shifts' && user && (
+              <div className="tab-content-wrapper" key={`shifts-${selectedBranchScope}`}>
+                {user.role === 'manager' ? (
+                  <StoreManagerDashboard
+                    user={user}
+                    shop={shop}
+                    onNavigate={(tab) => {
+                      if (tab === 'inventory' || tab === 'product-movement' || tab === 'stock-transfer') {
+                        setShowInventoryDropdown(true);
+                      }
+                      setActiveTab(tab as any);
+                    }}
+                  />
+                ) : (
+                  <ShiftsDashboard
+                    user={user}
+                    shop={shop}
+                    selectedBranch={selectedBranchScope}
+                    branches={branches}
+                    onNavigateToPos={() => setActiveTab('pos')}
+                  />
+                )}
+              </div>
+            )}
+
             {/* TAB 2: PRODUCTS */}
-            {displayTab === 'items' && (() => {
+            {user?.role !== 'cashier' && displayTab === 'items' && (() => {
               const filteredMasterItems = items.filter((item) => {
                 const q = itemSearchMaster.trim().toLowerCase();
                 const matchesQ = !q ||
@@ -10233,7 +10719,7 @@ export function App() {
             })()}
 
             {/* TAB 2b: CATEGORY MANAGEMENT MODULE - BENTO REDESIGN */}
-            {displayTab === 'categories' && (() => {
+            {user?.role !== 'cashier' && displayTab === 'categories' && (() => {
               const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
               const subCategories = categoriesList.filter((c) => c.parentId && c.active);
               const activeCategoriesCount = categoriesList.filter((c) => c.active).length;
@@ -10972,7 +11458,7 @@ export function App() {
             })()}
 
             {/* TAB: INVENTORY MANAGEMENT */}
-            {displayTab === 'inventory' && (
+            {user?.role !== 'cashier' && displayTab === 'inventory' && (
               <InventoryDashboard
                 key={`inv-${selectedBranchScope}`}
                 branches={branches}
@@ -11004,7 +11490,7 @@ export function App() {
             )}
 
             {/* TAB: STOCK TRANSFER (BRANCH TO BRANCH) */}
-            {displayTab === 'stock-transfer' && user && (
+            {user?.role !== 'cashier' && displayTab === 'stock-transfer' && user && (
               <div className="tab-content-wrapper" key={`stock-transfer-${selectedBranchScope}`}>
                 <StockTransferView
                   user={user}
@@ -11022,7 +11508,7 @@ export function App() {
             )}
 
             {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
-            {displayTab === 'product-movement' && (
+            {user?.role !== 'cashier' && displayTab === 'product-movement' && (
               <ProductMovementAnalysisView
                 key={`movement-${selectedBranchScope}`}
                 categories={categories}
@@ -11101,7 +11587,7 @@ export function App() {
             )}
 
             {/* TAB: SALES ANALYSIS */}
-            {displayTab === 'sales-analysis' && (
+            {user?.role !== 'cashier' && displayTab === 'sales-analysis' && (
               <SalesAnalysisView
                 key={`sales-analysis-${selectedBranchScope}`}
                 userRole={user?.role}
@@ -11116,7 +11602,7 @@ export function App() {
             )}
 
             {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
-            {displayTab === 'customers' && (
+            {user?.role !== 'cashier' && displayTab === 'customers' && (
               <div className="tab-content-wrapper" key={`customers-${selectedBranchScope}`}>
                 <CustomerDirectory
                   parties={parties}
@@ -11135,7 +11621,7 @@ export function App() {
             )}
 
             {/* TAB: SUPPLIERS - MODERN UPGRADED SUPPLIER DIRECTORY */}
-            {displayTab === 'suppliers' && (
+            {user?.role !== 'cashier' && displayTab === 'suppliers' && (
               <div className="tab-content-wrapper" key={`suppliers-${selectedBranchScope}`}>
                 <SupplierDirectory
                   parties={parties}
@@ -11159,7 +11645,7 @@ export function App() {
             )}
 
           {/* TAB: PURCHASES & STOCK INWARD */}
-          {displayTab === 'purchases' && (() => {
+          {user?.role !== 'cashier' && displayTab === 'purchases' && (() => {
             const filteredPurchases = purchases.filter((p) => {
               if (purchaseStatusFilter === 'voided') {
                 if (p.status !== 'voided') return false;
@@ -11493,7 +11979,7 @@ export function App() {
           })()}
 
           {/* TAB 5: REPORTS & ANALYTICS */}
-          {displayTab === 'reports' && report && (() => {
+          {user?.role !== 'cashier' && displayTab === 'reports' && report && (() => {
             const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
             const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
             const activeBranchObj = branches.find(
@@ -11597,7 +12083,10 @@ export function App() {
                               cursor: 'pointer',
                             }}
                           >
-                            🏢 {b.name} ({b.code})
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginRight: '5px', verticalAlign: '-1px' }}>
+                              <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 10h1M14 10h1M9 14h1M14 14h1M9 18h1M14 18h1" />
+                            </svg>
+                            {b.name} ({b.code})
                           </button>
                         );
                       })}
@@ -11954,7 +12443,7 @@ export function App() {
         })()}
 
                       {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
-            {displayTab === 'settings' && (
+            {user?.role !== 'cashier' && displayTab === 'settings' && (
               <div>
                 {/* Section 1: Business Profile Editor */}
                 <div className="card settings-section">
@@ -13553,7 +14042,7 @@ export function App() {
 
 
             {/* ACCOUNTS & FINANCE TAB VIEWS */}
-            {displayTab === 'payments' && (
+            {user?.role !== 'cashier' && displayTab === 'payments' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <PaymentsView
                   key={selectedBranchScope}
@@ -13579,7 +14068,7 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'expenses' && (
+            {user?.role !== 'cashier' && displayTab === 'expenses' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ExpensesView
                   key={selectedBranchScope}
@@ -13593,13 +14082,13 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'cashbank' && (
+            {user?.role !== 'cashier' && displayTab === 'cashbank' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <CashBankView key={selectedBranchScope} />
               </div>
             )}
 
-            {displayTab === 'receivables' && (
+            {user?.role !== 'cashier' && displayTab === 'receivables' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ReceivablesView
                   key={selectedBranchScope}
@@ -13616,7 +14105,7 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'payables' && (
+            {user?.role !== 'cashier' && displayTab === 'payables' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <PayablesView
                   key={selectedBranchScope}
@@ -13634,49 +14123,49 @@ export function App() {
             )}
 
             {/* GST FILING TAB VIEWS */}
-            {displayTab === 'gst-overview' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-overview' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstOverviewView key={selectedBranchScope} tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-sales-register' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-sales-register' && (
               <div className="tab-content-wrapper" style={{ padding: '16px 1.5rem 1.5rem' }}>
                 <GstSalesRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-purchase-register' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-purchase-register' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstPurchaseRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-itc-reconciliation' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-itc-reconciliation' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ItcRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-gstr3b' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-gstr3b' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <Gstr3bView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-gstr1' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-gstr1' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <Gstr1View key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-import-export' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-import-export' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstImportExportView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-filing-history' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-filing-history' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstFilingHistoryView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
