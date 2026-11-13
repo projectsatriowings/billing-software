@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { Party, Shop, Purchase } from '../../api.ts';
 import './SupplierDirectory.css';
 
@@ -102,7 +103,131 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
   const [sortBy, setSortBy] = useState<'payable_desc' | 'due_date_asc' | 'name_asc'>('payable_desc');
   const [selectedSupplier, setSelectedSupplier] = useState<Party | null>(null);
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    openUpward: boolean;
+    maxHeight?: number;
+  } | null>(null);
+  const actionMenuAnchorRef = useRef<HTMLElement | null>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const closeMenu = useCallback(() => {
+    setActionMenuOpenId(null);
+    actionMenuAnchorRef.current = null;
+    setMenuPosition(null);
+  }, []);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!actionMenuAnchorRef.current) return;
+    const rect = actionMenuAnchorRef.current.getBoundingClientRect();
+
+    // If anchor is scrolled completely off the screen, close the menu
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      closeMenu();
+      return;
+    }
+
+    const dropdownEstimatedHeight = 185;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpward = spaceBelow < dropdownEstimatedHeight && spaceAbove > spaceBelow;
+
+    // Align right edge of dropdown with right edge of action button
+    const right = Math.max(8, window.innerWidth - rect.right);
+
+    if (openUpward) {
+      setMenuPosition({
+        bottom: window.innerHeight - rect.top + 6,
+        right,
+        openUpward: true,
+        maxHeight: Math.min(spaceAbove - 16, 320),
+      });
+    } else {
+      setMenuPosition({
+        top: rect.bottom + 6,
+        right,
+        openUpward: false,
+        maxHeight: Math.min(spaceBelow - 16, 320),
+      });
+    }
+  }, [closeMenu]);
+
+  const handleToggleActionMenu = (supplierId: string, buttonEl: HTMLElement) => {
+    if (actionMenuOpenId === supplierId) {
+      closeMenu();
+    } else {
+      actionMenuAnchorRef.current = buttonEl;
+      setActionMenuOpenId(supplierId);
+
+      const rect = buttonEl.getBoundingClientRect();
+      const dropdownEstimatedHeight = 185;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUpward = spaceBelow < dropdownEstimatedHeight && spaceAbove > spaceBelow;
+      const right = Math.max(8, window.innerWidth - rect.right);
+
+      if (openUpward) {
+        setMenuPosition({
+          bottom: window.innerHeight - rect.top + 6,
+          right,
+          openUpward: true,
+          maxHeight: Math.min(spaceAbove - 16, 320),
+        });
+      } else {
+        setMenuPosition({
+          top: rect.bottom + 6,
+          right,
+          openUpward: false,
+          maxHeight: Math.min(spaceBelow - 16, 320),
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!actionMenuOpenId) return;
+
+    const handleScroll = () => {
+      updateMenuPosition();
+    };
+
+    const handleResize = () => {
+      updateMenuPosition();
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        dropdownMenuRef.current &&
+        !dropdownMenuRef.current.contains(target) &&
+        actionMenuAnchorRef.current &&
+        !actionMenuAnchorRef.current.contains(target)
+      ) {
+        closeMenu();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actionMenuOpenId, updateMenuPosition, closeMenu]);
 
   // Filter parties to suppliers only
   const suppliersList = useMemo(() => {
@@ -481,8 +606,8 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                 <th style={{ width: '28%', minWidth: '220px' }}>SUPPLIER / VENDOR NAME</th>
                 <th style={{ width: '18%', minWidth: '150px' }}>CONTACT</th>
                 <th style={{ width: '16%', minWidth: '140px' }}>GSTIN</th>
-                <th style={{ width: '22%', minWidth: '180px' }}>OUTSTANDING PAYABLE</th>
-                <th style={{ width: '16%', minWidth: '180px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ width: '20%', minWidth: '180px' }}>OUTSTANDING PAYABLE</th>
+                <th style={{ width: '18%', minWidth: '240px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -606,7 +731,7 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                     </td>
 
                     {/* Modern Action Controls */}
-                    <td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <div className="supplier-actions-row" onClick={(e) => e.stopPropagation()}>
                         {/* Primary Settle / Pay Due button (when payable > 0) */}
                         {canPayPurchases && payable > 0 && (
@@ -641,74 +766,24 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
                           </button>
                         )}
 
-                        {/* More Actions Dropdown */}
+                        {/* More Actions Toggle Button */}
                         <div className="action-menu-wrap">
                           <button
                             type="button"
-                            className="btn-action-more"
-                            onClick={() => setActionMenuOpenId(actionMenuOpenId === s.id ? null : s.id)}
+                            className={`btn-action-more ${actionMenuOpenId === s.id ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleActionMenu(s.id, e.currentTarget);
+                            }}
                             title="More options"
+                            aria-expanded={actionMenuOpenId === s.id}
                           >
-                            •••
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="5" cy="12" r="2.2" />
+                              <circle cx="12" cy="12" r="2.2" />
+                              <circle cx="19" cy="12" r="2.2" />
+                            </svg>
                           </button>
-
-                          {actionMenuOpenId === s.id && (
-                            <>
-                              <div
-                                className="action-dropdown-backdrop"
-                                onClick={() => setActionMenuOpenId(null)}
-                              />
-                              <div className="action-dropdown-menu">
-                                {canManagePurchases && (
-                                  <button
-                                    type="button"
-                                    className="dropdown-item"
-                                    onClick={() => {
-                                      setActionMenuOpenId(null);
-                                      onNewPurchase(s.id);
-                                    }}
-                                  >
-                                    <span>📥 + Add Supplier Bill</span>
-                                  </button>
-                                )}
-
-                                {canManagePurchases && (
-                                  <button
-                                    type="button"
-                                    className="dropdown-item"
-                                    onClick={() => {
-                                      setActionMenuOpenId(null);
-                                      onOpenLedger(s.id);
-                                    }}
-                                  >
-                                    <span>📖 View Running Ledger</span>
-                                  </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  className="dropdown-item"
-                                  onClick={() => {
-                                    setActionMenuOpenId(null);
-                                    onEditSupplier(s);
-                                  }}
-                                >
-                                  <span>✏️ Edit Supplier Details</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className={`dropdown-item ${s.active !== false ? 'danger' : 'success'}`}
-                                  onClick={() => {
-                                    setActionMenuOpenId(null);
-                                    onToggleActive(s);
-                                  }}
-                                >
-                                  <span>{s.active !== false ? '🚫 Deactivate Supplier' : '✓ Activate Supplier'}</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -1039,6 +1114,78 @@ export const SupplierDirectory: React.FC<SupplierDirectoryProps> = ({
           </div>
         </div>
       )}
+
+      {/* PORTAL-BASED ACTION DROPDOWN (Prevents overflow clipping & handles viewport bounds) */}
+      {typeof document !== 'undefined' && actionMenuOpenId && menuPosition && (() => {
+        const activeSupplier = suppliersList.find((s) => s.id === actionMenuOpenId);
+        if (!activeSupplier) return null;
+
+        return createPortal(
+          <div
+            ref={dropdownMenuRef}
+            className={`action-dropdown-menu ${menuPosition.openUpward ? 'open-upward' : 'open-downward'}`}
+            style={{
+              position: 'fixed',
+              top: menuPosition.top !== undefined ? `${menuPosition.top}px` : undefined,
+              bottom: menuPosition.bottom !== undefined ? `${menuPosition.bottom}px` : undefined,
+              right: `${menuPosition.right}px`,
+              maxHeight: menuPosition.maxHeight ? `${menuPosition.maxHeight}px` : undefined,
+              zIndex: 9999,
+              maxWidth: 'calc(100vw - 16px)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {canManagePurchases && (
+              <button
+                type="button"
+                className="dropdown-item"
+                onClick={() => {
+                  closeMenu();
+                  onNewPurchase(activeSupplier.id);
+                }}
+              >
+                <span>📥 + Add Supplier Bill</span>
+              </button>
+            )}
+
+            {canManagePurchases && (
+              <button
+                type="button"
+                className="dropdown-item"
+                onClick={() => {
+                  closeMenu();
+                  onOpenLedger(activeSupplier.id);
+                }}
+              >
+                <span>📖 View Running Ledger</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="dropdown-item"
+              onClick={() => {
+                closeMenu();
+                onEditSupplier(activeSupplier);
+              }}
+            >
+              <span>✏️ Edit Supplier Details</span>
+            </button>
+
+            <button
+              type="button"
+              className={`dropdown-item ${activeSupplier.active !== false ? 'danger' : 'success'}`}
+              onClick={() => {
+                closeMenu();
+                onToggleActive(activeSupplier);
+              }}
+            >
+              <span>{activeSupplier.active !== false ? '🚫 Deactivate Supplier' : '✓ Activate Supplier'}</span>
+            </button>
+          </div>,
+          document.body
+        );
+      })()}
     </div>
   );
 };

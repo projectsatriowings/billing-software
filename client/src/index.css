@@ -23801,15 +23801,13 @@ select.expense-input-control {
 }
 
 .action-dropdown-menu {
-  position: absolute;
-  right: 0;
-  top: 105%;
-  z-index: 101;
-  width: 200px;
+  position: fixed;
+  z-index: 9999;
+  min-width: 210px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
