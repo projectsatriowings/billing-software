@@ -646,17 +646,23 @@
 
 /* Modern Action Buttons */
 .supplier-actions-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.45rem;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .btn-action-pay {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 0.42rem 0.8rem;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 0.8rem;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border: 1px solid transparent;
   color: #ffffff;
@@ -667,6 +673,8 @@
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
   transition: all 0.15s ease;
   white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .btn-action-pay:hover {
@@ -677,8 +685,11 @@
 .btn-action-inward {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 0.42rem 0.75rem;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 0.75rem;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1d4ed8;
@@ -688,6 +699,8 @@
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .btn-action-inward:hover {
@@ -699,66 +712,95 @@
 .btn-action-more {
   width: 32px;
   height: 32px;
+  box-sizing: border-box;
   border-radius: 8px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   color: #64748b;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
 }
 
 .btn-action-more:hover {
   background: #e2e8f0;
   color: #0f172a;
+  border-color: #94a3b8;
 }
 
-/* Action Dropdown Menu */
+.btn-action-more.active {
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Action Dropdown Menu (Portal-rendered at document.body) */
 .action-menu-wrap {
   position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .action-dropdown-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 9998;
 }
 
 .action-dropdown-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
+  position: fixed !important;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 0.35rem;
-  min-width: 200px;
-  z-index: 50;
+  min-width: 210px;
+  z-index: 9999 !important;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  animation: dropdownFadeIn 0.15s ease-out;
+  transform-origin: top right;
+  overflow-y: auto;
+}
+
+.action-dropdown-menu.open-upward {
+  transform-origin: bottom right;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 0.75rem;
   border: none;
   background: transparent;
   color: #334155;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
   width: 100%;
+  white-space: nowrap;
 }
 
 .dropdown-item:hover {
@@ -767,9 +809,9 @@
 }
 
 .dropdown-item.danger { color: #dc2626; }
-.dropdown-item.danger:hover { background: #fef2f2; }
+.dropdown-item.danger:hover { background: #fef2f2; color: #b91c1c; }
 .dropdown-item.success { color: #059669; }
-.dropdown-item.success:hover { background: #ecfdf5; }
+.dropdown-item.success:hover { background: #ecfdf5; color: #047857; }
 
 /* Empty State */
 .supplier-empty-state {
