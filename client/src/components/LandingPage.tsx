@@ -115,7 +115,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <header className="landing-navbar">
         <div className="landing-nav-container">
           <div className="landing-brand" onClick={() => scrollToSection('hero')} style={{ cursor: 'pointer' }}>
-            <span className="landing-brand-icon">⚡</span>
+            <span className="landing-brand-icon" style={{ display: 'inline-flex', alignItems: 'center', color: '#6d4aff' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="#6d4aff" stroke="#4338ca" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
             <span className="landing-brand-name">Adaptive Billing</span>
             <span className="landing-brand-badge">Retail & Supermarket</span>
           </div>
@@ -695,7 +699,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="cta-banner-content-split">
           <div className="cta-banner-left">
             <div className="cta-store-icon-bubble">
-              🏪
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
             </div>
             <div className="cta-banner-text">
               <h2>Ready to Grow Your Store?</h2>
@@ -716,7 +723,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={() => scrollToSection('faq')}
               className="banner-btn-secondary"
             >
-              <span style={{ marginRight: '6px' }}>🎧</span> Contact Support
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                  <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+                </svg>
+                <span>Contact Support</span>
+              </span>
             </button>
           </div>
 
@@ -742,7 +755,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="footer-container">
           <div className="footer-brand-col">
             <div className="footer-brand">
-              <span className="footer-brand-icon">⚡</span>
+              <span className="footer-brand-icon" style={{ display: 'inline-flex', alignItems: 'center', color: '#fbbf24' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </span>
               <span className="footer-brand-title">Adaptive Billing</span>
             </div>
             <p className="footer-brand-tagline">

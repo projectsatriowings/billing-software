@@ -1,5 +1,28 @@
 import { divRound, fmtMoney } from './money.ts';
 
+export const RETURN_REASONS = [
+  'Size too small',
+  'Size too large',
+  'Damaged product',
+  'Wrong product',
+  'Customer changed mind',
+  'Other',
+] as const;
+
+export const RETURN_CONDITIONS = [
+  'resellable',
+  'damaged',
+  'defective',
+] as const;
+
+export const REFUND_METHODS = [
+  'cash',
+  'upi',
+  'bank',
+  'original',
+  'store_credit',
+] as const;
+
 export interface ReturnLineInput {
   origLineId: string;
   itemId?: string | null;
@@ -19,7 +42,9 @@ export interface ReturnLineInput {
   origIgstMinor: number;
   origTotalMinor: number;
   restock: boolean;
+  condition?: 'resellable' | 'damaged' | 'defective';
   reason?: string;
+  remarks?: string;
 }
 
 export interface CalculatedReturnLine {
@@ -43,7 +68,9 @@ export interface CalculatedReturnLine {
   taxMinor: number;
   totalMinor: number;
   restock: boolean;
+  condition: 'resellable' | 'damaged' | 'defective';
   reason: string;
+  remarks?: string;
 }
 
 export interface CalculatedReturn {
@@ -164,8 +191,10 @@ export function calcReturn(
       igstMinor,
       taxMinor,
       totalMinor,
-      restock: Boolean(l.restock),
+      restock: l.condition ? l.condition === 'resellable' : Boolean(l.restock),
+      condition: l.condition || (l.restock ? 'resellable' : 'damaged'),
       reason: (l.reason || '').trim(),
+      remarks: (l.remarks || '').trim(),
     });
   }
 
@@ -274,5 +303,26 @@ export function planSettlement(
     refundMode,
     refundReference,
     totalCreditMinor,
+  };
+}
+
+export interface ExchangeCalcResult {
+  returnTotalMinor: number;
+  newPurchaseTotalMinor: number;
+  exchangeAdjustedMinor: number;
+  customerPayableMinor: number;
+  customerRefundMinor: number;
+}
+
+export function calcExchange(returnTotalMinor: number, newPurchaseTotalMinor: number): ExchangeCalcResult {
+  const exchangeAdjustedMinor = Math.min(returnTotalMinor, newPurchaseTotalMinor);
+  const customerPayableMinor = Math.max(0, newPurchaseTotalMinor - returnTotalMinor);
+  const customerRefundMinor = Math.max(0, returnTotalMinor - newPurchaseTotalMinor);
+  return {
+    returnTotalMinor,
+    newPurchaseTotalMinor,
+    exchangeAdjustedMinor,
+    customerPayableMinor,
+    customerRefundMinor,
   };
 }

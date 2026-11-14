@@ -38,14 +38,14 @@ export function registerShop(r: Router) {
           invoice_prefix = ?, language = ?, locations = ?::jsonb,
           whatsapp_enabled = ?, whatsapp_default_lang = ?, whatsapp_include_link = ?,
           loyalty_enabled = ?, loyalty_points_per_100 = ?, loyalty_point_value_minor = ?, loyalty_min_points_redeem = ?, owner_email = ?,
-          invoice_profiles = ?::jsonb, wholesale_business_name = ?
+          invoice_profiles = ?::jsonb, wholesale_business_name = ?, logo_url = ?
          WHERE id = ?`,
         [
           next.name, next.businessType, next.gstin, next.stateCode, next.address, next.phone, next.upiId,
           next.invoicePrefix, next.language, j(next.locations),
           next.whatsappEnabled, next.whatsappDefaultLang, next.whatsappIncludeLink,
           next.loyaltyEnabled, next.loyaltyPointsPer100, next.loyaltyPointValueMinor, next.loyaltyMinPointsRedeem, next.ownerEmail,
-          j(next.invoiceProfiles), next.wholesaleBusinessName,
+          j(next.invoiceProfiles), next.wholesaleBusinessName, next.logoUrl,
           tenantId,
         ],
       );

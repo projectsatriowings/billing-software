@@ -182,7 +182,18 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
     <div className="space-y-6">
       {/* Header */}
       {/* Return Period Filter & Actions Bar */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={() => onNavigate('gst-purchase-register')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-400"
+            title="Open invoice-by-invoice detailed purchase and inward register"
+          >
+            📋 Itemized Purchase Register
+          </button>
+        )}
+        <div className="flex flex-wrap items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
             <input
@@ -222,6 +233,7 @@ export const ItcRegisterView: React.FC<ItcRegisterViewProps> = ({ onNavigate }) 
             {exporting ? <SpinnerIcon className="h-4 w-4 animate-spin text-slate-500" /> : <BarChartIcon className="h-4 w-4 text-slate-600" />}
             <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
+        </div>
       </div>
 
       {/* Summary Cards */}

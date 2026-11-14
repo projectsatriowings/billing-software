@@ -8,7 +8,7 @@ const ALL: Role[] = ['owner', 'manager', 'cashier', 'accountant'];
 export const PERMS = {
   sell: ['owner', 'manager', 'cashier', 'counter'],
   'bills.view': ALL,
-  returns: ['owner', 'manager'],
+  returns: ['owner', 'manager', 'cashier'],
   'items.view': ALL,
   'items.write': ['owner', 'manager'],
   'parties.view': ALL,
@@ -1327,3 +1327,103 @@ export function formatStockDuration(days: number | null | undefined): string {
   const totalMinutes = Math.max(1, Math.round(totalHours * 60));
   return `${totalMinutes} ${totalMinutes === 1 ? 'Minute' : 'Minutes'}`;
 }
+
+export type ReturnItemCondition = 'resellable' | 'damaged' | 'defective';
+export type ReturnReason =
+  | 'Size too small'
+  | 'Size too large'
+  | 'Damaged product'
+  | 'Wrong product'
+  | 'Customer changed mind'
+  | 'Other';
+
+export interface DayClosing {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  bdate: string;
+  status: 'closed' | 'reopened';
+  openingCashMinor: number;
+  cashSalesMinor: number;
+  cashRefundsMinor: number;
+  cashExpensesMinor: number;
+  cashInMinor: number;
+  cashOutMinor: number;
+  expectedCashMinor: number;
+  actualCashMinor: number;
+  varianceMinor: number;
+  grossSalesMinor: number;
+  returnsTotalMinor: number;
+  netSalesMinor: number;
+  invoicesCount: number;
+  returnsCount: number;
+  exchangesCount: number;
+  refundsCount: number;
+  cogsMinor: number;
+  returnedCogsMinor: number;
+  netCogsMinor: number;
+  grossProfitMinor: number;
+  operatingExpensesMinor: number;
+  netProfitMinor: number;
+  collectionsSummary: Record<string, number>;
+  returnsSummary: {
+    totalValueMinor: number;
+    cashRefundsMinor: number;
+    upiRefundsMinor: number;
+    exchangeAdjustedMinor: number;
+    storeCreditsIssuedMinor: number;
+  };
+  exchangesSummary: {
+    count: number;
+    oldReturnedMinor: number;
+    newSoldMinor: number;
+    diffCollectedMinor: number;
+    remainingCreditMinor: number;
+  };
+  remarks?: string | null;
+  closedBy: string;
+  closedByName?: string;
+  verifiedBy?: string | null;
+  closedAt: string;
+  createdAt: string;
+}
+
+export interface StoreCredit {
+  id: string;
+  tenantId: string;
+  partyId: string;
+  partyName?: string;
+  partyPhone?: string;
+  creditNoteId?: string;
+  creditNoteNumber?: string;
+  amountMinor: number;
+  balanceMinor: number;
+  status: 'active' | 'exhausted' | 'expired' | 'voided';
+  referenceNo?: string;
+  expiryDate?: string;
+  notes?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: string;
+}
+
+export interface RefundTransaction {
+  id: string;
+  tenantId: string;
+  creditNoteId: string;
+  creditNoteNumber?: string;
+  origInvoiceId?: string;
+  origInvoiceNumber?: string;
+  partyId?: string;
+  partyName?: string;
+  amountMinor: number;
+  method: 'cash' | 'upi' | 'bank' | 'card' | 'original' | 'store_credit';
+  referenceNo?: string;
+  bdate: string;
+  shiftId?: string;
+  notes?: string;
+  processedBy: string;
+  processedByName?: string;
+  createdAt: string;
+}
+

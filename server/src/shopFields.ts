@@ -24,6 +24,7 @@ export interface ShopFields {
   loyaltyMinPointsRedeem: number;
   ownerEmail: string | null;
   invoiceProfiles: InvoiceProfiles;
+  logoUrl: string | null;
 }
 
 export const SHOP_DEFAULTS: ShopFields = {
@@ -31,6 +32,7 @@ export const SHOP_DEFAULTS: ShopFields = {
   whatsappEnabled: true, whatsappDefaultLang: 'en', whatsappIncludeLink: false,
   loyaltyEnabled: true, loyaltyPointsPer100: 10, loyaltyPointValueMinor: 10, loyaltyMinPointsRedeem: 10, ownerEmail: null,
   invoiceProfiles: DEFAULT_INVOICE_PROFILES,
+  logoUrl: null,
 };
 
 const has = (o: any, k: string) => o != null && Object.prototype.hasOwnProperty.call(o, k);
@@ -142,6 +144,10 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
     out.wholesaleBusinessName = out.invoiceProfiles.wholesale.displayName;
   }
 
+  if (has(body, 'logoUrl')) {
+    out.logoUrl = V.optStr(body.logoUrl, 'Logo URL', 600000);
+  }
+
   return out;
 }
 
@@ -234,6 +240,7 @@ export function shopView(t: any) {
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
     invoiceProfiles: normalizeInvoiceProfiles(t.invoiceProfiles ?? t.invoice_profiles, t),
+    logoUrl: t.logoUrl ?? t.logo_url ?? null,
     createdAt: t.createdAt ?? t.created_at,
   };
 }
@@ -252,5 +259,6 @@ export function shopFromRow(t: any): ShopFields {
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
     invoiceProfiles: normalizeInvoiceProfiles(t.invoiceProfiles ?? t.invoice_profiles, t),
+    logoUrl: t.logoUrl ?? t.logo_url ?? null,
   };
 }
