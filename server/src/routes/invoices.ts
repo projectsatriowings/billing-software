@@ -259,16 +259,24 @@ export function registerInvoices(r: Router) {
   r.post('/api/invoices', requirePerm('sell'), async (ctx) => {
     const b = ctx.body ?? {};
     const tenantId = ctx.user!.tenantId;
+    const isWholesale = (b.invoiceType || b.invoice_type) === 'wholesale';
 
-    // POS billing requires an open cashier shift; invoice gets branch_id from active shift
+    // POS billing requires an open cashier shift; wholesale billing can use shift or branch directly
     const activeShift = await ctx.db.one<any>(
       "SELECT id, branch_id, counter_id, counter, counter_name_snapshot FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
       [tenantId, ctx.user!.id],
     );
-    if (!activeShift) {
+    if (!activeShift && !isWholesale) {
       throw bad('An open cashier shift is required to create a bill. Please start your shift at POS Counter.', 'SHIFT_REQUIRED');
     }
-    const invoiceBranchId = activeShift.branchId ?? activeShift.branch_id ?? ctx.user!.branchId;
+    let invoiceBranchId = activeShift?.branchId ?? activeShift?.branch_id ?? b.branchId ?? b.branch_id ?? ctx.user!.branchId;
+    if (!invoiceBranchId) {
+      const fallbackBr = await ctx.db.one<{ id: string }>(
+        "SELECT id FROM branches WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY (code = 'MAIN') DESC, created_at ASC LIMIT 1",
+        [tenantId],
+      );
+      invoiceBranchId = fallbackBr?.id || null;
+    }
     if (!invoiceBranchId) {
       throw bad('Branch is required for bill creation. Please link your shift or account to a branch.', 'BRANCH_REQUIRED');
     }
@@ -354,8 +362,8 @@ export function registerInvoices(r: Router) {
     const inputCounter = V.optStr(b.counter, 'Counter', 50);
 
     let resolvedCounterId: string | null = null;
-    let resolvedCounterCode: string = inputCounter || activeShift?.counter || 'COUNTER-1';
-    let resolvedCounterName: string = inputCounter || activeShift?.counterNameSnapshot || activeShift?.counter_name_snapshot || 'Counter 1';
+    let resolvedCounterCode: string = inputCounter || activeShift?.counter || (isWholesale ? 'WHOLESALE' : 'COUNTER-1');
+    let resolvedCounterName: string = inputCounter || activeShift?.counterNameSnapshot || activeShift?.counter_name_snapshot || (isWholesale ? 'Wholesale Desk' : 'Counter 1');
 
     let counterRow: any = null;
     if (invoiceBranchId) {
@@ -487,13 +495,20 @@ export function registerInvoices(r: Router) {
         "SELECT series FROM number_series WHERE tenant_id = ? AND branch_id = ? AND series NOT IN ('SHF', 'TRF', 'EXP', 'PUR', 'STC', 'ADJ', 'CNT') ORDER BY series = ? DESC LIMIT 1",
         [tenantId, invoiceBranchId, shop.invoicePrefix || '']
       );
-      let prefix = branchSeriesRow?.series;
-      if (!prefix) {
-        const branchRow = await q.one<{ code: string }>(
-          'SELECT code FROM branches WHERE id = ? AND tenant_id = ?',
-          [invoiceBranchId, tenantId]
-        );
-        prefix = (branchRow?.code && branchRow.code !== 'MAIN') ? branchRow.code : (shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV');
+      const rawShopProfiles = shop.invoiceProfiles ?? shop.invoice_profiles;
+      const shopProfiles = typeof rawShopProfiles === 'string' ? JSON.parse(rawShopProfiles) : (rawShopProfiles || null);
+      let prefix: string;
+      if (isWholesale) {
+        prefix = (shopProfiles?.wholesale?.invoicePrefix || 'WH').trim().toUpperCase();
+      } else {
+        prefix = (shopProfiles?.retail?.invoicePrefix || branchSeriesRow?.series || '').trim().toUpperCase();
+        if (!prefix) {
+          const branchRow = await q.one<{ code: string }>(
+            'SELECT code FROM branches WHERE id = ? AND tenant_id = ?',
+            [invoiceBranchId, tenantId]
+          );
+          prefix = (branchRow?.code && branchRow.code !== 'MAIN') ? branchRow.code : (shop.invoicePrefix ?? shop.invoice_prefix ?? 'INV');
+        }
       }
 
       while (true) {
@@ -515,10 +530,41 @@ export function registerInvoices(r: Router) {
 
       // 2. Payments calculation
       for (const p of paymentsInput) {
+        const rawM = (p.method ?? p.mode ?? '').toLowerCase();
+        if (rawM === 'credit') continue;
         const amt = V.int(p.amountMinor, 'Payment amount', { min: 1 });
         totalPaidMinor += amt;
       }
       const balanceMinor = Math.max(0, calculated.totalMinor - totalPaidMinor);
+
+      // Validate customer credit limit if there is an unpaid balance
+      if (partyId && balanceMinor > 0) {
+        const partyRow = await q.one<any>(
+          `SELECT p.id, p.name, p.credit_limit_minor,
+                  COALESCE((SELECT SUM(i.balance_minor) FROM invoices i WHERE i.party_id = p.id AND i.tenant_id = p.tenant_id AND i.status = 'posted'), 0)::bigint AS unpaid_minor,
+                  p.advance_minor
+           FROM parties p
+           WHERE p.id = ? AND p.tenant_id = ? FOR UPDATE`,
+          [partyId, tenantId],
+        );
+        if (partyRow) {
+          const credLimit = Number(partyRow.creditLimitMinor ?? partyRow.credit_limit_minor ?? 0);
+          if (credLimit > 0) {
+            const unpaid = Number(partyRow.unpaidMinor ?? partyRow.unpaid_minor ?? 0);
+            const adv = Number(partyRow.advanceMinor ?? partyRow.advance_minor ?? 0);
+            const currentDues = Math.max(0, unpaid - adv);
+            const futureDues = currentDues + balanceMinor;
+            if (futureDues > credLimit) {
+              const availCredit = Math.max(0, credLimit - currentDues);
+              throw bad(
+                `Customer credit limit of ₹${(credLimit / 100).toFixed(2)} exceeded for "${partyRow.name}". Outstanding dues: ₹${(currentDues / 100).toFixed(2)}, available credit: ₹${(availCredit / 100).toFixed(2)}.`,
+                'CREDIT_LIMIT_EXCEEDED',
+                { creditLimitMinor: credLimit, currentDuesMinor: currentDues, availableCreditMinor: availCredit }
+              );
+            }
+          }
+        }
+      }
 
       // Active shift already verified prior to transaction
 
@@ -529,6 +575,23 @@ export function registerInvoices(r: Router) {
 
       const paymentStatus = balanceMinor === 0 ? 'paid' : (totalPaidMinor > 0 ? 'partial' : 'unpaid');
 
+      const invoiceCustom = {
+        ...(tenderData ? { tender: tenderData } : {}),
+        ...(b.custom && typeof b.custom === 'object' ? b.custom : {}),
+        ...(isWholesale ? {
+          invoiceType: 'wholesale',
+          paymentTerms: b.custom?.paymentTerms || b.paymentTerms || null,
+          customerGstin: b.custom?.customerGstin || b.customerGstin || null,
+          customerState: b.custom?.customerState || b.customerState || null,
+          customerStateCode: b.custom?.customerStateCode || b.customerStateCode || null,
+          billingAddress: b.custom?.billingAddress || b.billingAddress || null,
+          shippingAddress: b.custom?.shippingAddress || b.shippingAddress || b.billingAddress || null,
+          contactPerson: b.custom?.contactPerson || b.contactPerson || null,
+        } : {}),
+      };
+
+      const profileSnapshot = isWholesale ? (shopProfiles?.wholesale || null) : (shopProfiles?.retail || null);
+
       await q.exec(
         `INSERT INTO invoices (
           id, tenant_id, branch_id, client_id, number, kind, status, bdate, party_id,
@@ -536,14 +599,16 @@ export function registerInvoices(r: Router) {
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor,
           paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, counter_id, counter_name_snapshot, shift_id, custom,
-          applied_promotions, promotion_discount_minor
+          applied_promotions, promotion_discount_minor,
+          invoice_type, profile_snapshot
         ) VALUES (
           ?, ?, ?, ?, ?, 'sale', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?,
           ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?::jsonb,
-          ?::jsonb, ?
+          ?::jsonb, ?,
+          ?, ?::jsonb
         )`,
         [
           invoiceId,
@@ -579,9 +644,11 @@ export function registerInvoices(r: Router) {
           resolvedCounterId,
           resolvedCounterName,
           activeShift?.id || null,
-          j(tenderData ? { tender: tenderData } : {}),
+          j(invoiceCustom),
           j(appliedPromotionsInput),
           promotionDiscountMinor,
+          isWholesale ? 'wholesale' : 'retail',
+          j(profileSnapshot),
         ],
       );
 
@@ -674,8 +741,9 @@ export function registerInvoices(r: Router) {
 
       // 5. Insert payments
       for (const p of paymentsInput) {
-        const amt = V.int(p.amountMinor, 'Payment amount', { min: 1 });
         const rawMethod = (p.method ?? p.mode ?? 'cash').toLowerCase();
+        if (rawMethod === 'credit') continue;
+        const amt = V.int(p.amountMinor, 'Payment amount', { min: 1 });
         const method = V.oneOf(rawMethod, 'Payment method', ['cash', 'upi', 'card', 'bank', 'advance'] as const, 'cash');
 
         if (method === 'advance') {
@@ -696,7 +764,7 @@ export function registerInvoices(r: Router) {
         await q.exec(
           `INSERT INTO payments (id, tenant_id, branch_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter, counter_id, counter_name_snapshot)
            VALUES (?, ?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('pay'), tenantId, invoiceBranchId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift.id, todayStr, ctx.user!.id, location, resolvedCounterCode, resolvedCounterId, resolvedCounterName],
+          [newId('pay'), tenantId, invoiceBranchId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift?.id || null, todayStr, ctx.user!.id, location, resolvedCounterCode, resolvedCounterId, resolvedCounterName],
         );
 
         if (activeShift?.id && resolvedCounterId && (activeShift.counterId !== resolvedCounterId || activeShift.counter_id !== resolvedCounterId)) {
@@ -807,6 +875,7 @@ export function registerInvoices(r: Router) {
       id: invoiceId,
       invoiceId,
       number: assignedNumber,
+      invoiceType: isWholesale ? 'wholesale' : 'retail',
       totalMinor: calculated.totalMinor,
       paidMinor: totalPaidMinor,
       balanceMinor: Math.max(0, calculated.totalMinor - totalPaidMinor),
@@ -848,7 +917,8 @@ export function registerInvoices(r: Router) {
     );
     const payments = await ctx.db.query('SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC', [inv.id]);
 
-    const paper = (ctx.query.paper === 'a4' || ctx.query.paper === 'thermal58') ? ctx.query.paper : 'thermal80';
+    const isWholesale = (inv.invoice_type === 'wholesale' || inv.invoiceType === 'wholesale' || ctx.query.paper === 'wholesale_a4' || ctx.query.template === 'wholesale_a4');
+    const paper = isWholesale ? 'wholesale_a4' : ((ctx.query.paper === 'a4' || ctx.query.paper === 'thermal58') ? ctx.query.paper : 'thermal80');
     const autoPrint = ctx.query.autoprint === 'true';
 
     const custName = inv.customerName ?? inv.customer_name;
@@ -857,14 +927,25 @@ export function registerInvoices(r: Router) {
     const customObj = typeof inv.custom === 'string' ? JSON.parse(inv.custom || '{}') : (inv.custom || {});
     const tender = customObj?.tender || null;
 
+    const profileSnapshot = typeof inv.profileSnapshot === 'string'
+      ? JSON.parse(inv.profileSnapshot)
+      : (inv.profileSnapshot ?? (typeof inv.profile_snapshot === 'string' ? JSON.parse(inv.profile_snapshot) : (inv.profile_snapshot || null)));
+    const shopProfiles = typeof shop.invoiceProfiles === 'string'
+      ? JSON.parse(shop.invoiceProfiles)
+      : (shop.invoiceProfiles ?? (typeof shop.invoice_profiles === 'string' ? JSON.parse(shop.invoice_profiles) : (shop.invoice_profiles || null)));
+    const wholesaleProfile = (isWholesale && profileSnapshot) ? profileSnapshot : (shopProfiles?.wholesale || {});
+    const retailProfile = (!isWholesale && profileSnapshot) ? profileSnapshot : (shopProfiles?.retail || {});
+    const activeProfile = isWholesale ? wholesaleProfile : retailProfile;
+
     const customFields: { label: string; value: string }[] = [];
     const pId = inv.partyId ?? inv.party_id;
+    let partyRow: any = null;
     if (pId) {
-      const custRow = await ctx.db.one<{ loyalty_points?: number; loyaltyPoints?: number }>(
-        'SELECT loyalty_points FROM parties WHERE id = ?',
+      partyRow = await ctx.db.one(
+        'SELECT loyalty_points, gstin, address, state_code, custom FROM parties WHERE id = ?',
         [pId]
       );
-      const pts = Number(custRow?.loyaltyPoints ?? custRow?.loyalty_points ?? 0);
+      const pts = Number(partyRow?.loyaltyPoints ?? partyRow?.loyalty_points ?? 0);
       if (pts > 0) {
         customFields.push({ label: '⭐ Loyalty Balance', value: `${pts} pts` });
       }
@@ -874,19 +955,53 @@ export function registerInvoices(r: Router) {
       customFields.push({ label: 'Counter', value: String(invCounter) });
     }
 
+    const wholesaleDisplayName = (
+      wholesaleProfile?.displayName ||
+      shop.wholesaleBusinessName ||
+      shop.wholesale_business_name ||
+      ''
+    ).trim();
+    const wholesaleLegalName = (wholesaleProfile?.legalName || '').trim();
+
+    const wholesaleMeta = isWholesale ? {
+      invoiceType: 'wholesale' as const,
+      displayName: wholesaleDisplayName || (wholesaleLegalName ? wholesaleLegalName : null),
+      legalName: wholesaleLegalName || null,
+      logoUrl: wholesaleProfile?.logoUrl || null,
+      phone: wholesaleProfile?.phone || shop.phone || null,
+      email: wholesaleProfile?.email || null,
+      gstin: wholesaleProfile?.gstin || shop.gstin || null,
+      address: wholesaleProfile?.address || shop.address || null,
+      paymentTerms: customObj?.paymentTerms || 'Due on Receipt',
+      billingAddress: customObj?.billingAddress || partyRow?.address || null,
+      shippingAddress: customObj?.shippingAddress || customObj?.billingAddress || partyRow?.address || null,
+      contactPerson: customObj?.contactPerson || (partyRow?.custom && typeof partyRow.custom === 'object' ? partyRow.custom.contactPerson : null),
+      customerState: customObj?.customerState || null,
+      customerStateCode: customObj?.customerStateCode || partyRow?.state_code || partyRow?.stateCode || null,
+      terms: wholesaleProfile?.terms || null,
+      jurisdiction: wholesaleProfile?.jurisdiction || null,
+    } : null;
+
     const printable: PrintableBill = {
       number: inv.number,
       kind: 'sale',
       dateText: new Date(createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
       shop: {
-        name: shop.name,
-        address: shop.address,
-        phone: shop.phone,
-        gstin: shop.gstin,
+        name: isWholesale
+          ? (wholesaleDisplayName || wholesaleLegalName || 'Wholesale B2B Tax Invoice')
+          : (retailProfile?.displayName || shop.name),
+        address: isWholesale ? (wholesaleProfile?.address || shop.address) : (retailProfile?.address || shop.address),
+        phone: isWholesale ? (wholesaleProfile?.phone || shop.phone) : (retailProfile?.phone || shop.phone),
+        gstin: isWholesale ? (wholesaleProfile?.gstin || shop.gstin) : (retailProfile?.gstin || shop.gstin),
         upiId: shop.upiId ?? shop.upi_id,
-        logoUrl: shop.logoUrl ?? shop.logo_url ?? null,
+        logoUrl: activeProfile?.logoUrl || shop.logoUrl || shop.logo_url || null,
       },
-      customer: custName ? { name: custName, phone: custPhone } : null,
+      customer: custName ? {
+        name: custName,
+        phone: custPhone,
+        gstin: partyRow?.gstin || customObj?.customerGstin || null,
+        address: partyRow?.address || customObj?.billingAddress || null,
+      } as any : null,
       lines: lines.map((l: any) => {
         let mrpMinor = 0;
         try {
@@ -941,7 +1056,8 @@ export function registerInvoices(r: Router) {
       payments: payments.map((p: any) => ({ method: p.method, amountMinor: Number(p.amountMinor ?? p.amount_minor) })),
       tender,
       customFields,
-      intra: true,
+      intra: Boolean(inv.intra !== false),
+      wholesale: wholesaleMeta,
     };
 
     let qrSvgMarkup = '';

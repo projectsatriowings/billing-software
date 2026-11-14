@@ -57,6 +57,8 @@ function formatItem(r: any) {
     unit: r.unit,
     category: r.category ?? null,
     priceMinor: Number(r.priceMinor ?? r.price_minor ?? 0),
+    wholesalePriceMinor: (r.wholesalePriceMinor != null || r.wholesale_price_minor != null) ? Number(r.wholesalePriceMinor ?? r.wholesale_price_minor) : null,
+    minWholesaleQtyMilli: (r.minWholesaleQtyMilli != null || r.min_wholesale_qty_milli != null) ? Number(r.minWholesaleQtyMilli ?? r.min_wholesale_qty_milli) : null,
     costMinor: Number(r.costMinor ?? r.cost_minor ?? 0),
     taxRateBp: Number(r.taxRateBp ?? r.tax_rate_bp ?? 0),
     taxInclusive: Boolean(r.taxInclusive ?? r.tax_inclusive),
@@ -960,6 +962,12 @@ export function registerItems(r: Router) {
 
     const name = V.str(b.name, 'Item name', { required: true, max: 120 });
     const priceMinor = V.int(b.priceMinor, 'Price (paise)', { min: 0, required: true });
+    const wholesalePriceMinor = (b.wholesalePriceMinor !== undefined && b.wholesalePriceMinor !== null && b.wholesalePriceMinor !== '')
+      ? V.int(b.wholesalePriceMinor, 'Wholesale price (paise)', { min: 0 })
+      : null;
+    const minWholesaleQtyMilli = (b.minWholesaleQtyMilli !== undefined && b.minWholesaleQtyMilli !== null && b.minWholesaleQtyMilli !== '')
+      ? V.int(b.minWholesaleQtyMilli, 'Minimum wholesale quantity', { min: 0 })
+      : null;
     const costMinor = V.int(b.costMinor ?? 0, 'Cost (paise)', { min: 0 });
     const taxRateBp = V.int(b.taxRateBp ?? 0, 'Tax rate (basis points)', { min: 0, max: 10000 });
     const sku = V.optStr(b.sku, 'SKU', 60);
@@ -1022,10 +1030,10 @@ export function registerItems(r: Router) {
       await q.exec(
         `INSERT INTO items (
           id, tenant_id, branch_id, name, sku, barcode, barcode_type, hsn, unit, category,
-          price_minor, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
+          price_minor, wholesale_price_minor, min_wholesale_qty_milli, cost_minor, tax_rate_bp, tax_inclusive, track_stock,
           reorder_milli, preferred_supplier_id, favorite, custom, active, image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
-        [id, tenantId, branchId, name, sku, barcode, barcode ? barcodeType : 'INTERNAL', hsn, unit, category, priceMinor, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?)`,
+        [id, tenantId, branchId, name, sku, barcode, barcode ? barcodeType : 'INTERNAL', hsn, unit, category, priceMinor, wholesalePriceMinor, minWholesaleQtyMilli, costMinor, taxRateBp, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom), imageUrl],
       );
 
       if (barcode) {
@@ -1083,6 +1091,12 @@ export function registerItems(r: Router) {
 
     const name = b.name !== undefined ? V.str(b.name, 'Item name', { required: true, max: 120 }) : item.name;
     const priceMinor = b.priceMinor !== undefined ? V.int(b.priceMinor, 'Price (paise)', { min: 0 }) : Number(item.priceMinor ?? item.price_minor ?? 0);
+    const wholesalePriceMinor = b.wholesalePriceMinor !== undefined
+      ? (b.wholesalePriceMinor !== null && b.wholesalePriceMinor !== '' ? V.int(b.wholesalePriceMinor, 'Wholesale price (paise)', { min: 0 }) : null)
+      : (item.wholesalePriceMinor != null || item.wholesale_price_minor != null ? Number(item.wholesalePriceMinor ?? item.wholesale_price_minor) : null);
+    const minWholesaleQtyMilli = b.minWholesaleQtyMilli !== undefined
+      ? (b.minWholesaleQtyMilli !== null && b.minWholesaleQtyMilli !== '' ? V.int(b.minWholesaleQtyMilli, 'Minimum wholesale quantity', { min: 0 }) : null)
+      : (item.minWholesaleQtyMilli != null || item.min_wholesale_qty_milli != null ? Number(item.minWholesaleQtyMilli ?? item.min_wholesale_qty_milli) : null);
     const costMinor = b.costMinor !== undefined ? V.int(b.costMinor, 'Cost (paise)', { min: 0 }) : Number(item.costMinor ?? item.cost_minor ?? 0);
     const taxRateBp = b.taxRateBp !== undefined ? V.int(b.taxRateBp, 'Tax rate (basis points)', { min: 0, max: 10000 }) : Number(item.taxRateBp ?? item.tax_rate_bp ?? 0);
     const sku = b.sku !== undefined ? V.optStr(b.sku, 'SKU', 60) : (item.sku ?? null);
@@ -1143,11 +1157,11 @@ export function registerItems(r: Router) {
 
       await q.exec(
         `UPDATE items SET
-          name = ?, price_minor = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?, barcode_type = ?,
+          name = ?, price_minor = ?, wholesale_price_minor = ?, min_wholesale_qty_milli = ?, cost_minor = ?, tax_rate_bp = ?, sku = ?, barcode = ?, barcode_type = ?,
           hsn = ?, unit = ?, category = ?, tax_inclusive = ?, track_stock = ?, reorder_milli = ?,
           preferred_supplier_id = ?, favorite = ?, custom = ?::jsonb, active = ?, image_url = ?, updated_at = now()
          WHERE id = ? AND tenant_id = ?`,
-        [name, priceMinor, costMinor, taxRateBp, sku, barcode, barcode ? bType : (item.barcode_type || 'INTERNAL'), hsn, unit, category, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
+        [name, priceMinor, wholesalePriceMinor, minWholesaleQtyMilli, costMinor, taxRateBp, sku, barcode, barcode ? bType : (item.barcode_type || 'INTERNAL'), hsn, unit, category, taxInclusive, trackStock, reorderMilli, preferredSupplierId || null, favorite, JSON.stringify(custom ?? {}), active, imageUrl, item.id, tenantId],
       );
 
       // Keep product_barcodes table synchronized
