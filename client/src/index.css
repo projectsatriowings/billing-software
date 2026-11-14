@@ -423,7 +423,8 @@ body {
   justify-content: center;
 }
 
-.app-sidebar.icon-only .sidebar-nav-item .nav-icon svg {
+.app-sidebar.icon-only .sidebar-nav-item .nav-icon svg,
+.app-sidebar.icon-only .sidebar-nav-item .nav-icon .wholesale-nav-icon {
   width: 20px;
   height: 20px;
 }
@@ -683,6 +684,18 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
+}
+
+.sidebar-nav-item .nav-icon .wholesale-nav-icon {
+  width: 20px;
+  height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  object-fit: contain;
+  display: block;
+  filter: brightness(0) invert(1);
+  user-select: none;
+  pointer-events: none;
 }
 
 /* Labels: 15px, weight 600, single line with an ellipsis. "Discounts & Offers" never wraps */
@@ -14801,9 +14814,20 @@ body {
 }
 
 @keyframes posLaserSweep {
-  0% { top: 20%; opacity: 0.8; }
-  50% { top: 75%; opacity: 1; }
-  100% { top: 20%; opacity: 0.8; }
+  0% {
+    top: 20%;
+    opacity: 0.8;
+  }
+
+  50% {
+    top: 75%;
+    opacity: 1;
+  }
+
+  100% {
+    top: 20%;
+    opacity: 0.8;
+  }
 }
 
 .pos-inline-scan-target {
@@ -14826,25 +14850,29 @@ body {
 }
 
 .pos-inline-scan-target .corner.top-left {
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   border-width: 2.5px 0 0 2.5px;
   border-top-left-radius: 4px;
 }
 
 .pos-inline-scan-target .corner.top-right {
-  top: 0; right: 0;
+  top: 0;
+  right: 0;
   border-width: 2.5px 2.5px 0 0;
   border-top-right-radius: 4px;
 }
 
 .pos-inline-scan-target .corner.bottom-left {
-  bottom: 0; left: 0;
+  bottom: 0;
+  left: 0;
   border-width: 0 0 2.5px 2.5px;
   border-bottom-left-radius: 4px;
 }
 
 .pos-inline-scan-target .corner.bottom-right {
-  bottom: 0; right: 0;
+  bottom: 0;
+  right: 0;
   border-width: 0 2.5px 2.5px 0;
   border-bottom-right-radius: 4px;
 }
@@ -26921,6 +26949,7 @@ select.expense-input-control {
     opacity: 0;
     transform: translateY(-16px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -33002,6 +33031,7 @@ select.expense-input-control {
   cursor: default !important;
   opacity: 0.95;
 }
+
 .bento-alert-pill.bento-alert-pill-readonly:hover {
   transform: none !important;
   box-shadow: none !important;
@@ -33400,6 +33430,7 @@ select.expense-input-control {
     font-size: 17px;
   }
 }
+
 /* ==========================================================================
    GST SALES REGISTER TOP ACTIONS & CONTROLS
    ========================================================================== */
@@ -33540,7 +33571,7 @@ select.expense-input-control {
     min-width: 0;
   }
 
-  .gst-sales-register-period-wrapper > div {
+  .gst-sales-register-period-wrapper>div {
     width: 100% !important;
   }
 
@@ -33565,10 +33596,12 @@ select.expense-input-control {
     transform: scale(0);
     opacity: 0;
   }
+
   65% {
     transform: scale(1.35);
     opacity: 1;
   }
+
   100% {
     transform: scale(1);
     opacity: 0.95;
@@ -33585,6 +33618,7 @@ select.expense-input-control {
   0% {
     opacity: 0;
   }
+
   100% {
     opacity: 0.45;
   }
@@ -33601,9 +33635,11 @@ select.expense-input-control {
     stroke-dashoffset: 100;
     opacity: 0.1;
   }
+
   20% {
     opacity: 1;
   }
+
   100% {
     stroke-dasharray: 100;
     stroke-dashoffset: 0;
@@ -33627,9 +33663,11 @@ select.expense-input-control {
     transform: scaleY(0.06);
     transform-origin: bottom;
   }
+
   30% {
     opacity: 0.45;
   }
+
   100% {
     opacity: 1;
     transform: scaleY(1);
@@ -33651,10 +33689,12 @@ select.expense-input-control {
     transform: scale(0.25) rotate(-45deg);
     opacity: 0;
   }
+
   65% {
     transform: scale(1.03) rotate(2deg);
     opacity: 0.95;
   }
+
   100% {
     transform: scale(1) rotate(0deg);
     opacity: 1;
@@ -33671,6 +33711,7 @@ select.expense-input-control {
     opacity: 0;
     transform: scale(0.5);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -33688,6 +33729,7 @@ select.expense-input-control {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.65);
   }
+
   100% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
@@ -33705,6 +33747,7 @@ select.expense-input-control {
     transform: scaleY(0);
     opacity: 0;
   }
+
   100% {
     transform: scaleY(1);
     opacity: 1;
@@ -33733,6 +33776,7 @@ select.expense-input-control {
     opacity: 0;
     transform: translateY(6px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -34920,6 +34964,7 @@ select.expense-input-control {
   .shift-bento-ribbon {
     grid-template-columns: repeat(2, 1fr) !important;
   }
+
   .shift-bento-main-grid {
     grid-template-columns: 1fr !important;
   }
@@ -35168,13 +35213,16 @@ select.expense-input-control {
     margin-left: 10px;
     gap: 0.5rem;
   }
+
   .top-pos-bento-badge {
     padding: 0.35rem 0.65rem;
   }
+
   .top-pos-badge-icon {
     width: 28px;
     height: 28px;
   }
+
   .top-pos-badge-val {
     font-size: 0.8rem;
   }
@@ -35880,6 +35928,7 @@ select.expense-input-control {
   border-color: #cbd5e1;
   color: #334155;
 }
+
 .bento-act-btn.view:hover {
   background: #e2e8f0;
   color: #0f172a;
@@ -35890,6 +35939,7 @@ select.expense-input-control {
   border-color: #bfdbfe;
   color: #1d4ed8;
 }
+
 .bento-act-btn.thermal:hover {
   background: #dbeafe;
   color: #1e40af;
@@ -35900,6 +35950,7 @@ select.expense-input-control {
   border-color: #cbd5e1;
   color: #475569;
 }
+
 .bento-act-btn.a4:hover {
   background: #f1f5f9;
   color: #1e293b;
@@ -35910,10 +35961,12 @@ select.expense-input-control {
   border-color: #e9d5ff;
   color: #7e22ce;
 }
+
 .bento-act-btn.return:hover {
   background: #f3e8ff;
   color: #6b21a8;
 }
+
 .bento-act-btn.return:disabled {
   background: #f1f5f9;
   border-color: #cbd5e1;
@@ -35926,6 +35979,7 @@ select.expense-input-control {
   border-color: #bbf7d0;
   color: #15803d;
 }
+
 .bento-act-btn.whatsapp:hover {
   background: #dcfce7;
   color: #166534;
@@ -35936,6 +35990,7 @@ select.expense-input-control {
   border-color: #fecaca;
   color: #b91c1c;
 }
+
 .bento-act-btn.void:hover {
   background: #fee2e2;
   color: #991b1b;
@@ -35946,6 +36001,7 @@ select.expense-input-control {
   border-color: #fde68a;
   color: #b45309;
 }
+
 .bento-act-btn.collect:hover {
   background: #fef3c7;
   color: #92400e;
@@ -36014,10 +36070,12 @@ select.expense-input-control {
   .invoices-kpi-grid {
     grid-template-columns: 1fr 1fr;
   }
+
   .invoices-controls-bar {
     flex-direction: column;
     align-items: stretch;
   }
+
   .invoices-search-box {
     max-width: 100%;
   }

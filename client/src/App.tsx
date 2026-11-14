@@ -144,6 +144,7 @@ import { StoreManagerDashboard } from './components/dashboards/StoreManagerDashb
 import { fileToOptimizedDataUrl, resolveDriveImageUrl, isGoogleDriveUrl, handleProductImageError } from './imageUtils';
 import { BulkImportModal } from './components/BulkImportModal';
 import { WholesaleBillingView } from './components/wholesale/WholesaleBillingView';
+import { WHOLESALE_BILLING_ICON } from './components/wholesale/wholesaleIconData';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { PrintBarcodeModal } from './components/PrintBarcodeModal';
 import { BulkBarcodeModal } from './components/BulkBarcodeModal';
@@ -6293,12 +6294,11 @@ export function App() {
                 title="Wholesale Billing (B2B Tax Invoices)"
               >
                 <span className="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1" y="3" width="15" height="13" rx="1" />
-                    <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
-                    <circle cx="5.5" cy="18.5" r="2.5" />
-                    <circle cx="18.5" cy="18.5" r="2.5" />
-                  </svg>
+                  <img
+                    src={WHOLESALE_BILLING_ICON}
+                    alt="Wholesale Billing"
+                    className="wholesale-nav-icon"
+                  />
                 </span>
                 <span className="nav-text">Wholesale Billing</span>
               </button>
