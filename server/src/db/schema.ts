@@ -722,7 +722,7 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS invoices_today_covering ON invoices (tenant_id, bdate, status, kind, created_at)`,
     ],
   },
-  
+
   {
     version: 19,
     statements: [
@@ -731,7 +731,8 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_minor INTEGER NOT NULL DEFAULT 10`,
       `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_min_points_redeem INTEGER NOT NULL DEFAULT 10`,
     ],
-  },{
+  },
+  {
     version: 20,
     statements: [
       `CREATE TABLE IF NOT EXISTS shop_payment_settings (
@@ -830,7 +831,7 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
   {
-version: 29,
+    version: 29,
     statements: [
       `CREATE TABLE IF NOT EXISTS card_terminals (
         id TEXT PRIMARY KEY,
@@ -1147,6 +1148,7 @@ version: 29,
           ALTER TABLE product_barcodes ADD CONSTRAINT product_barcodes_barcode_type_check CHECK (barcode_type IN ('INTERNAL', 'MANUFACTURER'));
         END IF;
       END $$;`,
+      `ALTER TABLE product_barcodes ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT false`,
       `ALTER TABLE product_barcodes ALTER COLUMN is_primary DROP NOT NULL`,
       `ALTER TABLE product_barcodes ALTER COLUMN is_primary SET DEFAULT false`,
     ],
@@ -1732,6 +1734,103 @@ version: 29,
 
       // 4. Index for fast branch counter lookup by status
       `CREATE INDEX IF NOT EXISTS idx_counters_tenant_branch_status ON counters (tenant_id, branch_id, status)`,
+    ],
+  },
+  {
+    version: 63,
+    statements: [
+      // 1. Day Closings table for branch-level daily financial, cash and sales reconciliation
+      `CREATE TABLE IF NOT EXISTS day_closings (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        branch_id TEXT NOT NULL,
+        bdate TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'closed' CHECK (status IN ('closed', 'reopened')),
+        opening_cash_minor BIGINT NOT NULL DEFAULT 0,
+        cash_sales_minor BIGINT NOT NULL DEFAULT 0,
+        cash_refunds_minor BIGINT NOT NULL DEFAULT 0,
+        cash_expenses_minor BIGINT NOT NULL DEFAULT 0,
+        cash_in_minor BIGINT NOT NULL DEFAULT 0,
+        cash_out_minor BIGINT NOT NULL DEFAULT 0,
+        expected_cash_minor BIGINT NOT NULL DEFAULT 0,
+        actual_cash_minor BIGINT NOT NULL DEFAULT 0,
+        variance_minor BIGINT NOT NULL DEFAULT 0,
+        gross_sales_minor BIGINT NOT NULL DEFAULT 0,
+        returns_total_minor BIGINT NOT NULL DEFAULT 0,
+        net_sales_minor BIGINT NOT NULL DEFAULT 0,
+        invoices_count INTEGER NOT NULL DEFAULT 0,
+        returns_count INTEGER NOT NULL DEFAULT 0,
+        exchanges_count INTEGER NOT NULL DEFAULT 0,
+        refunds_count INTEGER NOT NULL DEFAULT 0,
+        cogs_minor BIGINT NOT NULL DEFAULT 0,
+        returned_cogs_minor BIGINT NOT NULL DEFAULT 0,
+        net_cogs_minor BIGINT NOT NULL DEFAULT 0,
+        gross_profit_minor BIGINT NOT NULL DEFAULT 0,
+        operating_expenses_minor BIGINT NOT NULL DEFAULT 0,
+        net_profit_minor BIGINT NOT NULL DEFAULT 0,
+        collections_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+        returns_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+        exchanges_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+        remarks TEXT,
+        closed_by TEXT NOT NULL REFERENCES users(id),
+        verified_by TEXT REFERENCES users(id),
+        closed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (tenant_id, branch_id, bdate)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_day_closings_tenant_bdate ON day_closings (tenant_id, bdate DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_day_closings_branch ON day_closings (tenant_id, branch_id, bdate DESC)`,
+
+      // 2. Customer Store Credits liability ledger
+      `CREATE TABLE IF NOT EXISTS store_credits (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        party_id TEXT NOT NULL REFERENCES parties(id),
+        credit_note_id TEXT REFERENCES invoices(id),
+        amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+        balance_minor BIGINT NOT NULL CHECK (balance_minor >= 0),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'exhausted', 'expired', 'voided')),
+        reference_no TEXT,
+        expiry_date TEXT,
+        notes TEXT,
+        created_by TEXT REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_store_credits_tenant_party ON store_credits (tenant_id, party_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_store_credits_status ON store_credits (tenant_id, status)`,
+
+      // 3. Detailed Refund Transactions tracking
+      `CREATE TABLE IF NOT EXISTS refund_transactions (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        credit_note_id TEXT NOT NULL REFERENCES invoices(id),
+        orig_invoice_id TEXT REFERENCES invoices(id),
+        party_id TEXT REFERENCES parties(id),
+        amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+        method TEXT NOT NULL CHECK (method IN ('cash', 'upi', 'bank', 'card', 'original', 'store_credit')),
+        reference_no TEXT,
+        bdate TEXT NOT NULL,
+        shift_id TEXT REFERENCES shifts(id),
+        notes TEXT,
+        processed_by TEXT NOT NULL REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_refund_transactions_tenant_date ON refund_transactions (tenant_id, bdate DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_refund_transactions_cn ON refund_transactions (tenant_id, credit_note_id)`,
+
+      // 4. Exchange & Day Closed flags on invoices
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS shift_id TEXT REFERENCES shifts(id)`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS exchange_id TEXT`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS is_exchange BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS exchange_adjusted_minor BIGINT NOT NULL DEFAULT 0`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS is_day_closed BOOLEAN NOT NULL DEFAULT FALSE`,
+      `CREATE INDEX IF NOT EXISTS idx_invoices_exchange_id ON invoices (tenant_id, exchange_id) WHERE exchange_id IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_invoices_bdate_kind ON invoices (tenant_id, bdate, kind, status)`,
+
+      // 5. Line item condition and purchase cost snapshot on invoice_lines
+      `ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS item_condition TEXT DEFAULT 'resellable'`,
+      `ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS cost_minor BIGINT NOT NULL DEFAULT 0`,
     ],
   },
 ];

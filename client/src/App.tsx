@@ -172,6 +172,10 @@ import { DiscountsPromotionsView } from './components/promotions/DiscountsPromot
 import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
 import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
+import { PosReturnExchangeModal, type ReturnSelectedLine } from './components/pos/PosReturnExchangeModal.tsx';
+import { DayClosingView } from './components/shifts/DayClosingView.tsx';
+import { ReturnReportsView } from './components/reports/ReturnReportsView.tsx';
+import { submitExchange } from './api';
 
 // Routes and tabs where the business info bar (green-dot pill) and its dividers are hidden
 export const HIDE_BUSINESS_BAR_ROUTES = [
@@ -269,6 +273,8 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'gst-gstr1': 'GSTR-1 Outward Supplies',
   'gst-import-export': 'GST Import & Export',
   'gst-filing-history': 'GST Filing History',
+  'day-closing': 'Day Closing & Register Reconciliation',
+  'return-reports': 'Returns, Exchanges & Profit Reports',
 };
 
 export interface ToastItem {
@@ -542,7 +548,7 @@ export const getBusinessLabel = (type?: string) => {
   }
 };
 
-export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices']);
+export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices', 'day-closing']);
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -577,6 +583,8 @@ export function App() {
     | 'gst-filing-history'
     | 'promotions'
     | 'user-management'
+    | 'day-closing'
+    | 'return-reports'
   >(() => {
     try {
       const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -858,6 +866,9 @@ export function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<{ item: Item; qty: number }[]>([]);
+  const [showReturnExchangeModal, setShowReturnExchangeModal] = useState<boolean>(false);
+  const [activeExchangeLines, setActiveExchangeLines] = useState<ReturnSelectedLine[]>([]);
+  const [activeExchangeOrigBill, setActiveExchangeOrigBill] = useState<string>('');
   const [parties, setParties] = useState<Party[]>([]);
   const [selectedPartyId, setSelectedPartyId] = useState<string>('');
   const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'split'>('cash');
@@ -3336,6 +3347,11 @@ export function App() {
   const promoDiscountMinor = promoEvalResult?.totalDiscountMinor || 0;
   const discountMinor = percentDiscountMinor + pointsDiscountMinor + promoDiscountMinor;
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
+  const totalExchangeCreditMinor = useMemo(() => {
+    return activeExchangeLines.reduce((acc, l) => acc + (l.estimatedCreditMinor || 0), 0);
+  }, [activeExchangeLines]);
+  const exchangeCustomerPayableMinor = Math.max(0, finalPayableMinor - totalExchangeCreditMinor);
+  const exchangeCustomerRefundMinor = Math.max(0, totalExchangeCreditMinor - finalPayableMinor);
   const pointsToEarnOnBill = (shopLoyaltyActive && shopPointsPer100 > 0)
     ? Math.floor((finalPayableMinor * shopPointsPer100) / 10000)
     : 0;
@@ -4023,6 +4039,45 @@ export function App() {
       const cleanSearchDigits = customerSearch.trim().replace(/\D/g, '');
       const checkoutPhone = selectedCustomer?.phone || (cleanSearchDigits.length >= 7 ? customerSearch.trim() : undefined);
       const checkoutCustName = custName || (selectedCustomer ? selectedCustomer.name : (quickCustomerName.trim() || (checkoutPhone ? `Customer ${checkoutPhone.replace(/\D/g, '').slice(-4)}` : undefined)));
+
+      // Handle Exchange Transaction Workflow
+      if (activeExchangeLines.length > 0) {
+        const exchangeMethod = selectedPayMode === 'split' ? splitMethod1 : selectedPayMode;
+        const exchangeRef = (exchangeMethod === 'upi' || exchangeMethod === 'bank')
+          ? (activeQrAttempt?.providerPaymentId || (upiManualRef.trim() ? upiManualRef.trim() : undefined))
+          : (exchangeMethod === 'card' ? (paymentCardRef || 'CARD_PAYMENT') : undefined);
+
+        const exchangeRes = await submitExchange({
+          origInvoiceId: activeExchangeLines[0].origInvoiceId,
+          branchId: activeBranch?.id || user?.branchId || undefined,
+          counter: selectedCounter,
+          counterId: checkoutCounterId || selectedCounterId || undefined,
+          returnLines: activeExchangeLines.map((l) => ({
+            origLineId: l.origLineId,
+            returnQtyMilli: l.returnQtyMilli,
+            condition: l.condition,
+            reason: l.reason,
+            remarks: l.remarks,
+          })),
+          newLines: lines,
+          paymentMethod: exchangeMethod,
+          paymentRef: exchangeRef,
+          excessRefundMethod: 'cash',
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
+        });
+
+        showToast(`✓ Exchange completed! New Bill: ${exchangeRes.newInvoiceNumber}, Credit Note: ${exchangeRes.creditNoteNumber}`);
+        try {
+          window.open(`/api/exchanges/${exchangeRes.exchangeId}/print`, '_blank', 'width=900,height=800');
+        } catch { }
+
+        setActiveExchangeLines([]);
+        setActiveExchangeOrigBill('');
+        setCart([]);
+        setIsCheckingOut(false);
+        return;
+      }
 
       const res = await api<{
         invoiceId: string;
@@ -6666,23 +6721,40 @@ export function App() {
 
               {/* Cashier Recent Bills */}
               {user?.role === 'cashier' && (
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('invoices')}
-                  title="Recent Bills"
-                >
-                  <span className="nav-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" y1="13" x2="8" y2="13" />
-                      <line x1="16" y1="17" x2="8" y2="17" />
-                      <polyline points="10 9 9 9 8 9" />
-                    </svg>
-                  </span>
-                  <span className="nav-text">Recent Bills</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('invoices')}
+                    title="Recent Bills"
+                  >
+                    <span className="nav-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                      </svg>
+                    </span>
+                    <span className="nav-text">Recent Bills</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`sidebar-nav-item ${activeTab === 'day-closing' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('day-closing')}
+                    title="Day Closing & Register Reconciliation"
+                  >
+                    <span className="nav-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </span>
+                    <span className="nav-text">Day Closing</span>
+                  </button>
+                </>
               )}
 
               {/* 7. Customers: Only for Store Manager and Super Admin */}
@@ -6828,6 +6900,34 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">Expenses</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`sidebar-nav-item ${activeTab === 'day-closing' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('day-closing')}
+                      >
+                        <span className="nav-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        </span>
+                        <span className="nav-text">Day Closing</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`sidebar-nav-item ${activeTab === 'return-reports' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('return-reports')}
+                      >
+                        <span className="nav-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                            <polyline points="17 6 23 6 23 12" />
+                          </svg>
+                        </span>
+                        <span className="nav-text">Returns &amp; Profit Reports</span>
                       </button>
                     </div>
                   )}
@@ -7949,10 +8049,26 @@ export function App() {
                         <div className="terminal-actions">
                           <button
                             type="button"
+                            className="bento-hold-cart-btn"
+                            style={{ background: '#4f46e5', color: '#ffffff', borderColor: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => setShowReturnExchangeModal(true)}
+                            title="Sales Return or Exchange (F3)"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <polyline points="1 4 1 10 7 10"></polyline>
+                              <polyline points="23 20 23 14 17 14"></polyline>
+                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                            </svg>
+                            <span>Return / Exchange</span>
+                          </button>
+                          <button
+                            type="button"
                             className="bento-clear-cart-btn"
                             disabled={cart.length === 0}
                             onClick={() => {
                               setCart([]);
+                              setActiveExchangeLines([]);
+                              setActiveExchangeOrigBill('');
                               setCashReceived('');
                               setActiveQrAttempt(null);
                               setUpiManualRef('');
@@ -7982,6 +8098,56 @@ export function App() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Active Exchange Notification Strip */}
+                      {activeExchangeLines.length > 0 && (
+                        <div style={{
+                          margin: '0.75rem 1rem 0 1rem',
+                          padding: '0.65rem 0.85rem',
+                          background: '#eef2ff',
+                          border: '1px solid #c7d2fe',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: '0.8rem',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ background: '#4f46e5', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
+                              EXCHANGE
+                            </span>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#312e81' }}>
+                                Linked Original Invoice: {activeExchangeOrigBill}
+                              </div>
+                              <div style={{ color: '#4338ca', fontSize: '0.75rem' }}>
+                                {activeExchangeLines.length} garment(s) returning · Available Return Credit: <strong>₹{(totalExchangeCreditMinor / 100).toFixed(2)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Cancel active exchange return credit?')) {
+                                setActiveExchangeLines([]);
+                                setActiveExchangeOrigBill('');
+                              }
+                            }}
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fecaca',
+                              color: '#b91c1c',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cancel Exchange
+                          </button>
+                        </div>
+                      )}
 
                       {/* RESTAURANT SPECIAL: Table & Order Type */}
                       {shop?.businessType === 'restaurant' && (
@@ -9280,8 +9446,24 @@ export function App() {
                         {/* Bottom Grand Total & Proceed Button */}
                         <div className="bento-checkout-row">
                           <div className="bento-grand-total">
-                            <span className="grand-total-label">Grand Total Amount</span>
-                            <span className="grand-total-val mono">{formatRupees(finalPayableMinor)}</span>
+                            {activeExchangeLines.length > 0 ? (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', color: '#4f46e5', fontWeight: 600 }}>
+                                  New Items: {formatRupees(finalPayableMinor)} | Return Credit: -{formatRupees(totalExchangeCreditMinor)}
+                                </div>
+                                <span className="grand-total-label">
+                                  {finalPayableMinor >= totalExchangeCreditMinor ? 'Net Customer Payable' : 'Customer Refund Due'}
+                                </span>
+                                <span className="grand-total-val mono" style={{ color: finalPayableMinor >= totalExchangeCreditMinor ? '#059669' : '#dc2626' }}>
+                                  {formatRupees(Math.abs(finalPayableMinor - totalExchangeCreditMinor))}
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="grand-total-label">Grand Total Amount</span>
+                                <span className="grand-total-val mono">{formatRupees(finalPayableMinor)}</span>
+                              </>
+                            )}
                           </div>
 
                           <div className="bento-checkout-actions">
@@ -9311,11 +9493,13 @@ export function App() {
                               ) : (
                                 <>
                                   <span>
-                                    {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
-                                      selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
-                                        selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
-                                          selectedPayMode === 'bank' ? 'Bank Transfer Received & Generate Bill' :
-                                            'Proceed to Payment'}
+                                    {activeExchangeLines.length > 0
+                                      ? (finalPayableMinor >= totalExchangeCreditMinor ? 'Complete Exchange & Bill' : 'Complete Exchange & Refund Balance')
+                                      : (selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
+                                        selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
+                                          selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
+                                            selectedPayMode === 'bank' ? 'Bank Transfer Received & Generate Bill' :
+                                              'Proceed to Payment')}
                                   </span>
                                   <span className="checkout-arrow">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
@@ -11668,6 +11852,30 @@ export function App() {
                   branches={branches}
                   parties={parties}
                   onOpenPos={() => setActiveTab('pos')}
+                />
+              </div>
+            )}
+
+            {/* TAB: DAY CLOSING & DRAWER RECONCILIATION */}
+            {(activeTab === 'day-closing' || displayTab === 'day-closing') && (
+              <div className="tab-content-wrapper" key={`day-closing-${selectedBranchScope}`}>
+                <DayClosingView
+                  user={user}
+                  shop={shop}
+                  selectedBranch={selectedBranchScope}
+                  branches={branches}
+                />
+              </div>
+            )}
+
+            {/* TAB: RETURN, EXCHANGE & PROFIT REPORTS */}
+            {(activeTab === 'return-reports' || displayTab === 'return-reports') && (
+              <div className="tab-content-wrapper" key={`return-reports-${selectedBranchScope}`}>
+                <ReturnReportsView
+                  user={user}
+                  shop={shop}
+                  selectedBranch={selectedBranchScope}
+                  branches={branches}
                 />
               </div>
             )}
@@ -21835,6 +22043,22 @@ export function App() {
             </div>
           </div>
         )}
+
+        {/* POS RETURN & EXCHANGE MODAL */}
+        <PosReturnExchangeModal
+          isOpen={showReturnExchangeModal}
+          onClose={() => setShowReturnExchangeModal(false)}
+          onSelectForExchange={(lines, origInv) => {
+            setActiveExchangeLines(lines);
+            setActiveExchangeOrigBill(origInv);
+            setShowReturnExchangeModal(false);
+            showToast(`✓ Added ${lines.length} return item(s) from ${origInv} to exchange! Select new garments to complete.`);
+          }}
+          onReturnCompleted={(_cnId, cnNumber) => {
+            showToast(`✓ Return processed successfully! Credit Note: ${cnNumber}`);
+            setShowReturnExchangeModal(false);
+          }}
+        />
       </div>
     </BranchProvider>
   );

@@ -2478,3 +2478,118 @@ export const retrySms = (id: string) =>
     { method: 'POST' }
   );
 
+// =========================================================================
+// RETURN, EXCHANGE & DAY CLOSING APIS
+// =========================================================================
+
+export const searchInvoicesForReturn = (q: string) =>
+  api<{ invoices: any[] }>(`/api/invoices/search-for-return?q=${encodeURIComponent(q)}`);
+
+export const fetchInvoiceReturnInfo = (invoiceId: string) =>
+  api<ReturnInfo>(`/api/invoices/${encodeURIComponent(invoiceId)}/return-info`);
+
+export const createReturnCreditNote = (invoiceId: string, data: any) =>
+  api<{ creditNoteId: string; number: string; creditNoteNumber: string; totalCreditMinor: number; settlement?: any }>(
+    `/api/invoices/${encodeURIComponent(invoiceId)}/returns`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+
+export const submitExchange = (data: {
+  origInvoiceId: string;
+  branchId?: string;
+  counter?: string;
+  counterId?: string;
+  returnLines: {
+    origLineId: string;
+    returnQtyMilli: number;
+    condition: 'resellable' | 'damaged' | 'defective';
+    reason: string;
+    remarks?: string;
+  }[];
+  newLines: any[];
+  paymentMethod?: string;
+  paymentRef?: string;
+  excessRefundMethod?: string;
+  customerName?: string;
+  customerPhone?: string;
+}) =>
+  api<{
+    success: boolean;
+    exchangeId: string;
+    creditNoteId: string;
+    creditNoteNumber: string;
+    newInvoiceId: string;
+    newInvoiceNumber: string;
+    returnTotalMinor: number;
+    newPurchaseMinor: number;
+    customerPayableMinor: number;
+    customerRefundMinor: number;
+    exchangeAdjustedMinor: number;
+  }>('/api/exchanges', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchDayClosingPreview = (params: { bdate?: string; date?: string; branchId?: string } = {}) => {
+  const q = new URLSearchParams();
+  const bdate = params.bdate || params.date;
+  if (bdate) q.set('bdate', bdate);
+  if (params.branchId) q.set('branchId', params.branchId);
+  return api<any>(`/api/day-closing/preview?${q.toString()}`);
+};
+
+export const submitDayClosing = (data: {
+  bdate?: string;
+  date?: string;
+  branchId?: string;
+  actualCashMinor?: number;
+  actualClosingCashMinor?: number;
+  remarks?: string;
+  closingRemarks?: string;
+}) =>
+  api<{ success: boolean; dayClosing: any }>('/api/day-closing/submit', {
+    method: 'POST',
+    body: JSON.stringify({
+      bdate: data.bdate || data.date,
+      branchId: data.branchId,
+      actualCashMinor: data.actualCashMinor ?? data.actualClosingCashMinor,
+      remarks: data.remarks || data.closingRemarks,
+    }),
+  });
+
+export const fetchDayClosingHistory = (params: { branchId?: string; limit?: number } = {}) => {
+  const q = new URLSearchParams();
+  if (params.branchId) q.set('branchId', params.branchId);
+  if (params.limit) q.set('limit', String(params.limit));
+  return api<{ history: any[]; records?: any[] }>(`/api/day-closing/history?${q.toString()}`).then((res) => ({
+    history: res.history || [],
+    records: res.history || [],
+  }));
+};
+
+export const fetchReturnReports = (params: {
+  reportType?: string;
+  filter?: string;
+  period?: string;
+  from?: string;
+  to?: string;
+  startDate?: string;
+  endDate?: string;
+  branchId?: string;
+}) => {
+  const q = new URLSearchParams();
+  q.set('reportType', params.reportType || 'daily_sales');
+  const filter = params.filter || params.period || 'this_month';
+  q.set('filter', filter);
+  const from = params.from || params.startDate;
+  const to = params.to || params.endDate;
+  if (from) q.set('from', from);
+  if (to) q.set('to', to);
+  if (params.branchId) q.set('branchId', params.branchId);
+  return api<any>(`/api/reports/returns-module?${q.toString()}`);
+};
+
+
