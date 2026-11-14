@@ -229,6 +229,8 @@ export interface BranchSummary {
 export interface Shop {
   id: string;
   name: string;
+  wholesaleBusinessName?: string | null;
+  legalName?: string | null;
   businessType: string;
   gstin?: string;
   phone?: string;
@@ -245,6 +247,7 @@ export interface Shop {
   loyaltyPointValueMinor?: number;
   loyaltyMinPointsRedeem?: number;
   ownerEmail?: string | null;
+  invoiceProfiles?: import('../../shared/types.ts').InvoiceProfiles;
   logoUrl?: string | null;
 }
 
@@ -274,6 +277,8 @@ export interface Item {
   unit: string;
   category?: string;
   priceMinor: number;
+  wholesalePriceMinor?: number | null;
+  minWholesaleQtyMilli?: number | null;
   costMinor: number;
   taxRateBp: number;
   taxInclusive: boolean;
@@ -335,6 +340,10 @@ export interface Party {
   openPurchasesCount?: number;
   oldestDueDate?: string | null;
   active?: boolean;
+  contactPerson?: string | null;
+  shippingAddress?: string | null;
+  customerType?: 'retail' | 'wholesale';
+  custom?: Record<string, any>;
 
 }
 
@@ -397,6 +406,9 @@ export interface Invoice {
   whatsappLastLanguage?: 'en' | 'hi' | 'ta' | string;
   whatsappLastSentBy?: string;
   shareToken?: string;
+  invoiceType?: 'retail' | 'wholesale';
+  profileSnapshot?: Record<string, any> | null;
+  custom?: Record<string, any>;
 }
 
 export interface ReturnInfoLine {

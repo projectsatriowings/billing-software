@@ -1833,4 +1833,28 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS cost_minor BIGINT NOT NULL DEFAULT 0`,
     ],
   },
+  {
+    version: 64,
+    statements: [
+      // 1. Wholesale pricing and minimum wholesale quantity for items
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS wholesale_price_minor BIGINT DEFAULT NULL`,
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS min_wholesale_qty_milli BIGINT DEFAULT NULL`,
+
+      // 2. Invoice profiles on tenants (retail & wholesale profiles)
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS invoice_profiles JSONB DEFAULT '{}'::jsonb`,
+
+      // 3. Invoice type ('retail' | 'wholesale') and snapshot of active profile at billing
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'retail'`,
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS profile_snapshot JSONB DEFAULT NULL`,
+
+      // 4. Index for invoice type filtering
+      `CREATE INDEX IF NOT EXISTS idx_invoices_tenant_type ON invoices (tenant_id, invoice_type)`,
+    ],
+  },
+  {
+    version: 65,
+    statements: [
+      `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wholesale_business_name TEXT DEFAULT NULL`,
+    ],
+  },
 ];

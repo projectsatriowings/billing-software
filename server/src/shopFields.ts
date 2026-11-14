@@ -1,10 +1,11 @@
-import { BUSINESS_TYPES, type BusinessType, type Lang } from '../../shared/types.ts';
+import { BUSINESS_TYPES, type BusinessType, type Lang, type InvoiceProfiles, DEFAULT_INVOICE_PROFILES } from '../../shared/types.ts';
 import { STATES } from '../../shared/states.ts';
 import { validateGstin } from '../../shared/tax.ts';
 import { bad, V } from './http.ts';
 
 export interface ShopFields {
   name: string;
+  wholesaleBusinessName: string | null;
   businessType: BusinessType;
   gstin: string | null;
   stateCode: string;
@@ -22,13 +23,15 @@ export interface ShopFields {
   loyaltyPointValueMinor: number;
   loyaltyMinPointsRedeem: number;
   ownerEmail: string | null;
+  invoiceProfiles: InvoiceProfiles;
   logoUrl: string | null;
 }
 
 export const SHOP_DEFAULTS: ShopFields = {
-  name: '', businessType: 'retail', gstin: null, stateCode: '33', address: null, phone: null, upiId: null, invoicePrefix: 'INV', language: 'en', locations: ['MAIN'],
+  name: '', wholesaleBusinessName: null, businessType: 'retail', gstin: null, stateCode: '33', address: null, phone: null, upiId: null, invoicePrefix: 'INV', language: 'en', locations: ['MAIN'],
   whatsappEnabled: true, whatsappDefaultLang: 'en', whatsappIncludeLink: false,
   loyaltyEnabled: true, loyaltyPointsPer100: 10, loyaltyPointValueMinor: 10, loyaltyMinPointsRedeem: 10, ownerEmail: null,
+  invoiceProfiles: DEFAULT_INVOICE_PROFILES,
   logoUrl: null,
 };
 
@@ -124,6 +127,23 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
     }
   }
 
+  if (has(body, 'wholesaleBusinessName') || has(body, 'wholesale_business_name')) {
+    out.wholesaleBusinessName = V.optStr(body.wholesaleBusinessName ?? body.wholesale_business_name, 'Wholesale Business Display Name', 120);
+  }
+
+  if (has(body, 'invoiceProfiles')) {
+    out.invoiceProfiles = normalizeInvoiceProfiles(body.invoiceProfiles, out);
+  } else if (!cur.invoiceProfiles) {
+    out.invoiceProfiles = normalizeInvoiceProfiles(DEFAULT_INVOICE_PROFILES, out);
+  }
+
+  // Keep wholesaleBusinessName and invoiceProfiles.wholesale.displayName synchronized
+  if (out.wholesaleBusinessName && !body.invoiceProfiles?.wholesale?.displayName) {
+    out.invoiceProfiles.wholesale.displayName = out.wholesaleBusinessName;
+  } else if (out.invoiceProfiles.wholesale.displayName && !out.wholesaleBusinessName) {
+    out.wholesaleBusinessName = out.invoiceProfiles.wholesale.displayName;
+  }
+
   if (has(body, 'logoUrl')) {
     out.logoUrl = V.optStr(body.logoUrl, 'Logo URL', 600000);
   }
@@ -131,10 +151,85 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
   return out;
 }
 
+export function normalizeInvoiceProfiles(raw: any, shopFallback?: any): InvoiceProfiles {
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+  }
+  parsed = parsed || {};
+  const retailRaw = parsed.retail || {};
+  const wholesaleRaw = parsed.wholesale || {};
+
+  const fallbackName = shopFallback?.name || '';
+  const fallbackGstin = shopFallback?.gstin || '';
+  const fallbackPhone = shopFallback?.phone || '';
+  const fallbackEmail = shopFallback?.ownerEmail ?? shopFallback?.owner_email ?? '';
+  const fallbackAddress = shopFallback?.address || '';
+  const fallbackState = shopFallback?.stateCode ?? shopFallback?.state_code ?? '33';
+  const fallbackPrefix = shopFallback?.invoicePrefix ?? shopFallback?.invoice_prefix ?? 'INV';
+
+  const retailBank = retailRaw.bankDetails || {};
+  const retail: InvoiceProfiles['retail'] = {
+    enabled: retailRaw.enabled !== false,
+    displayName: (retailRaw.displayName || fallbackName).trim(),
+    legalName: (retailRaw.legalName || fallbackName).trim(),
+    logoUrl: retailRaw.logoUrl || null,
+    gstin: (retailRaw.gstin || fallbackGstin).trim().toUpperCase(),
+    phone: (retailRaw.phone || fallbackPhone).trim(),
+    email: (retailRaw.email || fallbackEmail).trim(),
+    address: (retailRaw.address || fallbackAddress).trim(),
+    stateCode: (retailRaw.stateCode || fallbackState).trim(),
+    invoicePrefix: (retailRaw.invoicePrefix || fallbackPrefix || 'INV').trim().toUpperCase(),
+    paper: retailRaw.paper || 'thermal80',
+    bankDetails: {
+      bankName: (retailBank.bankName || '').trim(),
+      accountNo: (retailBank.accountNo || '').trim(),
+      branchName: (retailBank.branchName || '').trim(),
+      ifscCode: (retailBank.ifscCode || '').trim().toUpperCase(),
+    },
+    terms: retailRaw.terms || 'Goods once sold will not be taken back or exchanged. Thank you!',
+    jurisdiction: retailRaw.jurisdiction || '',
+  };
+
+  const wholesaleDisplayName = (
+    wholesaleRaw.displayName ||
+    shopFallback?.wholesaleBusinessName ||
+    shopFallback?.wholesale_business_name ||
+    ''
+  ).trim();
+  const wholesaleLegalName = (wholesaleRaw.legalName || shopFallback?.legalName || fallbackName).trim();
+
+  const wholesaleBank = wholesaleRaw.bankDetails || {};
+  const wholesale: InvoiceProfiles['wholesale'] = {
+    enabled: wholesaleRaw.enabled !== false,
+    displayName: wholesaleDisplayName,
+    legalName: wholesaleLegalName,
+    logoUrl: wholesaleRaw.logoUrl || null,
+    gstin: (wholesaleRaw.gstin || fallbackGstin).trim().toUpperCase(),
+    phone: (wholesaleRaw.phone || fallbackPhone).trim(),
+    email: (wholesaleRaw.email || fallbackEmail).trim(),
+    address: (wholesaleRaw.address || fallbackAddress).trim(),
+    stateCode: (wholesaleRaw.stateCode || fallbackState).trim(),
+    invoicePrefix: (wholesaleRaw.invoicePrefix || 'WH').trim().toUpperCase(),
+    paper: wholesaleRaw.paper || 'wholesale_a4',
+    bankDetails: {
+      bankName: (wholesaleBank.bankName || '').trim(),
+      accountNo: (wholesaleBank.accountNo || '').trim(),
+      branchName: (wholesaleBank.branchName || '').trim(),
+      ifscCode: (wholesaleBank.ifscCode || '').trim().toUpperCase(),
+    },
+    terms: wholesaleRaw.terms || DEFAULT_INVOICE_PROFILES.wholesale.terms,
+    jurisdiction: wholesaleRaw.jurisdiction || '',
+  };
+
+  return { retail, wholesale };
+}
+
 /** Row -> public shop profile. */
 export function shopView(t: any) {
   return {
-    id: t.id, name: t.name, businessType: t.businessType, gstin: t.gstin, stateCode: t.stateCode, address: t.address, phone: t.phone,
+    id: t.id, name: t.name, wholesaleBusinessName: t.wholesaleBusinessName ?? t.wholesale_business_name ?? (typeof t.invoiceProfiles === 'object' ? t.invoiceProfiles?.wholesale?.displayName : null) ?? null,
+    businessType: t.businessType, gstin: t.gstin, stateCode: t.stateCode, address: t.address, phone: t.phone,
     upiId: t.upiId, invoicePrefix: t.invoicePrefix, plan: t.plan, timezone: t.timezone, language: t.language, locations: t.locations,
     whatsappEnabled: Boolean(t.whatsappEnabled ?? t.whatsapp_enabled ?? true),
     whatsappDefaultLang: (t.whatsappDefaultLang ?? t.whatsapp_default_lang ?? 'en') as Lang,
@@ -144,6 +239,7 @@ export function shopView(t: any) {
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
+    invoiceProfiles: normalizeInvoiceProfiles(t.invoiceProfiles ?? t.invoice_profiles, t),
     logoUrl: t.logoUrl ?? t.logo_url ?? null,
     createdAt: t.createdAt ?? t.created_at,
   };
@@ -151,7 +247,8 @@ export function shopView(t: any) {
 
 export function shopFromRow(t: any): ShopFields {
   return {
-    name: t.name, businessType: t.businessType, gstin: t.gstin, stateCode: t.stateCode, address: t.address, phone: t.phone,
+    name: t.name, wholesaleBusinessName: t.wholesaleBusinessName ?? t.wholesale_business_name ?? null,
+    businessType: t.businessType, gstin: t.gstin, stateCode: t.stateCode, address: t.address, phone: t.phone,
     upiId: t.upiId, invoicePrefix: t.invoicePrefix, language: t.language, locations: t.locations,
     whatsappEnabled: Boolean(t.whatsappEnabled ?? t.whatsapp_enabled ?? true),
     whatsappDefaultLang: (t.whatsappDefaultLang ?? t.whatsapp_default_lang ?? 'en') as Lang,
@@ -161,6 +258,7 @@ export function shopFromRow(t: any): ShopFields {
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
+    invoiceProfiles: normalizeInvoiceProfiles(t.invoiceProfiles ?? t.invoice_profiles, t),
     logoUrl: t.logoUrl ?? t.logo_url ?? null,
   };
 }

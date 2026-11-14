@@ -1,5 +1,5 @@
 import { requirePerm } from '../auth.ts';
-import { bad, notFound, V, type Router } from '../http.ts';
+import { bad, conflict, notFound, V, type Router } from '../http.ts';
 import { newId } from '../security.ts';
 import { audit } from '../audit.ts';
 import { normalizePhone } from '../../../shared/whatsapp.ts';
@@ -62,6 +62,9 @@ function formatParty(p: any) {
     openPurchasesCount,
     oldestDueDate,
     custom: typeof p.custom === 'string' ? JSON.parse(p.custom) : (p.custom ?? {}),
+    contactPerson: (p.custom && typeof p.custom === 'object' && p.custom.contactPerson) ? String(p.custom.contactPerson) : null,
+    shippingAddress: (p.custom && typeof p.custom === 'object' && p.custom.shippingAddress) ? String(p.custom.shippingAddress) : null,
+    customerType: (p.custom && typeof p.custom === 'object' && p.custom.customerType) ? String(p.custom.customerType) : 'wholesale',
     active: Boolean(p.active),
     createdAt: p.createdAt ?? p.created_at,
   };
@@ -314,6 +317,29 @@ export function registerParties(r: Router) {
     const loyaltyPoints = V.int(b.loyaltyPoints ?? 0, 'Loyalty points', { min: 0 });
     const custom = validateCustom(b.custom);
 
+    if (phone) {
+      const dupPhone = await ctx.db.one<{ id: string; name: string }>(
+        'SELECT id, name FROM parties WHERE tenant_id = ? AND type = ? AND phone = ? AND active = true LIMIT 1',
+        [tenantId, type, phone],
+      );
+      if (dupPhone) {
+        throw conflict(`${type === 'customer' ? 'Customer' : 'Supplier'} with phone number ${phone} already exists (${dupPhone.name}).`, 'DUPLICATE_PHONE', { existingId: dupPhone.id });
+      }
+    }
+    if (gstin) {
+      const dupGstin = await ctx.db.one<{ id: string; name: string }>(
+        'SELECT id, name FROM parties WHERE tenant_id = ? AND type = ? AND UPPER(gstin) = UPPER(?) AND active = true LIMIT 1',
+        [tenantId, type, gstin],
+      );
+      if (dupGstin) {
+        throw conflict(`${type === 'customer' ? 'Customer' : 'Supplier'} with GSTIN ${gstin} already exists (${dupGstin.name}).`, 'DUPLICATE_GSTIN', { existingId: dupGstin.id });
+      }
+    }
+
+    if (b.contactPerson) custom.contactPerson = String(b.contactPerson).trim();
+    if (b.shippingAddress) custom.shippingAddress = String(b.shippingAddress).trim();
+    if (b.customerType) custom.customerType = String(b.customerType).trim();
+
     const id = newId('p');
     await ctx.db.tx(async (q) => {
       await q.exec(
@@ -381,6 +407,9 @@ export function registerParties(r: Router) {
     const creditLimitMinor = b.creditLimitMinor !== undefined ? V.int(b.creditLimitMinor, 'Credit limit (paise)', { min: 0 }) : Number(party.creditLimitMinor ?? party.credit_limit_minor ?? 0);
     const loyaltyPoints = b.loyaltyPoints !== undefined ? V.int(b.loyaltyPoints, 'Loyalty points', { min: 0 }) : Number(party.loyaltyPoints ?? party.loyalty_points ?? 0);
     const custom = b.custom !== undefined ? validateCustom(b.custom) : (typeof party.custom === 'string' ? JSON.parse(party.custom) : (party.custom ?? {}));
+    if (b.contactPerson !== undefined) custom.contactPerson = b.contactPerson ? String(b.contactPerson).trim() : null;
+    if (b.shippingAddress !== undefined) custom.shippingAddress = b.shippingAddress ? String(b.shippingAddress).trim() : null;
+    if (b.customerType !== undefined) custom.customerType = b.customerType ? String(b.customerType).trim() : 'wholesale';
     const active = b.active !== undefined ? V.bool(b.active) : Boolean(party.active);
 
     await ctx.db.tx(async (q) => {

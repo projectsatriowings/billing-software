@@ -8,11 +8,12 @@ async function build() {
     fs.mkdirSync(distDir, { recursive: true });
   }
 
-  // Copy index.html
-  const publicHtml = path.resolve('client/public/index.html');
-  const distHtml = path.resolve(distDir, 'index.html');
-  if (fs.existsSync(publicHtml)) {
-    fs.copyFileSync(publicHtml, distHtml);
+  // Copy public assets
+  const publicDir = path.resolve('client/public');
+  if (fs.existsSync(publicDir)) {
+    for (const f of fs.readdirSync(publicDir)) {
+      fs.copyFileSync(path.join(publicDir, f), path.join(distDir, f));
+    }
   }
 
   console.log('Bundling client with esbuild...');

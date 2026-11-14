@@ -18,6 +18,31 @@ export interface PrintableLine {
   serialNo?: string | null;
   batchNo?: string | null;
 }
+export interface PrintableWholesaleMeta {
+  invoiceType?: 'retail' | 'wholesale';
+  displayName?: string | null;
+  legalName?: string | null;
+  logoUrl?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  gstin?: string | null;
+  address?: string | null;
+  paymentTerms?: string | null;
+  billingAddress?: string | null;
+  shippingAddress?: string | null;
+  contactPerson?: string | null;
+  customerState?: string | null;
+  customerStateCode?: string | null;
+  bankDetails?: {
+    bankName?: string | null;
+    accountNo?: string | null;
+    branchName?: string | null;
+    ifscCode?: string | null;
+  } | null;
+  terms?: string | null;
+  jurisdiction?: string | null;
+}
+
 export interface PrintableBill {
   number: string;
   kind: 'sale' | 'credit_note';
@@ -36,6 +61,7 @@ export interface PrintableBill {
   note?: string | null;
   linkedNumber?: string | null;
   intra: boolean;
+  wholesale?: PrintableWholesaleMeta | null;
 }
 
 export const LABELS: Record<Lang, Record<string, string>> = {
@@ -465,6 +491,261 @@ function a4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, strin
 </section>`;
 }
 
+export function wholesaleA4Copy(bill: PrintableBill, tpl: PrintTemplate, L: Record<string, string>, copyLabel: string, opts: RenderOpts): string {
+  const wh = bill.wholesale || {};
+  const t = bill.totals;
+  const isInterstate = !bill.intra;
+  const displayName = (wh.displayName || (wh.legalName && wh.legalName !== bill.shop.name ? wh.legalName : '') || 'WHOLESALE B2B TAX INVOICE').trim();
+  const legalName = (wh.legalName || '').trim();
+  const logoUrl = wh.logoUrl || bill.shop.logoUrl || '';
+  const headOfficeAddress = wh.address || bill.shop.address || '';
+  const phone = wh.phone || bill.shop.phone || '';
+  const email = wh.email || '';
+  const gstin = wh.gstin || bill.shop.gstin || '';
+
+  const buyerName = bill.customer?.name || 'Cash Customer';
+  const buyerAddress = wh.billingAddress || (bill.customer as any)?.address || '';
+  const shippingAddress = wh.shippingAddress || buyerAddress;
+  const buyerPhone = bill.customer?.phone || '';
+  const buyerGstin = bill.customer?.gstin || '';
+  const buyerStateName = wh.customerState || '';
+  const buyerStateCode = wh.customerStateCode || '';
+
+  let totalQtyMilli = 0;
+  let primaryUnit = 'Pcs';
+
+  const lineRows = bill.lines.map((l, i) => {
+    totalQtyMilli += l.qtyMilli;
+    const u = l.unit || 'Pcs';
+    if (i === 0) primaryUnit = u;
+    const qtyFormatted = fmtQty(l.qtyMilli);
+    const rateFormatted = money(l.priceMinor);
+    const amountFormatted = money(l.taxableMinor + l.cgstMinor + l.sgstMinor + l.igstMinor);
+    const gstRateFormatted = `${bpToPct(l.taxRateBp)}%`;
+
+    return `<tr>
+      <td style="text-align:center;">${i + 1}</td>
+      <td style="text-align:left;">
+        <b>${esc(l.name)}</b>
+        ${l.batchNo ? `<div style="font-size:9px;color:#444;">Batch: ${esc(l.batchNo)}</div>` : ''}
+        ${l.serialNo ? `<div style="font-size:9px;color:#444;">SN: ${esc(l.serialNo)}</div>` : ''}
+      </td>
+      <td style="text-align:center;">${esc(l.hsn || '—')}</td>
+      <td style="text-align:center;">${gstRateFormatted}</td>
+      <td style="text-align:center;">${qtyFormatted}</td>
+      <td style="text-align:right;">${rateFormatted}</td>
+      <td style="text-align:center;">${esc(u)}</td>
+      <td style="text-align:right;">${amountFormatted}</td>
+    </tr>`;
+  }).join('');
+
+  const minRows = 6;
+  const paddingRowCount = Math.max(0, minRows - bill.lines.length);
+  const paddingRows = Array.from({ length: paddingRowCount }, () => `
+    <tr class="wh-pad-row">
+      <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+    </tr>
+  `).join('');
+
+  const totalQtyFormatted = fmtQty(totalQtyMilli);
+
+  // Group by HSN code
+  const hsnMap = new Map<string, { hsn: string; qtyMilli: number; taxableMinor: number; taxRateBp: number; taxMinor: number }>();
+  for (const l of bill.lines) {
+    const code = l.hsn || 'NON-GST';
+    const entry = hsnMap.get(code) || { hsn: code, qtyMilli: 0, taxableMinor: 0, taxRateBp: l.taxRateBp, taxMinor: 0 };
+    entry.qtyMilli += l.qtyMilli;
+    entry.taxableMinor += l.taxableMinor;
+    entry.taxMinor += (l.cgstMinor + l.sgstMinor + l.igstMinor);
+    hsnMap.set(code, entry);
+  }
+
+  const hsnRows = Array.from(hsnMap.values()).map((h) => `
+    <tr>
+      <td style="text-align:center;">${esc(h.hsn)}</td>
+      <td style="text-align:center;">${fmtQty(h.qtyMilli)}</td>
+      <td style="text-align:right;">${money(h.taxableMinor)}</td>
+      <td style="text-align:center;">${bpToPct(h.taxRateBp)}%</td>
+      <td style="text-align:right;">${money(h.taxMinor)}</td>
+    </tr>
+  `).join('');
+
+  const totalTaxMinor = t.cgstMinor + t.sgstMinor + t.igstMinor;
+  const termsText = wh.terms || tpl.terms || `(1) Payments to be made by payee's A/c. Cheque, Draft or NEFT/RTGS.\n(2) Goods once sold and/or delivered will in no circumstances be taken back or exchanged.\n(3) Any Complain for goods should be made within 7 days. after that no complain will be entertained.\n(4) Interest @ 24 % per annum will be charged after due date of the bill.\n(5) We are not responsible for any loss or damage during transit.\n(6) Subject to Jurisdiction.`;
+  const termsList = termsText.split('\n').filter(Boolean).map((line) => `<div>${esc(line)}</div>`).join('');
+
+  const activeCopy = copyLabel || 'Original';
+
+  return `<section class="copy wholesale-a4">
+  <div class="wh-header-box">
+    <div class="wh-title-col">TAX INVOICE</div>
+    <div class="wh-brand-col">
+      ${logoUrl ? `<img src="${esc(logoUrl)}" style="max-height:42px;margin-bottom:3px;object-fit:contain;" alt="Logo" />` : ''}
+      <div class="wh-brand-title">${esc(displayName)}</div>
+      ${legalName && legalName !== displayName ? `<div class="wh-brand-sub" style="font-weight:600;">(M/s ${esc(legalName)})</div>` : ''}
+      ${headOfficeAddress ? `<div class="wh-brand-sub">HEAD OFFICE : ${esc(headOfficeAddress)}</div>` : ''}
+      <div class="wh-brand-sub">PHONE : ${esc(phone)}${email ? `, Email : ${esc(email)}` : ''}</div>
+      <div class="wh-brand-sub" style="font-weight:bold;margin-top:2px;">GSTIN &nbsp; ${esc(gstin)}</div>
+    </div>
+    <div class="wh-copies-col">
+      <div class="wh-copy-line ${activeCopy === 'Original' ? 'wh-copy-active' : ''}">Original</div>
+      <div class="wh-copy-line ${activeCopy === 'Duplicate' ? 'wh-copy-active' : ''}">Duplicate</div>
+      <div class="wh-copy-line ${activeCopy === 'Triplicate' ? 'wh-copy-active' : ''}">Triplicate</div>
+      <div style="margin-top:4px;color:#555;">Page 1 of 1</div>
+    </div>
+  </div>
+
+  <div class="wh-grid-2col">
+    <div class="wh-col-buyer">
+      <div style="font-size:11px;margin-bottom:3px;"><b>M/S, &nbsp; ${esc(buyerName)}</b></div>
+      ${buyerAddress ? `<div style="font-size:10px;margin-bottom:3px;color:#222;">${esc(buyerAddress)}</div>` : ''}
+      ${shippingAddress && shippingAddress !== buyerAddress ? `<div style="font-size:9.5px;margin-bottom:3px;color:#444;"><b>Ship To:</b> ${esc(shippingAddress)}</div>` : ''}
+      <div style="font-size:10px;margin-bottom:4px;"><b>Phone :</b> ${esc(buyerPhone || '—')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10px;margin-top:4px;">
+        <div><b>GST NO. :</b> &nbsp; ${esc(buyerGstin || 'Unregistered')}</div>
+        <div><b>${esc(buyerStateName || '')}${buyerStateCode ? ` - ${esc(buyerStateCode)}` : ''}</b></div>
+      </div>
+    </div>
+    <div class="wh-col-meta">
+      <table class="wh-meta-table">
+        <tr>
+          <td style="width:50%;"><b>Invoice No :</b> &nbsp; <b>${esc(bill.number)}</b></td>
+          <td style="width:50%;"><b>Date :</b> &nbsp; ${esc(bill.dateText.split(',')[0] || bill.dateText)}</td>
+        </tr>
+        <tr>
+          <td colspan="2"><b>Place of Supply :</b> &nbsp; ${esc(buyerStateName ? `${buyerStateName}${buyerStateCode ? ` (${buyerStateCode})` : ''}` : 'As per Delivery Address')}</td>
+        </tr>
+        <tr>
+          <td style="width:50%;"><b>Reverse Charge :</b> &nbsp; No</td>
+          <td style="width:50%;"><b>Payment Terms :</b> &nbsp; ${esc(wh.paymentTerms || 'Due on Receipt')}</td>
+        </tr>
+        <tr>
+          <td colspan="2"><b>Supply Type :</b> &nbsp; ${isInterstate ? 'Inter-State B2B Supply (IGST)' : 'Intra-State B2B Supply (CGST + SGST)'}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <table class="wh-items-table">
+    <thead>
+      <tr>
+        <th style="width:5%;">SR.NO</th>
+        <th style="width:40%;text-align:left;">DESCRIPTION</th>
+        <th style="width:11%;">HSN CODE</th>
+        <th style="width:9%;">GST RATE</th>
+        <th style="width:9%;">QUANTITY</th>
+        <th style="width:11%;">RATE</th>
+        <th style="width:5%;">PER</th>
+        <th style="width:10%;">AMOUNT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lineRows}
+      ${paddingRows}
+      <tr class="wh-total-row">
+        <td colspan="4" style="text-align:right;">Total :-</td>
+        <td style="text-align:center;">${totalQtyFormatted}</td>
+        <td></td>
+        <td></td>
+        <td style="text-align:right;">${money(t.subtotalMinor)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="wh-post-grid">
+    <div class="wh-words-col">
+      <div style="font-weight:bold;font-size:9.5px;color:#222;margin-bottom:3px;">Total Amount in Words :</div>
+      <div style="font-size:11px;font-weight:bold;line-height:1.35;margin-bottom:8px;">
+        Rs. ${moneyInWords(t.totalMinor)} Only
+      </div>
+      <div style="font-size:8.5px;color:#555;line-height:1.3;border-top:1px dashed #ccc;padding-top:6px;">
+        Certified that the particulars given in this tax invoice are true and correct, and the amount indicated represents the price actually charged.
+      </div>
+    </div>
+    <div class="wh-totals-col">
+      <table class="wh-totals-table">
+        ${t.discountMinor > 0 ? `
+          <tr>
+            <td class="wh-tot-lbl">DISCOUNT</td>
+            <td class="wh-tot-val">-₹${money(t.discountMinor)}</td>
+          </tr>
+        ` : ''}
+        <tr>
+          <td class="wh-tot-lbl">Taxable Amount</td>
+          <td class="wh-tot-val">${money(t.taxableMinor)}</td>
+        </tr>
+        ${isInterstate ? `
+          <tr>
+            <td class="wh-tot-lbl">IGST</td>
+            <td class="wh-tot-val">${money(t.igstMinor)}</td>
+          </tr>
+        ` : `
+          <tr>
+            <td class="wh-tot-lbl">CGST</td>
+            <td class="wh-tot-val">${money(t.cgstMinor)}</td>
+          </tr>
+          <tr>
+            <td class="wh-tot-lbl">SGST</td>
+            <td class="wh-tot-val">${money(t.sgstMinor)}</td>
+          </tr>
+        `}
+        ${t.roundOffMinor !== 0 ? `
+          <tr>
+            <td class="wh-tot-lbl">Round Off</td>
+            <td class="wh-tot-val">${t.roundOffMinor > 0 ? '+' : ''}${money(t.roundOffMinor)}</td>
+          </tr>
+        ` : ''}
+        <tr class="wh-grand-tot-row">
+          <td style="border-right:1px solid #000;padding:4px 6px;">Total :- &nbsp; <b>${totalQtyFormatted} ${esc(primaryUnit)}</b></td>
+          <td style="text-align:right;padding:4px 6px;"><b>RS. &nbsp; ${money(t.totalMinor)}</b></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <table class="wh-hsn-table">
+    <thead>
+      <tr>
+        <th rowspan="2" style="width:25%;">HSN CODE</th>
+        <th rowspan="2" style="width:15%;">Quantity</th>
+        <th rowspan="2" style="width:25%;">Taxable Amount</th>
+        <th colspan="2" style="width:35%;">${isInterstate ? 'Integrated Tax' : 'Central & State Tax'}</th>
+      </tr>
+      <tr>
+        <th style="width:15%;">Rate</th>
+        <th style="width:20%;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${hsnRows}
+      <tr style="font-weight:bold;">
+        <td style="text-align:right;">Total :</td>
+        <td style="text-align:center;">${totalQtyFormatted}</td>
+        <td style="text-align:right;">${money(t.taxableMinor)}</td>
+        <td></td>
+        <td style="text-align:right;">${money(totalTaxMinor)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="wh-footer-grid">
+    <div class="wh-footer-terms">
+      <div style="font-weight:bold;margin-bottom:2px;">TERMS &amp; CONDITION -:</div>
+      ${termsList}
+      <div style="margin-top:24px;font-weight:bold;font-size:9.5px;">Receiver's Signature</div>
+    </div>
+    <div class="wh-footer-center">
+      E. &amp; O. E.
+    </div>
+    <div class="wh-footer-sig">
+      <div style="font-weight:bold;font-size:11px;">For -: ${esc(displayName)}</div>
+      <div style="height:35px;"></div>
+      <div style="font-weight:bold;font-size:9.5px;">Authorised Signatory</div>
+    </div>
+  </div>
+</section>`;
+}
+
 const CSS = (paper: PrintTemplate['paper']) => {
   const thermal = paper === 'thermal58' || paper === 'thermal80';
   const w = paper === 'thermal58' ? '58mm' : '80mm';
@@ -593,17 +874,70 @@ table{border-collapse:collapse;width:100%}table.items th{background:#111;color:#
 .bottom{display:flex;justify-content:space-between;gap:24px;margin-top:14px;align-items:flex-start}.left{flex:1}.right{width:260px}.rw{display:flex;justify-content:space-between;padding:2px 0}
 .tot{font-weight:700;font-size:16px;border-top:2px solid #111;border-bottom:2px solid #111;margin:6px 0;padding:5px 0}table.tx{font-size:11px;margin-bottom:10px;width:auto}table.tx th,table.tx td{border:1px solid #ccc;padding:3px 8px;text-align:right}table.tx th{background:#f0f0f0}
 .qr svg{width:110px;height:110px}.terms{margin-top:16px;font-size:10.5px;color:#444;border-top:1px solid #ddd;padding-top:6px}.foot{margin-top:10px;text-align:center;color:#333}.dup{text-align:center;margin-top:8px;border:1px solid #111;padding:2px}
-.stamp{position:absolute;top:40%;left:25%;transform:rotate(-20deg);font-size:64px;font-weight:800;color:#c0392b;opacity:.25;border:6px solid #c0392b;padding:6px 24px}`;
+.stamp{position:absolute;top:40%;left:25%;transform:rotate(-20deg);font-size:64px;font-weight:800;color:#c0392b;opacity:.25;border:6px solid #c0392b;padding:6px 24px}
+
+/* Traditional Wholesale A4 Tax Invoice Styles (StyleWell Co. Layout) */
+@media screen {
+  .copy.wholesale-a4 { width:100%!important; max-width:210mm!important; min-height:297mm; background:#ffffff; box-shadow:0 10px 25px rgba(0,0,0,0.15); padding:8mm 10mm!important; margin:0 auto 24px auto!important; }
+}
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  body { background:#fff; padding:0; }
+  .copy.wholesale-a4 { width:100%!important; max-width:none!important; min-height:auto!important; box-shadow:none!important; padding:0!important; margin:0!important; }
+}
+.wholesale-a4 { width:100%; max-width:210mm; background:#fff; border:1.5px solid #000; box-sizing:border-box; font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; font-size:10px; line-height:1.25; color:#000; }
+.wh-header-box { display:flex; align-items:flex-start; justify-content:space-between; padding:6px 8px; border-bottom:1.5px solid #000; }
+.wh-title-col { width:20%; font-size:13px; font-weight:bold; letter-spacing:0.5px; }
+.wh-brand-col { width:60%; text-align:center; }
+.wh-brand-title { font-size:22px; font-weight:bold; letter-spacing:0.8px; text-transform:uppercase; margin-bottom:2px; }
+.wh-brand-sub { font-size:9.5px; color:#111; line-height:1.3; }
+.wh-copies-col { width:20%; text-align:right; font-size:9.5px; line-height:1.3; }
+.wh-copy-line { color:#555; }
+.wh-copy-active { font-weight:bold; color:#000; }
+.wh-grid-2col { display:flex; border-bottom:1px solid #000; }
+.wh-col-buyer { width:52%; padding:6px 8px; border-right:1px solid #000; }
+.wh-col-meta { width:48%; }
+.wh-meta-table { width:100%; border-collapse:collapse; }
+.wh-meta-table td { border-bottom:1px solid #000; border-right:1px solid #000; padding:3px 6px; font-size:9.5px; }
+.wh-meta-table tr td:last-child { border-right:none; }
+.wh-meta-table tr:last-child td { border-bottom:none; }
+.wh-items-table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.wh-items-table th { border:1px solid #000; padding:3px 4px; font-size:9.5px; font-weight:bold; background:#fafafa; text-align:center; }
+.wh-items-table td { border-left:1px solid #000; border-right:1px solid #000; border-bottom:1px solid #eee; padding:3px 4px; font-size:9.5px; }
+.wh-pad-row td { height:18px; border-bottom:none; }
+.wh-total-row td { border-top:1px solid #000; border-bottom:1px solid #000; font-weight:bold; padding:4px; }
+.wh-post-grid { display:flex; border-bottom:1px solid #000; }
+.wh-words-col { width:52%; padding:8px 10px; border-right:1px solid #000; font-size:9.5px; line-height:1.35; display:flex; flex-direction:column; justify-content:space-between; }
+.wh-totals-col { width:48%; }
+.wh-totals-table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.wh-totals-table td { padding:2.5px 6px; font-size:9.5px; }
+.wh-totals-table .wh-tot-lbl { text-align:right; width:55%; border-right:1px solid #000; }
+.wh-totals-table .wh-tot-val { text-align:right; width:45%; font-weight:600; }
+.wh-grand-tot-row td { border-top:1px solid #000; border-bottom:1px solid #000; font-size:11.5px; font-weight:bold; padding:4px 6px; }
+.wh-words-box { padding:4px 8px; border-bottom:1px solid #000; font-size:10px; }
+.wh-hsn-table { width:100%; border-collapse:collapse; border-bottom:1px solid #000; font-variant-numeric:tabular-nums; }
+.wh-hsn-table th, .wh-hsn-table td { border:1px solid #000; padding:2.5px 4px; font-size:9px; }
+.wh-hsn-table th { background:#fafafa; text-align:center; font-weight:bold; }
+.wh-footer-grid { display:flex; padding:6px 8px; }
+.wh-footer-terms { width:58%; font-size:8px; line-height:1.25; }
+.wh-footer-center { width:12%; display:flex; align-items:flex-end; justify-content:center; font-size:9.5px; font-weight:bold; padding-bottom:4px; }
+.wh-footer-sig { width:30%; text-align:right; display:flex; flex-direction:column; justify-content:space-between; }`;
 };
 
 /** Full HTML document for one bill (all requested copies). Used for printing, the public bill page and PDF-by-browser. */
 export function renderBillDoc(bill: PrintableBill, tpl: PrintTemplate, opts: RenderOpts = {}): string {
   const L = LABELS[tpl.language] ?? LABELS.en;
-  const thermal = tpl.paper === 'thermal58' || tpl.paper === 'thermal80';
+  const isWholesale = bill.wholesale?.invoiceType === 'wholesale' || tpl.paper === 'wholesale_a4';
+  const thermal = !isWholesale && (tpl.paper === 'thermal58' || tpl.paper === 'thermal80');
   const labels = ['', L.copy2, L.copy3];
   const copies = Array.from({ length: tpl.copies }, (_, i) => (i === 0 ? (tpl.copies > 1 ? L.original : '') : labels[i]));
-  const sections = copies.map((c) => (thermal ? thermalCopy(bill, tpl, L, c, opts) : a4Copy(bill, tpl, L, c, opts))).join('\n');
-  return `<!doctype html><html lang="${tpl.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(bill.number)}</title><style>${CSS(tpl.paper)}</style></head><body>${sections}${opts.autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print()},250)})</script>' : ''}</body></html>`;
+  const sections = copies.map((c) => {
+    if (thermal) return thermalCopy(bill, tpl, L, c, opts);
+    if (isWholesale) return wholesaleA4Copy(bill, tpl, L, c, opts);
+    return a4Copy(bill, tpl, L, c, opts);
+  }).join('\n');
+  const effectivePaper = isWholesale ? 'wholesale_a4' : tpl.paper;
+  return `<!doctype html><html lang="${tpl.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(bill.number)}</title><style>${CSS(effectivePaper)}</style></head><body>${sections}${opts.autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print()},250)})</script>' : ''}</body></html>`;
 }
 
 export interface PrintableReceiptAllocation {

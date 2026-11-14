@@ -6,6 +6,8 @@ import { SmsSettingsSection } from './SmsSettingsSection';
 import { STATES } from '../../../../shared/states.ts';
 import { qrSvg, upiUri } from '../../../../shared/qr.ts';
 import { billMessage } from '../../../../shared/whatsapp.ts';
+import { DEFAULT_INVOICE_PROFILES } from '../../../../shared/types.ts';
+import type { InvoiceProfiles } from '../../../../shared/types.ts';
 import { StrictIsolationBanner } from '../StrictIsolationBanner';
 import {
   CreditCardIcon,
@@ -22,7 +24,7 @@ export interface StoreSettingsViewProps {
   onNavigateTab?: (tab: string) => void;
 }
 
-type SettingsSection = 'profile' | 'billing' | 'inventory' | 'payments' | 'sms' | 'whatsapp' | 'security';
+type SettingsSection = 'profile' | 'billing' | 'inventory' | 'payments' | 'sms' | 'whatsapp' | 'security' | 'invoice_profiles';
 
 const BUSINESS_TYPE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
   retail: { label: 'Retail / Kirana / Supermarket', icon: '🛒', desc: 'Barcode scanning, standard inventory, fast POS checkout' },
@@ -64,6 +66,13 @@ export function StoreSettingsView({
   const [loyaltyPointsPer100, setLoyaltyPointsPer100] = useState(10);
   const [loyaltyPointValueRupees, setLoyaltyPointValueRupees] = useState(0.10);
   const [loyaltyMinPointsRedeem, setLoyaltyMinPointsRedeem] = useState(10);
+
+  // Multiple Invoice Profiles (Retail POS & Wholesale B2B)
+  const [wholesaleBusinessName, setWholesaleBusinessName] = useState(() => shop?.wholesaleBusinessName || shop?.invoiceProfiles?.wholesale?.displayName || '');
+  const [invoiceProfiles, setInvoiceProfiles] = useState<InvoiceProfiles>(() => {
+    return shop?.invoiceProfiles || DEFAULT_INVOICE_PROFILES;
+  });
+  const [activeProfileTab, setActiveProfileTab] = useState<'wholesale' | 'retail'>('wholesale');
 
   // Receipt / Billing Preferences (Local UI preferences aligned with shared types)
   // Shop-specific Payment Settings & QR Configuration
@@ -181,6 +190,14 @@ export function StoreSettingsView({
       setLoyaltyPointsPer100(shop.loyaltyPointsPer100 ?? 10);
       setLoyaltyPointValueRupees((shop.loyaltyPointValueMinor ?? 10) / 100);
       setLoyaltyMinPointsRedeem(shop.loyaltyMinPointsRedeem ?? 10);
+      if (shop.wholesaleBusinessName !== undefined) {
+        setWholesaleBusinessName(shop.wholesaleBusinessName || '');
+      } else if (shop.invoiceProfiles?.wholesale?.displayName) {
+        setWholesaleBusinessName(shop.invoiceProfiles.wholesale.displayName);
+      }
+      if (shop.invoiceProfiles) {
+        setInvoiceProfiles(shop.invoiceProfiles);
+      }
     }
   }, [shop]);
 
@@ -250,6 +267,14 @@ export function StoreSettingsView({
         loyaltyPointsPer100: Math.max(0, Math.min(1000, Number(loyaltyPointsPer100) || 0)),
         loyaltyPointValueMinor: Math.max(1, Math.min(10000, Math.round((Number(loyaltyPointValueRupees) || 0.10) * 100))),
         loyaltyMinPointsRedeem: Math.max(0, Math.min(10000, Number(loyaltyMinPointsRedeem) || 0)),
+        wholesaleBusinessName: wholesaleBusinessName.trim() || undefined,
+        invoiceProfiles: {
+          ...invoiceProfiles,
+          wholesale: {
+            ...invoiceProfiles.wholesale,
+            displayName: wholesaleBusinessName.trim() || invoiceProfiles.wholesale.displayName || '',
+          },
+        },
       };
 
       await onSaveShop(payload);
@@ -341,6 +366,7 @@ export function StoreSettingsView({
           { id: 'profile', icon: '🏢', label: 'Store Profile' },
           { id: 'billing', icon: '📜', label: 'Business & Billing Rules' },
           { id: 'inventory', icon: '📦', label: 'Inventory & Purchase' },
+          { id: 'invoice_profiles', icon: '🧾', label: 'Invoice Profiles (Wholesale & Retail)' },
           { id: 'payments', icon: '💳', label: 'Payments & Integrations' },
           { id: 'sms', icon: '💬', label: 'SMS & Free Trial' },
           { id: 'whatsapp', icon: '📲', label: 'WhatsApp & Notifications' },
@@ -417,6 +443,30 @@ export function StoreSettingsView({
                 />
                 <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
                   Legal trade name displayed at top of printed bills and customer displays.
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  Wholesale Business Display Name
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  disabled={!isEditable}
+                  placeholder="e.g. ABC Wholesale Traders, Sri Lakshmi Distributors, Kumar Agencies"
+                  value={wholesaleBusinessName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWholesaleBusinessName(val);
+                    setInvoiceProfiles((prev) => ({
+                      ...prev,
+                      wholesale: { ...prev.wholesale, displayName: val },
+                    }));
+                  }}
+                />
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
+                  Trading/display name printed in large bold typography at the top of Wholesale A4 Tax Invoices. Kept completely separate from the retail name.
                 </span>
               </div>
 
@@ -863,6 +913,747 @@ export function StoreSettingsView({
               <span className="badge badge-emerald">Ready</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SECTION: INVOICE PROFILES (WHOLESALE & RETAIL) */}
+      {activeSection === 'invoice_profiles' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Informational Header */}
+          <div
+            style={{
+              background: '#f8fafc',
+              padding: '1.25rem 1.5rem',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '1rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem' }}>
+              <span style={{ fontSize: '1.75rem', lineHeight: 1 }}>🧾</span>
+              <div>
+                <strong style={{ fontSize: '1rem', color: '#1e293b' }}>
+                  Multiple Business Invoice Profiles
+                </strong>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: '#64748b', maxWidth: '680px' }}>
+                  Configure separate legal entities, tax details, bank account credentials, sequential invoice series, and print layouts for <strong>Retail POS (Thermal Receipts)</strong> and <strong>Wholesale B2B Billing (Traditional Indian A4 Tax Invoices)</strong>.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setActiveProfileTab('wholesale')}
+                style={{
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  border: activeProfileTab === 'wholesale' ? '1px solid #6d4aff' : '1px solid #cbd5e1',
+                  background: activeProfileTab === 'wholesale' ? '#6d4aff' : '#ffffff',
+                  color: activeProfileTab === 'wholesale' ? '#ffffff' : '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  boxShadow: activeProfileTab === 'wholesale' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                }}
+              >
+                📦 Wholesale B2B Profile (A4)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveProfileTab('retail')}
+                style={{
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  border: activeProfileTab === 'retail' ? '1px solid #6d4aff' : '1px solid #cbd5e1',
+                  background: activeProfileTab === 'retail' ? '#6d4aff' : '#ffffff',
+                  color: activeProfileTab === 'retail' ? '#ffffff' : '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  boxShadow: activeProfileTab === 'retail' ? '0 2px 6px rgba(109,74,255,0.25)' : 'none',
+                }}
+              >
+                🛒 Retail POS Profile (Thermal)
+              </button>
+            </div>
+          </div>
+
+          {/* WHOLESALE PROFILE CONFIGURATION */}
+          {activeProfileTab === 'wholesale' && (
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '1.75rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📦</span> Wholesale B2B Tax Invoice Profile
+                    <span style={{ fontSize: '0.72rem', background: '#ede9fe', color: '#6d4aff', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                      Traditional Indian A4 Layout
+                    </span>
+                  </h3>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                    Used for B2B billing, bulk distribution orders, transport metadata, and legal tax compliance.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 500, color: '#475569' }}>Profile Active</span>
+                  <ToggleSwitch
+                    checked={invoiceProfiles.wholesale.enabled !== false}
+                    onChange={() => {
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, enabled: !(prev.wholesale.enabled !== false) },
+                      }));
+                    }}
+                    disabled={!isEditable}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Wholesale Business Display Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={wholesaleBusinessName || invoiceProfiles.wholesale.displayName || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setWholesaleBusinessName(val);
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, displayName: val },
+                      }));
+                    }}
+                    placeholder="e.g. ABC Wholesale Traders, Sri Lakshmi Distributors, Kumar Agencies"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Rendered in large prominent bold typography at the top of the wholesale A4 Tax Invoice.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Registered Legal Entity Name
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.wholesale.legalName || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, legalName: val },
+                      }));
+                    }}
+                    placeholder="e.g. StyleWell Textiles Private Limited"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Statutory name appearing in tax filings and declarations.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Wholesale Business Logo URL
+                  </label>
+                  <input
+                    type="url"
+                    className="form-input"
+                    value={invoiceProfiles.wholesale.logoUrl || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, logoUrl: val || null },
+                      }));
+                    }}
+                    placeholder="https://example.com/wholesale-logo.png"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Rendered at top of A4 invoice (falls back to store logo if blank).
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Invoice Number Series Prefix <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    maxLength={6}
+                    value={invoiceProfiles.wholesale.invoicePrefix || 'WH'}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 6);
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, invoicePrefix: val },
+                      }));
+                    }}
+                    placeholder="e.g. WH"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Atomic sequential numbering (e.g. <strong>{invoiceProfiles.wholesale.invoicePrefix || 'WH'}-1001</strong>). Independent of retail series.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Wholesale GSTIN
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    maxLength={15}
+                    value={invoiceProfiles.wholesale.gstin || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      const stateCode = val.length >= 2 ? val.slice(0, 2) : undefined;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, gstin: val, stateCode: stateCode || prev.wholesale.stateCode },
+                      }));
+                    }}
+                    placeholder="e.g. 24ACAFS6901Q1ZT"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    15-character Goods &amp; Services Tax Identification Number.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Head Office Phone
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.wholesale.phone || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, phone: val },
+                      }));
+                    }}
+                    placeholder="e.g. 9879448228"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Head Office Email
+                  </label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={invoiceProfiles.wholesale.email || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, email: val },
+                      }));
+                    }}
+                    placeholder="e.g. info.stylewell@gmail.com"
+                    disabled={!isEditable}
+                  />
+                </div>
+              </div>
+
+              {/* Head Office Address */}
+              <div style={{ marginTop: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  Head Office Registered Address <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={invoiceProfiles.wholesale.address || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInvoiceProfiles((prev) => ({
+                      ...prev,
+                      wholesale: { ...prev.wholesale, address: val },
+                    }));
+                  }}
+                  placeholder="e.g. G 29-30-31, CITI INDUSTRIAL ESTATE, BEHIND SWAMINARAYAN MANDIR UDHNA, SURAT 394210. (GUJ)"
+                  disabled={!isEditable}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Terms and Jurisdiction */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem', marginTop: '1.5rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Wholesale Terms &amp; Conditions (Printed in Footer)
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={5}
+                    value={invoiceProfiles.wholesale.terms || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, terms: val },
+                      }));
+                    }}
+                    placeholder="Enter standard B2B trade terms line by line"
+                    disabled={!isEditable}
+                    style={{ resize: 'vertical', fontSize: '0.82rem', fontFamily: 'monospace' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Legal Jurisdiction
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.wholesale.jurisdiction || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        wholesale: { ...prev.wholesale, jurisdiction: val },
+                      }));
+                    }}
+                    placeholder="e.g. SURAT Jurisdiction or MUMBAI Jurisdiction"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.4rem' }}>
+                    Printed as <em>&quot;Subject to [Jurisdiction]&quot;</em> in invoice footer clause.
+                  </div>
+
+                  <div style={{ marginTop: '1rem', padding: '0.85rem', borderRadius: '8px', background: '#eef2ff', border: '1px solid #c7d2fe' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#3730a3', marginBottom: '0.2rem' }}>
+                      📐 Layout Specification
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#4338ca' }}>
+                      Paper format is locked to <strong>Traditional Indian A4 Tax Invoice</strong> with crisp boxed borders, statutory place of supply, HSN tax summary table, and dual signatures.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RETAIL PROFILE CONFIGURATION */}
+          {activeProfileTab === 'retail' && (
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '1.75rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', paddingBottom: '0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>🛒</span> Retail POS Receipt Profile
+                    <span style={{ fontSize: '0.72rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                      Fast Thermal Receipt
+                    </span>
+                  </h3>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                    Used for high-speed counter billing, barcode scanning, and thermal slip printers.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 500, color: '#475569' }}>Profile Active</span>
+                  <ToggleSwitch
+                    checked={invoiceProfiles.retail.enabled !== false}
+                    onChange={() => {
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, enabled: !(prev.retail.enabled !== false) },
+                      }));
+                    }}
+                    disabled={!isEditable}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Store Display Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.retail.displayName || name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, displayName: val },
+                      }));
+                    }}
+                    placeholder="e.g. Shree Krishna Supermarket"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Registered Legal Entity Name
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.retail.legalName || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, legalName: val },
+                      }));
+                    }}
+                    placeholder="e.g. Shree Krishna Retail Enterprises Pvt Ltd"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Retail Business Logo URL
+                  </label>
+                  <input
+                    type="url"
+                    className="form-input"
+                    value={invoiceProfiles.retail.logoUrl || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, logoUrl: val || null },
+                      }));
+                    }}
+                    placeholder="https://example.com/retail-logo.png"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Retail GSTIN
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    maxLength={15}
+                    value={invoiceProfiles.retail.gstin || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      const stateCode = val.length >= 2 ? val.slice(0, 2) : undefined;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, gstin: val, stateCode: stateCode || prev.retail.stateCode },
+                      }));
+                    }}
+                    placeholder="e.g. 33AAAAA0000A1Z5"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Invoice Number Series Prefix <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    maxLength={6}
+                    value={invoiceProfiles.retail.invoicePrefix || invoicePrefix || 'INV'}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 6);
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, invoicePrefix: val },
+                      }));
+                    }}
+                    placeholder="e.g. INV"
+                    disabled={!isEditable}
+                  />
+                  <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Consecutive counter numbering (e.g. <strong>{invoiceProfiles.retail.invoicePrefix || 'INV'}-1001</strong>).
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Thermal Paper Format
+                  </label>
+                  <select
+                    className="form-input"
+                    value={invoiceProfiles.retail.paper || 'thermal80'}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, paper: val },
+                      }));
+                    }}
+                    disabled={!isEditable}
+                  >
+                    <option value="thermal80">Thermal 80mm (Standard 3-inch roll)</option>
+                    <option value="thermal58">Thermal 58mm (Compact 2-inch roll)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Retail Store Phone
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={invoiceProfiles.retail.phone || phone}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, phone: val },
+                      }));
+                    }}
+                    placeholder="Store contact number"
+                    disabled={!isEditable}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Retail Store Email
+                  </label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={invoiceProfiles.retail.email || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvoiceProfiles((prev) => ({
+                        ...prev,
+                        retail: { ...prev.retail, email: val },
+                      }));
+                    }}
+                    placeholder="e.g. retail@supermarket.com"
+                    disabled={!isEditable}
+                  />
+                </div>
+              </div>
+
+              {/* Retail Store Address */}
+              <div style={{ marginTop: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  Retail Store Address <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={invoiceProfiles.retail.address || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInvoiceProfiles((prev) => ({
+                      ...prev,
+                      retail: { ...prev.retail, address: val },
+                    }));
+                  }}
+                  placeholder="Store street address, city, pin code"
+                  disabled={!isEditable}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Retail Bank Details */}
+              <div
+                style={{
+                  marginTop: '1.5rem',
+                  padding: '1.25rem',
+                  borderRadius: '10px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem' }}>
+                  <span style={{ fontSize: '1.1rem' }}>🏦</span>
+                  <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                    Retail Bank Account Details (Printed on Receipts if configured)
+                  </strong>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={invoiceProfiles.retail.bankDetails?.bankName || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceProfiles((prev) => ({
+                          ...prev,
+                          retail: {
+                            ...prev.retail,
+                            bankDetails: { ...(prev.retail.bankDetails || { accountNo: '', branchName: '', ifscCode: '' }), bankName: val },
+                          },
+                        }));
+                      }}
+                      placeholder="e.g. STATE BANK OF INDIA"
+                      disabled={!isEditable}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                      Account Number
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={invoiceProfiles.retail.bankDetails?.accountNo || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceProfiles((prev) => ({
+                          ...prev,
+                          retail: {
+                            ...prev.retail,
+                            bankDetails: { ...(prev.retail.bankDetails || { bankName: '', branchName: '', ifscCode: '' }), accountNo: val },
+                          },
+                        }));
+                      }}
+                      placeholder="e.g. 10002345678"
+                      disabled={!isEditable}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                      Branch Name
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={invoiceProfiles.retail.bankDetails?.branchName || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceProfiles((prev) => ({
+                          ...prev,
+                          retail: {
+                            ...prev.retail,
+                            bankDetails: { ...(prev.retail.bankDetails || { bankName: '', accountNo: '', ifscCode: '' }), branchName: val },
+                          },
+                        }));
+                      }}
+                      placeholder="e.g. MAIN BRANCH"
+                      disabled={!isEditable}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.8rem', color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                      IFSC Code
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={invoiceProfiles.retail.bankDetails?.ifscCode || ''}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setInvoiceProfiles((prev) => ({
+                          ...prev,
+                          retail: {
+                            ...prev.retail,
+                            bankDetails: { ...(prev.retail.bankDetails || { bankName: '', accountNo: '', branchName: '' }), ifscCode: val },
+                          },
+                        }));
+                      }}
+                      placeholder="e.g. SBIN0001234"
+                      disabled={!isEditable}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '1.25rem' }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  Receipt Footer Thank You Note / Terms
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={invoiceProfiles.retail.terms || 'Goods once sold will not be taken back or exchanged. Thank you!'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInvoiceProfiles((prev) => ({
+                      ...prev,
+                      retail: { ...prev.retail, terms: val },
+                    }));
+                  }}
+                  placeholder="e.g. Thank you for shopping with us! Visit again."
+                  disabled={!isEditable}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Action Row */}
+          {isEditable && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleSave()}
+                disabled={isSubmitting}
+                style={{
+                  padding: '0.75rem 1.75rem',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="spinner-small" /> Saving Profiles...
+                  </>
+                ) : (
+                  <>
+                    <span>💾</span> Save Invoice Profiles
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
