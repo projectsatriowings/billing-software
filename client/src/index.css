@@ -693,9 +693,15 @@ body {
   max-height: 20px;
   object-fit: contain;
   display: block;
-  filter: brightness(0) invert(1);
+  filter: brightness(0) invert(1) drop-shadow(0 0 0.3px #ffffff);
   user-select: none;
   pointer-events: none;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.sidebar-nav-item:hover .nav-icon .wholesale-nav-icon,
+.sidebar-nav-item.active .nav-icon .wholesale-nav-icon {
+  filter: brightness(0) invert(1) drop-shadow(0 0 0.4px #ffffff);
 }
 
 /* Labels: 15px, weight 600, single line with an ellipsis. "Discounts & Offers" never wraps */
