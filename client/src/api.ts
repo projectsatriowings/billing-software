@@ -16,10 +16,38 @@ export function withAuthToken(url: string): string {
   return `${url}${sep}token=${encodeURIComponent(token)}`;
 }
 
+export function getActiveBranchScope(): string {
+  const br = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
+  return br || 'all';
+}
+
+export function setActiveBranchScope(branch: string) {
+  const val = (branch || 'all').trim();
+  if (val && val.toLowerCase() !== 'all') {
+    localStorage.setItem('sa_selected_branch', val);
+    localStorage.setItem('selected_branch', val);
+    sessionStorage.setItem('sa_selected_branch', val);
+    sessionStorage.setItem('selected_branch', val);
+  } else {
+    localStorage.setItem('sa_selected_branch', 'all');
+    localStorage.setItem('selected_branch', 'all');
+    sessionStorage.setItem('sa_selected_branch', 'all');
+    sessionStorage.setItem('selected_branch', 'all');
+  }
+}
+
 export async function downloadFile(url: string, defaultFilename: string): Promise<void> {
   const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const selectedBranch = getActiveBranchScope();
+  if (selectedBranch && selectedBranch.toLowerCase() !== 'all') {
+    headers['x-branch-id'] = selectedBranch;
+  }
   const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -39,26 +67,6 @@ export async function downloadFile(url: string, defaultFilename: string): Promis
   a.click();
   window.URL.revokeObjectURL(objectUrl);
   document.body.removeChild(a);
-}
-
-export function getActiveBranchScope(): string {
-  const br = localStorage.getItem('sa_selected_branch') || localStorage.getItem('selected_branch');
-  return br || 'all';
-}
-
-export function setActiveBranchScope(branch: string) {
-  const val = (branch || 'all').trim();
-  if (val && val.toLowerCase() !== 'all') {
-    localStorage.setItem('sa_selected_branch', val);
-    localStorage.setItem('selected_branch', val);
-    sessionStorage.setItem('sa_selected_branch', val);
-    sessionStorage.setItem('selected_branch', val);
-  } else {
-    localStorage.setItem('sa_selected_branch', 'all');
-    localStorage.setItem('selected_branch', 'all');
-    sessionStorage.setItem('sa_selected_branch', 'all');
-    sessionStorage.setItem('selected_branch', 'all');
-  }
 }
 
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
@@ -237,6 +245,7 @@ export interface Shop {
   loyaltyPointValueMinor?: number;
   loyaltyMinPointsRedeem?: number;
   ownerEmail?: string | null;
+  logoUrl?: string | null;
 }
 
 export interface DemoBusiness {
@@ -2468,4 +2477,119 @@ export const retrySms = (id: string) =>
     `/api/sms/retry/${id}`,
     { method: 'POST' }
   );
+
+// =========================================================================
+// RETURN, EXCHANGE & DAY CLOSING APIS
+// =========================================================================
+
+export const searchInvoicesForReturn = (q: string) =>
+  api<{ invoices: any[] }>(`/api/invoices/search-for-return?q=${encodeURIComponent(q)}`);
+
+export const fetchInvoiceReturnInfo = (invoiceId: string) =>
+  api<ReturnInfo>(`/api/invoices/${encodeURIComponent(invoiceId)}/return-info`);
+
+export const createReturnCreditNote = (invoiceId: string, data: any) =>
+  api<{ creditNoteId: string; number: string; creditNoteNumber: string; totalCreditMinor: number; settlement?: any }>(
+    `/api/invoices/${encodeURIComponent(invoiceId)}/returns`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+
+export const submitExchange = (data: {
+  origInvoiceId: string;
+  branchId?: string;
+  counter?: string;
+  counterId?: string;
+  returnLines: {
+    origLineId: string;
+    returnQtyMilli: number;
+    condition: 'resellable' | 'damaged' | 'defective';
+    reason: string;
+    remarks?: string;
+  }[];
+  newLines: any[];
+  paymentMethod?: string;
+  paymentRef?: string;
+  excessRefundMethod?: string;
+  customerName?: string;
+  customerPhone?: string;
+}) =>
+  api<{
+    success: boolean;
+    exchangeId: string;
+    creditNoteId: string;
+    creditNoteNumber: string;
+    newInvoiceId: string;
+    newInvoiceNumber: string;
+    returnTotalMinor: number;
+    newPurchaseMinor: number;
+    customerPayableMinor: number;
+    customerRefundMinor: number;
+    exchangeAdjustedMinor: number;
+  }>('/api/exchanges', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const fetchDayClosingPreview = (params: { bdate?: string; date?: string; branchId?: string } = {}) => {
+  const q = new URLSearchParams();
+  const bdate = params.bdate || params.date;
+  if (bdate) q.set('bdate', bdate);
+  if (params.branchId) q.set('branchId', params.branchId);
+  return api<any>(`/api/day-closing/preview?${q.toString()}`);
+};
+
+export const submitDayClosing = (data: {
+  bdate?: string;
+  date?: string;
+  branchId?: string;
+  actualCashMinor?: number;
+  actualClosingCashMinor?: number;
+  remarks?: string;
+  closingRemarks?: string;
+}) =>
+  api<{ success: boolean; dayClosing: any }>('/api/day-closing/submit', {
+    method: 'POST',
+    body: JSON.stringify({
+      bdate: data.bdate || data.date,
+      branchId: data.branchId,
+      actualCashMinor: data.actualCashMinor ?? data.actualClosingCashMinor,
+      remarks: data.remarks || data.closingRemarks,
+    }),
+  });
+
+export const fetchDayClosingHistory = (params: { branchId?: string; limit?: number } = {}) => {
+  const q = new URLSearchParams();
+  if (params.branchId) q.set('branchId', params.branchId);
+  if (params.limit) q.set('limit', String(params.limit));
+  return api<{ history: any[]; records?: any[] }>(`/api/day-closing/history?${q.toString()}`).then((res) => ({
+    history: res.history || [],
+    records: res.history || [],
+  }));
+};
+
+export const fetchReturnReports = (params: {
+  reportType?: string;
+  filter?: string;
+  period?: string;
+  from?: string;
+  to?: string;
+  startDate?: string;
+  endDate?: string;
+  branchId?: string;
+}) => {
+  const q = new URLSearchParams();
+  q.set('reportType', params.reportType || 'daily_sales');
+  const filter = params.filter || params.period || 'this_month';
+  q.set('filter', filter);
+  const from = params.from || params.startDate;
+  const to = params.to || params.endDate;
+  if (from) q.set('from', from);
+  if (to) q.set('to', to);
+  if (params.branchId) q.set('branchId', params.branchId);
+  return api<any>(`/api/reports/returns-module?${q.toString()}`);
+};
+
 

@@ -23,13 +23,15 @@ export interface PrintBarcodeModalProps {
   onClose: () => void;
   item: Item | null;
   shopName?: string;
+  shopLogoUrl?: string | null;
 }
 
-export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarcodeModalProps) {
+export function PrintBarcodeModal({ isOpen, onClose, item, shopName, shopLogoUrl }: PrintBarcodeModalProps) {
   const [selectedSizeId, setSelectedSizeId] = useState<string>('thermal-50-25');
   const [customWidthMm, setCustomWidthMm] = useState<number>(50);
   const [customHeightMm, setCustomHeightMm] = useState<number>(25);
 
+  const [showShopLogo, setShowShopLogo] = useState<boolean>(true);
   const [showProductName, setShowProductName] = useState<boolean>(true);
   const [showPrice, setShowPrice] = useState<boolean>(true);
   const [showShopName, setShowShopName] = useState<boolean>(false);
@@ -110,7 +112,36 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
       URL.revokeObjectURL(blobUrl);
 
       const centerX = canvas.width / 2;
-      let curY = Math.round(canvas.height * 0.12);
+      let curY = Math.round(canvas.height * 0.10);
+
+      // 0. Store Logo (optional)
+      if (showShopLogo && shopLogoUrl) {
+        try {
+          const logoImg = new Image();
+          logoImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve) => {
+            logoImg.onload = () => resolve();
+            logoImg.onerror = () => resolve();
+            logoImg.src = shopLogoUrl;
+          });
+          if (logoImg.width > 0 && logoImg.height > 0) {
+            const maxLogoH = Math.round(canvas.height * 0.16);
+            const maxLogoW = Math.round(canvas.width * 0.40);
+            const aspect = logoImg.width / logoImg.height;
+            let drawW = maxLogoW;
+            let drawH = drawW / aspect;
+            if (drawH > maxLogoH) {
+              drawH = maxLogoH;
+              drawW = drawH * aspect;
+            }
+            const drawX = (canvas.width - drawW) / 2;
+            ctx.drawImage(logoImg, drawX, curY - Math.round(canvas.height * 0.04), drawW, drawH);
+            curY += Math.round(drawH * 1.05);
+          }
+        } catch (e) {
+          console.warn('Could not draw store logo on barcode PNG:', e);
+        }
+      }
 
       // 1. Shop name
       if (showShopName && shopName) {
@@ -181,6 +212,7 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
     // Construct single label HTML
     const singleLabelHtml = `
       <div class="print-label-page">
+        ${showShopLogo && shopLogoUrl ? `<img src="${escapeHtml(shopLogoUrl)}" class="label-logo" alt="Logo" />` : ''}
         ${showShopName && shopName ? `<div class="label-shop">${escapeHtml(shopName)}</div>` : ''}
         ${showProductName ? `<div class="label-name">${escapeHtml(item.name)}</div>` : ''}
         <div class="label-barcode-svg">${barcodeSvgBarsOnly}</div>
@@ -250,6 +282,13 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
             .print-label-page:last-child {
               page-break-after: avoid;
               break-after: avoid;
+            }
+            .label-logo {
+              max-height: ${Math.max(3.5, Math.round(heightMm * 0.16))}mm;
+              max-width: ${Math.round(widthMm * 0.45)}mm;
+              object-fit: contain;
+              margin-bottom: 0.5mm;
+              display: block;
             }
             .label-shop {
               font-size: 7pt;
@@ -493,6 +532,18 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
                   <span>Selling price</span>
                 </label>
 
+                {shopLogoUrl && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.85rem', color: '#1e293b', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={showShopLogo}
+                      onChange={(e) => setShowShopLogo(e.target.checked)}
+                      style={{ width: '16px', height: '16px', accentColor: '#6d4aff', cursor: 'pointer' }}
+                    />
+                    <span>Store Logo</span>
+                  </label>
+                )}
+
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontSize: '0.85rem', color: '#1e293b', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
@@ -577,6 +628,21 @@ export function PrintBarcodeModal({ isOpen, onClose, item, shopName }: PrintBarc
                     transition: 'all 0.15s ease',
                   }}
                 >
+                  {/* Store logo (optional) */}
+                  {showShopLogo && shopLogoUrl && (
+                    <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'center' }}>
+                      <img
+                        src={shopLogoUrl}
+                        alt="Store Logo"
+                        style={{
+                          maxHeight: '26px',
+                          maxWidth: '90px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </div>
+                  )}
+
                   {/* Shop name (optional) */}
                   {showShopName && (
                     <div

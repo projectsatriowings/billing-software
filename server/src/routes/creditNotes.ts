@@ -9,6 +9,37 @@ import { DEFAULT_CONFIG } from '../../../shared/types.ts';
 import { normalizePhone } from '../../../shared/whatsapp.ts';
 
 export function registerCreditNotes(r: Router) {
+  // 0. Search posted sales invoices by invoice number, customer phone, or customer name
+  r.get('/api/invoices/search-for-return', requireUser, async (ctx) => {
+    const tenantId = ctx.user!.tenantId;
+    const qStr = String(ctx.query.q || '').trim();
+    if (!qStr) return { invoices: [] };
+
+    const searchPattern = `%${qStr.toLowerCase()}%`;
+    const invoices = await ctx.db.query(
+      `SELECT i.id, i.number, i.bdate, i.total_minor, i.paid_minor, i.balance_minor,
+              i.customer_name, i.customer_phone, i.status, i.kind, i.created_at,
+              COALESCE(i.counter, 'COUNTER-1') AS counter,
+              COALESCE(i.location, 'MAIN') AS location,
+              COALESCE((SELECT json_agg(json_build_object('method', p.method, 'amountMinor', p.amount_minor))
+                        FROM payments p WHERE p.invoice_id = i.id), '[]'::json) AS payments
+       FROM invoices i
+       WHERE i.tenant_id = ?
+         AND i.kind = 'sale'
+         AND i.status = 'posted'
+         AND (
+           lower(i.number) LIKE ?
+           OR i.customer_phone LIKE ?
+           OR lower(COALESCE(i.customer_name, '')) LIKE ?
+         )
+       ORDER BY i.created_at DESC
+       LIMIT 15`,
+      [tenantId, searchPattern, `%${qStr}%`, searchPattern],
+    );
+
+    return { invoices };
+  });
+
   // 1. Get returnable info for an invoice (pre-fill Create Return / Credit Note screen)
   r.get('/api/invoices/:id/return-info', requireUser, async (ctx) => {
     const tenantId = ctx.user!.tenantId;
@@ -220,7 +251,19 @@ export function registerCreditNotes(r: Router) {
     const refundReference = V.optStr(b.refundReference, 'Refund reference', 100);
     const overallNote = V.optStr(b.note, 'Note', 250);
 
-    const VALID_REASONS = ['Defective', 'Wrong Item', 'Customer Changed Mind', 'Damaged', 'Expired', 'Other'];
+    const VALID_REASONS = [
+      'Size too small',
+      'Size too large',
+      'Damaged product',
+      'Wrong product',
+      'Customer changed mind',
+      'Defective',
+      'Wrong Item',
+      'Customer Changed Mind',
+      'Damaged',
+      'Expired',
+      'Other',
+    ];
 
     let savedCnId = '';
     let assignedNumber = '';
@@ -244,6 +287,18 @@ export function registerCreditNotes(r: Router) {
       }
       if (origInv.status === 'voided') {
         throw bad('Cannot return on a voided document.', 'VOIDED_BILL');
+      }
+
+      const cnBranchId = origInv.branch_id || origInv.branchId || null;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (cnBranchId) {
+        const closedDay = await q.one<any>(
+          "SELECT id FROM day_closings WHERE tenant_id = ? AND branch_id = ? AND bdate = ? AND status = 'closed'",
+          [tenantId, cnBranchId, todayStr],
+        );
+        if (closedDay) {
+          throw bad(`Day ${todayStr} has already undergone Day Closing for this branch. Cannot record new returns on closed days.`, 'DAY_CLOSED');
+        }
       }
 
       // 2. Lock original lines
@@ -294,7 +349,7 @@ export function registerCreditNotes(r: Router) {
 
       for (let i = 0; i < linesInput.length; i++) {
         const item = linesInput[i];
-        const origLineId = V.str(item.origLineId, `Line ${i + 1} ID`, { required: true });
+        const origLineId = V.str(item.origLineId || item.lineId, `Line ${i + 1} ID`, { required: true });
         const origL = origLineMap.get(origLineId);
         if (!origL) {
           throw bad(`Original line ${origLineId} not found on this invoice.`);
@@ -311,7 +366,7 @@ export function registerCreditNotes(r: Router) {
         }
 
         const returnableQtyMilli = Math.max(0, billedQtyMilli - alreadyReturned);
-        const returnQtyMilli = V.int(item.returnQtyMilli ?? 0, `Line ${origL.name} return quantity`, { min: 0 });
+        const returnQtyMilli = V.int(item.returnQtyMilli ?? item.qtyMilli ?? 0, `Line ${origL.name} return quantity`, { min: 0 });
 
         if (returnQtyMilli > returnableQtyMilli) {
           throw bad(
@@ -337,8 +392,12 @@ export function registerCreditNotes(r: Router) {
             finalReason = `Other: ${custom.trim()}`;
           }
 
-          // Restock flag
-          const restock = Boolean(item.restock ?? true);
+          // Condition & Restock handling
+          const rawCondition = String(item.condition || (item.restock === false ? 'damaged' : 'resellable')).toLowerCase().trim();
+          const condition: 'resellable' | 'damaged' | 'defective' =
+            rawCondition === 'defective' ? 'defective' : rawCondition === 'damaged' ? 'damaged' : 'resellable';
+          const restock = condition === 'resellable';
+          const remarks = V.optStr(item.remarks || item.customReason, 'Remarks', 250);
 
           preparedLines.push({
             origLineId: origL.id,
@@ -359,7 +418,9 @@ export function registerCreditNotes(r: Router) {
             origIgstMinor: Number(origL.igstMinor ?? origL.igst_minor),
             origTotalMinor: Number(origL.totalMinor ?? origL.total_minor),
             restock,
+            condition,
             reason: finalReason,
+            remarks: remarks || undefined,
           });
         }
 
@@ -458,7 +519,6 @@ export function registerCreditNotes(r: Router) {
       settlementResult = settlement;
 
       // 7. Number series for Credit Note (CN-1001)
-      const cnBranchId = origInv.branch_id || origInv.branchId;
       const seriesRow = await q.one<{ assignedNo?: number; assigned_no?: number }>(
         `INSERT INTO number_series (tenant_id, branch_id, series, next_no)
          VALUES (?, ?, 'CN', 2)
@@ -472,7 +532,6 @@ export function registerCreditNotes(r: Router) {
       const cnId = newId('cn');
       savedCnId = cnId;
       savedShareToken = newId('tok');
-      const todayStr = new Date().toISOString().slice(0, 10);
 
       // 8. Insert credit note invoice
       const cnCustName = origInv.customer_name || origInv.customerName || origInv.party_name || origInv.partyName || null;
@@ -533,18 +592,24 @@ export function registerCreditNotes(r: Router) {
         ],
       );
 
-      // 9. Insert lines and create restock stock moves
+      // 9. Insert lines and create condition-specific stock moves
       for (let i = 0; i < calculated.lines.length; i++) {
         const cl = calculated.lines[i];
         const lineId = newId('inl');
+        const origLineObj = origLineMap.get(cl.origLineId);
+        let costMinor = Number(origLineObj?.costMinor ?? origLineObj?.cost_minor ?? 0);
+        if (!costMinor && cl.itemId) {
+          const itemRow = await q.one<any>('SELECT cost_minor FROM items WHERE id = ?', [cl.itemId]);
+          costMinor = Number(itemRow?.cost_minor ?? 0);
+        }
 
         await q.exec(
           `INSERT INTO invoice_lines (
             id, tenant_id, branch_id, invoice_id, pos, item_id, name, hsn, unit,
             qty_milli, price_minor, discount_minor, tax_rate_bp, inclusive,
             taxable_minor, cgst_minor, sgst_minor, igst_minor, total_minor,
-            reason, restock, orig_line_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            reason, restock, orig_line_id, item_condition, cost_minor
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             lineId,
             tenantId,
@@ -564,27 +629,35 @@ export function registerCreditNotes(r: Router) {
             cl.sgstMinor,
             cl.igstMinor,
             cl.totalMinor,
-            cl.reason,
+            cl.remarks ? `${cl.reason} (${cl.remarks})` : cl.reason,
             cl.restock,
             cl.origLineId,
+            cl.condition || (cl.restock ? 'resellable' : 'damaged'),
+            costMinor,
           ],
         );
 
-        // Stock moves: ONLY if restock is true and item has itemId
-        if (cl.restock && cl.itemId) {
+        // Stock moves:
+        // - Resellable: Added to available inventory ('MAIN' / branch)
+        // - Damaged: Placed into 'DAMAGED' inventory
+        // - Defective: Placed into 'DEFECTIVE' inventory
+        // Available stock query filters out DAMAGED and DEFECTIVE so non-resellable is never counted as available
+        if (cl.itemId) {
+          const moveLocation = cl.condition === 'damaged' ? 'DAMAGED' : cl.condition === 'defective' ? 'DEFECTIVE' : (origInv.location || 'MAIN');
           await q.exec(
             `INSERT INTO stock_moves (
               id, tenant_id, branch_id, item_id, location, qty_milli, kind, ref_type, ref_id, user_id, reason, created_at
-            ) VALUES (?, ?, ?, ?, 'MAIN', ?, 'return', 'credit_note', ?, ?, ?, NOW())`,
+            ) VALUES (?, ?, ?, ?, ?, ?, 'return', 'credit_note', ?, ?, ?, NOW())`,
             [
               newId('sm'),
               tenantId,
               cnBranchId,
               cl.itemId,
-              cl.returnQtyMilli, // positive stock return
+              moveLocation,
+              cl.returnQtyMilli,
               cnId,
               ctx.user!.id,
-              cl.reason,
+              `${cl.reason}${cl.remarks ? ' - ' + cl.remarks : ''} [${cl.condition || 'resellable'}]`,
             ],
           );
         }
@@ -615,13 +688,57 @@ export function registerCreditNotes(r: Router) {
         );
       }
 
-      // 11. Add customer advance if created
+      // 11. Add customer advance if created and record in store_credits
       if (settlement.advanceAmountMinor > 0 && partyId) {
         await q.exec(
           `UPDATE parties
            SET advance_minor = advance_minor + ?
            WHERE id = ? AND tenant_id = ?`,
           [settlement.advanceAmountMinor, partyId, tenantId],
+        );
+
+        await q.exec(
+          `INSERT INTO store_credits (
+            id, tenant_id, party_id, credit_note_id, amount_minor, balance_minor, status, reference_no, notes, created_by, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, NOW(), NOW())`,
+          [
+            newId('sc'),
+            tenantId,
+            partyId,
+            cnId,
+            settlement.advanceAmountMinor,
+            settlement.advanceAmountMinor,
+            assignedNumber,
+            `Store credit issued from Return ${assignedNumber}`,
+            ctx.user!.id,
+          ],
+        );
+      }
+
+      // 12. Record in refund_transactions if refund was issued
+      if (settlement.refundAmountMinor > 0) {
+        const openShiftRow = await q.one<any>(
+          "SELECT id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' LIMIT 1",
+          [tenantId, ctx.user!.id],
+        );
+        await q.exec(
+          `INSERT INTO refund_transactions (
+            id, tenant_id, credit_note_id, orig_invoice_id, party_id, amount_minor, method, reference_no, bdate, shift_id, notes, processed_by, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [
+            newId('rfd'),
+            tenantId,
+            cnId,
+            origInv.id,
+            partyId || null,
+            settlement.refundAmountMinor,
+            settlement.refundMode || 'cash',
+            settlement.refundReference || null,
+            todayStr,
+            openShiftRow?.id || null,
+            overallNote || null,
+            ctx.user!.id,
+          ],
         );
       }
 

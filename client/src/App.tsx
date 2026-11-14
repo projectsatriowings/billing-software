@@ -156,7 +156,6 @@ import { RecentBillsBentoView } from './components/invoices/RecentBillsBentoView
 import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
-import { CashBankView } from './components/finance/CashBankView.tsx';
 import { ReceivablesView } from './components/finance/ReceivablesView.tsx';
 import { PayablesView } from './components/finance/PayablesView.tsx';
 import { GstOverviewView } from './components/gst/GstOverviewView.tsx';
@@ -173,6 +172,10 @@ import { DiscountsPromotionsView } from './components/promotions/DiscountsPromot
 import { evaluatePromotions, type Promotion, type PromotionEvalResult, type CartItemForEval } from '../../shared/promotions.ts';
 import { fetchPromotions } from './api';
 import { LoyaltySchemeModal } from './components/loyalty/LoyaltySchemeModal.tsx';
+import { PosReturnExchangeModal, type ReturnSelectedLine } from './components/pos/PosReturnExchangeModal.tsx';
+import { DayClosingView } from './components/shifts/DayClosingView.tsx';
+import { ReturnReportsView } from './components/reports/ReturnReportsView.tsx';
+import { submitExchange } from './api';
 
 // Routes and tabs where the business info bar (green-dot pill) and its dividers are hidden
 export const HIDE_BUSINESS_BAR_ROUTES = [
@@ -190,7 +193,6 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
   '/purchases',
   '/payments',
   '/expenses',
-  '/cashbank',
   '/payables',
   '/receivables',
   '/reports',
@@ -213,7 +215,6 @@ export const HIDE_BUSINESS_BAR_TABS = new Set([
   'purchases',
   'payments',
   'expenses',
-  'cashbank',
   'payables',
   'receivables',
   'reports',
@@ -244,7 +245,6 @@ export const PAGE_TITLES: Record<string, string> = {
   '/purchases': 'Accounts & Finance',
   '/payments': 'Accounts & Finance',
   '/expenses': 'Accounts & Finance',
-  '/cashbank': 'Accounts & Finance',
   '/payables': 'Accounts & Finance',
   '/receivables': 'Accounts & Finance',
   '/reports': 'Accounts & Finance',
@@ -262,7 +262,6 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'purchases': 'Purchase Management',
   'payments': 'Payment Management',
   'expenses': 'Expense Management',
-  'cashbank': 'Financial Accounts',
   'payables': 'Accounts Payable',
   'receivables': 'Accounts Receivable',
   'reports': 'Management Reports',
@@ -274,6 +273,8 @@ export const TAB_PAGE_TITLES: Record<string, string> = {
   'gst-gstr1': 'GSTR-1 Outward Supplies',
   'gst-import-export': 'GST Import & Export',
   'gst-filing-history': 'GST Filing History',
+  'day-closing': 'Day Closing & Register Reconciliation',
+  'return-reports': 'Returns, Exchanges & Profit Reports',
 };
 
 export interface ToastItem {
@@ -547,7 +548,7 @@ export const getBusinessLabel = (type?: string) => {
   }
 };
 
-export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices']);
+export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices', 'day-closing']);
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -570,7 +571,6 @@ export function App() {
     | 'settings'
     | 'payments'
     | 'expenses'
-    | 'cashbank'
     | 'receivables'
     | 'payables'
     | 'gst-overview'
@@ -583,6 +583,8 @@ export function App() {
     | 'gst-filing-history'
     | 'promotions'
     | 'user-management'
+    | 'day-closing'
+    | 'return-reports'
   >(() => {
     try {
       const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -623,7 +625,7 @@ export function App() {
   }, [user?.role, activeTabRaw]);
 
   // Collapsible sidebar accordion sections
-  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'cashbank', 'payables', 'reports'].includes(activeTab);
+  const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'payables', 'reports'].includes(activeTab);
   const isGstTabActive = [
     'gst-overview',
     'gst-sales-register',
@@ -864,6 +866,9 @@ export function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<{ item: Item; qty: number }[]>([]);
+  const [showReturnExchangeModal, setShowReturnExchangeModal] = useState<boolean>(false);
+  const [activeExchangeLines, setActiveExchangeLines] = useState<ReturnSelectedLine[]>([]);
+  const [activeExchangeOrigBill, setActiveExchangeOrigBill] = useState<string>('');
   const [parties, setParties] = useState<Party[]>([]);
   const [selectedPartyId, setSelectedPartyId] = useState<string>('');
   const [selectedPayMode, setSelectedPayMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'split'>('cash');
@@ -1203,6 +1208,9 @@ export function App() {
   const [settingsUpiId, setSettingsUpiId] = useState('');
   const [settingsPrefix, setSettingsPrefix] = useState('');
   const [settingsOwnerEmail, setSettingsOwnerEmail] = useState('');
+  const [settingsLogoUrl, setSettingsLogoUrl] = useState('');
+  const [logoPreviewTab, setLogoPreviewTab] = useState<'favicon' | 'app' | 'label'>('favicon');
+  const [isDraggingLogo, setIsDraggingLogo] = useState<boolean>(false);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState('');
 
   // Settings: WhatsApp Bill Sharing (Section 9.1)
@@ -1778,6 +1786,7 @@ export function App() {
     setSettingsUpiId(s.upiId || '');
     setSettingsPrefix(s.invoicePrefix || 'INV');
     setSettingsOwnerEmail(s.ownerEmail || '');
+    setSettingsLogoUrl(s.logoUrl || '');
     setSettingsWhatsAppEnabled(s.whatsappEnabled !== false);
     setSettingsWhatsAppDefaultLang(s.whatsappDefaultLang || 'en');
     setSettingsWhatsAppIncludeLink(Boolean(s.whatsappIncludeLink));
@@ -1821,7 +1830,7 @@ export function App() {
       } catch { }
       showToast("You don't have access to User Management");
     }
-    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'cashbank' || activeTab === 'receivables' || activeTab === 'payables')) {
+    if (!can(user.role as any, 'gst.view') && (activeTab.startsWith('gst-') || activeTab === 'payments' || activeTab === 'receivables' || activeTab === 'payables')) {
       setActiveTab('pos');
     }
   }, [user, activeTab]);
@@ -1845,6 +1854,40 @@ export function App() {
       initSettingsForm(shop);
     }
   }, [user?.id, shop?.id]);
+
+  // Dynamically update website favicon and browser tab title to match store brand
+  useEffect(() => {
+    // 1. Dynamic Favicon
+    let faviconLink: HTMLLinkElement | null = document.getElementById('app-favicon') as HTMLLinkElement | null;
+    if (!faviconLink) {
+      faviconLink = document.querySelector("link[rel*='icon']");
+    }
+    if (!faviconLink) {
+      faviconLink = document.createElement('link');
+      faviconLink.id = 'app-favicon';
+      faviconLink.rel = 'shortcut icon';
+      document.head.appendChild(faviconLink);
+    }
+    if (shop?.logoUrl) {
+      faviconLink.href = shop.logoUrl;
+      faviconLink.type = 'image/png';
+    } else {
+      faviconLink.href = '/favicon.ico';
+    }
+
+    // 2. Apple Touch Icon (mobile homescreen)
+    const appleIcon: HTMLLinkElement | null = document.getElementById('app-apple-touch-icon') as HTMLLinkElement | null;
+    if (appleIcon && shop?.logoUrl) {
+      appleIcon.href = shop.logoUrl;
+    }
+
+    // 3. Dynamic Browser Tab Title
+    if (shop?.name) {
+      document.title = `${shop.name} | Cloud POS & Billing`;
+    } else {
+      document.title = 'Adaptive Billing | India-First Cloud POS & GST Invoicing';
+    }
+  }, [shop?.logoUrl, shop?.name]);
 
 
   // Real-time Promotions Evaluation Engine & BOGO Auto-Free Insertion
@@ -2536,7 +2579,7 @@ export function App() {
           localStorage.setItem('selected_branch', enforced);
           sessionStorage.setItem('sa_selected_branch', enforced);
           sessionStorage.setItem('selected_branch', enforced);
-        } catch {}
+        } catch { }
       } else {
         const saved = localStorage.getItem('sa_selected_branch') || 'all';
         setSelectedBranchScope(saved);
@@ -2606,6 +2649,118 @@ export function App() {
     navigateTo('landing');
   };
 
+  const handleLogoFileUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        // High quality downscale to max 320x320 for sharp favicon and fast save
+        const maxDim = 320;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setSettingsLogoUrl(canvas.toDataURL('image/png'));
+        } else {
+          setSettingsLogoUrl((ev.target?.result as string) || '');
+        }
+      };
+      img.onerror = () => {
+        setSettingsLogoUrl((ev.target?.result as string) || '');
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!confirm('Are you sure you want to remove your store brand logo?')) return;
+    setSettingsLogoUrl('');
+    try {
+      setIsSavingSettings(true);
+      const updated = await api<Shop>('/api/shop', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: settingsName,
+          businessType: settingsType,
+          gstin: settingsGstin || null,
+          phone: settingsPhone || null,
+          address: settingsAddress || null,
+          upiId: settingsUpiId || null,
+          invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
+          logoUrl: null,
+          whatsappEnabled: settingsWhatsAppEnabled,
+          whatsappDefaultLang: settingsWhatsAppDefaultLang,
+          whatsappIncludeLink: settingsWhatsAppIncludeLink,
+          loyaltyEnabled: settingsLoyaltyEnabled,
+          loyaltyPointsPer100: Math.max(0, Number(settingsLoyaltyPointsPer100) || 0),
+          loyaltyPointValueMinor: Math.round((Number(settingsLoyaltyPointValueRupees) || 0.10) * 100),
+          loyaltyMinPointsRedeem: Math.max(0, Number(settingsLoyaltyMinRedeem) || 0),
+        }),
+      });
+      setShop(updated);
+      initSettingsForm(updated);
+      showToast('Store logo permanently removed!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove logo on server');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleSaveLogoDirectly = async (logoToSave?: string) => {
+    const targetLogo = logoToSave !== undefined ? logoToSave : settingsLogoUrl;
+    try {
+      setIsSavingSettings(true);
+      const updated = await api<Shop>('/api/shop', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: settingsName,
+          businessType: settingsType,
+          gstin: settingsGstin || null,
+          phone: settingsPhone || null,
+          address: settingsAddress || null,
+          upiId: settingsUpiId || null,
+          invoicePrefix: settingsPrefix || 'INV',
+          ownerEmail: settingsOwnerEmail || null,
+          logoUrl: targetLogo || null,
+          whatsappEnabled: settingsWhatsAppEnabled,
+          whatsappDefaultLang: settingsWhatsAppDefaultLang,
+          whatsappIncludeLink: settingsWhatsAppIncludeLink,
+          loyaltyEnabled: settingsLoyaltyEnabled,
+          loyaltyPointsPer100: Math.max(0, Number(settingsLoyaltyPointsPer100) || 0),
+          loyaltyPointValueMinor: Math.round((Number(settingsLoyaltyPointValueRupees) || 0.10) * 100),
+          loyaltyMinPointsRedeem: Math.max(0, Number(settingsLoyaltyMinRedeem) || 0),
+        }),
+      });
+      setShop(updated);
+      initSettingsForm(updated);
+      showToast('Store logo saved successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save logo');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsSavedMsg('');
@@ -2622,6 +2777,7 @@ export function App() {
           upiId: settingsUpiId || null,
           invoicePrefix: settingsPrefix || 'INV',
           ownerEmail: settingsOwnerEmail || null,
+          logoUrl: settingsLogoUrl || null,
           whatsappEnabled: settingsWhatsAppEnabled,
           whatsappDefaultLang: settingsWhatsAppDefaultLang,
           whatsappIncludeLink: settingsWhatsAppIncludeLink,
@@ -3191,6 +3347,11 @@ export function App() {
   const promoDiscountMinor = promoEvalResult?.totalDiscountMinor || 0;
   const discountMinor = percentDiscountMinor + pointsDiscountMinor + promoDiscountMinor;
   const finalPayableMinor = Math.max(0, cartTotalMinor - discountMinor);
+  const totalExchangeCreditMinor = useMemo(() => {
+    return activeExchangeLines.reduce((acc, l) => acc + (l.estimatedCreditMinor || 0), 0);
+  }, [activeExchangeLines]);
+  const exchangeCustomerPayableMinor = Math.max(0, finalPayableMinor - totalExchangeCreditMinor);
+  const exchangeCustomerRefundMinor = Math.max(0, totalExchangeCreditMinor - finalPayableMinor);
   const pointsToEarnOnBill = (shopLoyaltyActive && shopPointsPer100 > 0)
     ? Math.floor((finalPayableMinor * shopPointsPer100) / 10000)
     : 0;
@@ -3878,6 +4039,45 @@ export function App() {
       const cleanSearchDigits = customerSearch.trim().replace(/\D/g, '');
       const checkoutPhone = selectedCustomer?.phone || (cleanSearchDigits.length >= 7 ? customerSearch.trim() : undefined);
       const checkoutCustName = custName || (selectedCustomer ? selectedCustomer.name : (quickCustomerName.trim() || (checkoutPhone ? `Customer ${checkoutPhone.replace(/\D/g, '').slice(-4)}` : undefined)));
+
+      // Handle Exchange Transaction Workflow
+      if (activeExchangeLines.length > 0) {
+        const exchangeMethod = selectedPayMode === 'split' ? splitMethod1 : selectedPayMode;
+        const exchangeRef = (exchangeMethod === 'upi' || exchangeMethod === 'bank')
+          ? (activeQrAttempt?.providerPaymentId || (upiManualRef.trim() ? upiManualRef.trim() : undefined))
+          : (exchangeMethod === 'card' ? (paymentCardRef || 'CARD_PAYMENT') : undefined);
+
+        const exchangeRes = await submitExchange({
+          origInvoiceId: activeExchangeLines[0].origInvoiceId,
+          branchId: activeBranch?.id || user?.branchId || undefined,
+          counter: selectedCounter,
+          counterId: checkoutCounterId || selectedCounterId || undefined,
+          returnLines: activeExchangeLines.map((l) => ({
+            origLineId: l.origLineId,
+            returnQtyMilli: l.returnQtyMilli,
+            condition: l.condition,
+            reason: l.reason,
+            remarks: l.remarks,
+          })),
+          newLines: lines,
+          paymentMethod: exchangeMethod,
+          paymentRef: exchangeRef,
+          excessRefundMethod: 'cash',
+          customerName: checkoutCustName,
+          customerPhone: checkoutPhone,
+        });
+
+        showToast(`✓ Exchange completed! New Bill: ${exchangeRes.newInvoiceNumber}, Credit Note: ${exchangeRes.creditNoteNumber}`);
+        try {
+          window.open(`/api/exchanges/${exchangeRes.exchangeId}/print`, '_blank', 'width=900,height=800');
+        } catch { }
+
+        setActiveExchangeLines([]);
+        setActiveExchangeOrigBill('');
+        setCart([]);
+        setIsCheckingOut(false);
+        return;
+      }
 
       const res = await api<{
         invoiceId: string;
@@ -6026,17 +6226,37 @@ export function App() {
                 className="sidebar-brand"
                 onClick={() => navigateTo('landing')}
                 style={{ cursor: 'pointer' }}
-                title="Adaptive Billing · Cloud POS & GST"
+                title={`${shop?.name || 'Adaptive Billing'} · Cloud POS & GST`}
               >
-                <div className="sidebar-brand-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 2L2 22h20L12 2z" />
-                    <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
-                  </svg>
+                <div
+                  className="sidebar-brand-icon"
+                  style={shop?.logoUrl ? { background: '#ffffff', padding: '3px' } : undefined}
+                >
+                  {shop?.logoUrl ? (
+                    <img
+                      src={shop.logoUrl}
+                      alt={shop.name || 'Store Logo'}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        borderRadius: '7px',
+                      }}
+                    />
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2L2 22h20L12 2z" />
+                      <path d="M12 2v20" strokeWidth="1.5" strokeDasharray="2 2" />
+                    </svg>
+                  )}
                 </div>
                 <div className="sidebar-brand-text">
-                  <span className="sidebar-brand-title">Adaptive Billing</span>
-                  <span className="sidebar-brand-subtitle">Cloud POS &amp; GST</span>
+                  <span className="sidebar-brand-title" title={shop?.name || 'Adaptive Billing'}>
+                    {shop?.name || 'Adaptive Billing'}
+                  </span>
+                  <span className="sidebar-brand-subtitle">
+                    {shop?.businessType ? getBusinessLabel(shop.businessType) : 'Cloud POS & GST'}
+                  </span>
                 </div>
               </div>
 
@@ -6501,23 +6721,40 @@ export function App() {
 
               {/* Cashier Recent Bills */}
               {user?.role === 'cashier' && (
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('invoices')}
-                  title="Recent Bills"
-                >
-                  <span className="nav-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" y1="13" x2="8" y2="13" />
-                      <line x1="16" y1="17" x2="8" y2="17" />
-                      <polyline points="10 9 9 9 8 9" />
-                    </svg>
-                  </span>
-                  <span className="nav-text">Recent Bills</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={`sidebar-nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('invoices')}
+                    title="Recent Bills"
+                  >
+                    <span className="nav-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                      </svg>
+                    </span>
+                    <span className="nav-text">Recent Bills</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`sidebar-nav-item ${activeTab === 'day-closing' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('day-closing')}
+                    title="Day Closing & Register Reconciliation"
+                  >
+                    <span className="nav-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </span>
+                    <span className="nav-text">Day Closing</span>
+                  </button>
+                </>
               )}
 
               {/* 7. Customers: Only for Store Manager and Super Admin */}
@@ -6638,7 +6875,7 @@ export function App() {
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'payments' || activeTab === 'payables' ? 'active' : ''}`}
                         onClick={() => setActiveTab('payments')}
                       >
                         <span className="nav-icon">
@@ -6647,7 +6884,7 @@ export function App() {
                             <line x1="1" y1="10" x2="23" y2="10" />
                           </svg>
                         </span>
-                        <span className="nav-text">Payments</span>
+                        <span className="nav-text">Payments &amp; Payables</span>
                       </button>
 
                       <button
@@ -6667,51 +6904,30 @@ export function App() {
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'cashbank' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('cashbank')}
+                        className={`sidebar-nav-item ${activeTab === 'day-closing' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('day-closing')}
                       >
                         <span className="nav-icon">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="3" y1="21" x2="21" y2="21" />
-                            <line x1="4" y1="10" x2="20" y2="10" />
-                            <polyline points="12 3 2 10 22 10" />
-                            <line x1="6" y1="10" x2="6" y2="21" />
-                            <line x1="10" y1="10" x2="10" y2="21" />
-                            <line x1="14" y1="10" x2="14" y2="21" />
-                            <line x1="18" y1="10" x2="18" y2="21" />
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                           </svg>
                         </span>
-                        <span className="nav-text">Cash &amp; Bank</span>
+                        <span className="nav-text">Day Closing</span>
                       </button>
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'payables' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('payables')}
+                        className={`sidebar-nav-item ${activeTab === 'return-reports' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('return-reports')}
                       >
                         <span className="nav-icon">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
-                            <polyline points="17 18 23 18 23 12" />
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                            <polyline points="17 6 23 6 23 12" />
                           </svg>
                         </span>
-                        <span className="nav-text">Payables</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('reports')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                            <line x1="2" y1="20" x2="22" y2="20" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Financial Reports</span>
+                        <span className="nav-text">Returns &amp; Profit Reports</span>
                       </button>
                     </div>
                   )}
@@ -6767,23 +6983,7 @@ export function App() {
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-sales-register' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-sales-register')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                            <line x1="8" y1="11" x2="16" y2="11" />
-                            <line x1="8" y1="15" x2="16" y2="15" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Sales Register</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-gstr1' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'gst-gstr1' || activeTab === 'gst-sales-register' ? 'active' : ''}`}
                         onClick={() => setActiveTab('gst-gstr1')}
                       >
                         <span className="nav-icon">
@@ -6794,27 +6994,12 @@ export function App() {
                             <line x1="16" y1="17" x2="8" y2="17" />
                           </svg>
                         </span>
-                        <span className="nav-text">GSTR-1</span>
+                        <span className="nav-text">GSTR-1 (Sales Register)</span>
                       </button>
 
                       <button
                         type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-purchase-register' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-purchase-register')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="21 8 21 21 3 21 3 8" />
-                            <rect x="1" y="3" width="22" height="5" rx="1" />
-                            <line x1="10" y1="12" x2="14" y2="12" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Purchase Register</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' ? 'active' : ''}`}
+                        className={`sidebar-nav-item ${activeTab === 'gst-itc-reconciliation' || activeTab === 'gst-purchase-register' ? 'active' : ''}`}
                         onClick={() => setActiveTab('gst-itc-reconciliation')}
                       >
                         <span className="nav-icon">
@@ -6826,7 +7011,7 @@ export function App() {
                             <path d="M3 7h18" />
                           </svg>
                         </span>
-                        <span className="nav-text">ITC Register &amp; Reconciliation</span>
+                        <span className="nav-text">ITC Register &amp; 2B Recon</span>
                       </button>
 
                       <button
@@ -6842,36 +7027,6 @@ export function App() {
                           </svg>
                         </span>
                         <span className="nav-text">GSTR-3B Preparation</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-import-export' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-import-export')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="17 1 21 5 17 9" />
-                            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                            <polyline points="7 23 3 19 7 15" />
-                            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Import &amp; Export</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`sidebar-nav-item ${activeTab === 'gst-filing-history' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('gst-filing-history')}
-                      >
-                        <span className="nav-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                        </span>
-                        <span className="nav-text">Filing History</span>
                       </button>
                     </div>
                   )}
@@ -7164,30 +7319,57 @@ export function App() {
                 {currentHeaderTitle}
               </h1>
             ) : displayTab === 'dashboard' && user ? (
-              <div className="top-dash-greeting-group-left">
-                <h1 className="header-greeting-title">
-                  {dashboardGreeting}, {userFirstName}
-                </h1>
-                <div className="header-meta-line">
-                  <span className="header-meta-item header-shop-name">{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
-                  <span className="header-meta-sep">·</span>
-                  <span className="header-meta-item header-gstin-wrap">
-                    <span className="header-gstin-label">GSTIN </span>
-                    <span className="header-gstin-val">{shop?.gstin || '33AAAAA0000A1Z9'}</span>
-                  </span>
-                  <span className="header-meta-sep">·</span>
-                  <span className="header-meta-item header-date-wrap">
-                    <CalendarIcon size={15} className="header-calendar-icon" />
-                    <span>
-                      {new Date().toLocaleDateString('en-GB', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        timeZone: 'Asia/Kolkata',
-                      })}
+              <div className="top-dash-greeting-group-left" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                {shop?.logoUrl && (
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '12px',
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '3px',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                    }}
+                    title={shop.name}
+                  >
+                    <img
+                      src={shop.logoUrl}
+                      alt={shop.name}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+                <div>
+                  <h1 className="header-greeting-title">
+                    {dashboardGreeting}, {userFirstName}
+                  </h1>
+                  <div className="header-meta-line">
+                    <span className="header-meta-item header-shop-name">{shop?.name || 'Shree Krishna Supermarket & Retail'}</span>
+                    <span className="header-meta-sep">·</span>
+                    <span className="header-meta-item header-gstin-wrap">
+                      <span className="header-gstin-label">GSTIN </span>
+                      <span className="header-gstin-val">{shop?.gstin || '33AAAAA0000A1Z9'}</span>
                     </span>
-                  </span>
+                    <span className="header-meta-sep">·</span>
+                    <span className="header-meta-item header-date-wrap">
+                      <CalendarIcon size={15} className="header-calendar-icon" />
+                      <span>
+                        {new Date().toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          timeZone: 'Asia/Kolkata',
+                        })}
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -7560,7 +7742,6 @@ export function App() {
                     {displayTab === 'settings' && 'Business Configuration & Settings'}
                     {displayTab === 'payments' && 'Supplier Payments & Disbursements'}
                     {displayTab === 'expenses' && 'Business Operational Expenses'}
-                    {displayTab === 'cashbank' && 'Cash & Bank Reconciliation'}
                     {displayTab === 'receivables' && 'Accounts Receivable & Customer Dues'}
                     {displayTab === 'payables' && 'Accounts Payable & Vendor Balances'}
                     {displayTab === 'gst-overview' && 'GST Compliance & Filing Overview'}
@@ -7570,6 +7751,7 @@ export function App() {
                     {displayTab === 'gst-gstr3b' && 'GSTR-3B Preparation & Filing'}
                     {displayTab === 'gst-gstr1' && 'GSTR-1 Outward Supplies'}
                     {displayTab === 'gst-import-export' && 'GST Import & Export Hub'}
+                    {displayTab === 'gst-filing-history' && 'GST Returns & Audit Filing History'}
                   </h1>
                   <span className="content-page-subtitle">
                     {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
@@ -7581,7 +7763,6 @@ export function App() {
                     {displayTab === 'settings' && 'Store profile, GST settings, and tailored trade packs'}
                     {displayTab === 'payments' && 'Manage supplier payments, vendor disbursements, and payment vouchers'}
                     {displayTab === 'expenses' && 'Record, categorize, track vendor GSTINs, and manage business overhead expenditures'}
-                    {displayTab === 'cashbank' && 'Monitor register cash drawer, bank collections, and payment method summaries'}
                     {displayTab === 'receivables' && 'Outstanding customer credits, ageing analysis, and receivables'}
                     {displayTab === 'payables' && 'Outstanding supplier invoices, vendor dues, and settlement schedules'}
                     {displayTab === 'gst-overview' && 'Period sales, outward GST, purchases, potential vs reviewed ITC, and estimated net liability'}
@@ -7591,6 +7772,7 @@ export function App() {
                     {displayTab === 'gst-gstr3b' && 'Draft and verify Table 3.1 outward liabilities, Table 4 reviewed eligible ITC, and net cash tax payable'}
                     {displayTab === 'gst-gstr1' && 'B2B supplies (Table 4) and B2C retail counter sales (Table 7) return preparation'}
                     {displayTab === 'gst-import-export' && 'Upload GSTR-2B JSON/CSV statements and download statutory GST worksheets and audit reports'}
+                    {displayTab === 'gst-filing-history' && 'Historical archive of submitted GSTR-1, GSTR-3B summaries, ARN receipts, and tax review logs'}
                   </span>
                 </div>
 
@@ -7601,11 +7783,25 @@ export function App() {
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginRight: '5px', verticalAlign: '-1px' }}>
                         <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 10h1M14 10h1M9 14h1M14 14h1M9 18h1M14 18h1" />
                       </svg>
-                      <strong>{user.assignedLocation || branches[0]?.name || 'Main Branch'}</strong>
+                      <strong>{currentBranchName}</strong>
                     </span>
                   </div>
-                  <div className="header-store-chip">
-                    <span className="store-chip-dot"></span>
+                  <div className="header-store-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                    {shop?.logoUrl ? (
+                      <img
+                        src={shop.logoUrl}
+                        alt="Store Logo"
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '4px',
+                          objectFit: 'contain',
+                          background: '#ffffff',
+                        }}
+                      />
+                    ) : (
+                      <span className="store-chip-dot"></span>
+                    )}
                     <span className="store-chip-text">
                       {shop?.name} • <strong>{shop?.gstin || 'B2C Retail'}</strong>
                     </span>
@@ -7647,10 +7843,18 @@ export function App() {
                 <div className="bento-top-bar">
                   <div className="bento-top-left">
                     <div className="bento-pos-badge">
-                      <span className="bento-badge-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
+                      <span className="bento-badge-icon" style={shop?.logoUrl ? { background: '#ffffff', padding: '2px' } : undefined}>
+                        {shop?.logoUrl ? (
+                          <img
+                            src={shop.logoUrl}
+                            alt={shop.name || 'Store Logo'}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                          />
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                          </svg>
+                        )}
                       </span>
                       <div>
                         <div className="bento-badge-title">POS Billing Counter</div>
@@ -7845,10 +8049,26 @@ export function App() {
                         <div className="terminal-actions">
                           <button
                             type="button"
+                            className="bento-hold-cart-btn"
+                            style={{ background: '#4f46e5', color: '#ffffff', borderColor: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => setShowReturnExchangeModal(true)}
+                            title="Sales Return or Exchange (F3)"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <polyline points="1 4 1 10 7 10"></polyline>
+                              <polyline points="23 20 23 14 17 14"></polyline>
+                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                            </svg>
+                            <span>Return / Exchange</span>
+                          </button>
+                          <button
+                            type="button"
                             className="bento-clear-cart-btn"
                             disabled={cart.length === 0}
                             onClick={() => {
                               setCart([]);
+                              setActiveExchangeLines([]);
+                              setActiveExchangeOrigBill('');
                               setCashReceived('');
                               setActiveQrAttempt(null);
                               setUpiManualRef('');
@@ -7878,6 +8098,56 @@ export function App() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Active Exchange Notification Strip */}
+                      {activeExchangeLines.length > 0 && (
+                        <div style={{
+                          margin: '0.75rem 1rem 0 1rem',
+                          padding: '0.65rem 0.85rem',
+                          background: '#eef2ff',
+                          border: '1px solid #c7d2fe',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: '0.8rem',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ background: '#4f46e5', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>
+                              EXCHANGE
+                            </span>
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#312e81' }}>
+                                Linked Original Invoice: {activeExchangeOrigBill}
+                              </div>
+                              <div style={{ color: '#4338ca', fontSize: '0.75rem' }}>
+                                {activeExchangeLines.length} garment(s) returning · Available Return Credit: <strong>₹{(totalExchangeCreditMinor / 100).toFixed(2)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Cancel active exchange return credit?')) {
+                                setActiveExchangeLines([]);
+                                setActiveExchangeOrigBill('');
+                              }
+                            }}
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fecaca',
+                              color: '#b91c1c',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Cancel Exchange
+                          </button>
+                        </div>
+                      )}
 
                       {/* RESTAURANT SPECIAL: Table & Order Type */}
                       {shop?.businessType === 'restaurant' && (
@@ -9176,8 +9446,24 @@ export function App() {
                         {/* Bottom Grand Total & Proceed Button */}
                         <div className="bento-checkout-row">
                           <div className="bento-grand-total">
-                            <span className="grand-total-label">Grand Total Amount</span>
-                            <span className="grand-total-val mono">{formatRupees(finalPayableMinor)}</span>
+                            {activeExchangeLines.length > 0 ? (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', color: '#4f46e5', fontWeight: 600 }}>
+                                  New Items: {formatRupees(finalPayableMinor)} | Return Credit: -{formatRupees(totalExchangeCreditMinor)}
+                                </div>
+                                <span className="grand-total-label">
+                                  {finalPayableMinor >= totalExchangeCreditMinor ? 'Net Customer Payable' : 'Customer Refund Due'}
+                                </span>
+                                <span className="grand-total-val mono" style={{ color: finalPayableMinor >= totalExchangeCreditMinor ? '#059669' : '#dc2626' }}>
+                                  {formatRupees(Math.abs(finalPayableMinor - totalExchangeCreditMinor))}
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="grand-total-label">Grand Total Amount</span>
+                                <span className="grand-total-val mono">{formatRupees(finalPayableMinor)}</span>
+                              </>
+                            )}
                           </div>
 
                           <div className="bento-checkout-actions">
@@ -9207,11 +9493,13 @@ export function App() {
                               ) : (
                                 <>
                                   <span>
-                                    {selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
-                                      selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
-                                        selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
-                                          selectedPayMode === 'bank' ? 'Bank Transfer Received & Generate Bill' :
-                                            'Proceed to Payment'}
+                                    {activeExchangeLines.length > 0
+                                      ? (finalPayableMinor >= totalExchangeCreditMinor ? 'Complete Exchange & Bill' : 'Complete Exchange & Refund Balance')
+                                      : (selectedPayMode === 'cash' ? 'Complete Sale & Generate Bill' :
+                                        selectedPayMode === 'upi' ? 'Confirm UPI & Generate Bill' :
+                                          selectedPayMode === 'card' ? 'Card Paid & Generate Bill' :
+                                            selectedPayMode === 'bank' ? 'Bank Transfer Received & Generate Bill' :
+                                              'Proceed to Payment')}
                                   </span>
                                   <span className="checkout-arrow">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
@@ -11568,6 +11856,30 @@ export function App() {
               </div>
             )}
 
+            {/* TAB: DAY CLOSING & DRAWER RECONCILIATION */}
+            {(activeTab === 'day-closing' || displayTab === 'day-closing') && (
+              <div className="tab-content-wrapper" key={`day-closing-${selectedBranchScope}`}>
+                <DayClosingView
+                  user={user}
+                  shop={shop}
+                  selectedBranch={selectedBranchScope}
+                  branches={branches}
+                />
+              </div>
+            )}
+
+            {/* TAB: RETURN, EXCHANGE & PROFIT REPORTS */}
+            {(activeTab === 'return-reports' || displayTab === 'return-reports') && (
+              <div className="tab-content-wrapper" key={`return-reports-${selectedBranchScope}`}>
+                <ReturnReportsView
+                  user={user}
+                  shop={shop}
+                  selectedBranch={selectedBranchScope}
+                  branches={branches}
+                />
+              </div>
+            )}
+
             {/* TAB: USER MANAGEMENT (SUPER ADMIN & STORE MANAGER) */}
             {(activeTab === 'user-management' || displayTab === 'user-management') && (
               (() => {
@@ -11644,805 +11956,801 @@ export function App() {
               </div>
             )}
 
-          {/* TAB: PURCHASES & STOCK INWARD */}
-          {user?.role !== 'cashier' && displayTab === 'purchases' && (() => {
-            const filteredPurchases = purchases.filter((p) => {
-              if (purchaseStatusFilter === 'voided') {
-                if (p.status !== 'voided') return false;
-              } else if (purchaseStatusFilter === 'unpaid') {
-                if (p.status === 'voided' || (p.paidMinor || 0) > 0) return false;
-              } else if (purchaseStatusFilter === 'partial') {
-                if (p.status === 'voided' || (p.paidMinor || 0) === 0 || (p.balanceMinor || 0) === 0) return false;
-              } else if (purchaseStatusFilter === 'paid') {
-                if (p.status === 'voided' || (p.balanceMinor || 0) > 0) return false;
-              }
-              if (!purchaseSearch.trim()) return true;
-              const q = purchaseSearch.trim().toLowerCase();
+            {/* TAB: PURCHASES & STOCK INWARD */}
+            {user?.role !== 'cashier' && displayTab === 'purchases' && (() => {
+              const filteredPurchases = purchases.filter((p) => {
+                if (purchaseStatusFilter === 'voided') {
+                  if (p.status !== 'voided') return false;
+                } else if (purchaseStatusFilter === 'unpaid') {
+                  if (p.status === 'voided' || (p.paidMinor || 0) > 0) return false;
+                } else if (purchaseStatusFilter === 'partial') {
+                  if (p.status === 'voided' || (p.paidMinor || 0) === 0 || (p.balanceMinor || 0) === 0) return false;
+                } else if (purchaseStatusFilter === 'paid') {
+                  if (p.status === 'voided' || (p.balanceMinor || 0) > 0) return false;
+                }
+                if (!purchaseSearch.trim()) return true;
+                const q = purchaseSearch.trim().toLowerCase();
+                return (
+                  (p.purchaseNumber && p.purchaseNumber.toLowerCase().includes(q)) ||
+                  (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(q)) ||
+                  (p.billNo && p.billNo.toLowerCase().includes(q)) ||
+                  (p.supplierName && p.supplierName.toLowerCase().includes(q)) ||
+                  (p.supplierGstin && p.supplierGstin.toLowerCase().includes(q)) ||
+                  (p.supplierPhone && p.supplierPhone.includes(q))
+                );
+              });
+
+              const nonVoidedPurchases = purchases.filter((p) => p.status !== 'voided');
+              const totalPurchasesVolume = nonVoidedPurchases.reduce((sum, p) => sum + (p.totalMinor || 0), 0);
+              const totalItcRecorded = nonVoidedPurchases.reduce((sum, p) => sum + (p.itcMinor || 0), 0);
+              const totalBalancePayable = nonVoidedPurchases.reduce((sum, p) => sum + (p.balanceMinor || 0), 0);
+              const openBillsCount = nonVoidedPurchases.filter((p) => (p.balanceMinor || 0) > 0).length;
               return (
-                (p.purchaseNumber && p.purchaseNumber.toLowerCase().includes(q)) ||
-                (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(q)) ||
-                (p.billNo && p.billNo.toLowerCase().includes(q)) ||
-                (p.supplierName && p.supplierName.toLowerCase().includes(q)) ||
-                (p.supplierGstin && p.supplierGstin.toLowerCase().includes(q)) ||
-                (p.supplierPhone && p.supplierPhone.includes(q))
-              );
-            });
-
-            const nonVoidedPurchases = purchases.filter((p) => p.status !== 'voided');
-            const totalPurchasesVolume = nonVoidedPurchases.reduce((sum, p) => sum + (p.totalMinor || 0), 0);
-            const totalItcRecorded = nonVoidedPurchases.reduce((sum, p) => sum + (p.itcMinor || 0), 0);
-            const totalBalancePayable = nonVoidedPurchases.reduce((sum, p) => sum + (p.balanceMinor || 0), 0);
-            const openBillsCount = nonVoidedPurchases.filter((p) => (p.balanceMinor || 0) > 0).length;
-
-            return (
-              <div>
-                {/* Purchases Metric Cards */}
-                <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
-                      <TruckIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#6366f1' }}>
-                        {formatRupees(totalPurchasesVolume)}
+                <div>
+                  {/* Purchases Metric Cards */}
+                  <div className="kpi-grid" style={{ marginBottom: '1.25rem' }}>
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
+                        <TruckIcon size={24} />
                       </div>
-                      <div className="kpi-label">Total Inward Stock Volume</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      <LandmarkIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#10b981' }}>
-                        {formatRupees(totalItcRecorded)}
-                      </div>
-                      <div className="kpi-label">Input Tax Credit (ITC) Recorded</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                      <CreditCardIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#ef4444' }}>
-                        {formatRupees(totalBalancePayable)}
-                      </div>
-                      <div className="kpi-label">Supplier Payable Balance</div>
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      <FileTextIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
-                      <div className="kpi-label">Open Supplier Bills</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main Purchases Table Card */}
-                <div className="card">
-                  <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
-                        Record supplier invoices, inward goods stock into ledger, and track input GST credit
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#6366f1' }}>
+                          {formatRupees(totalPurchasesVolume)}
+                        </div>
+                        <div className="kpi-label">Total Inward Stock Volume</div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {/* Status Filter Tabs */}
-                      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
-                        {([
-                          { id: 'ALL', label: 'All Bills' },
-                          { id: 'unpaid', label: 'Unpaid' },
-                          { id: 'partial', label: 'Part-Paid' },
-                          { id: 'paid', label: 'Paid' },
-                          { id: 'voided', label: 'Voided' },
-                        ] as const).map((st) => (
-                          <button
-                            key={st.id}
-                            type="button"
-                            style={{
-                              padding: '0.35rem 0.75rem',
-                              fontSize: '0.8rem',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              background: purchaseStatusFilter === st.id ? '#ffffff' : 'transparent',
-                              color: purchaseStatusFilter === st.id ? '#6d4aff' : '#64748b',
-                              boxShadow: purchaseStatusFilter === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                            }}
-                            onClick={() => setPurchaseStatusFilter(st.id)}
-                          >
-                            {st.label}
-                          </button>
-                        ))}
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <LandmarkIcon size={24} />
                       </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#10b981' }}>
+                          {formatRupees(totalItcRecorded)}
+                        </div>
+                        <div className="kpi-label">Input Tax Credit (ITC) Recorded</div>
+                      </div>
+                    </div>
 
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ width: '230px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-                        placeholder="Search bill #, supplier, invoice #..."
-                        value={purchaseSearch}
-                        onChange={(e) => setPurchaseSearch(e.target.value)}
-                      />
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                        <CreditCardIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#ef4444' }}>
+                          {formatRupees(totalBalancePayable)}
+                        </div>
+                        <div className="kpi-label">Supplier Payable Balance</div>
+                      </div>
+                    </div>
 
-                      <button className="btn btn-primary" onClick={() => openNewPurchaseModal()}>
-                        + Inward Goods / New Bill
-                      </button>
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        <FileTextIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#f59e0b' }}>{openBillsCount}</div>
+                        <div className="kpi-label">Open Supplier Bills</div>
+                      </div>
                     </div>
                   </div>
 
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Purchase # & Date</th>
-                        <th>Supplier Invoice # & Date</th>
-                        <th>Supplier / Vendor</th>
-                        <th>Status</th>
-                        <th>Taxable Amount</th>
-                        <th>GST (ITC)</th>
-                        <th>Total Amount</th>
-                        <th>Paid / Balance</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPurchases.map((p) => {
-                        const isVoided = p.status === 'voided';
-                        const isPaid = !isVoided && (p.balanceMinor || 0) === 0;
-                        const isPartPaid = !isVoided && (p.paidMinor || 0) > 0 && (p.balanceMinor || 0) > 0;
-                        const isUnpaid = !isVoided && (p.paidMinor || 0) === 0;
+                  {/* Main Purchases Table Card */}
+                  <div className="card">
+                    <div className="card-title" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
+                          Record supplier invoices, inward goods stock into ledger, and track input GST credit
+                        </div>
+                      </div>
 
-                        return (
-                          <tr key={p.id} style={{ opacity: isVoided ? 0.65 : 1 }}>
-                            <td>
-                              <div style={{ fontWeight: 700, color: isVoided ? '#94a3b8' : '#6d4aff' }}>
-                                {p.purchaseNumber || (p.billNo ? `#${p.billNo}` : `Ref: ${p.id.slice(-6)}`)}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                {p.purchaseDate || p.bdate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : '—')}
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{p.supplierInvoiceNumber || p.billNo || '—'}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                {p.supplierInvoiceDate || p.bdate || '—'}
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{p.supplierName || 'Unknown Supplier'}</div>
-                              {p.supplierGstin ? (
-                                <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                  GSTIN: {p.supplierGstin}
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Status Filter Tabs */}
+                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
+                          {([
+                            { id: 'ALL', label: 'All Bills' },
+                            { id: 'unpaid', label: 'Unpaid' },
+                            { id: 'partial', label: 'Part-Paid' },
+                            { id: 'paid', label: 'Paid' },
+                            { id: 'voided', label: 'Voided' },
+                          ] as const).map((st) => (
+                            <button
+                              key={st.id}
+                              type="button"
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                fontSize: '0.8rem',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                background: purchaseStatusFilter === st.id ? '#ffffff' : 'transparent',
+                                color: purchaseStatusFilter === st.id ? '#6d4aff' : '#64748b',
+                                boxShadow: purchaseStatusFilter === st.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                              }}
+                              onClick={() => setPurchaseStatusFilter(st.id)}
+                            >
+                              {st.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ width: '230px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
+                          placeholder="Search bill #, supplier, invoice #..."
+                          value={purchaseSearch}
+                          onChange={(e) => setPurchaseSearch(e.target.value)}
+                        />
+
+                        <button className="btn btn-primary" onClick={() => openNewPurchaseModal()}>
+                          + Inward Goods / New Bill
+                        </button>
+                      </div>
+                    </div>
+
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Purchase # & Date</th>
+                          <th>Supplier Invoice # & Date</th>
+                          <th>Supplier / Vendor</th>
+                          <th>Status</th>
+                          <th>Taxable Amount</th>
+                          <th>GST (ITC)</th>
+                          <th>Total Amount</th>
+                          <th>Paid / Balance</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPurchases.map((p) => {
+                          const isVoided = p.status === 'voided';
+                          const isPaid = !isVoided && (p.balanceMinor || 0) === 0;
+                          const isPartPaid = !isVoided && (p.paidMinor || 0) > 0 && (p.balanceMinor || 0) > 0;
+                          const isUnpaid = !isVoided && (p.paidMinor || 0) === 0;
+
+                          return (
+                            <tr key={p.id} style={{ opacity: isVoided ? 0.65 : 1 }}>
+                              <td>
+                                <div style={{ fontWeight: 700, color: isVoided ? '#94a3b8' : '#6d4aff' }}>
+                                  {p.purchaseNumber || (p.billNo ? `#${p.billNo}` : `Ref: ${p.id.slice(-6)}`)}
                                 </div>
-                              ) : (
-                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Unregistered Supplier</div>
-                              )}
-                              {p.supplierPhone && (
-                                <div className="mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {p.supplierPhone}</span>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                  {p.purchaseDate || p.bdate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : '—')}
                                 </div>
-                              )}
-                            </td>
-                            <td>
-                              {isVoided ? (
-                                <span
-                                  className="badge"
-                                  style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
-                                  title={p.voidReason ? `Voided: ${p.voidReason}` : 'Voided'}
-                                >
-                                  <XCircleIcon size={12} /> Voided
-                                </span>
-                              ) : isPaid ? (
-                                <span className="badge badge-emerald">
-                                  <CheckCircleIcon size={12} /> Paid
-                                </span>
-                              ) : isPartPaid ? (
-                                <span className="badge badge-amber">
-                                  <ClockIcon size={12} /> Part-Paid
-                                </span>
-                              ) : (
-                                <span className="badge" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}>
-                                  <AlertTriangleIcon size={12} /> Unpaid
-                                </span>
-                              )}
-                            </td>
-                            <td className="mono">{formatRupees(p.taxableMinor)}</td>
-                            <td className="mono" style={{ color: '#6366f1' }}>
-                              {formatRupees(p.itcMinor ?? (p.cgstMinor + p.sgstMinor + p.igstMinor))}
-                            </td>
-                            <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>
-                              {formatRupees(p.totalMinor)}
-                            </td>
-                            <td>
-                              <div className="mono" style={{ color: '#10b981', fontSize: '0.85rem' }}>
-                                Paid: {formatRupees(p.paidMinor)}
-                              </div>
-                              {(p.balanceMinor || 0) > 0 && !isVoided && (
-                                <div className="mono" style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
-                                  Bal: {formatRupees(p.balanceMinor)}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{p.supplierInvoiceNumber || p.billNo || '—'}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                  {p.supplierInvoiceDate || p.bdate || '—'}
                                 </div>
-                              )}
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => handleViewPurchaseDetails(p.id)}
-                                >
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                                  onClick={() => window.open(`/api/purchases/${p.id}/print?format=a4`, '_blank')}
-                                  title="Print A4 Purchase Document"
-                                >
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span>
-                                </button>
-                                {!isVoided && (p.balanceMinor || 0) > 0 && can(user?.role as any, 'purchases.pay') && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
-                                    onClick={() => {
-                                      const sup = parties.find((part) => part.id === p.supplierId);
-                                      if (sup) {
-                                        handleOpenPaySupplier(sup);
-                                      } else {
-                                        handleOpenPaySupplier({
-                                          id: p.supplierId,
-                                          name: p.supplierName || 'Supplier',
-                                          phone: p.supplierPhone,
-                                          payableMinor: p.balanceMinor,
-                                          openPurchasesCount: 1,
-                                          type: 'supplier',
-                                          creditLimitMinor: 0,
-                                        });
-                                      }
-                                    }}
-                                    title="Pay supplier balance"
-                                  >
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CreditCardIcon size={13} /> Pay</span>
-                                  </button>
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{p.supplierName || 'Unknown Supplier'}</div>
+                                {p.supplierGstin ? (
+                                  <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    GSTIN: {p.supplierGstin}
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Unregistered Supplier</div>
                                 )}
-                                {!isVoided && can(user?.role as any, 'purchases.void') && (
+                                {p.supplierPhone && (
+                                  <div className="mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PhoneIcon size={12} /> {p.supplierPhone}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                {isVoided ? (
+                                  <span
+                                    className="badge"
+                                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                                    title={p.voidReason ? `Voided: ${p.voidReason}` : 'Voided'}
+                                  >
+                                    <XCircleIcon size={12} /> Voided
+                                  </span>
+                                ) : isPaid ? (
+                                  <span className="badge badge-emerald">
+                                    <CheckCircleIcon size={12} /> Paid
+                                  </span>
+                                ) : isPartPaid ? (
+                                  <span className="badge badge-amber">
+                                    <ClockIcon size={12} /> Part-Paid
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}>
+                                    <AlertTriangleIcon size={12} /> Unpaid
+                                  </span>
+                                )}
+                              </td>
+                              <td className="mono">{formatRupees(p.taxableMinor)}</td>
+                              <td className="mono" style={{ color: '#6366f1' }}>
+                                {formatRupees(p.itcMinor ?? (p.cgstMinor + p.sgstMinor + p.igstMinor))}
+                              </td>
+                              <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>
+                                {formatRupees(p.totalMinor)}
+                              </td>
+                              <td>
+                                <div className="mono" style={{ color: '#10b981', fontSize: '0.85rem' }}>
+                                  Paid: {formatRupees(p.paidMinor)}
+                                </div>
+                                {(p.balanceMinor || 0) > 0 && !isVoided && (
+                                  <div className="mono" style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
+                                    Bal: {formatRupees(p.balanceMinor)}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                   <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}
-                                    onClick={() => handleOpenVoidPurchase(p)}
-                                    title="Void this purchase and reverse stock inward"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                    onClick={() => handleViewPurchaseDetails(p.id)}
                                   >
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
                                   </button>
-                                )}
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                    onClick={() => window.open(`/api/purchases/${p.id}/print?format=a4`, '_blank')}
+                                    title="Print A4 Purchase Document"
+                                  >
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={13} /> Print</span>
+                                  </button>
+                                  {!isVoided && (p.balanceMinor || 0) > 0 && can(user?.role as any, 'purchases.pay') && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-primary"
+                                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#10b981', borderColor: '#10b981' }}
+                                      onClick={() => {
+                                        const sup = parties.find((part) => part.id === p.supplierId);
+                                        if (sup) {
+                                          handleOpenPaySupplier(sup);
+                                        } else {
+                                          handleOpenPaySupplier({
+                                            id: p.supplierId,
+                                            name: p.supplierName || 'Supplier',
+                                            phone: p.supplierPhone,
+                                            payableMinor: p.balanceMinor,
+                                            openPurchasesCount: 1,
+                                            type: 'supplier',
+                                            creditLimitMinor: 0,
+                                          });
+                                        }
+                                      }}
+                                      title="Pay supplier balance"
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CreditCardIcon size={13} /> Pay</span>
+                                    </button>
+                                  )}
+                                  {!isVoided && can(user?.role as any, 'purchases.void') && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}
+                                      onClick={() => handleOpenVoidPurchase(p)}
+                                      title="Void this purchase and reverse stock inward"
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Trash2Icon size={13} /> Void</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {filteredPurchases.length === 0 && (
+                          <tr>
+                            <td colSpan={9} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#94a3b8' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                                <div
+                                  style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '14px',
+                                    background: 'rgba(99, 102, 241, 0.08)',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)',
+                                  }}
+                                >
+                                  <InboxIcon size={28} />
+                                </div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
+                                  No purchase bills found matching your filter
+                                </div>
+                                <div style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '380px', lineHeight: 1.5 }}>
+                                  Record supplier invoices to inward products into your stock ledger and track input GST credit.
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  style={{ marginTop: '0.4rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', fontWeight: 600 }}
+                                  onClick={() => openNewPurchaseModal()}
+                                >
+                                  <PlusIcon size={16} />
+                                  Record Your First Purchase Bill
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        );
-                      })}
-                      {filteredPurchases.length === 0 && (
-                        <tr>
-                          <td colSpan={9} style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: '#94a3b8' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-                              <div
-                                style={{
-                                  width: '54px',
-                                  height: '54px',
-                                  borderRadius: '14px',
-                                  background: 'rgba(99, 102, 241, 0.08)',
-                                  color: '#6366f1',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.08)',
-                                }}
-                              >
-                                <InboxIcon size={28} />
-                              </div>
-                              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#334155' }}>
-                                No purchase bills found matching your filter
-                              </div>
-                              <div style={{ fontSize: '0.825rem', color: '#94a3b8', maxWidth: '380px', lineHeight: 1.5 }}>
-                                Record supplier invoices to inward products into your stock ledger and track input GST credit.
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                style={{ marginTop: '0.4rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.25rem', fontWeight: 600 }}
-                                onClick={() => openNewPurchaseModal()}
-                              >
-                                <PlusIcon size={16} />
-                                Record Your First Purchase Bill
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
-          {/* TAB 5: REPORTS & ANALYTICS */}
-          {user?.role !== 'cashier' && displayTab === 'reports' && report && (() => {
-            const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
-            const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
-            const activeBranchObj = branches.find(
-              (b) =>
-                b.id === selectedBranchScope ||
-                b.code === selectedBranchScope ||
-                (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
-            ) || branches[0];
-            const currentBranchTitle = isOverall
-              ? 'All Branches (Overall)'
-              : (activeBranchObj?.name || user.assignedLocation || 'Branch');
+            {/* TAB 5: REPORTS & ANALYTICS */}
+            {user?.role !== 'cashier' && displayTab === 'reports' && report && (() => {
+              const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
+              const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
+              const activeBranchObj = branches.find(
+                (b) =>
+                  b.id === selectedBranchScope ||
+                  b.code === selectedBranchScope ||
+                  (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
+              ) || branches[0];
+              const currentBranchTitle = isOverall
+                ? 'All Branches (Overall)'
+                : (activeBranchObj?.name || user.assignedLocation || 'Branch');
 
-            const visibleBranches = isOverall
-              ? branches
-              : branches.filter(
+              const visibleBranches = isOverall
+                ? branches
+                : branches.filter(
                   (b) =>
                     b.id === selectedBranchScope ||
                     b.code === selectedBranchScope ||
                     (!isSuperAdmin && (b.id === user.branchId || b.code === user.assignedLocation))
                 );
-            const displayBranches = visibleBranches.length > 0 ? visibleBranches : (activeBranchObj ? [activeBranchObj] : branches);
+              const displayBranches = visibleBranches.length > 0 ? visibleBranches : (activeBranchObj ? [activeBranchObj] : branches);
 
-            return (
-              <div>
-                {/* Branch Scope Header & Drilldown Navigator */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    padding: '0.85rem 1.15rem',
-                    background: isOverall ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' : 'linear-gradient(90deg, #eff6ff 0%, #ffffff 100%)',
-                    border: isOverall ? '1.5px solid #bbf7d0' : '1.5px solid #bfdbfe',
-                    borderRadius: '12px',
-                    marginBottom: '1.25rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        background: isOverall ? '#10b981' : '#3b82f6',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Building2Icon size={20} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b' }}>
-                        Financial Reports — {isOverall ? 'All Branches (Overall)' : (currentBranchTitle + ' (' + (activeBranchObj?.code || 'BRANCH') + ')')}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
-                        {isOverall
-                          ? 'Showing consolidated aggregate financials across all branches'
-                          : ('Showing isolated financial performance for ' + currentBranchTitle + ' only')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {isSuperAdmin ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Select Scope:</span>
-                      <button
-                        type="button"
-                        onClick={() => handleGlobalBranchChange('all')}
+              return (
+                <div>
+                  {/* Branch Scope Header & Drilldown Navigator */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                      padding: '0.85rem 1.15rem',
+                      background: isOverall ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' : 'linear-gradient(90deg, #eff6ff 0%, #ffffff 100%)',
+                      border: isOverall ? '1.5px solid #bbf7d0' : '1.5px solid #bfdbfe',
+                      borderRadius: '12px',
+                      marginBottom: '1.25rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div
                         style={{
-                          fontSize: '0.76rem',
-                          fontWeight: isOverall ? 700 : 500,
-                          background: isOverall ? '#10b981' : '#ffffff',
-                          color: isOverall ? '#ffffff' : '#334155',
-                          border: isOverall ? '1px solid #059669' : '1px solid #cbd5e1',
-                          padding: '0.3rem 0.75rem',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: isOverall ? '#10b981' : '#3b82f6',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                       >
-                        🌐 All Branches (Overall)
-                      </button>
-                      {branches.map((b) => {
-                        const isThisActive = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
-                        return (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => handleGlobalBranchChange(b.code || b.id)}
-                            style={{
-                              fontSize: '0.76rem',
-                              fontWeight: isThisActive ? 700 : 500,
-                              background: isThisActive ? '#3b82f6' : '#ffffff',
-                              color: isThisActive ? '#ffffff' : '#334155',
-                              border: isThisActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                              padding: '0.3rem 0.75rem',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginRight: '5px', verticalAlign: '-1px' }}>
-                              <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 10h1M14 10h1M9 14h1M14 14h1M9 18h1M14 18h1" />
-                            </svg>
-                            {b.name} ({b.code})
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        background: '#f1f5f9',
-                        padding: '0.35rem 0.75rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#334155',
-                      }}
-                    >
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                      Assigned Branch: {currentBranchTitle} ({activeBranchObj?.code || user.assignedLocation})
-                    </div>
-                  )}
-                </div>
-
-                {/* KPI Cards */}
-                <div className="kpi-grid">
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-                      <RupeeIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#10b981' }}>
-                        {formatRupees(report.today.totalMinor)}
+                        <Building2Icon size={20} />
                       </div>
-                      <div className="kpi-label">Today's Revenue ({isOverall ? 'All Branches' : currentBranchTitle})</div>
-                      {report.overall.totalMinor > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Cumulative Sales: <strong style={{ color: '#1e293b' }}>{formatRupees(report.overall.totalMinor)}</strong>
+                      <div>
+                        <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#1e293b' }}>
+                          Financial Reports — {isOverall ? 'All Branches (Overall)' : (currentBranchTitle + ' (' + (activeBranchObj?.code || 'BRANCH') + ')')}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                      <ReceiptIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{report.today.billCount}</div>
-                      <div className="kpi-label">Bills Generated Today</div>
-                      {report.overall.billCount > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Total Bills: <strong style={{ color: '#1e293b' }}>{report.overall.billCount}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      <LandmarkIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
-                      <div className="kpi-label">GST Collected Today</div>
-                      {report.gstPosition?.outputGstMinor !== undefined && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Output GST: <strong style={{ color: '#1e293b' }}>{formatRupees(report.gstPosition.outputGstMinor)}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
-                      <WalletIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono" style={{ color: '#ea580c' }}>
-                        {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
-                      </div>
-                      <div className="kpi-label">Today's Customer Collections</div>
-                      {report.outstandingDuesMinor !== undefined && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Khata Dues: <strong style={{ color: '#b45309' }}>{formatRupees(report.outstandingDuesMinor)}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="kpi-card">
-                    <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
-                      <PackageIcon size={24} />
-                    </div>
-                    <div>
-                      <div className="kpi-val mono">{report.overall.itemCount}</div>
-                      <div className="kpi-label">Active SKUs in Catalog</div>
-                      {report.overall.customerCount > 0 && (
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                          Customers: <strong style={{ color: '#1e293b' }}>{report.overall.customerCount}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Top Items & Payment Breakdown */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                  <div className="card">
-                    <div className="card-title">
-                      Top Selling Products {isOverall ? '— All Branches (Overall)' : ('in ' + currentBranchTitle)}
-                    </div>
-                    {report.topItems && report.topItems.length > 0 ? (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Product</th>
-                            <th>Qty Sold</th>
-                            <th>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.topItems.map((item, idx) => (
-                            <tr key={idx}>
-                              <td style={{ fontWeight: 600 }}>{item.name}</td>
-                              <td className="mono">{item.qtyMilli / 1000} units</td>
-                              <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
-                                {formatRupees(item.totalMinor)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
-                        <PackageIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
-                        <div style={{ fontSize: '0.85rem' }}>No sales recorded for this branch yet</div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="card">
-                    <div className="card-title">
-                      Payment Method Breakdown {isOverall ? '— All Branches (Overall)' : ('— ' + currentBranchTitle)}
-                    </div>
-                    {report.paymentBreakdown && report.paymentBreakdown.length > 0 ? (
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Method</th>
-                            <th>Volume</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.paymentBreakdown.map((pay, idx) => (
-                            <tr key={idx}>
-                              <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
-                              <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
-                                {formatRupees(pay.totalMinor)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
-                        <WalletIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
-                        <div style={{ fontSize: '0.85rem' }}>No payments collected for this branch yet</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Branch-Wise Sales & Collections Performance */}
-                {branches.length > 0 && (
-                  <div className="card" style={{ marginTop: '1.25rem' }}>
-                    <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Building2Icon size={18} style={{ color: '#6d4aff' }} />
-                        <span>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '1px' }}>
                           {isOverall
-                            ? 'Branch-Wise Sales & Operations Performance (All Branches)'
-                            : ('Branch Sales & Operations Performance — ' + currentBranchTitle)}
-                        </span>
+                            ? 'Showing consolidated aggregate financials across all branches'
+                            : ('Showing isolated financial performance for ' + currentBranchTitle + ' only')}
+                        </div>
                       </div>
-                      {isSuperAdmin && !isOverall && (
+                    </div>
+
+                    {isSuperAdmin ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Select Scope:</span>
                         <button
                           type="button"
                           onClick={() => handleGlobalBranchChange('all')}
                           style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '0.25rem 0.6rem',
+                            fontSize: '0.76rem',
+                            fontWeight: isOverall ? 700 : 500,
+                            background: isOverall ? '#10b981' : '#ffffff',
+                            color: isOverall ? '#ffffff' : '#334155',
+                            border: isOverall ? '1px solid #059669' : '1px solid #cbd5e1',
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '8px',
                             cursor: 'pointer',
-                            color: '#334155',
                           }}
                         >
-                          ← Switch to Overall (All Branches)
+                          🌐 All Branches (Overall)
                         </button>
+                        {branches.map((b) => {
+                          const isThisActive = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                              style={{
+                                fontSize: '0.76rem',
+                                fontWeight: isThisActive ? 700 : 500,
+                                background: isThisActive ? '#3b82f6' : '#ffffff',
+                                color: isThisActive ? '#ffffff' : '#334155',
+                                border: isThisActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+                                padding: '0.3rem 0.75rem',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              🏢 {b.name} ({b.code})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          background: '#f1f5f9',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: '#334155',
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                        Assigned Branch: {currentBranchTitle} ({activeBranchObj?.code || user.assignedLocation})
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KPI Cards */}
+                  <div className="kpi-grid">
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <RupeeIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#10b981' }}>
+                          {formatRupees(report.today.totalMinor)}
+                        </div>
+                        <div className="kpi-label">Today's Revenue ({isOverall ? 'All Branches' : currentBranchTitle})</div>
+                        {report.overall.totalMinor > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Cumulative Sales: <strong style={{ color: '#1e293b' }}>{formatRupees(report.overall.totalMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
+                        <ReceiptIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{report.today.billCount}</div>
+                        <div className="kpi-label">Bills Generated Today</div>
+                        {report.overall.billCount > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Total Bills: <strong style={{ color: '#1e293b' }}>{report.overall.billCount}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        <LandmarkIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{formatRupees(report.today.gstMinor)}</div>
+                        <div className="kpi-label">GST Collected Today</div>
+                        {report.gstPosition?.outputGstMinor !== undefined && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Output GST: <strong style={{ color: '#1e293b' }}>{formatRupees(report.gstPosition.outputGstMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(234, 88, 12, 0.15)', color: '#ea580c' }}>
+                        <WalletIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono" style={{ color: '#ea580c' }}>
+                          {formatRupees(report.today.customerCollectionsMinor ?? report.today.khataCollectionsMinor ?? 0)}
+                        </div>
+                        <div className="kpi-label">Today's Customer Collections</div>
+                        {report.outstandingDuesMinor !== undefined && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Khata Dues: <strong style={{ color: '#b45309' }}>{formatRupees(report.outstandingDuesMinor)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div className="kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                        <PackageIcon size={24} />
+                      </div>
+                      <div>
+                        <div className="kpi-val mono">{report.overall.itemCount}</div>
+                        <div className="kpi-label">Active SKUs in Catalog</div>
+                        {report.overall.customerCount > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                            Customers: <strong style={{ color: '#1e293b' }}>{report.overall.customerCount}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Items & Payment Breakdown */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                    <div className="card">
+                      <div className="card-title">
+                        Top Selling Products {isOverall ? '— All Branches (Overall)' : ('in ' + currentBranchTitle)}
+                      </div>
+                      {report.topItems && report.topItems.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Product</th>
+                              <th>Qty Sold</th>
+                              <th>Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {report.topItems.map((item, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>{item.name}</td>
+                                <td className="mono">{item.qtyMilli / 1000} units</td>
+                                <td className="mono" style={{ color: '#6d4aff', fontWeight: 700 }}>
+                                  {formatRupees(item.totalMinor)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                          <PackageIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                          <div style={{ fontSize: '0.85rem' }}>No sales recorded for this branch yet</div>
+                        </div>
                       )}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-                      {displayBranches.map((b) => {
-                        const compData = report.branchComparison?.find((c) => c.id === b.id || c.code === b.code);
-                        const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                        const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                        const invSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                        const invGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
-                        const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
-                        const invReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
 
-                        const bSalesTotal = compData?.allTimeSalesTotalMinor ?? (invSalesTotal || compData?.todaySalesTotalMinor || 0);
-                        const bBillsCount = compData?.allTimeSalesCount ?? (bSales.length || compData?.todaySalesCount || 0);
-                        const bGst = compData?.allTimeGstMinor ?? invGst;
-                        const bReturnsTotal = compData?.allTimeReturnsTotalMinor ?? invReturnsTotal;
-                        const bReturnsCount = compData?.allTimeReturnsCount ?? bReturns.length;
+                    <div className="card">
+                      <div className="card-title">
+                        Payment Method Breakdown {isOverall ? '— All Branches (Overall)' : ('— ' + currentBranchTitle)}
+                      </div>
+                      {report.paymentBreakdown && report.paymentBreakdown.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Method</th>
+                              <th>Volume</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {report.paymentBreakdown.map((pay, idx) => (
+                              <tr key={idx}>
+                                <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{pay.method}</td>
+                                <td className="mono" style={{ color: '#10b981', fontWeight: 700 }}>
+                                  {formatRupees(pay.totalMinor)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                          <WalletIcon size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                          <div style={{ fontSize: '0.85rem' }}>No payments collected for this branch yet</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                        const isSelectedBranch = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
-
-                        return (
-                          <div
-                            key={b.id}
+                  {/* Branch-Wise Sales & Collections Performance */}
+                  {branches.length > 0 && (
+                    <div className="card" style={{ marginTop: '1.25rem' }}>
+                      <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Building2Icon size={18} style={{ color: '#6d4aff' }} />
+                          <span>
+                            {isOverall
+                              ? 'Branch-Wise Sales & Operations Performance (All Branches)'
+                              : ('Branch Sales & Operations Performance — ' + currentBranchTitle)}
+                          </span>
+                        </div>
+                        {isSuperAdmin && !isOverall && (
+                          <button
+                            type="button"
+                            onClick={() => handleGlobalBranchChange('all')}
                             style={{
-                              background: isSelectedBranch ? '#f0fdf4' : '#f8fafc',
-                              borderRadius: '12px',
-                              border: isSelectedBranch ? '2px solid #10b981' : '1.5px solid #e2e8f0',
-                              padding: '1.1rem',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              background: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              padding: '0.25rem 0.6rem',
+                              cursor: 'pointer',
+                              color: '#334155',
                             }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                {isSelectedBranch && (
-                                  <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.68rem', fontWeight: 700 }}>
-                                    Active Filter
+                            ← Switch to Overall (All Branches)
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                        {displayBranches.map((b) => {
+                          const compData = report.branchComparison?.find((c) => c.id === b.id || c.code === b.code);
+                          const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
+                          const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
+                          const invSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+                          const invGst = bSales.reduce((sum, i) => sum + ((i.cgstMinor || 0) + (i.sgstMinor || 0) + (i.igstMinor || 0)), 0);
+                          const bReturns = bInvs.filter((i) => i.kind === 'credit_note' && i.status === 'posted');
+                          const invReturnsTotal = bReturns.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
+
+                          const bSalesTotal = compData?.allTimeSalesTotalMinor ?? (invSalesTotal || compData?.todaySalesTotalMinor || 0);
+                          const bBillsCount = compData?.allTimeSalesCount ?? (bSales.length || compData?.todaySalesCount || 0);
+                          const bGst = compData?.allTimeGstMinor ?? invGst;
+                          const bReturnsTotal = compData?.allTimeReturnsTotalMinor ?? invReturnsTotal;
+                          const bReturnsCount = compData?.allTimeReturnsCount ?? bReturns.length;
+
+                          const isSelectedBranch = !isOverall && (selectedBranchScope === b.id || selectedBranchScope === b.code);
+
+                          return (
+                            <div
+                              key={b.id}
+                              style={{
+                                background: isSelectedBranch ? '#f0fdf4' : '#f8fafc',
+                                borderRadius: '12px',
+                                border: isSelectedBranch ? '2px solid #10b981' : '1.5px solid #e2e8f0',
+                                padding: '1.1rem',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                                <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e293b' }}>{b.name}</span>
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                  {isSelectedBranch && (
+                                    <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.68rem', fontWeight: 700 }}>
+                                      Active Filter
+                                    </span>
+                                  )}
+                                  <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>
+                                    {b.code}
                                   </span>
-                                )}
-                                <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', fontWeight: 700 }}>
-                                  {b.code}
-                                </span>
+                                </div>
                               </div>
-                            </div>
-                            <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
-                              {formatRupees(bSalesTotal)}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
-                              <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bBillsCount}</strong></span>
-                              <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
-                            </div>
-                            {bReturnsTotal > 0 && (
-                              <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
-                                Returns: {formatRupees(bReturnsTotal)} ({bReturnsCount} credit notes)
+                              <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10b981', fontFamily: 'monospace' }}>
+                                {formatRupees(bSalesTotal)}
                               </div>
-                            )}
-                            {isSuperAdmin && isOverall && (
+                              <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.45rem', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Total Bills: <strong style={{ color: '#1e293b' }}>{bBillsCount}</strong></span>
+                                <span>GST: <strong style={{ color: '#1e293b' }}>{formatRupees(bGst)}</strong></span>
+                              </div>
+                              {bReturnsTotal > 0 && (
+                                <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '0.3rem' }}>
+                                  Returns: {formatRupees(bReturnsTotal)} ({bReturnsCount} credit notes)
+                                </div>
+                              )}
+                              {isSuperAdmin && isOverall && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGlobalBranchChange(b.code || b.id)}
+                                  style={{
+                                    marginTop: '0.75rem',
+                                    width: '100%',
+                                    padding: '0.35rem 0.5rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    color: '#4338ca',
+                                    background: '#eef2ff',
+                                    border: '1px solid #c7d2fe',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  View {b.name} Report →
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
+                  <div className="card" style={{ marginTop: '1.25rem' }}>
+                    <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span>Customer Outstanding Dues & Ageing Report</span>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
+                          Total outstanding dues: <b style={{ color: '#b45309' }}>{formatRupees(duesSummary?.totalDuesMinor || 0)}</b> across credit customers | Total advance held: <b style={{ color: '#10b981' }}>{formatRupees(duesSummary?.totalAdvanceMinor || 0)}</b>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span className="badge badge-emerald">0-30d: {formatRupees(duesSummary?.ageing['0_30'] || 0)}</span>
+                        <span className="badge badge-amber">31-60d: {formatRupees(duesSummary?.ageing['31_60'] || 0)}</span>
+                        <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>60+d: {formatRupees(duesSummary?.ageing['61_plus'] || 0)}</span>
+                      </div>
+                    </div>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Customer Name</th>
+                          <th>Phone</th>
+                          <th>Oldest Unpaid Bill</th>
+                          <th>Outstanding Dues</th>
+                          <th>Advance Held</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(duesSummary?.topDebtors || []).map((debtor) => (
+                          <tr key={debtor.id}>
+                            <td style={{ fontWeight: 600 }}>{debtor.name}</td>
+                            <td className="mono">{debtor.phone || '—'}</td>
+                            <td>{debtor.oldestInvoiceDate ? new Date(debtor.oldestInvoiceDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</td>
+                            <td className="mono" style={{ fontWeight: 800, color: '#b45309' }}>
+                              {formatRupees(debtor.duesMinor)}
+                            </td>
+                            <td className="mono">{debtor.advanceMinor > 0 ? formatRupees(debtor.advanceMinor) : '—'}</td>
+                            <td>
                               <button
-                                type="button"
-                                onClick={() => handleGlobalBranchChange(b.code || b.id)}
-                                style={{
-                                  marginTop: '0.75rem',
-                                  width: '100%',
-                                  padding: '0.35rem 0.5rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                  color: '#4338ca',
-                                  background: '#eef2ff',
-                                  border: '1px solid #c7d2fe',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
+                                className="btn btn-primary"
+                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, background: '#f59e0b', borderColor: '#d97706' }}
+                                onClick={() => {
+                                  const partyObj = parties.find((p) => p.id === debtor.id) || {
+                                    id: debtor.id,
+                                    name: debtor.name,
+                                    phone: debtor.phone,
+                                    type: 'customer',
+                                    creditLimitMinor: 0,
+                                  };
+                                  openCollectPayment(partyObj);
                                 }}
                               >
-                                View {b.name} Report →
+                                💰 Collect Payment
                               </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-              {/* Customer Dues Summary & Top Outstanding Accounts (Section 13) */}
-              <div className="card" style={{ marginTop: '1.25rem' }}>
-                <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div>
-                    <span>Customer Outstanding Dues & Ageing Report</span>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
-                      Total outstanding dues: <b style={{ color: '#b45309' }}>{formatRupees(duesSummary?.totalDuesMinor || 0)}</b> across credit customers | Total advance held: <b style={{ color: '#10b981' }}>{formatRupees(duesSummary?.totalAdvanceMinor || 0)}</b>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    <span className="badge badge-emerald">0-30d: {formatRupees(duesSummary?.ageing['0_30'] || 0)}</span>
-                    <span className="badge badge-amber">31-60d: {formatRupees(duesSummary?.ageing['31_60'] || 0)}</span>
-                    <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>60+d: {formatRupees(duesSummary?.ageing['61_plus'] || 0)}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        {(!duesSummary?.topDebtors || duesSummary.topDebtors.length === 0) && (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
+                              No pending customer dues. All customer accounts are clear!
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Customer Name</th>
-                      <th>Phone</th>
-                      <th>Oldest Unpaid Bill</th>
-                      <th>Outstanding Dues</th>
-                      <th>Advance Held</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(duesSummary?.topDebtors || []).map((debtor) => (
-                      <tr key={debtor.id}>
-                        <td style={{ fontWeight: 600 }}>{debtor.name}</td>
-                        <td className="mono">{debtor.phone || '—'}</td>
-                        <td>{debtor.oldestInvoiceDate ? new Date(debtor.oldestInvoiceDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</td>
-                        <td className="mono" style={{ fontWeight: 800, color: '#b45309' }}>
-                          {formatRupees(debtor.duesMinor)}
-                        </td>
-                        <td className="mono">{debtor.advanceMinor > 0 ? formatRupees(debtor.advanceMinor) : '—'}</td>
-                        <td>
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, background: '#f59e0b', borderColor: '#d97706' }}
-                            onClick={() => {
-                              const partyObj = parties.find((p) => p.id === debtor.id) || {
-                                id: debtor.id,
-                                name: debtor.name,
-                                phone: debtor.phone,
-                                type: 'customer',
-                                creditLimitMinor: 0,
-                              };
-                              openCollectPayment(partyObj);
-                            }}
-                          >
-                            💰 Collect Payment
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {(!duesSummary?.topDebtors || duesSummary.topDebtors.length === 0) && (
-                      <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8' }}>
-                          No pending customer dues. All customer accounts are clear!
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })()}
+              );
+            })()}
 
-                      {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
+            {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
             {user?.role !== 'cashier' && displayTab === 'settings' && (
               <div>
                 {/* Section 1: Business Profile Editor */}
@@ -12476,6 +12784,449 @@ export function App() {
                   )}
 
                   <form onSubmit={handleSaveSettings}>
+                    {/* Advanced Brand Identity & Live Favicon Studio */}
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        borderRadius: '14px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 3px 12px rgba(15, 23, 42, 0.04)',
+                        padding: '1.25rem 1.5rem',
+                        marginBottom: '1.5rem',
+                      }}
+                    >
+                      {/* Header row with badges */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.75rem',
+                          marginBottom: '1rem',
+                          paddingBottom: '0.75rem',
+                          borderBottom: '1px solid #f1f5f9',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '7px',
+                              background: '#ede9fe',
+                              color: '#6d4aff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <StoreIcon size={16} />
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '0.96rem', color: '#0f172a' }}>
+                              Store Brand Logo &amp; Website Favicon Studio
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                              Your logo automatically syncs across the browser tab favicon, dashboard, sidebar, and printed labels.
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.45rem',
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '9999px',
+                            background: settingsLogoUrl ? '#ecfdf5' : '#f8fafc',
+                            border: `1px solid ${settingsLogoUrl ? '#a7f3d0' : '#e2e8f0'}`,
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: settingsLogoUrl ? '#065f46' : '#64748b',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: settingsLogoUrl ? '#10b981' : '#94a3b8',
+                              boxShadow: settingsLogoUrl ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : 'none',
+                            }}
+                          />
+                          <span>{settingsLogoUrl ? 'Live: Favicon, Dashboard, Sidebar & Labels' : 'Default Brand Active'}</span>
+                        </div>
+                      </div>
+
+                      {/* Main 2-column Studio Grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(280px, 1fr) minmax(320px, 1.2fr)',
+                          gap: '1.25rem',
+                          alignItems: 'stretch',
+                        }}
+                      >
+                        {/* Column 1: Upload & Drag Drop Zone */}
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingLogo(true);
+                          }}
+                          onDragLeave={() => setIsDraggingLogo(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingLogo(false);
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) handleLogoFileUpload(file);
+                          }}
+                          style={{
+                            background: isDraggingLogo ? '#eff6ff' : '#f8fafc',
+                            border: `2px dashed ${isDraggingLogo ? '#3b82f6' : '#cbd5e1'}`,
+                            borderRadius: '12px',
+                            padding: '1.1rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {/* Logo container */}
+                          <div
+                            style={{
+                              width: '84px',
+                              height: '84px',
+                              borderRadius: '14px',
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              marginBottom: '0.8rem',
+                              padding: '6px',
+                            }}
+                          >
+                            {settingsLogoUrl ? (
+                              <img
+                                src={settingsLogoUrl}
+                                alt="Store Logo"
+                                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                              />
+                            ) : (
+                              <StoreIcon size={38} style={{ color: '#94a3b8' }} />
+                            )}
+                          </div>
+
+                          <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b', marginBottom: '0.2rem' }}>
+                            {settingsLogoUrl ? 'Brand Logo Uploaded' : 'Drag & Drop Logo Image Here'}
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: '0.8rem', maxWidth: '240px' }}>
+                            Auto-optimizes PNG, JPG, WebP, SVG for instant web rendering &amp; thermal prints.
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <label
+                              className="btn btn-primary"
+                              style={{
+                                padding: '0.4rem 0.9rem',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                margin: 0,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                borderRadius: '8px',
+                              }}
+                            >
+                              <span>📷 {settingsLogoUrl ? 'Change Logo' : 'Upload Logo'}</span>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleLogoFileUpload(file);
+                                }}
+                              />
+                            </label>
+                            {settingsLogoUrl !== (shop?.logoUrl || '') && (
+                              <button
+                                type="button"
+                                className="btn"
+                                style={{
+                                  padding: '0.4rem 0.85rem',
+                                  fontSize: '0.8rem',
+                                  background: '#10b981',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => handleSaveLogoDirectly()}
+                              >
+                                💾 Save Logo
+                              </button>
+                            )}
+                            {Boolean(settingsLogoUrl || shop?.logoUrl) && (
+                              <button
+                                type="button"
+                                className="btn"
+                                style={{
+                                  padding: '0.4rem 0.8rem',
+                                  fontSize: '0.8rem',
+                                  background: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '8px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={handleRemoveLogo}
+                              >
+                                ✕ Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Column 2: Live Multi-Surface Preview */}
+                        <div
+                          style={{
+                            background: '#f8fafc',
+                            borderRadius: '12px',
+                            border: '1px solid #e2e8f0',
+                            padding: '1rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Live Multi-Surface Preview
+                            </span>
+                            {/* Preview switcher tabs */}
+                            <div style={{ display: 'inline-flex', background: '#e2e8f0', borderRadius: '7px', padding: '2px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('favicon')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'favicon' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'favicon' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'favicon' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                🌐 Favicon
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('app')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'app' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'app' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'app' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                📊 App &amp; Sidebar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLogoPreviewTab('label')}
+                                style={{
+                                  border: 'none',
+                                  background: logoPreviewTab === 'label' ? '#ffffff' : 'transparent',
+                                  color: logoPreviewTab === 'label' ? '#0f172a' : '#64748b',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '0.25rem 0.55rem',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  boxShadow: logoPreviewTab === 'label' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                }}
+                              >
+                                🏷️ Label
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Preview Viewport */}
+                          <div
+                            style={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minHeight: '130px',
+                            }}
+                          >
+                            {/* Preview 1: Website Favicon & Browser Tab */}
+                            {logoPreviewTab === 'favicon' && (
+                              <div
+                                style={{
+                                  width: '100%',
+                                  background: '#e2e8f0',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                                  border: '1px solid #cbd5e1',
+                                }}
+                              >
+                                {/* Browser Chrome Window Header */}
+                                <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: '6px' }}>
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                                  <div
+                                    style={{
+                                      marginLeft: '6px',
+                                      background: '#ffffff',
+                                      borderRadius: '6px 6px 0 0',
+                                      padding: '4px 10px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '7px',
+                                      maxWidth: '240px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 600,
+                                      color: '#0f172a',
+                                      boxShadow: '0 -1px 3px rgba(0,0,0,0.04)',
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '3px',
+                                        background: '#f1f5f9',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {settingsLogoUrl ? (
+                                        <img src={settingsLogoUrl} alt="Favicon" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                      ) : (
+                                        <span style={{ fontSize: '10px' }}>⚡</span>
+                                      )}
+                                    </div>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {settingsName || 'Your Store'} | Cloud POS
+                                    </span>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.7rem', marginLeft: 'auto' }}>✕</span>
+                                  </div>
+                                </div>
+                                {/* Mock URL address bar */}
+                                <div style={{ background: '#ffffff', padding: '6px 12px', borderTop: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700 }}>🔒</span>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                    https://{((settingsName || 'store').toLowerCase().replace(/[^a-z0-9]/g, '')) || 'mybrand'}.billing.app
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Preview 2: App Sidebar & Top Header */}
+                            {logoPreviewTab === 'app' && (
+                              <div
+                                style={{
+                                  width: '100%',
+                                  background: '#1e1b4b',
+                                  borderRadius: '8px',
+                                  padding: '10px 14px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '8px',
+                                    background: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '2px',
+                                    overflow: 'hidden',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {settingsLogoUrl ? (
+                                    <img src={settingsLogoUrl} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                  ) : (
+                                    <StoreIcon size={20} style={{ color: '#6d4aff' }} />
+                                  )}
+                                </div>
+                                <div style={{ overflow: 'hidden', flex: 1 }}>
+                                  <div style={{ color: '#ffffff', fontWeight: 800, fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {settingsName || 'Adaptive Billing'}
+                                  </div>
+                                  <div style={{ color: '#c7d2fe', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {getBusinessLabel(settingsType)} · POS &amp; GST
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Preview 3: Barcode Label Sticker */}
+                            {logoPreviewTab === 'label' && (
+                              <div
+                                style={{
+                                  background: '#ffffff',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  padding: '8px 12px',
+                                  width: '190px',
+                                  textAlign: 'center',
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                                }}
+                              >
+                                {settingsLogoUrl && (
+                                  <div style={{ marginBottom: '2px', display: 'flex', justifyContent: 'center' }}>
+                                    <img src={settingsLogoUrl} alt="Logo" style={{ maxHeight: '18px', maxWidth: '60px', objectFit: 'contain' }} />
+                                  </div>
+                                )}
+                                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                                  {settingsName || 'STORE NAME'}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>
+                                  Sample Product
+                                </div>
+                                <div style={{ fontSize: '0.55rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '1px', margin: '2px 0' }}>
+                                  ||| | |||| ||| || |
+                                </div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 900, color: '#0f172a' }}>
+                                  ₹199.00
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="form-group">
                         <label className="form-label">Store / Enterprise Name</label>
@@ -14082,12 +14833,6 @@ export function App() {
               </div>
             )}
 
-            {user?.role !== 'cashier' && displayTab === 'cashbank' && (
-              <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
-                <CashBankView key={selectedBranchScope} />
-              </div>
-            )}
-
             {user?.role !== 'cashier' && displayTab === 'receivables' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ReceivablesView
@@ -14630,6 +15375,7 @@ export function App() {
             isOpen={showPrintBarcodeModal}
             item={printBarcodeItem}
             shopName={shop?.name}
+            shopLogoUrl={shop?.logoUrl}
             onClose={() => {
               setShowPrintBarcodeModal(false);
               setPrintBarcodeItem(null);
@@ -14643,6 +15389,7 @@ export function App() {
             isOpen={showBulkBarcodeModal}
             items={items}
             shopName={shop?.name}
+            shopLogoUrl={shop?.logoUrl}
             onClose={() => setShowBulkBarcodeModal(false)}
           />
         )}
@@ -21296,6 +22043,22 @@ export function App() {
             </div>
           </div>
         )}
+
+        {/* POS RETURN & EXCHANGE MODAL */}
+        <PosReturnExchangeModal
+          isOpen={showReturnExchangeModal}
+          onClose={() => setShowReturnExchangeModal(false)}
+          onSelectForExchange={(lines, origInv) => {
+            setActiveExchangeLines(lines);
+            setActiveExchangeOrigBill(origInv);
+            setShowReturnExchangeModal(false);
+            showToast(`✓ Added ${lines.length} return item(s) from ${origInv} to exchange! Select new garments to complete.`);
+          }}
+          onReturnCompleted={(_cnId, cnNumber) => {
+            showToast(`✓ Return processed successfully! Credit Note: ${cnNumber}`);
+            setShowReturnExchangeModal(false);
+          }}
+        />
       </div>
     </BranchProvider>
   );

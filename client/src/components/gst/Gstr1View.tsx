@@ -45,7 +45,18 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       {/* Filter & Export Controls */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={() => onNavigate('gst-sales-register')}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-400"
+            title="Open invoice-by-invoice detailed outward register"
+          >
+            📋 Itemized Sales Register
+          </button>
+        )}
+        <div className="flex flex-wrap items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Return Period:</span>
             <input
@@ -76,6 +87,7 @@ export const Gstr1View: React.FC<Gstr1ViewProps> = ({ onNavigate }) => {
           >
             <span className="inline-flex items-center">{exporting ? <SpinnerIcon size={15} /> : <DownloadIcon size={15} />}</span> {exporting ? 'Exporting...' : 'Download GSTR-1 CSV'}
           </button>
+        </div>
       </div>
 
       {loading ? (

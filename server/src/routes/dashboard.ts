@@ -425,7 +425,7 @@ export function registerDashboard(r: Router) {
       // 3. COGS (if owner or manager)
       isOwnerOrManager
         ? ctx.db.one<any>(
-            `SELECT
+          `SELECT
               COALESCE(SUM(
                 CASE
                   WHEN i.kind = 'sale' THEN (il.qty_milli * COALESCE(it.cost_minor, 0)) / 1000
@@ -442,8 +442,8 @@ export function registerDashboard(r: Router) {
                AND i.status = 'posted'
                AND i.kind IN ('sale', 'credit_note')
                ${invBranchClause}`,
-            [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
-          )
+          [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
+        )
         : Promise.resolve(null),
 
       // 4. Items sold today
@@ -761,17 +761,17 @@ export function registerDashboard(r: Router) {
     const netCgstMinor = Math.max(
       0,
       Number(todaySalesRes?.grossCgst ?? todaySalesRes?.gross_cgst ?? 0) -
-        Number(todaySalesRes?.returnsCgst ?? todaySalesRes?.returns_cgst ?? 0),
+      Number(todaySalesRes?.returnsCgst ?? todaySalesRes?.returns_cgst ?? 0),
     );
     const netSgstMinor = Math.max(
       0,
       Number(todaySalesRes?.grossSgst ?? todaySalesRes?.gross_sgst ?? 0) -
-        Number(todaySalesRes?.returnsSgst ?? todaySalesRes?.returns_sgst ?? 0),
+      Number(todaySalesRes?.returnsSgst ?? todaySalesRes?.returns_sgst ?? 0),
     );
     const netIgstMinor = Math.max(
       0,
       Number(todaySalesRes?.grossIgst ?? todaySalesRes?.gross_igst ?? 0) -
-        Number(todaySalesRes?.returnsIgst ?? todaySalesRes?.returns_igst ?? 0),
+      Number(todaySalesRes?.returnsIgst ?? todaySalesRes?.returns_igst ?? 0),
     );
     const totalGstMinor = netCgstMinor + netSgstMinor + netIgstMinor;
 
@@ -929,9 +929,8 @@ export function registerDashboard(r: Router) {
 
     const busiestRangeText = busiestHourToday && maxTodaySales > 0 ? busiestHourToday.label : null;
     const subtitle = busiestRangeText
-      ? `${Math.round(netSalesMinor / 100).toLocaleString('en-IN')} so far · busiest hour ${busiestRangeText}${
-          isEveningRushAhead ? ' · evening rush still ahead' : ''
-        }`
+      ? `${Math.round(netSalesMinor / 100).toLocaleString('en-IN')} so far · busiest hour ${busiestRangeText}${isEveningRushAhead ? ' · evening rush still ahead' : ''
+      }`
       : `${Math.round(netSalesMinor / 100).toLocaleString('en-IN')} so far${isEveningRushAhead ? ' · evening rush still ahead' : ''}`;
 
     const paymentModesMap = new Map<string, number>();
@@ -962,11 +961,11 @@ export function registerDashboard(r: Router) {
     const paymentModes = Array.from(paymentModesMap.entries()).map(([modeKey, amt]) => {
       const name =
         modeKey === 'upi' ? 'UPI' :
-        modeKey === 'cash' ? 'Cash' :
-        modeKey === 'card' ? 'Card' :
-        modeKey === 'bank' ? 'Bank Transfer' :
-        modeKey === 'cheque' ? 'Cheque' :
-        modeKey.toUpperCase();
+          modeKey === 'cash' ? 'Cash' :
+            modeKey === 'card' ? 'Card' :
+              modeKey === 'bank' ? 'Bank Transfer' :
+                modeKey === 'cheque' ? 'Cheque' :
+                  modeKey.toUpperCase();
 
       const percentage = collectedTotalMinor > 0 ? Math.round((amt / collectedTotalMinor) * 100) : 0;
       const color = PAYMENT_MODE_COLORS[modeKey] || '#6366f1';

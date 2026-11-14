@@ -22,12 +22,14 @@ export interface ShopFields {
   loyaltyPointValueMinor: number;
   loyaltyMinPointsRedeem: number;
   ownerEmail: string | null;
+  logoUrl: string | null;
 }
 
 export const SHOP_DEFAULTS: ShopFields = {
   name: '', businessType: 'retail', gstin: null, stateCode: '33', address: null, phone: null, upiId: null, invoicePrefix: 'INV', language: 'en', locations: ['MAIN'],
   whatsappEnabled: true, whatsappDefaultLang: 'en', whatsappIncludeLink: false,
   loyaltyEnabled: true, loyaltyPointsPer100: 10, loyaltyPointValueMinor: 10, loyaltyMinPointsRedeem: 10, ownerEmail: null,
+  logoUrl: null,
 };
 
 const has = (o: any, k: string) => o != null && Object.prototype.hasOwnProperty.call(o, k);
@@ -122,6 +124,10 @@ export function parseShopFields(body: any, cur: ShopFields = SHOP_DEFAULTS): Sho
     }
   }
 
+  if (has(body, 'logoUrl')) {
+    out.logoUrl = V.optStr(body.logoUrl, 'Logo URL', 600000);
+  }
+
   return out;
 }
 
@@ -138,6 +144,7 @@ export function shopView(t: any) {
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
+    logoUrl: t.logoUrl ?? t.logo_url ?? null,
     createdAt: t.createdAt ?? t.created_at,
   };
 }
@@ -154,5 +161,6 @@ export function shopFromRow(t: any): ShopFields {
     loyaltyPointValueMinor: Number(t.loyaltyPointValueMinor ?? t.loyalty_point_value_minor ?? 10),
     loyaltyMinPointsRedeem: Number(t.loyaltyMinPointsRedeem ?? t.loyalty_min_points_redeem ?? 10),
     ownerEmail: t.ownerEmail ?? t.owner_email ?? null,
+    logoUrl: t.logoUrl ?? t.logo_url ?? null,
   };
 }
