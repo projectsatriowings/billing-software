@@ -262,7 +262,7 @@ export function registerInvoices(r: Router) {
 
     // POS billing requires an open cashier shift; invoice gets branch_id from active shift
     const activeShift = await ctx.db.one<any>(
-      "SELECT id, branch_id FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
+      "SELECT id, branch_id, counter_id, counter, counter_name_snapshot FROM shifts WHERE tenant_id = ? AND user_id = ? AND status = 'open' FOR SHARE",
       [tenantId, ctx.user!.id],
     );
     if (!activeShift) {
@@ -350,7 +350,64 @@ export function registerInvoices(r: Router) {
       const br = await ctx.db.one<any>('SELECT code FROM branches WHERE id = ?', [invoiceBranchId]);
       location = br?.code || ctx.user!.assignedLocation || 'MAIN';
     }
-    const counter = V.optStr(b.counter, 'Counter', 50) || ctx.user!.assignedCounter || 'COUNTER-1';
+    const inputCounterId = V.optStr(b.counterId ?? b.counter_id, 'counterId', 50);
+    const inputCounter = V.optStr(b.counter, 'Counter', 50);
+
+    let resolvedCounterId: string | null = null;
+    let resolvedCounterCode: string = inputCounter || activeShift?.counter || 'COUNTER-1';
+    let resolvedCounterName: string = inputCounter || activeShift?.counterNameSnapshot || activeShift?.counter_name_snapshot || 'Counter 1';
+
+    let counterRow: any = null;
+    if (invoiceBranchId) {
+      if (inputCounterId) {
+        counterRow = await ctx.db.one<any>(
+          'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND id = ?',
+          [tenantId, invoiceBranchId, inputCounterId],
+        );
+      }
+      if (!counterRow && inputCounter) {
+        counterRow = await ctx.db.one<any>(
+          'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND (upper(code) = upper(?) OR lower(name) = lower(?))',
+          [tenantId, invoiceBranchId, inputCounter, inputCounter],
+        );
+      }
+
+      // If client explicitly passed a counter that doesn't exist in this branch:
+      if (!counterRow && (inputCounterId || inputCounter)) {
+        const branchCounters = await ctx.db.query<any>(
+          'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ?',
+          [tenantId, invoiceBranchId],
+        );
+        if (branchCounters.length > 0) {
+          throw bad(`Billing counter "${inputCounter || inputCounterId}" does not belong to this branch.`, 'INVALID_COUNTER');
+        }
+      }
+
+      // Only if client did NOT supply a counter in body, fallback to active shift's counter
+      if (!counterRow && !inputCounterId && !inputCounter) {
+        if (activeShift?.counterId || activeShift?.counter_id) {
+          counterRow = await ctx.db.one<any>(
+            'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND id = ?',
+            [tenantId, invoiceBranchId, activeShift.counterId ?? activeShift.counter_id],
+          );
+        }
+        if (!counterRow && activeShift?.counter) {
+          counterRow = await ctx.db.one<any>(
+            'SELECT id, name, code, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND (upper(code) = upper(?) OR lower(name) = lower(?))',
+            [tenantId, invoiceBranchId, activeShift.counter, activeShift.counter],
+          );
+        }
+      }
+
+      if (counterRow) {
+        if (counterRow.status === 'DISABLED') {
+          throw bad(`Billing counter "${counterRow.name}" is currently disabled. Please select an active counter.`, 'COUNTER_DISABLED');
+        }
+        resolvedCounterId = counterRow.id;
+        resolvedCounterCode = counterRow.code;
+        resolvedCounterName = counterRow.name;
+      }
+    }
     let earnedLoyaltyPoints = 0;
     let customerLoyaltyPoints: number | null = null;
     let isNewCustomer = false;
@@ -414,7 +471,7 @@ export function registerInvoices(r: Router) {
           const assignedCustName = (customerName && customerName.trim() && !customerName.toLowerCase().includes('walk-in'))
             ? customerName.trim()
             : `Customer ${cleanPhoneDigits.slice(-4)}`;
-          
+
           await q.exec(
             `INSERT INTO parties (
               id, tenant_id, branch_id, type, name, phone, state_code, loyalty_points, active, custom
@@ -478,14 +535,14 @@ export function registerInvoices(r: Router) {
           customer_name, customer_phone, party_name, party_phone, place_state, intra,
           subtotal_minor, discount_minor, taxable_minor, cgst_minor, sgst_minor, igst_minor,
           round_off_minor, rounding_minor, total_minor,
-          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, shift_id, custom,
+          paid_minor, balance_minor, payment_status, rule_version, calc, share_token, created_by, location, counter, counter_id, counter_name_snapshot, shift_id, custom,
           applied_promotions, promotion_discount_minor
         ) VALUES (
           ?, ?, ?, ?, ?, 'sale', 'posted', ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb,
+          ?, ?, ?, '1.0', ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?::jsonb,
           ?::jsonb, ?
         )`,
         [
@@ -518,7 +575,9 @@ export function registerInvoices(r: Router) {
           shareToken,
           ctx.user!.id,
           location,
-          counter,
+          resolvedCounterCode,
+          resolvedCounterId,
+          resolvedCounterName,
           activeShift?.id || null,
           j(tenderData ? { tender: tenderData } : {}),
           j(appliedPromotionsInput),
@@ -558,7 +617,7 @@ export function registerInvoices(r: Router) {
                 customerPhone || null,
                 Math.max(0, Number(promoItem.discountMinor || 0)),
                 location,
-                counter,
+                resolvedCounterCode,
               ]
             );
           }
@@ -635,10 +694,17 @@ export function registerInvoices(r: Router) {
         }
 
         await q.exec(
-          `INSERT INTO payments (id, tenant_id, branch_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter)
-           VALUES (?, ?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [newId('pay'), tenantId, invoiceBranchId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift.id, todayStr, ctx.user!.id, location, counter],
+          `INSERT INTO payments (id, tenant_id, branch_id, kind, method, mode, amount_minor, invoice_id, party_id, reference, shift_id, bdate, created_by, location, counter, counter_id, counter_name_snapshot)
+           VALUES (?, ?, ?, 'receipt', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId('pay'), tenantId, invoiceBranchId, method, method, amt, invoiceId, partyId || null, p.reference || null, activeShift.id, todayStr, ctx.user!.id, location, resolvedCounterCode, resolvedCounterId, resolvedCounterName],
         );
+
+        if (activeShift?.id && resolvedCounterId && (activeShift.counterId !== resolvedCounterId || activeShift.counter_id !== resolvedCounterId)) {
+          await q.exec(
+            'UPDATE shifts SET counter_id = ?, counter = ?, counter_name_snapshot = ?, updated_at = now() WHERE id = ?',
+            [resolvedCounterId, resolvedCounterCode, resolvedCounterName, activeShift.id],
+          );
+        }
 
         if (method === 'card' && p.reference) {
           const rrnMatch = p.reference.match(/RRN:([^\s|]+)/i);
@@ -694,9 +760,9 @@ export function registerInvoices(r: Router) {
       }
 
       // Invalidate cache
-    invalidateTodayDashboardCache(tenantId);
+      invalidateTodayDashboardCache(tenantId);
 
-    await audit(q, ctx, {
+      await audit(q, ctx, {
         action: 'invoice.create',
         entity: 'invoice',
         entityId: invoiceId,
@@ -745,7 +811,8 @@ export function registerInvoices(r: Router) {
       paidMinor: totalPaidMinor,
       balanceMinor: Math.max(0, calculated.totalMinor - totalPaidMinor),
       location,
-      counter,
+      counter: resolvedCounterCode,
+      counterId: resolvedCounterId,
       shareToken,
       tender: tenderData,
       earnedLoyaltyPoints,
@@ -829,7 +896,7 @@ export function registerInvoices(r: Router) {
           } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
             mrpMinor = itemCustom.mrp_minor;
           }
-        } catch {}
+        } catch { }
 
         const priceMinor = Number(l.priceMinor ?? l.price_minor);
         const discountMinor = Number(l.discountMinor ?? l.discount_minor);
@@ -997,7 +1064,7 @@ export function registerInvoices(r: Router) {
           } else if (typeof itemCustom.mrp_minor === 'number' && itemCustom.mrp_minor > 0) {
             mrpMinor = itemCustom.mrp_minor;
           }
-        } catch {}
+        } catch { }
 
         const priceMinor = Number(l.priceMinor ?? l.price_minor);
         const discountMinor = Number(l.discountMinor ?? l.discount_minor);

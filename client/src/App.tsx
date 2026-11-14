@@ -48,6 +48,7 @@ import {
   type PaymentAttempt,
   getActiveBranchScope,
   setActiveBranchScope,
+  selectActiveShiftCounter,
 } from './api';
 import { BranchProvider } from './contexts/BranchContext';
 import { moneyInWords } from '../../shared/money.ts';
@@ -151,6 +152,7 @@ import { ToggleSwitch } from './components/ToggleSwitch';
 import { renderBarcodeSvg } from '../../shared/bulkImport.ts';
 import { OpenShiftModal } from './components/shifts/OpenShiftModal.tsx';
 import { SelectCounterModal } from './components/shifts/SelectCounterModal.tsx';
+import { RecentBillsBentoView } from './components/invoices/RecentBillsBentoView.tsx';
 import { TodayDashboardView, AnimatedCounter } from './components/dashboard/TodayDashboardView.tsx';
 import { PaymentsView } from './components/finance/PaymentsView.tsx';
 import { ExpensesView } from './components/finance/ExpensesView.tsx';
@@ -196,6 +198,7 @@ export const HIDE_BUSINESS_BAR_ROUTES = [
 ];
 
 export const HIDE_BUSINESS_BAR_TABS = new Set([
+  'shifts',
   'items',
   'categories',
   'inventory',
@@ -539,10 +542,12 @@ export const getBusinessLabel = (type?: string) => {
   }
 };
 
+export const CASHIER_ALLOWED_TABS = new Set<string>(['pos', 'shifts', 'invoices']);
+
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
-  const [activeTab, setActiveTab] = useState<
+  const [activeTabRaw, setActiveTabRaw] = useState<
     | 'dashboard'
     | 'pos'
     | 'shifts'
@@ -572,20 +577,44 @@ export function App() {
     | 'gst-filing-history'
     | 'promotions'
     | 'user-management'
-  >('dashboard');
-  const [displayTab, setDisplayTab] = useState<string>('dashboard');
-  const [isViewExiting, setIsViewExiting] = useState<boolean>(false);
+  >(() => {
+    try {
+      const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u?.role === 'cashier') return 'pos';
+      }
+    } catch {}
+    return 'dashboard';
+  });
+
+  // Strict role-based tab interceptor: Cashiers are strictly restricted to POS, Cashier Shift & Recent Bills
+  const setActiveTab = useCallback(
+    (tabOrFn: any) => {
+      setActiveTabRaw((prev: any) => {
+        const next = typeof tabOrFn === 'function' ? tabOrFn(prev) : tabOrFn;
+        if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(next)) {
+          return 'pos';
+        }
+        return next;
+      });
+    },
+    [user?.role]
+  );
+
+  const activeTab: typeof activeTabRaw =
+    user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTabRaw)
+      ? 'pos'
+      : activeTabRaw;
+
+  // displayTab is directly bound to activeTab, eliminating blank screen timeout race conditions
+  const displayTab = activeTab;
 
   useEffect(() => {
-    if (activeTab !== displayTab) {
-      setIsViewExiting(true);
-      const timer = setTimeout(() => {
-        setDisplayTab(activeTab);
-        setIsViewExiting(false);
-      }, 100);
-      return () => clearTimeout(timer);
+    if (user?.role === 'cashier' && !CASHIER_ALLOWED_TABS.has(activeTabRaw)) {
+      setActiveTabRaw('pos');
     }
-  }, [activeTab, displayTab]);
+  }, [user?.role, activeTabRaw]);
 
   // Collapsible sidebar accordion sections
   const isAccountsTabActive = ['invoices', 'purchases', 'payments', 'expenses', 'payables', 'reports'].includes(activeTab);
@@ -717,6 +746,36 @@ export function App() {
   const [myBusinesses, setMyBusinesses] = useState<DemoBusiness[]>([]);
   const [showBusinessDropdown, setShowBusinessDropdown] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  // Top header notifications popover state and ref
+  const [showTopNotifPopover, setShowTopNotifPopover] = useState(false);
+  const notifPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  // Close notifications popover on outside click or Escape key without blurring background
+  useEffect(() => {
+    if (!showTopNotifPopover) return;
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (
+        notifPopoverRef.current &&
+        !notifPopoverRef.current.contains(event.target as Node)
+      ) {
+        setShowTopNotifPopover(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowTopNotifPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showTopNotifPopover]);
 
   // Inventory Hub dropdown & submenu state
   const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
@@ -998,6 +1057,13 @@ export function App() {
       return '';
     }
   });
+  const [selectedCounterId, setSelectedCounterId] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('pos_selected_counter_id') || localStorage.getItem('pos_selected_counter_id') || '';
+    } catch {
+      return '';
+    }
+  });
   const [showCounterModal, setShowCounterModal] = useState<boolean>(false);
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -1055,6 +1121,51 @@ export function App() {
       } catch { }
     }
   }, [activeTab]);
+
+  // Synchronize and validate cashier counter selection with active branch counters
+  useEffect(() => {
+    if (!activeBranch || !activeBranch.counterDetails || activeBranch.counterDetails.length === 0) return;
+    const activeList = activeBranch.counterDetails.filter((c: any) => c.status !== 'DISABLED');
+    if (activeList.length === 0) return;
+
+    if (selectedCounterId) {
+      const match = activeList.find((c: any) => c.id === selectedCounterId);
+      if (!match) {
+        // Counter ID does not belong to active branch (e.g. branch switched or deleted) -> reset
+        setSelectedCounterId('');
+        setSelectedCounter('');
+        try {
+          sessionStorage.removeItem('pos_selected_counter_id');
+          sessionStorage.removeItem('pos_selected_counter');
+          sessionStorage.removeItem('pos_selected_counter_name');
+          localStorage.removeItem('pos_selected_counter_id');
+          localStorage.removeItem('pos_selected_counter');
+          localStorage.removeItem('pos_selected_counter_name');
+        } catch { }
+        if (user?.role === 'cashier') {
+          setShowCounterModal(true);
+        }
+      } else if (match.code !== selectedCounter) {
+        setSelectedCounter(match.code);
+        try {
+          sessionStorage.setItem('pos_selected_counter', match.code);
+          localStorage.setItem('pos_selected_counter', match.code);
+        } catch { }
+      }
+    } else if (selectedCounter) {
+      const match = activeList.find((c: any) => c.code.toUpperCase() === selectedCounter.toUpperCase() || c.name.toLowerCase() === selectedCounter.toLowerCase());
+      if (match) {
+        setSelectedCounterId(match.id);
+        setSelectedCounter(match.code);
+        try {
+          sessionStorage.setItem('pos_selected_counter_id', match.id);
+          sessionStorage.setItem('pos_selected_counter', match.code);
+          localStorage.setItem('pos_selected_counter_id', match.id);
+          localStorage.setItem('pos_selected_counter', match.code);
+        } catch { }
+      }
+    }
+  }, [activeBranch, selectedCounterId, selectedCounter, user?.role]);
 
   // Specialized Business Fields
   // Restaurant:
@@ -1594,7 +1705,7 @@ export function App() {
         if (res.user?.role === 'cashier') {
           setActiveTab('pos');
           try {
-            if (!sessionStorage.getItem('pos_selected_counter')) {
+            if (!sessionStorage.getItem('pos_selected_counter_id') && !localStorage.getItem('pos_selected_counter_id')) {
               setShowCounterModal(true);
             }
           } catch { }
@@ -2511,11 +2622,17 @@ export function App() {
     try {
       sessionStorage.removeItem('pos_selected_counter');
       localStorage.removeItem('pos_selected_counter');
+      sessionStorage.removeItem('pos_selected_counter_id');
+      localStorage.removeItem('pos_selected_counter_id');
+      sessionStorage.removeItem('pos_selected_counter_name');
+      localStorage.removeItem('pos_selected_counter_name');
       localStorage.removeItem('sa_selected_branch');
       localStorage.removeItem('selected_branch');
       sessionStorage.removeItem('sa_selected_branch');
       sessionStorage.removeItem('selected_branch');
     } catch { }
+    setSelectedCounter('');
+    setSelectedCounterId('');
     setUser(null);
     setShop(null);
     navigateTo('landing');
@@ -3811,6 +3928,25 @@ export function App() {
   const handleCheckout = async (isKot = false) => {
     if (cart.length === 0) return;
 
+    if (!selectedCounter) {
+      setShowCounterModal(true);
+      showToast('Please select a billing counter before proceeding with billing.', 'error');
+      return;
+    }
+
+    let checkoutCounterId = selectedCounterId;
+    if (activeBranch?.counterDetails && activeBranch.counterDetails.length > 0) {
+      const match = activeBranch.counterDetails.find(
+        (c) => (selectedCounterId ? c.id === selectedCounterId : (c.code === selectedCounter || c.name === selectedCounter)) && c.status === 'ACTIVE'
+      );
+      if (!match) {
+        setShowCounterModal(true);
+        showToast('Selected counter is disabled or does not belong to your branch. Please choose an active counter.', 'error');
+        return;
+      }
+      checkoutCounterId = match.id;
+    }
+
     const selectedCustomer = parties.find((p) => p.id === selectedPartyId);
 
     setIsCheckingOut(true);
@@ -3913,7 +4049,8 @@ export function App() {
         body: JSON.stringify({
           lines,
           location: user?.assignedLocation || currentBranchCode || undefined,
-          counter: selectedCounter || 'Counter 1',
+          counter: selectedCounter,
+          counterId: checkoutCounterId || selectedCounterId || undefined,
           branchId: activeBranch?.id || user?.branchId || undefined,
           billDiscountMinor: Math.round(percentDiscountMinor + pointsDiscountMinor + (promoEvalResult?.billDiscountMinor || 0)),
           appliedPromotions: promoEvalResult?.appliedPromotions || [],
@@ -6175,20 +6312,22 @@ export function App() {
 
                         {/* Quick navigation actions */}
                         <div className="store-quick-actions">
-                          <button
-                            type="button"
-                            className="store-quick-action-btn"
-                            onClick={() => {
-                              setActiveTab('settings');
-                              setShowBusinessDropdown(false);
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                            </svg>
-                            Store Profile &amp; Settings
-                          </button>
+                          {user?.role !== 'cashier' && (
+                            <button
+                              type="button"
+                              className="store-quick-action-btn"
+                              onClick={() => {
+                                setActiveTab('settings');
+                                setShowBusinessDropdown(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                              </svg>
+                              Store Profile &amp; Settings
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="store-quick-action-btn"
@@ -6204,22 +6343,24 @@ export function App() {
                             </svg>
                             Open POS Quick Billing
                           </button>
-                          <button
-                            type="button"
-                            className="store-quick-action-btn"
-                            onClick={() => {
-                              setActiveTab('reports');
-                              setShowBusinessDropdown(false);
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
-                              <line x1="18" y1="20" x2="18" y2="10" />
-                              <line x1="12" y1="20" x2="12" y2="4" />
-                              <line x1="6" y1="20" x2="6" y2="14" />
-                              <line x1="2" y1="20" x2="22" y2="20" />
-                            </svg>
-                            Sales Reports &amp; Analytics
-                          </button>
+                          {user?.role !== 'cashier' && (
+                            <button
+                              type="button"
+                              className="store-quick-action-btn"
+                              onClick={() => {
+                                setActiveTab('reports');
+                                setShowBusinessDropdown(false);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px', verticalAlign: '-2px' }}>
+                                <line x1="18" y1="20" x2="18" y2="10" />
+                                <line x1="12" y1="20" x2="12" y2="4" />
+                                <line x1="6" y1="20" x2="6" y2="14" />
+                                <line x1="2" y1="20" x2="22" y2="20" />
+                              </svg>
+                              Sales Reports &amp; Analytics
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -6233,22 +6374,24 @@ export function App() {
                       </div>
                     </div>
 
-                    <div className="dropdown-footer">
-                      <button
-                        className="btn btn-secondary"
-                        style={{ width: '100%', padding: '0.45rem', fontSize: '0.8rem', justifyContent: 'center' }}
-                        onClick={() => {
-                          setShowBusinessDropdown(false);
-                          setActiveTab('settings');
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-                          <circle cx="12" cy="12" r="3" />
-                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
-                        Store Profile &amp; Tax Settings
-                      </button>
-                    </div>
+                    {user?.role !== 'cashier' && (
+                      <div className="dropdown-footer">
+                        <button
+                          className="btn btn-secondary"
+                          style={{ width: '100%', padding: '0.45rem', fontSize: '0.8rem', justifyContent: 'center' }}
+                          onClick={() => {
+                            setShowBusinessDropdown(false);
+                            setActiveTab('settings');
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                          Store Profile &amp; Tax Settings
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -6293,9 +6436,9 @@ export function App() {
                   </svg>
                 </span>
                 <span className="nav-text">POS Counter</span>
-
               </button>
-              {/* 3. Cashier Shifts: ONLY for Cashier (Store Manager manages shifts from Branch Dashboard) */}
+
+              {/* 3. Cashier Shifts: ONLY for Cashier */}
               {user?.role === 'cashier' && (
                 <button
                   type="button"
@@ -6891,7 +7034,162 @@ export function App() {
         <main className="main-content">
           {/* Top Global Bar Matching Image 2 */}
           <div className={`top-global-bar ${hideBusinessBar ? 'no-divider' : ''} ${displayTab === 'dashboard' ? 'dashboard-top-bar' : ''}`}>
-            {displayTab === 'inventory' || activeTab === 'inventory' ? (
+            {displayTab === 'pos' || activeTab === 'pos' ? (
+            <div className="top-pos-header-left">
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (displayTab === 'invoices' || activeTab === 'invoices') && user?.role === 'cashier' ? (
+            <div className="top-invoices-header-left">
+              <div className="top-invoices-title-group">
+                <h1 className="top-invoices-title">
+                  Recent Bills
+                </h1>
+                <span className="top-invoices-subtitle">
+                  Live POS transactions, receipts & customer returns
+                </span>
+              </div>
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (displayTab === 'shifts' || activeTab === 'shifts') && user?.role === 'cashier' ? (
+            <div className="top-invoices-header-left">
+              <div className="top-invoices-title-group">
+                <h1 className="top-invoices-title">
+                  My Cashier Shift
+                </h1>
+                <span className="top-invoices-subtitle">
+                  Manage shift register, drawer cash float, and day-end closing
+                </span>
+              </div>
+              <div className="top-pos-bento-badge top-pos-branch-badge" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
+                <div className="top-pos-badge-icon branch">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Branch</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">{currentBranchName}</span>
+                    <span className="top-pos-code-tag">{currentBranchCode}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="top-pos-bento-badge top-pos-counter-badge locked" title="Billing counter is locked for this session">
+                <div className="top-pos-badge-icon counter">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                </div>
+                <div className="top-pos-badge-text">
+                  <span className="top-pos-badge-label">Counter</span>
+                  <div className="top-pos-badge-val-row">
+                    <span className="top-pos-badge-val">
+                      {(() => {
+                        const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
+                        if (match) return `${match.name} (${match.code})`;
+                        return selectedCounter || activeBranch?.counters?.[0] || 'Counter 1';
+                      })()}
+                    </span>
+                    <span className="top-pos-lock-tag" title="Counter is locked for this logged-in session">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span>Locked</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : displayTab === 'inventory' || activeTab === 'inventory' ? (
               <div className="top-inventory-header-left">
                 <h1 className="top-inventory-title">
                   Inventory Hub
@@ -6986,34 +7284,327 @@ export function App() {
                   canAccessOverall={user.role === 'owner' || user.role === 'admin' || String(user.role).toUpperCase() === 'SUPER_ADMIN'}
                 />
               )}
-              <button
-                type="button"
-                className="top-notification-btn"
-                aria-label="Notifications"
-                title={
-                  totalStockAlerts > 0
-                    ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock)`
-                    : 'Notifications'
-                }
-                onClick={() => {
-                  setActiveTab('inventory');
-                  setShowInventoryDropdown(true);
-                  setInventoryInitialTab(totalStockAlerts > 0 ? 'replenish' : 'overview');
-                }}
-              >
-                <span className="notif-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                  </svg>
-                </span>
-                {totalStockAlerts > 0 && (
-                  <span className="notif-badge">
-                    {totalStockAlerts}
+              <div className="top-notif-wrapper" ref={notifPopoverRef}>
+                <button
+                  type="button"
+                  className={`top-notification-btn ${showTopNotifPopover ? 'active' : ''}`}
+                  aria-label="Notifications"
+                  title={
+                    user?.role === 'cashier'
+                      ? 'Terminal Notifications'
+                      : totalStockAlerts > 0
+                        ? `${totalStockAlerts} Inventory Alert${totalStockAlerts > 1 ? 's' : ''} (${outOfStockItems.length} out of stock, ${lowStockItems.length} low stock)`
+                        : 'Notifications'
+                  }
+                  onClick={() => setShowTopNotifPopover((prev) => !prev)}
+                >
+                  <span className="notif-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
                   </span>
-                )}
-              </button>
-              <div className="top-user-chip" onClick={() => setActiveTab('settings')} title="Settings & Profile">
+                  {user?.role === 'cashier' ? (
+                    (!activeShiftNumber || totalStockAlerts > 0) && (
+                      <span className="notif-badge">
+                        {!activeShiftNumber ? 1 : totalStockAlerts}
+                      </span>
+                    )
+                  ) : (
+                    totalStockAlerts > 0 && (
+                      <span className="notif-badge">
+                        {totalStockAlerts}
+                      </span>
+                    )
+                  )}
+                </button>
+
+                {showTopNotifPopover && (
+                  <div className="top-notif-popover bento-notif-popover">
+                      {/* Bento Popover Header */}
+                      <div className="bento-notif-header">
+                        <div className="bento-notif-title-row">
+                          <span className="bento-notif-icon-bubble">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                          </span>
+                          <span className="bento-notif-title">Notifications</span>
+                        </div>
+                        <span className={`bento-notif-role-badge ${user?.role === 'cashier' ? 'cashier' : 'admin'}`}>
+                          {user?.role === 'cashier' ? 'Cashier Station' : 'Store Admin'}
+                        </span>
+                      </div>
+
+                      {/* Bento Popover Cards */}
+                      <div className="bento-notif-body">
+                        {user?.role === 'cashier' ? (
+                          <>
+                            {/* Card 1: Shift Status */}
+                            <div className={`bento-notif-card ${activeShiftNumber ? 'active-shift' : 'warning-shift'}`}>
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon">
+                                  {activeShiftNumber ? (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="10"></circle>
+                                      <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                  ) : (
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">
+                                    {activeShiftNumber ? `Shift #${activeShiftNumber} Active` : 'Shift is Closed'}
+                                  </span>
+                                  <span className={`bento-notif-status-pill ${activeShiftNumber ? 'live' : 'warn'}`}>
+                                    {activeShiftNumber ? 'Live Shift' : 'Action Required'}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                {activeShiftNumber
+                                  ? `Register drawer is active on ${selectedCounter || 'Assigned Counter'} at ${currentBranchName}.`
+                                  : 'Open a cashier register shift to record opening cash float and track bills.'}
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('shifts');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>{activeShiftNumber ? 'Manage Shift & Drawer' : 'Open Register Shift'}</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 2: Billing Counter Station */}
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon pos">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="9" cy="21" r="1"></circle>
+                                    <circle cx="20" cy="21" r="1"></circle>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">POS Billing Counter</span>
+                                  <span className="bento-notif-status-pill pos">Ready</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                High-speed retail barcode terminal for checkout, customer lookup, and thermal printing.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('pos');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>Go to Billing Counter</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 3: Recent Bills */}
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon invoices">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">Recent Invoices</span>
+                                  <span className="bento-notif-status-pill invoices">Receipts</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                Review recent shift transactions, reprint thermal receipts, and handle customer sales returns.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('invoices');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>View Recent Bills</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+
+                            {/* Card 4: Shelf Stock Advisory (Strictly Informational, NO navigation to Inventory) */}
+                            {totalStockAlerts > 0 ? (
+                              <div className="bento-notif-card stock-advisory">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon advisory">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Shelf Stock Advisory</span>
+                                    <span className="bento-notif-status-pill advisory">{totalStockAlerts} items</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  {totalStockAlerts} catalog items have low or zero floor stock ({outOfStockItems.length} out of stock, {lowStockItems.length} low stock). Inform Store Manager to replenish.
+                                </p>
+                                <span className="bento-notif-hint">
+                                  Inventory replenishment is managed by Store Managers.
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="bento-notif-card stock-advisory ok">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon ok">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Shelf Stock Healthy</span>
+                                    <span className="bento-notif-status-pill ok">Optimal</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  All tracked retail inventory items have sufficient floor stock levels.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Non-cashier notifications (Store Manager / Super Admin) */}
+                            {totalStockAlerts > 0 ? (
+                              <div className="bento-notif-card warning-shift">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon advisory">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">{totalStockAlerts} Inventory Alerts</span>
+                                    <span className="bento-notif-status-pill warn">Critical</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  {outOfStockItems.length} items out of stock and {lowStockItems.length} items below minimum safety levels.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="bento-notif-action-btn primary"
+                                  onClick={() => {
+                                    setActiveTab('inventory');
+                                    setShowInventoryDropdown(true);
+                                    setInventoryInitialTab('replenish');
+                                    setShowTopNotifPopover(false);
+                                  }}
+                                >
+                                  <span>Open Inventory Replenishment</span>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="bento-notif-card stock-advisory ok">
+                                <div className="bento-notif-card-head">
+                                  <div className="bento-notif-card-icon ok">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  </div>
+                                  <div className="bento-notif-card-title-group">
+                                    <span className="bento-notif-card-title">Inventory Stock Healthy</span>
+                                    <span className="bento-notif-status-pill ok">Optimal</span>
+                                  </div>
+                                </div>
+                                <p className="bento-notif-card-desc">
+                                  Catalog inventory is fully stocked. No restock orders are currently pending.
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="bento-notif-card">
+                              <div className="bento-notif-card-head">
+                                <div className="bento-notif-card-icon pos">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="9" cy="21" r="1"></circle>
+                                    <circle cx="20" cy="21" r="1"></circle>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                  </svg>
+                                </div>
+                                <div className="bento-notif-card-title-group">
+                                  <span className="bento-notif-card-title">POS Quick Terminal</span>
+                                  <span className="bento-notif-status-pill pos">Active</span>
+                                </div>
+                              </div>
+                              <p className="bento-notif-card-desc">
+                                Jump to high-speed POS billing counter for retail sales checkout.
+                              </p>
+                              <button
+                                type="button"
+                                className="bento-notif-action-btn"
+                                onClick={() => {
+                                  setActiveTab('pos');
+                                  setShowTopNotifPopover(false);
+                                }}
+                              >
+                                <span>Open POS Counter</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Bento Popover Footer */}
+                      <div className="bento-notif-footer">
+                        {user?.role === 'cashier' ? (
+                          <span className="bento-notif-footer-text">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" style={{ verticalAlign: '-1px', marginRight: '5px' }}>
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            Cashier Workspace: POS Counter · My Cashier Shift · Recent Bills
+                          </span>
+                        ) : (
+                          <span className="bento-notif-footer-text">
+                            Store Admin Workspace · Multi-branch Controls Active
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+              <div
+                className={`top-user-chip ${user?.role === 'cashier' ? 'readonly' : ''}`}
+                onClick={() => {
+                  if (user?.role !== 'cashier') {
+                    setActiveTab('settings');
+                  }
+                }}
+                title={user?.role === 'cashier' ? `Cashier on Duty: ${(user?.name || 'Cashier').replace(/\s*\([^)]*\)/g, '').trim()}` : 'Settings & Profile'}
+              >
                 <div className="top-user-avatar">
                   {(user?.name || 'User').replace(/\s*\([^)]*\)/g, '').trim().slice(0, 1).toUpperCase()}
                 </div>
@@ -7036,13 +7627,12 @@ export function App() {
           </div>
 
           {/* View Transition Stage (SPA Bento Transition) */}
-          <div key={displayTab} className={`app-view-stage ${isViewExiting ? 'is-exiting' : 'is-entering'} ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
+          <div key={displayTab} className={`app-view-stage ${hideBusinessBar ? 'stage-business-bar-hidden' : ''}`}>
             {/* Other Tab Headers */}
-            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && displayTab !== 'shifts' && (
+            {!hideBusinessBar && displayTab !== 'pos' && displayTab !== 'shifts' && displayTab !== 'sales-analysis' && displayTab !== 'dashboard' && displayTab !== 'stock-transfer' && displayTab !== 'user-management' && activeTab !== 'user-management' && (
               <header className="content-top-header">
                 <div className="content-header-left">
                   <h1 className="content-page-title">
-                    {displayTab === 'shifts' && 'Cashier Shifts & Day-End Closing'}
                     {displayTab === 'items' && 'Product & Stock Catalog'}
                     {displayTab === 'purchases' && 'Purchases & Stock Inward'}
                     {displayTab === 'invoices' && 'Sales Invoices & Bills'}
@@ -7064,7 +7654,6 @@ export function App() {
                     {displayTab === 'gst-filing-history' && 'GST Returns & Audit Filing History'}
                   </h1>
                   <span className="content-page-subtitle">
-                    {displayTab === 'shifts' && 'Manage cashier registers, drawer cash float, cash movements, and day-end reconciliation reports'}
                     {displayTab === 'items' && 'Manage your catalog, stock balances, tax rates, and barcodes'}
                     {displayTab === 'purchases' && 'Record supplier invoices, inward goods stock into ledger, and track purchase GST'}
                     {displayTab === 'invoices' && 'View issued invoices, audit trails, and print thermal receipts'}
@@ -7091,7 +7680,10 @@ export function App() {
                   <div className="header-store-chip" title="Active Branch Scope">
                     <span className="store-chip-dot"></span>
                     <span className="store-chip-text">
-                      🏢 <strong>{currentBranchName}</strong>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ marginRight: '5px', verticalAlign: '-1px' }}>
+                        <path d="M3 21h18M3 7v14M21 7v14M6 7V3h12v4M9 10h1M14 10h1M9 14h1M14 14h1M9 18h1M14 18h1" />
+                      </svg>
+                      <strong>{currentBranchName}</strong>
                     </span>
                   </div>
                   <div className="header-store-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
@@ -7128,7 +7720,6 @@ export function App() {
                   selectedBranch={selectedBranchScope}
                   onBranchChange={handleGlobalBranchChange}
                   onNavigateToPos={() => setActiveTab('pos')}
-                  onNavigateToShifts={() => setActiveTab('shifts')}
                   onNavigateToInventory={() => setActiveTab('inventory')}
                   onNavigateToSalesAnalysis={() => setActiveTab('sales-analysis')}
                   onNavigateToPurchases={() => {
@@ -7166,37 +7757,7 @@ export function App() {
                         )}
                       </span>
                       <div>
-                        <div className="bento-badge-title-row">
-                          <span className="bento-badge-title">POS Billing Counter</span>
-                          <span className="bento-branch-chip" title={`Store Branch: ${currentBranchName} (${currentBranchCode})`}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                              <circle cx="12" cy="10" r="3" />
-                            </svg>
-                            <span className="bento-branch-chip-label">Branch:</span>
-                            <span>{currentBranchName}</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="bento-counter-chip"
-                            onClick={() => setShowCounterModal(true)}
-                            title="Active Checkout Counter • Click to switch counter"
-                          >
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                              <line x1="8" y1="21" x2="16" y2="21" />
-                              <line x1="12" y1="17" x2="12" y2="21" />
-                            </svg>
-                            <span>
-                              {(() => {
-                                const match = activeBranch?.counterDetails?.find(c => c.code === selectedCounter || c.name === selectedCounter);
-                                if (match) return `${match.name} (${match.code})`;
-                                return selectedCounter || activeBranch?.counters?.[0] || 'Select Counter';
-                              })()}
-                            </span>
-                            <span className="bento-counter-chip-action">Change</span>
-                          </button>
-                        </div>
+                        <div className="bento-badge-title">POS Billing Counter</div>
                         <div className="bento-badge-sub">High-Speed Bento Billing Terminal</div>
                       </div>
                     </div>
@@ -7292,27 +7853,43 @@ export function App() {
 
                     {/* Inventory Alert Trigger */}
                     {totalStockAlerts > 0 && (
-                      <button
-                        type="button"
-                        className="bento-alert-pill"
-                        onClick={() => setActiveTab('inventory')}
-                        title={`${totalStockAlerts} items have stock warnings`}
-                      >
-                        <span className="alert-ping">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                            <line x1="12" y1="9" x2="12" y2="13"></line>
-                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                          </svg>
-                        </span>
-                        <span>{totalStockAlerts} Stock Alerts</span>
-                        <span className="alert-arrow">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                            <polyline points="12 5 19 12 12 19"></polyline>
-                          </svg>
-                        </span>
-                      </button>
+                      user?.role === 'cashier' ? (
+                        <div
+                          className="bento-alert-pill bento-alert-pill-readonly"
+                          title={`${totalStockAlerts} items have floor stock warnings. Managed by Store Manager.`}
+                        >
+                          <span className="alert-ping">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                              <line x1="12" y1="9" x2="12" y2="13"></line>
+                              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                          </span>
+                          <span>{totalStockAlerts} Stock Alerts</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="bento-alert-pill"
+                          onClick={() => setActiveTab('inventory')}
+                          title={`${totalStockAlerts} items have stock warnings`}
+                        >
+                          <span className="alert-ping">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                              <line x1="12" y1="9" x2="12" y2="13"></line>
+                              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                          </span>
+                          <span>{totalStockAlerts} Stock Alerts</span>
+                          <span className="alert-arrow">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                              <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                          </span>
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -9652,7 +10229,7 @@ export function App() {
             )}
 
             {/* TAB 2: PRODUCTS */}
-            {displayTab === 'items' && (() => {
+            {user?.role !== 'cashier' && displayTab === 'items' && (() => {
               const filteredMasterItems = items.filter((item) => {
                 const q = itemSearchMaster.trim().toLowerCase();
                 const matchesQ = !q ||
@@ -10246,7 +10823,7 @@ export function App() {
             })()}
 
             {/* TAB 2b: CATEGORY MANAGEMENT MODULE - BENTO REDESIGN */}
-            {displayTab === 'categories' && (() => {
+            {user?.role !== 'cashier' && displayTab === 'categories' && (() => {
               const mainCategories = categoriesList.filter((c) => !c.parentId && c.active);
               const subCategories = categoriesList.filter((c) => c.parentId && c.active);
               const activeCategoriesCount = categoriesList.filter((c) => c.active).length;
@@ -10985,7 +11562,7 @@ export function App() {
             })()}
 
             {/* TAB: INVENTORY MANAGEMENT */}
-            {displayTab === 'inventory' && (
+            {user?.role !== 'cashier' && displayTab === 'inventory' && (
               <InventoryDashboard
                 key={`inv-${selectedBranchScope}`}
                 branches={branches}
@@ -11017,7 +11594,7 @@ export function App() {
             )}
 
             {/* TAB: STOCK TRANSFER (BRANCH TO BRANCH) */}
-            {displayTab === 'stock-transfer' && user && (
+            {user?.role !== 'cashier' && displayTab === 'stock-transfer' && user && (
               <div className="tab-content-wrapper" key={`stock-transfer-${selectedBranchScope}`}>
                 <StockTransferView
                   user={user}
@@ -11035,7 +11612,7 @@ export function App() {
             )}
 
             {/* TAB: PRODUCT MOVEMENT ANALYSIS */}
-            {displayTab === 'product-movement' && (
+            {user?.role !== 'cashier' && displayTab === 'product-movement' && (
               <ProductMovementAnalysisView
                 key={`movement-${selectedBranchScope}`}
                 categories={categories}
@@ -11052,375 +11629,34 @@ export function App() {
               />
             )}
 
-            {/* TAB 3: BILLS & INVOICES */}
-            {displayTab === 'invoices' && (() => {
-              const displayedInvoices = invoices.filter((inv) => {
-                const matchDate = !invoiceFilterDate || inv.bdate === invoiceFilterDate || (inv.createdAt && inv.createdAt.startsWith(invoiceFilterDate));
-                const matchBranch = !invoiceBranchFilter || invoiceBranchFilter === 'all' || inv.branchId === invoiceBranchFilter || (inv as any).location === invoiceBranchFilter;
-                return matchDate && matchBranch;
-              });
-              return (
-                <div className="card" key={`invoices-${selectedBranchScope}`}>
-                  {branches.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', padding: '0.65rem 0.85rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Building2Icon size={14} style={{ color: '#6d4aff' }} /> Branch Sales:
-                      </span>
-                      {(user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN') ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInvoiceBranchFilter('all');
-                              handleGlobalBranchChange('all');
-                            }}
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? 700 : 500,
-                              background: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#f3f0ff' : '#ffffff',
-                              border: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                              color: (!selectedBranchScope || selectedBranchScope === 'all') && (invoiceBranchFilter === 'all' || !invoiceBranchFilter) ? '#6d4aff' : '#334155',
-                              padding: '0.25rem 0.6rem',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            All Branches (Overall) ({invoices.filter(i => i.kind === 'sale' && i.status === 'posted').length} bills)
-                          </button>
-                          {branches.map((b) => {
-                            const bInvs = invoices.filter((i) => i.branchId === b.id || (i as any).location === b.code);
-                            const bSales = bInvs.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                            const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                            const isSelected = selectedBranchScope === b.id || selectedBranchScope === b.code || invoiceBranchFilter === b.id || invoiceBranchFilter === b.code;
-                            return (
-                              <button
-                                key={b.id}
-                                type="button"
-                                onClick={() => {
-                                  setInvoiceBranchFilter(b.id);
-                                  handleGlobalBranchChange(b.code || b.id);
-                                }}
-                                style={{
-                                  fontSize: '0.75rem',
-                                  fontWeight: isSelected ? 700 : 500,
-                                  background: isSelected ? '#f3f0ff' : '#ffffff',
-                                  border: isSelected ? '1.5px solid #6d4aff' : '1px solid #cbd5e1',
-                                  color: isSelected ? '#6d4aff' : '#334155',
-                                  padding: '0.25rem 0.6rem',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <strong>{b.name}</strong>: {formatRupees(bSalesTotal)} ({bSales.length} bills)
-                              </button>
-                            );
-                          })}
-                        </>
-                      ) : (
-                        (() => {
-                          const myBranch = branches.find(b => b.id === user.branchId || b.code === user.assignedLocation) || branches[0];
-                          const bSales = invoices.filter((i) => i.kind === 'sale' && i.status === 'posted');
-                          const bSalesTotal = bSales.reduce((sum, i) => sum + (i.totalMinor || 0), 0);
-                          return (
-                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#166534', background: '#dcfce7', padding: '0.25rem 0.65rem', borderRadius: '6px', border: '1px solid #86efac' }}>
-                              🏢 {myBranch?.name || user.assignedLocation}: {formatRupees(bSalesTotal)} ({bSales.length} bills)
-                            </div>
-                          );
-                        })()
-                      )}
-                    </div>
-                  )}
-                  <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400, margin: 0 }}>
-                        View issued sales invoices, audit trails, and print thermal receipts
-                        {invoiceFilterDate && (
-                          <span
-                            className="badge badge-emerald"
-                            style={{ marginLeft: '10px', cursor: 'pointer', padding: '3px 8px', fontSize: '0.75rem', fontWeight: 600 }}
-                            onClick={() => setInvoiceFilterDate('')}
-                            title="Click to clear date filter"
-                          >
-                            📅 Filtered: {invoiceFilterDate} ✕
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {branches.length > 0 && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Filter Branch:</span>
-                        <select
-                          value={invoiceBranchFilter}
-                          onChange={(e) => setInvoiceBranchFilter(e.target.value)}
-                          style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
-                        >
-                          <option value="all">All Branches</option>
-                          {branches.map(b => (
-                            <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Invoice No</th>
-                        {branches.length > 0 && <th>Branch</th>}
-                        <th>Date & Time</th>
-                        <th>Customer / Reference</th>
-                        <th>Total Amount</th>
-                        <th>Taxable</th>
-                        <th>GST</th>
-                        <th>Payment Method</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedInvoices.map((inv) => (
-                        <tr key={inv.id}>
-                          <td className="mono" style={{ fontWeight: 700, color: '#6d4aff' }}>
-                            <button
-                              type="button"
-                              onClick={() => openInvoiceDetail(inv.id)}
-                              style={{ background: 'none', border: 'none', color: '#6d4aff', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-                              title="View bill details & returns"
-                            >
-                              {inv.number}
-                            </button>
-                            {inv.kind === 'credit_note' && (
-                              <span className="badge" style={{ marginLeft: '6px', background: '#e0e7ff', color: '#4338ca', fontSize: '0.65rem' }}>
-                                CREDIT NOTE
-                              </span>
-                            )}
-                            {inv.status === 'voided' && (
-                              <span className="badge" style={{ marginLeft: '6px', background: '#fee2e2', color: '#b91c1c', fontSize: '0.65rem' }}>
-                                VOIDED
-                              </span>
-                            )}
-                          </td>
-                          {branches.length > 0 && (
-                            <td>
-                              <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                background: '#f1f5f9',
-                                color: '#475569',
-                                padding: '0.2rem 0.45rem',
-                                borderRadius: '6px',
-                                border: '1px solid #e2e8f0',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                🏢 {branches.find(b => b.id === inv.branchId || b.code === (inv as any).location)?.code || 'MAIN'}
-                              </span>
-                            </td>
-                          )}
-                          <td>{new Date(inv.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                          <td>
-                            <div style={{ fontWeight: 600 }}>{inv.customerName || 'Walk-in Customer'}</div>
-                            {inv.customerPhone && (
-                              <div className="mono" style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                📞 {inv.customerPhone}
-                              </div>
-                            )}
-                            {/* Returned Badge (Section 4.1) */}
-                            {inv.fullyReturned ? (
-                              <div style={{ marginTop: '4px' }}>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: '#fef3c7',
-                                    color: '#92400e',
-                                    border: '1px solid #fde68a',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                  }}
-                                  onClick={() => openInvoiceDetail(inv.id)}
-                                  title="Every line on this bill is fully returned"
-                                >
-                                  Fully Returned • {inv.creditNotes?.map((c) => c.number).join(', ') || 'CN'}
-                                </span>
-                              </div>
-                            ) : (inv.returnedMinor && inv.returnedMinor > 0) ? (
-                              <div style={{ marginTop: '4px' }}>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background: '#e0f2fe',
-                                    color: '#0369a1',
-                                    border: '1px solid #bae6fd',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                  }}
-                                  onClick={() => openInvoiceDetail(inv.id)}
-                                  title="Click to view linked credit notes"
-                                >
-                                  Returned {formatRupees(inv.returnedMinor)} • {inv.creditNotes?.map((c) => c.number).join(', ')}
-                                </span>
-                              </div>
-                            ) : null}
-                            {inv.whatsappSendCount && inv.whatsappSendCount > 0 ? (
-                              <div style={{ fontSize: '0.72rem', color: '#16a34a', marginTop: '3px', fontWeight: 500 }}>
-                                WhatsApp sent ×{inv.whatsappSendCount} • last {new Date(inv.whatsappLastSentAt!).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} • {inv.whatsappLastLanguage === 'ta' ? 'Tamil' : inv.whatsappLastLanguage === 'hi' ? 'Hindi' : 'English'}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="mono" style={{ fontWeight: 700, color: '#1e1b4b' }}>{formatRupees(inv.totalMinor)}</td>
-                          <td className="mono">{formatRupees(inv.taxableMinor)}</td>
-                          <td className="mono">{formatRupees(inv.cgstMinor + inv.sgstMinor)}</td>
-                          <td>
-                            {inv.payments.map((p, idx) => (
-                              <span key={idx} className="badge badge-emerald" style={{ marginRight: '4px' }}>
-                                {p.method}
-                              </span>
-                            ))}
-                          </td>
-                          <td style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem' }}
-                              onClick={() => openInvoiceDetail(inv.id)}
-                              title="View bill lines and linked returns"
-                            >
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><EyeIcon size={13} /> View</span>
-                            </button>
-                            <a
-                              href={inv.kind === 'credit_note' ? `/api/credit-notes/${inv.id}/print?paper=thermal80&autoprint=true` : `/api/invoices/${inv.id}/print?paper=thermal80&autoprint=true`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem', textDecoration: 'none' }}
-                            >
-                              🖨️ Thermal
-                            </a>
-                            <a
-                              href={inv.kind === 'credit_note' ? `/api/credit-notes/${inv.id}/print?paper=a4` : `/api/invoices/${inv.id}/print?paper=a4`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem', textDecoration: 'none' }}
-                            >
-                              📄 A4 GST
-                            </a>
-
-                            {/* Return / Credit Note action button (Section 4.1) */}
-                            {inv.kind !== 'credit_note' && inv.status !== 'cancelled' && (
-                              <button
-                                type="button"
-                                className="btn"
-                                disabled={Boolean(inv.fullyReturned)}
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: inv.fullyReturned ? '#f1f5f9' : '#e0e7ff',
-                                  color: inv.fullyReturned ? '#94a3b8' : '#4338ca',
-                                  borderColor: inv.fullyReturned ? '#cbd5e1' : '#c7d2fe',
-                                  cursor: inv.fullyReturned ? 'not-allowed' : 'pointer',
-                                }}
-                                onClick={() => openReturnModal(inv.id)}
-                                title={inv.fullyReturned ? 'Fully returned' : 'Issue sales return / credit note'}
-                              >
-                                🔄 Return / CN
-                              </button>
-                            )}
-
-                            {/* Void action: Owner or Manager only, on credit notes (Section 11.2) */}
-                            {inv.kind === 'credit_note' && inv.status !== 'voided' && (user?.role === 'owner' || user?.role === 'manager') && (
-                              <button
-                                type="button"
-                                className="btn"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: '#fee2e2',
-                                  color: '#b91c1c',
-                                  borderColor: '#fca5a5',
-                                }}
-                                onClick={() => handleOpenVoidModal({ id: inv.id, number: inv.number, totalCreditMinor: inv.totalMinor, advanceAmountMinor: 0 })}
-                                title="Void this credit note (Owner/Manager only)"
-                              >
-                                🚫 Void
-                              </button>
-                            )}
-
-                            {inv.balanceMinor > 0 && inv.status === 'posted' && inv.partyId && (
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 700,
-                                  background: '#f59e0b',
-                                  borderColor: '#d97706',
-                                }}
-                                onClick={() => {
-                                  const cust = parties.find((p) => p.id === inv.partyId) || {
-                                    id: inv.partyId!,
-                                    name: inv.customerName || 'Customer',
-                                    phone: inv.customerPhone,
-                                    type: 'customer',
-                                    creditLimitMinor: 0,
-                                  };
-                                  openCollectPayment(cust, inv.id);
-                                }}
-                                title="Collect payment towards this bill"
-                              >
-                                💰 Collect
-                              </button>
-                            )}
-                            {shop?.whatsappEnabled !== false && (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{
-                                  padding: '0.3rem 0.55rem',
-                                  fontSize: '0.75rem',
-                                  color: inv.status === 'cancelled' || inv.status === 'voided' ? '#94a3b8' : '#15803d',
-                                  borderColor: inv.status === 'cancelled' || inv.status === 'voided' ? '#e2e8f0' : '#86efac',
-                                  background: inv.status === 'cancelled' || inv.status === 'voided' ? '#f8fafc' : '#f0fdf4',
-                                  fontWeight: 600,
-                                }}
-                                disabled={inv.status === 'cancelled' || inv.status === 'voided'}
-                                title={inv.status === 'cancelled' || inv.status === 'voided' ? 'Document cancelled / voided' : 'Resend on WhatsApp'}
-                                onClick={() => {
-                                  if (inv.kind === 'credit_note') {
-                                    handleOpenCreditNoteWhatsApp({
-                                      id: inv.id,
-                                      number: inv.number,
-                                      originalInvoiceNumber: 'Original Bill',
-                                      phone: inv.customerPhone || '',
-                                      customerName: inv.customerName,
-                                      totalCreditMinor: inv.totalMinor,
-                                      settlementSummary: 'Credit Note Settlement',
-                                      shareToken: inv.shareToken,
-                                    });
-                                  } else {
-                                    openWhatsAppResend(inv);
-                                  }
-                                }}
-                              >
-                                💬 WhatsApp
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
+            {/* TAB 3: BILLS & INVOICES (BENTO DESIGN) */}
+            {displayTab === 'invoices' && (
+              <RecentBillsBentoView
+                key={`invoices-${selectedBranchScope}`}
+                invoices={invoices}
+                user={user}
+                shop={shop}
+                branches={branches}
+                parties={parties}
+                activeBranch={activeBranch}
+                currentBranchName={currentBranchName}
+                currentBranchCode={currentBranchCode}
+                selectedBranchScope={selectedBranchScope}
+                invoiceFilterDate={invoiceFilterDate}
+                setInvoiceFilterDate={setInvoiceFilterDate}
+                invoiceBranchFilter={invoiceBranchFilter}
+                setInvoiceBranchFilter={setInvoiceBranchFilter}
+                handleGlobalBranchChange={handleGlobalBranchChange}
+                formatRupees={formatRupees}
+                openInvoiceDetail={openInvoiceDetail}
+                openReturnModal={openReturnModal}
+                handleOpenVoidModal={handleOpenVoidModal}
+                openCollectPayment={openCollectPayment}
+                openWhatsAppResend={openWhatsAppResend}
+                handleOpenCreditNoteWhatsApp={handleOpenCreditNoteWhatsApp}
+                onNavigateToPos={() => setActiveTab('pos')}
+              />
+            )}
 
             {/* TAB: DISCOUNTS & PROMOTIONS */}
             {activeTab === 'promotions' && (
@@ -11455,7 +11691,7 @@ export function App() {
             )}
 
             {/* TAB: SALES ANALYSIS */}
-            {displayTab === 'sales-analysis' && (
+            {user?.role !== 'cashier' && displayTab === 'sales-analysis' && (
               <SalesAnalysisView
                 key={`sales-analysis-${selectedBranchScope}`}
                 userRole={user?.role}
@@ -11470,7 +11706,7 @@ export function App() {
             )}
 
             {/* TAB 4: CUSTOMERS - MODERN CUSTOMER DIRECTORY & AUTOMATIC LOYALTY POINTS */}
-            {displayTab === 'customers' && (
+            {user?.role !== 'cashier' && displayTab === 'customers' && (
               <div className="tab-content-wrapper" key={`customers-${selectedBranchScope}`}>
                 <CustomerDirectory
                   parties={parties}
@@ -11489,7 +11725,7 @@ export function App() {
             )}
 
             {/* TAB: SUPPLIERS - MODERN UPGRADED SUPPLIER DIRECTORY */}
-            {displayTab === 'suppliers' && (
+            {user?.role !== 'cashier' && displayTab === 'suppliers' && (
               <div className="tab-content-wrapper" key={`suppliers-${selectedBranchScope}`}>
                 <SupplierDirectory
                   parties={parties}
@@ -11513,7 +11749,7 @@ export function App() {
             )}
 
             {/* TAB: PURCHASES & STOCK INWARD */}
-            {displayTab === 'purchases' && (() => {
+            {user?.role !== 'cashier' && displayTab === 'purchases' && (() => {
               const filteredPurchases = purchases.filter((p) => {
                 if (purchaseStatusFilter === 'voided') {
                   if (p.status !== 'voided') return false;
@@ -11541,7 +11777,6 @@ export function App() {
               const totalItcRecorded = nonVoidedPurchases.reduce((sum, p) => sum + (p.itcMinor || 0), 0);
               const totalBalancePayable = nonVoidedPurchases.reduce((sum, p) => sum + (p.balanceMinor || 0), 0);
               const openBillsCount = nonVoidedPurchases.filter((p) => (p.balanceMinor || 0) > 0).length;
-
               return (
                 <div>
                   {/* Purchases Metric Cards */}
@@ -11847,7 +12082,7 @@ export function App() {
             })()}
 
             {/* TAB 5: REPORTS & ANALYTICS */}
-            {displayTab === 'reports' && report && (() => {
+            {user?.role !== 'cashier' && displayTab === 'reports' && report && (() => {
               const isSuperAdmin = user.role === 'owner' || String(user.role).toUpperCase() === 'SUPER_ADMIN';
               const isOverall = isSuperAdmin && (!selectedBranchScope || selectedBranchScope.toLowerCase() === 'all');
               const activeBranchObj = branches.find(
@@ -12308,7 +12543,7 @@ export function App() {
             })()}
 
             {/* TAB 6: SETTINGS & BUSINESS CONFIGURATION PACKS */}
-            {displayTab === 'settings' && (
+            {user?.role !== 'cashier' && displayTab === 'settings' && (
               <div>
                 {/* Section 1: Business Profile Editor */}
                 <div className="card settings-section">
@@ -14350,7 +14585,7 @@ export function App() {
 
 
             {/* ACCOUNTS & FINANCE TAB VIEWS */}
-            {displayTab === 'payments' && (
+            {user?.role !== 'cashier' && displayTab === 'payments' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <PaymentsView
                   key={selectedBranchScope}
@@ -14376,7 +14611,7 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'expenses' && (
+            {user?.role !== 'cashier' && displayTab === 'expenses' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ExpensesView
                   key={selectedBranchScope}
@@ -14390,7 +14625,7 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'receivables' && (
+            {user?.role !== 'cashier' && displayTab === 'receivables' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ReceivablesView
                   key={selectedBranchScope}
@@ -14407,7 +14642,7 @@ export function App() {
               </div>
             )}
 
-            {displayTab === 'payables' && (
+            {user?.role !== 'cashier' && displayTab === 'payables' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <PayablesView
                   key={selectedBranchScope}
@@ -14425,49 +14660,49 @@ export function App() {
             )}
 
             {/* GST FILING TAB VIEWS */}
-            {displayTab === 'gst-overview' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-overview' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstOverviewView key={selectedBranchScope} tenantGstin={shop?.gstin || ''} onNavigateTab={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-sales-register' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-sales-register' && (
               <div className="tab-content-wrapper" style={{ padding: '16px 1.5rem 1.5rem' }}>
                 <GstSalesRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-purchase-register' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-purchase-register' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstPurchaseRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-itc-reconciliation' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-itc-reconciliation' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <ItcRegisterView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-gstr3b' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-gstr3b' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <Gstr3bView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-gstr1' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-gstr1' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <Gstr1View key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-import-export' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-import-export' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstImportExportView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
             )}
 
-            {displayTab === 'gst-filing-history' && (
+            {user?.role !== 'cashier' && displayTab === 'gst-filing-history' && (
               <div className="tab-content-wrapper" style={{ padding: '1.5rem' }}>
                 <GstFilingHistoryView key={selectedBranchScope} onNavigate={(tab) => setActiveTab(tab as any)} />
               </div>
@@ -14503,7 +14738,7 @@ export function App() {
                   className="btn btn-primary"
                   style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}
                 >
-                  🖨️ Thermal Slip
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><PrinterIcon size={12} /> Thermal</span> Slip
                 </a>
                 <a
                   href={`/api/invoices/${printModalInvoiceId}/print?paper=a4`}
@@ -14512,7 +14747,7 @@ export function App() {
                   className="btn btn-secondary"
                   style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}
                 >
-                  📄 A4 GST Copy
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><FileTextIcon size={12} /> A4</span> GST Copy
                 </a>
                 <button
                   className="btn btn-secondary"
@@ -14915,10 +15150,12 @@ export function App() {
             existingItems={items}
             branchId={activeBranch?.id || (selectedBranchScope !== 'all' ? selectedBranchScope : undefined)}
             shopName={shop?.name}
+            suppliers={parties.filter((p) => p.type === 'supplier')}
             onClose={() => setShowBulkImportModal(false)}
             onImportDone={() => {
               loadItems();
               loadCategories();
+              loadParties();
               showToast('Bulk import completed! Products updated.');
             }}
           />
@@ -16233,7 +16470,9 @@ export function App() {
             userRole={user.role}
             defaultLocation={currentBranchCode}
             defaultCounter={selectedCounter || 'Counter 1'}
+            defaultCounterId={selectedCounterId}
             branches={branches}
+            counterDetails={activeBranch?.counterDetails}
           />
         )}
 
@@ -16242,19 +16481,30 @@ export function App() {
           <SelectCounterModal
             isOpen={showCounterModal}
             onClose={() => setShowCounterModal(false)}
-            onSelectCounter={(counterCode, counterName) => {
+            onSelectCounter={(counterCode, counterName, counterId) => {
               setSelectedCounter(counterCode);
+              if (counterId) setSelectedCounterId(counterId);
               try {
                 sessionStorage.setItem('pos_selected_counter', counterCode);
                 localStorage.setItem('pos_selected_counter', counterCode);
+                if (counterId) {
+                  sessionStorage.setItem('pos_selected_counter_id', counterId);
+                  localStorage.setItem('pos_selected_counter_id', counterId);
+                }
                 if (counterName) {
                   sessionStorage.setItem('pos_selected_counter_name', counterName);
                   localStorage.setItem('pos_selected_counter_name', counterName);
                 }
               } catch { }
               showToast(`Billing Counter set to ${counterName || counterCode} (${counterCode})`);
+              selectActiveShiftCounter({
+                counterId,
+                counter: counterCode,
+                branchId: activeBranch?.id || user?.branchId || undefined,
+              }).catch(() => {});
             }}
             currentCounter={selectedCounter || activeBranch?.counters?.[0] || 'MAIN-C01'}
+            currentCounterId={selectedCounterId}
             branchName={currentBranchName}
             branchCode={currentBranchCode}
             cashierName={user.name || 'Cashier'}
@@ -20319,7 +20569,11 @@ export function App() {
                   <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
                     Issued on {invoiceDetailData?.invoice?.bdate ? new Date(invoiceDetailData.invoice.bdate).toLocaleDateString('en-IN') : '—'}
                     {invoiceDetailData?.invoice?.customerName && ` • Customer: ${invoiceDetailData.invoice.customerName}`}
-                    {invoiceDetailData?.invoice?.customerPhone && ` (📞 ${invoiceDetailData.invoice.customerPhone})`}
+                    {invoiceDetailData?.invoice?.customerPhone && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '6px', fontSize: '0.82rem', color: '#64748b' }}>
+                        <PhoneIcon size={12} /> {invoiceDetailData.invoice.customerPhone}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
@@ -20441,7 +20695,7 @@ export function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                         <div>
                           <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#1e293b' }}>
-                            🔄 Returns & Credit Notes
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RotateCcwIcon size={14} /> Returns & Credit Notes</span>
                           </h4>
                           {invoiceDetailData.creditNotes && invoiceDetailData.creditNotes.length > 0 && (
                             <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
@@ -20471,7 +20725,7 @@ export function App() {
                             }}
                             title={invoiceDetailData.invoice.fullyReturned ? 'Fully returned' : 'Issue a return against this bill'}
                           >
-                            🔄 Issue Return / Credit Note
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><RotateCcwIcon size={13} /> Issue Return / Credit Note</span>
                           </button>
                         )}
                       </div>
@@ -20551,7 +20805,7 @@ export function App() {
                                         shareToken: cn.shareToken,
                                       })}
                                     >
-                                      💬 WhatsApp
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><WhatsAppIcon size={13} /> WhatsApp</span>
                                     </button>
                                   )}
                                   {cn.status !== 'voided' && (user?.role === 'owner' || user?.role === 'manager') && (
@@ -20574,7 +20828,7 @@ export function App() {
                                       })}
                                       title="Void this credit note (Owner/Manager only)"
                                     >
-                                      🚫 Void
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><XCircleIcon size={12} /> Void</span>
                                     </button>
                                   )}
                                 </div>
@@ -20583,7 +20837,7 @@ export function App() {
                               {/* Voided Details Banner */}
                               {cn.status === 'voided' && (
                                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '0.4rem 0.6rem', fontSize: '0.76rem', color: '#b91c1c', marginBottom: '0.5rem' }}>
-                                  ⚠️ <b>Voided</b> on {new Date(cn.voidedAt).toLocaleString('en-IN')}{cn.voidedByName ? ` by ${cn.voidedByName}` : ''}: "{cn.voidReason || 'No reason provided'}"
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangleIcon size={13} /> <b>Voided</b></span> on {new Date(cn.voidedAt).toLocaleString('en-IN')}{cn.voidedByName ? ` by ${cn.voidedByName}` : ''}: "{cn.voidReason || 'No reason provided'}"
                                 </div>
                               )}
 

@@ -984,8 +984,14 @@ export type {
 export const fetchActiveShift = () =>
   api<{ ok: boolean; activeShift: import('../../shared/types.ts').Shift | null }>('/api/shifts/active');
 
-export const openShift = (data: { openingCashMinor: number; location?: string; counter?: string; notes?: string }) =>
+export const openShift = (data: { openingCashMinor: number; location?: string; counter?: string; counterId?: string; branchId?: string; notes?: string }) =>
   api<{ ok: boolean; shift: import('../../shared/types.ts').Shift }>('/api/shifts', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const selectActiveShiftCounter = (data: { counterId?: string; counter?: string; branchId?: string }) =>
+  api<{ ok: boolean; counter: string; counterName?: string; counterId?: string }>('/api/shifts/counter', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -1361,6 +1367,8 @@ export interface BulkImportRow {
   taxInclusive?: boolean | null;
   /** Opening / incoming stock in milli-units (e.g. 5000 = 5 pieces). */
   openingQtyMilli?: number | null;
+  /** Reorder level in milli-units (e.g. 20000 = 20 units). */
+  reorderMilli?: number | null;
   /** Whether this row is an identified restock of an existing product */
   isRestock?: boolean;
   /** The existing product ID being restocked */
@@ -1379,6 +1387,10 @@ export interface BulkImportRowResult {
 
 export interface BulkImportResult {
   importId: string;
+  purchaseId?: string | null;
+  purchaseNumber?: string | null;
+  supplierId?: string | null;
+  supplierName?: string | null;
   totalRows: number;
   created: number;
   restocked: number;
@@ -1387,10 +1399,20 @@ export interface BulkImportResult {
   results: BulkImportRowResult[];
 }
 
-export const bulkImportItems = (rows: BulkImportRow[], importBatchId?: string, branchId?: string | null) =>
+export const bulkImportItems = (
+  rows: BulkImportRow[],
+  importBatchId?: string,
+  branchId?: string | null,
+  supplierId?: string | null,
+) =>
   api<BulkImportResult>('/api/items/bulk-import', {
     method: 'POST',
-    body: JSON.stringify({ rows, importBatchId, branchId: branchId || undefined }),
+    body: JSON.stringify({
+      rows,
+      importBatchId,
+      branchId: branchId || undefined,
+      supplierId: supplierId || undefined,
+    }),
   });
 
 export const generateInternalBarcodeApi = (branchId?: string) =>
@@ -2283,8 +2305,10 @@ export interface ManagerDeleteImpact {
 export interface CounterDeleteImpact {
   name: string;
   code: string;
-  loginUsername: string | null;
-  defaultCashiersCount: number;
+  loginUsername?: string | null;
+  defaultCashiersCount?: number;
+  hasHistory?: boolean;
+  canDelete?: boolean;
 }
 
 export interface CashierDeleteImpact {

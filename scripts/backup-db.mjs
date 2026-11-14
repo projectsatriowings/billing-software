@@ -45,15 +45,17 @@ async function runBackup() {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
     ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 15000,
+    connectionTimeoutMillis: 30000,
+    keepAlive: true,
+    max: 3,
+  });
+
+  pool.on('error', (err) => {
+    console.warn('Postgres pool warning:', err.message);
   });
 
   try {
-    const client = await pool.connect();
-    console.log('Connected successfully!');
-
-    // Fetch list of user tables in the public schema
-    const tablesRes = await client.query(`
+    const tableRes = await pool.query(`
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
@@ -61,7 +63,7 @@ async function runBackup() {
       ORDER BY table_name;
     `);
 
-    const tableNames = tablesRes.rows.map((r) => r.table_name);
+    const tableNames = tableRes.rows.map((r) => r.table_name);
     console.log(`Found ${tableNames.length} tables to back up: ${tableNames.join(', ')}`);
 
     const backupData = {
@@ -75,7 +77,19 @@ async function runBackup() {
     sqlDump += `-- Total Tables: ${tableNames.length}\n\n`;
 
     for (const tableName of tableNames) {
-      const rowsRes = await client.query(`SELECT * FROM "${tableName}"`);
+      let retries = 3;
+      let rowsRes = null;
+      while (retries > 0) {
+        try {
+          rowsRes = await pool.query(`SELECT * FROM "${tableName}"`);
+          break;
+        } catch (err) {
+          retries--;
+          console.warn(`Retry querying ${tableName} (${retries} left):`, err.message);
+          if (retries === 0) throw err;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
       backupData.tables[tableName] = {
         rowCount: rowsRes.rows.length,
         rows: rowsRes.rows,
@@ -105,7 +119,6 @@ async function runBackup() {
       }
     }
 
-    client.release();
     await pool.end();
 
     // Write JSON format

@@ -41,6 +41,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   const [deleting, setDeleting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [impactText, setImpactText] = useState<string>('');
+  const [cannotDeleteDueToHistory, setCannotDeleteDueToHistory] = useState<boolean>(false);
   const [confirmInput, setConfirmInput] = useState<string>('');
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,30 +66,34 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
     setLoadingImpact(true);
     setErrorMessage('');
     setConfirmInput('');
+    setCannotDeleteDueToHistory(false);
 
     async function loadImpact() {
       try {
         if (type === 'branch') {
           const res = await fetchBranchDeleteImpact(id);
           setImpactText(
-            `This permanently deletes the branch, its ${res.countersCount} counters, ${res.counterLoginsCount} counter logins and ${res.cashiersCount} cashiers. The store manager ${
-              res.managerName ? res.managerName : 'None'
+            `This permanently deletes the branch, its ${res.countersCount} counters, ${res.counterLoginsCount} counter logins and ${res.cashiersCount} cashiers. The store manager ${res.managerName ? res.managerName : 'None'
             } will be unassigned (not deleted). Past bills are kept but will show the branch name only.`,
           );
         } else if (type === 'manager') {
           const res = await fetchManagerDeleteImpact(id);
           setImpactText(
-            `This permanently deletes ${res.name}'s account. Branch ${
-              res.branchName ? `${res.branchName}${res.branchCode ? ` (${res.branchCode})` : ''}` : 'Not assigned'
+            `This permanently deletes ${res.name}'s account. Branch ${res.branchName ? `${res.branchName}${res.branchCode ? ` (${res.branchCode})` : ''}` : 'Not assigned'
             } will have no manager.`,
           );
         } else if (type === 'counter') {
           const res = await fetchCounterDeleteImpact(id, isBranchScope);
-          setImpactText(
-            `This permanently deletes the counter and its login ${
-              res.loginUsername ? `@${res.loginUsername}` : res.name
-            }. ${res.defaultCashiersCount} cashiers using it as their default will switch to 'Any counter'.`,
-          );
+          if (res.hasHistory || (res as any).canDelete === false) {
+            setCannotDeleteDueToHistory(true);
+            setImpactText(
+              `This counter has existing billing transactions or shift history and cannot be deleted. Deactivate (disable) the counter instead to preserve historical sales and audit records.`,
+            );
+          } else {
+            setImpactText(
+              `This permanently deletes the counter "${res.name}". No sales or billing transactions were recorded on this counter.`,
+            );
+          }
         } else if (type === 'cashier') {
           const res = await fetchCashierDeleteImpact(id, isBranchScope);
           setImpactText(`This permanently deletes ${res.name}'s account and signs them out everywhere.`);
@@ -243,15 +248,29 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             Cancel
           </button>
 
-          <button
-            type="button"
-            className="um-btn-danger"
-            disabled={!isConfirmed || deleting}
-            onClick={handleDelete}
-          >
-            {deleting && <div className="um-btn-spinner" />}
-            <span>Delete permanently</span>
-          </button>
+          {cannotDeleteDueToHistory ? (
+            <button
+              type="button"
+              className="um-btn-primary"
+              style={{ minHeight: '40px', padding: '0 16px', background: '#5B3BE8', color: '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => {
+                onClose();
+                onDisableInstead?.(id);
+              }}
+            >
+              Deactivate counter instead
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="um-btn-danger"
+              disabled={!isConfirmed || deleting}
+              onClick={handleDelete}
+            >
+              {deleting && <div className="um-btn-spinner" />}
+              <span>Delete permanently</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

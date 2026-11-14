@@ -152,7 +152,8 @@ export function registerDashboard(r: Router) {
       ctx.db.one<any>('SELECT timezone FROM tenants WHERE id = ?', [tenantId]),
       ctx.db.query<any>(
         `SELECT b.*, u.name AS manager_name,
-           (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters
+           (SELECT json_agg(c.code ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counters,
+           (SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'code', c.code, 'status', c.status) ORDER BY c.code ASC) FROM counters c WHERE c.branch_id = b.id AND c.tenant_id = b.tenant_id AND c.status = 'ACTIVE') AS dynamic_counter_details
          FROM branches b
          LEFT JOIN users u ON u.id = b.manager_id
          ${branchWhereClause}
@@ -330,11 +331,43 @@ export function registerDashboard(r: Router) {
     }
     shiftSql += ' ORDER BY s.opened_at DESC LIMIT 1';
 
-    const assignedCounters: string[] = (Array.isArray(activeBranch?.dynamic_counters) && activeBranch.dynamic_counters.length > 0)
-      ? activeBranch.dynamic_counters.map(String)
-      : (Array.isArray(activeBranch?.counters) && activeBranch.counters.length > 0 ? parseCounters(activeBranch.counters) : ['COUNTER-1']);
+    // Resolve active counters for this branch from database records
+    let activeCounters: Array<{ id: string; code: string; name: string }> = [];
+    if (activeBranch?.id) {
+      const dbCounters = isAllBranches
+        ? await ctx.db.query<any>(
+            "SELECT id, code, name, status FROM counters WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY branch_id ASC, code ASC",
+            [tenantId],
+          )
+        : await ctx.db.query<any>(
+            "SELECT id, code, name, status FROM counters WHERE tenant_id = ? AND branch_id = ? AND status = 'ACTIVE' ORDER BY code ASC",
+            [tenantId, activeBranch.id],
+          );
+      if (dbCounters && dbCounters.length > 0) {
+        activeCounters = dbCounters.map((c) => ({
+          id: c.id,
+          code: c.code,
+          name: c.name || formatCounterDisplayName(c.code),
+        }));
+      }
+    }
 
-    // 4. PARALLELIZE ALL 14 DATABASE QUERIES CONCURRENTLY VIA Promise.all
+    if (activeCounters.length === 0) {
+      const rawDetails = activeBranch?.dynamicCounterDetails || activeBranch?.dynamic_counter_details;
+      if (Array.isArray(rawDetails) && rawDetails.length > 0) {
+        activeCounters = rawDetails
+          .filter((c: any) => c && c.id && c.status !== 'DISABLED')
+          .map((c: any) => ({
+            id: c.id,
+            code: c.code,
+            name: c.name || formatCounterDisplayName(c.code),
+          }));
+      }
+    }
+
+    const assignedCounters: string[] = activeCounters.map((c) => c.code);
+
+    // 4. PARALLELIZE ALL 12 DATABASE QUERIES CONCURRENTLY VIA Promise.all
     const [
       todaySalesRes,
       compSalesRes,
@@ -347,9 +380,7 @@ export function registerDashboard(r: Router) {
       topSellersRows,
       stockAttentionRows,
       shiftRow,
-      counterPaymentsRows,
-      counterRefundsRows,
-      counterCreditNoteRefundsRows,
+      todayCounterInvoicesRows,
     ] = await Promise.all([
       // 1. Today sales
       ctx.db.one<any>(
@@ -680,91 +711,23 @@ export function registerDashboard(r: Router) {
       // 11. Shift row
       ctx.db.one<any>(shiftSql, shiftParams),
 
-      // 12. Counter payments
+      // 12. Counter sales from invoices (Authoritative, zero duplicate JOINs)
       ctx.db.query<any>(
         `SELECT 
-           p.id,
-           p.amount_minor,
-           p.location AS payment_location,
-           p.counter AS payment_counter,
-           s.location AS shift_location,
-           s.counter AS shift_counter,
-           i.location AS invoice_location,
-           i.counter AS invoice_counter
-         FROM payments p
-         LEFT JOIN shifts s ON s.id = p.shift_id
-         LEFT JOIN invoices i ON i.id = p.invoice_id
-         WHERE p.tenant_id = ?
-           AND (
-             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
-             OR
-             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
-           )
-           AND (p.status IS NULL OR p.status = 'posted')
-           AND (p.invoice_id IS NULL OR (i.status = 'posted' AND i.kind = 'sale'))
-           AND COALESCE(p.kind, 'receipt') = 'receipt'
-           ${payBranchClause}`,
-        [
-          tenantId,
-          todayYMD,
-          tz,
-          todayYMD,
-          todayYMD,
-          tz,
-          todayYMD,
-          ...payBranchParams,
-        ],
-      ),
-
-      // 13. Counter refunds
-      ctx.db.query<any>(
-        `SELECT 
-           p.id,
-           p.amount_minor,
-           p.counter AS payment_counter,
-           s.location AS shift_location,
-           s.counter AS shift_counter,
-           i.location AS invoice_location,
-           i.counter AS invoice_counter
-         FROM payments p
-         LEFT JOIN shifts s ON s.id = p.shift_id
-         LEFT JOIN invoices i ON i.id = p.invoice_id
-         WHERE p.tenant_id = ?
-           AND (
-             (p.invoice_id IS NOT NULL AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date))
-             OR
-             (p.invoice_id IS NULL AND (p.bdate = ? OR (p.created_at AT TIME ZONE ?)::date = ?::date))
-           )
-           AND (p.status IS NULL OR p.status = 'posted')
-           AND p.kind = 'refund'
-           ${payBranchClause}`,
-        [
-          tenantId,
-          todayYMD,
-          tz,
-          todayYMD,
-          todayYMD,
-          tz,
-          todayYMD,
-          ...payBranchParams,
-        ],
-      ),
-
-      // 14. Counter credit note refunds
-      ctx.db.query<any>(
-        `SELECT 
-           id,
-           refund_amount_minor,
-           location,
-           counter
-         FROM invoices
-         WHERE tenant_id = ?
-           AND (bdate = ? OR (created_at AT TIME ZONE ?)::date = ?::date)
-           AND kind = 'credit_note'
-           AND status = 'posted'
-           AND refund_amount_minor > 0
-           ${invDirectBranchClause}`,
-        [tenantId, todayYMD, tz, todayYMD, ...invDirectBranchParams],
+           i.id,
+           i.kind,
+           i.total_minor,
+           i.counter_id,
+           i.counter,
+           i.counter_name_snapshot,
+           i.created_at
+         FROM invoices i
+         WHERE i.tenant_id = ?
+           AND (i.bdate = ? OR (i.created_at AT TIME ZONE ?)::date = ?::date)
+           AND i.status = 'posted'
+           AND i.kind IN ('sale', 'credit_note')
+           ${invBranchClause}`,
+        [tenantId, todayYMD, tz, todayYMD, ...invBranchParams],
       ),
     ]);
 
@@ -1175,64 +1138,40 @@ export function registerDashboard(r: Router) {
       };
     }
 
-    function resolveRowCounter(row: any, counters: string[]): string {
-      const candidates = [
-        row.shiftCounter ?? row.shift_counter,
-        row.paymentCounter ?? row.payment_counter,
-        row.invoiceCounter ?? row.invoice_counter,
-        row.counter,
-      ];
-      for (const raw of candidates) {
-        if (typeof raw === 'string' && raw.trim()) {
-          const trimmed = raw.trim().toUpperCase();
-          const exact = counters.find((c) => c.toUpperCase() === trimmed);
-          if (exact) return exact;
-          const strippedClean = trimmed.replace(/[^A-Z0-9]/g, '');
-          const stripped = counters.find(
-            (c) => c.toUpperCase().replace(/[^A-Z0-9]/g, '') === strippedClean
-          );
-          if (stripped) return stripped;
+    const counterAmountsMap = new Map<string, number>();
+    for (const c of activeCounters) {
+      counterAmountsMap.set(c.id, 0);
+    }
 
-          // Match by lane number (e.g. Counter 1 -> MAIN-C01, or MAIN-C01 -> Counter 1)
-          const mNum = trimmed.match(/(\d+)/);
-          if (mNum) {
-            const laneNo = mNum[1].replace(/^0+/, '');
-            const matchByLane = counters.find((c) => {
-              const cNum = c.match(/(\d+)/);
-              return cNum && cNum[1].replace(/^0+/, '') === laneNo;
-            });
-            if (matchByLane) return matchByLane;
-          }
-          if (trimmed.includes('EXP') || trimmed.includes('EXPRESS')) {
-            const matchExp = counters.find((c) => c.toUpperCase().includes('EXP') || c.toUpperCase().includes('EXPRESS'));
-            if (matchExp) return matchExp;
-          }
+    for (const inv of todayCounterInvoicesRows) {
+      const amt = Number(inv.totalMinor ?? inv.total_minor ?? 0);
+      const netAmt = inv.kind === 'credit_note' ? -amt : amt;
+
+      let targetCounterId: string | null = null;
+      const rawId = inv.counterId ?? inv.counter_id;
+      if (rawId && typeof rawId === 'string' && rawId.trim()) {
+        const match = activeCounters.find((c) => c.id === rawId.trim());
+        if (match) targetCounterId = match.id;
+      }
+
+      // Safe fallback ONLY for historical legacy records where counter_id was null:
+      // Exact code or exact name match against an active counter in the same branch
+      if (!targetCounterId && !rawId) {
+        const rawCode = (inv.counter || '').trim();
+        const rawName = ((inv.counterNameSnapshot ?? inv.counter_name_snapshot) || '').trim();
+        if (rawCode) {
+          const matchByCode = activeCounters.find((c) => c.code.toUpperCase() === rawCode.toUpperCase());
+          if (matchByCode) targetCounterId = matchByCode.id;
+        }
+        if (!targetCounterId && rawName) {
+          const matchByName = activeCounters.find((c) => c.name.toLowerCase() === rawName.toLowerCase());
+          if (matchByName) targetCounterId = matchByName.id;
         }
       }
-      return counters[0] || 'COUNTER-1';
-    }
 
-    const counterAmountsMap = new Map<string, number>();
-    for (const c of assignedCounters) {
-      counterAmountsMap.set(c, 0);
-    }
-
-    for (const p of counterPaymentsRows) {
-      const targetCounter = resolveRowCounter(p, assignedCounters);
-      const amt = Number(p.amountMinor ?? p.amount_minor ?? 0);
-      counterAmountsMap.set(targetCounter, (counterAmountsMap.get(targetCounter) || 0) + amt);
-    }
-
-    for (const r of counterRefundsRows) {
-      const targetCounter = resolveRowCounter(r, assignedCounters);
-      const refAmt = Number(r.amountMinor ?? r.amount_minor ?? 0);
-      counterAmountsMap.set(targetCounter, Math.max(0, (counterAmountsMap.get(targetCounter) || 0) - refAmt));
-    }
-
-    for (const cn of counterCreditNoteRefundsRows) {
-      const targetCounter = resolveRowCounter(cn, assignedCounters);
-      const refAmt = Number(cn.refundAmountMinor ?? cn.refund_amount_minor ?? 0);
-      counterAmountsMap.set(targetCounter, Math.max(0, (counterAmountsMap.get(targetCounter) || 0) - refAmt));
+      if (targetCounterId && counterAmountsMap.has(targetCounterId)) {
+        counterAmountsMap.set(targetCounterId, Math.max(0, counterAmountsMap.get(targetCounterId)! + netAmt));
+      }
     }
 
     function formatCounterRupees(minor: number): string {
@@ -1240,12 +1179,12 @@ export function registerDashboard(r: Router) {
       return `₹${val.toLocaleString('en-IN')}`;
     }
 
-    const countersList = assignedCounters.map((code: string, idx: number) => {
-      const amtMinor = counterAmountsMap.get(code) || 0;
+    const countersList = activeCounters.map((c) => {
+      const amtMinor = counterAmountsMap.get(c.id) || 0;
       return {
-        id: `counter-${idx + 1}`,
-        code,
-        name: formatCounterDisplayName(code),
+        id: c.id,
+        code: c.code,
+        name: c.name || formatCounterDisplayName(c.code),
         amountMinor: amtMinor,
         formattedAmount: formatCounterRupees(amtMinor),
       };
@@ -1272,13 +1211,19 @@ export function registerDashboard(r: Router) {
         name: activeBranch.name,
         counters: assignedCounters,
       },
-      branches: branchRows.map((b: any) => ({
-        id: b.id,
-        code: b.code,
-        name: b.name,
-        active: Boolean(b.active ?? true),
-        counters: parseCounters(b.counters),
-      })),
+      branches: branchRows.map((b: any) => {
+        const rawCounters = b.dynamicCounters || b.dynamic_counters;
+        const bCounters: string[] = (Array.isArray(rawCounters) && rawCounters.length > 0)
+          ? rawCounters.map((c: any) => typeof c === 'object' ? c.code : String(c))
+          : parseCounters(b.counters);
+        return {
+          id: b.id,
+          code: b.code,
+          name: b.name,
+          active: Boolean(b.active ?? true),
+          counters: bCounters,
+        };
+      }),
       nowKolkata: {
         timeStr: nowTimeStr,
         hour: currentHour,

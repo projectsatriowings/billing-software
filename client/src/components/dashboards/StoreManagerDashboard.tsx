@@ -13,7 +13,7 @@ import {
 interface StoreManagerDashboardProps {
   user: User;
   shop: Shop | null;
-  onNavigate?: (tab: 'pos' | 'shifts' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings' | 'stock-transfer') => void;
+  onNavigate?: (tab: 'pos' | 'items' | 'inventory' | 'product-movement' | 'purchases' | 'invoices' | 'customers' | 'suppliers' | 'reports' | 'settings' | 'stock-transfer') => void;
 }
 
 const formatRupees = (paise: number = 0) => {
@@ -99,7 +99,7 @@ export function StoreManagerDashboard({
   }) => {
     const storeName = shop?.name || 'Adaptive Billing Platform';
     return (
-`👋 Hello ${creds.name},
+      `👋 Hello ${creds.name},
 
 ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have been reset:` : `🎉 Welcome to ${storeName}! Here are your Cashier login credentials:`}
 
@@ -289,7 +289,7 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
     } finally {
       setIsSubmittingReset(false);
     }
-  };  if (loading) {
+  }; if (loading) {
     return (
       <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
         Loading authorized branch operations...
@@ -368,26 +368,6 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
               }}
             >
               <span>🛒</span> Start POS
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('shifts')}
-              style={{
-                background: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '0.55rem 1.15rem',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
-              }}
-            >
-              <span>⏱️</span> Shift Log
             </button>
             <button
               type="button"
@@ -502,10 +482,7 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
             {branchSummary?.activeShiftsCount ?? 0} <span style={{ fontSize: '0.9rem', fontWeight: 500, color: '#64748b' }}>Active</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
-            <span>Counters: {branchSummary?.branch?.counters?.length ?? 1}</span>
-            <span style={{ color: '#4f46e5', fontWeight: 700, cursor: 'pointer' }} onClick={() => onNavigate?.('shifts')}>
-              View ➔
-            </span>
+            <span>Counters: {branchSummary?.branch?.counters?.length ?? 0}</span>
           </div>
         </div>
 
@@ -642,13 +619,6 @@ ${creds.isReset ? `🔑 Your Cashier login credentials for ${storeName} have bee
               <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Active Cashiers & Counters</h2>
               <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Live open shifts currently processing billing in this branch.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('shifts')}
-              style={{ background: 'none', border: 'none', fontSize: '0.8rem', fontWeight: 700, color: '#4f46e5', cursor: 'pointer' }}
-            >
-              Open Shift ➔
-            </button>
           </div>
 
           {branchSummary?.activeShifts && branchSummary.activeShifts.length > 0 ? (

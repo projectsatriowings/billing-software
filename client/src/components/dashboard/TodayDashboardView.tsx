@@ -34,7 +34,7 @@ interface TodayDashboardViewProps {
   user: User;
   shop: Shop | null;
   onNavigateToPos: () => void;
-  onNavigateToShifts: () => void;
+  onNavigateToShifts?: () => void;
   onNavigateToInventory: () => void;
   onNavigateToSalesAnalysis: () => void;
   onNavigateToPurchases: () => void;
@@ -1635,14 +1635,6 @@ export const TodayDashboardView: React.FC<TodayDashboardViewProps> = ({
                 <span className="section-subtitle">Collected from open till now</span>
               </div>
             </div>
-            <button
-              type="button"
-              className="section-link-pill-btn"
-              onClick={onNavigateToShifts}
-            >
-              <span>Cashier Shifts</span>
-              <span className="pill-arrow">→</span>
-            </button>
           </div>
 
           <div className="counters-today-body" key={`counters-${chartAnimKey}`}>

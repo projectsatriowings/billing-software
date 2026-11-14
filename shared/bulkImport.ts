@@ -841,6 +841,7 @@ export interface MatchCandidate {
   hsn: string | null;
   packSize?: string | null;
   imageUrl?: string | null;
+  reorderMilli?: number | null;
   matchReason?: string;
 }
 

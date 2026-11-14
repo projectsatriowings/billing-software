@@ -23842,15 +23842,13 @@ select.expense-input-control {
 }
 
 .action-dropdown-menu {
-  position: absolute;
-  right: 0;
-  top: 105%;
-  z-index: 101;
-  width: 200px;
+  position: fixed;
+  z-index: 9999;
+  min-width: 210px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
@@ -32768,8 +32766,286 @@ select.expense-input-control {
   transition: all 0.15s ease;
 }
 
-.top-global-bar .top-notification-btn:hover {
+.top-global-bar .top-notification-btn:hover,
+.top-global-bar .top-notification-btn.active {
   border-color: #6D5EF5;
+  background: #F8F9FE;
+}
+
+/* Wrapper for notification popover */
+.top-notif-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Bento Notification Popover Dropdown */
+.top-notif-popover.bento-notif-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 390px;
+  max-width: calc(100vw - 24px);
+  background: #ffffff;
+  border: 1px solid #E2E0EF;
+  border-radius: 16px;
+  box-shadow: 0 20px 45px rgba(26, 24, 48, 0.18);
+  z-index: 1060;
+  overflow: hidden;
+  animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.bento-notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  background: #FAFAFD;
+  border-bottom: 1px solid #E2E0EF;
+}
+
+.bento-notif-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bento-notif-icon-bubble {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #EEF2FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bento-notif-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1A1838;
+}
+
+.bento-notif-role-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bento-notif-role-badge.cashier {
+  background: #EEF2FF;
+  color: #4F46E5;
+  border: 1px solid #C7D2FE;
+}
+
+.bento-notif-role-badge.admin {
+  background: #FDF2F8;
+  color: #DB2777;
+  border: 1px solid #FBCFE8;
+}
+
+.bento-notif-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.bento-notif-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E0EF;
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bento-notif-card:hover {
+  border-color: #C7D2FE;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.06);
+}
+
+.bento-notif-card.active-shift {
+  border-left: 4px solid #16a34a;
+}
+
+.bento-notif-card.warning-shift {
+  border-left: 4px solid #d97706;
+  background: #FFFDF9;
+}
+
+.bento-notif-card.stock-advisory {
+  border-left: 4px solid #ea580c;
+  background: #FFFBF7;
+}
+
+.bento-notif-card.stock-advisory.ok {
+  border-left: 4px solid #16a34a;
+  background: #F9FEFA;
+}
+
+.bento-notif-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bento-notif-card-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bento-notif-card-icon.pos {
+  background: #EEF2FF;
+}
+
+.bento-notif-card-icon.invoices {
+  background: #E0F2FE;
+}
+
+.bento-notif-card-icon.advisory {
+  background: #FFEDD5;
+}
+
+.bento-notif-card-icon.ok {
+  background: #DCFCE7;
+}
+
+.bento-notif-card-title-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.bento-notif-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1A1838;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bento-notif-status-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.bento-notif-status-pill.live {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.bento-notif-status-pill.warn {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.bento-notif-status-pill.pos {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.bento-notif-status-pill.invoices {
+  background: #E0F2FE;
+  color: #0369A1;
+}
+
+.bento-notif-status-pill.advisory {
+  background: #FFEDD5;
+  color: #C2410C;
+}
+
+.bento-notif-status-pill.ok {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.bento-notif-card-desc {
+  font-size: 0.78rem;
+  color: #64748B;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.bento-notif-hint {
+  font-size: 0.71rem;
+  color: #94A3B8;
+  font-style: italic;
+}
+
+.bento-notif-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #4F46E5;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bento-notif-action-btn:hover {
+  background: #EEF2FF;
+  border-color: #C7D2FE;
+  color: #4338CA;
+  transform: translateY(-1px);
+}
+
+.bento-notif-action-btn.primary {
+  background: #4F46E5;
+  border-color: #4338CA;
+  color: #FFFFFF;
+}
+
+.bento-notif-action-btn.primary:hover {
+  background: #4338CA;
+  color: #FFFFFF;
+}
+
+.bento-notif-footer {
+  padding: 10px 14px;
+  background: #FAFAFD;
+  border-top: 1px solid #E2E0EF;
+  font-size: 0.73rem;
+  color: #64748B;
+  text-align: center;
+}
+
+.bento-alert-pill.bento-alert-pill-readonly {
+  cursor: default !important;
+  opacity: 0.95;
+}
+.bento-alert-pill.bento-alert-pill-readonly:hover {
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 /* Profile chip: 44px tall, white, 1px #E2E0EF, 12px radius, 32px avatar */
@@ -32792,6 +33068,14 @@ select.expense-input-control {
 
 .top-global-bar .top-user-chip:hover {
   border-color: #6D5EF5;
+}
+
+.top-global-bar .top-user-chip.readonly {
+  cursor: default !important;
+}
+
+.top-global-bar .top-user-chip.readonly:hover {
+  border-color: #E2E0EF !important;
 }
 
 .top-global-bar .top-user-avatar {
@@ -34803,4 +35087,979 @@ select.expense-input-control {
 
 .calc-result-amount.text-amber {
   color: #b45309;
+}
+
+
+/* ==========================================================================
+   TOP GLOBAL BAR - POS BRANCH & LOCKED CHECKOUT COUNTER BENTO CARDS
+   ========================================================================== */
+.top-pos-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-left: 20px;
+}
+
+.top-pos-bento-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.42rem 0.85rem;
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  user-select: none;
+  transition: all 0.18s ease;
+}
+
+.top-pos-branch-badge {
+  border-color: #e0e7ff;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
+}
+
+.top-pos-counter-badge {
+  border-color: #ede9fe;
+  background: linear-gradient(135deg, #ffffff 0%, #faf8ff 100%);
+}
+
+.top-pos-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.top-pos-badge-icon.branch {
+  background: #eff6ff;
+  color: #3b82f6;
+  border: 1px solid #dbeafe;
+}
+
+.top-pos-badge-icon.counter {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ede9fe;
+}
+
+.top-pos-badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.top-pos-badge-label {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.top-pos-badge-val-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  line-height: 1.25;
+}
+
+.top-pos-badge-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.top-pos-code-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4338ca;
+  background: #e0e7ff;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid #c7d2fe;
+}
+
+.top-pos-lock-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.2;
+}
+
+.top-pos-lock-tag svg {
+  color: #059669;
+}
+
+@media (max-width: 768px) {
+  .top-pos-header-left {
+    margin-left: 10px;
+    gap: 0.5rem;
+  }
+  .top-pos-bento-badge {
+    padding: 0.35rem 0.65rem;
+  }
+  .top-pos-badge-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .top-pos-badge-val {
+    font-size: 0.8rem;
+  }
+}
+
+
+/* ==========================================================================
+   BENTO RECENT BILLS & INVOICING STYLES (CASHIER & ADMIN)
+   ========================================================================== */
+.invoices-bento-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  width: 100%;
+}
+
+.top-invoices-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  flex-wrap: wrap;
+  margin-left: 20px;
+}
+
+.top-invoices-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.top-invoices-title {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.top-invoices-subtitle {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Context Strip */
+.invoices-context-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem;
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.invoices-context-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.invoices-branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.invoices-branch-icon {
+  color: #6366f1;
+}
+
+.invoices-branch-label {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.invoices-branch-name {
+  color: #0f172a;
+}
+
+.invoices-branch-code {
+  color: #475569;
+  font-size: 0.72rem;
+}
+
+.invoices-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.invoices-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  animation: pulse-dot 2s infinite;
+}
+
+.invoices-quick-pos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+  transition: all 0.15s ease;
+}
+
+.invoices-quick-pos-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  transform: translateY(-1px);
+}
+
+/* Bento KPI Grid */
+.invoices-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.95rem;
+}
+
+.invoices-kpi-card {
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.85rem;
+  transition: all 0.18s ease;
+}
+
+.invoices-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+  border-color: #cbd5e1;
+}
+
+.invoices-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.invoices-kpi-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.invoices-kpi-icon-wrap.indigo {
+  background: #eef2ff;
+  color: #6366f1;
+  border: 1px solid #e0e7ff;
+}
+
+.invoices-kpi-icon-wrap.emerald {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.invoices-kpi-icon-wrap.violet {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ede9fe;
+}
+
+.invoices-kpi-icon-wrap.amber {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.invoices-kpi-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.invoices-kpi-badge.indigo {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.invoices-kpi-badge.emerald {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.invoices-kpi-badge.violet {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.invoices-kpi-badge.amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.invoices-kpi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.invoices-kpi-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.invoices-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.invoices-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.invoices-kpi-sub-amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.invoices-kpi-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Bento Search and Controls Bar */
+.invoices-controls-bar {
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.invoices-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+}
+
+.invoices-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.42rem 0.75rem;
+  flex: 1 1 240px;
+  max-width: 360px;
+  transition: all 0.15s ease;
+}
+
+.invoices-search-box:focus-within {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.invoices-search-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.invoices-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.82rem;
+  color: #0f172a;
+  width: 100%;
+}
+
+.invoices-clear-search-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.8rem;
+}
+
+.invoices-clear-search-btn:hover {
+  color: #475569;
+}
+
+.invoices-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.invoices-filter-pill {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  user-select: none;
+}
+
+.invoices-filter-pill:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.invoices-filter-pill.active {
+  background: #eff6ff;
+  border-color: #6366f1;
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.invoices-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.invoices-admin-branch-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+}
+
+.invoices-branch-dropdown {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+/* Bento Invoices Table Container */
+.invoices-bento-table-card {
+  background: #ffffff;
+  border: 1.2px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.invoices-table-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.95rem 1.35rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fafafa;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.invoices-table-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.invoices-table-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.invoices-count-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid #c7d2fe;
+}
+
+.invoices-table-scroller {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.invoices-bento-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.invoices-bento-table thead th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.85rem 1.15rem;
+  border-bottom: 1.5px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.invoices-bento-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s ease;
+}
+
+.invoices-bento-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.invoices-bento-table tbody td {
+  padding: 0.9rem 1.15rem;
+  font-size: 0.84rem;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+/* Bill Chip */
+.bento-bill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.28rem 0.65rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bento-bill-btn:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+  transform: translateY(-1px);
+}
+
+.invoices-tag-credit-note {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+.invoices-tag-voided {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+.invoices-branch-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.invoices-datetime-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.invoices-date-text {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.invoices-time-text {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.invoices-cust-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.invoices-cust-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.invoices-cust-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.invoices-cust-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.invoices-cust-phone {
+  font-size: 0.74rem;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.invoices-return-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-top: 3px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.invoices-return-status-pill.full {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.invoices-return-status-pill.partial {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.invoices-amount-total {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.invoices-amount-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.invoices-pmt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.invoices-pmt-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.invoices-pmt-pill.cash {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.invoices-pmt-pill.upi {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.invoices-pmt-pill.card {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.invoices-pmt-pill.other {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+/* Action Button Group */
+.bento-act-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.bento-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.bento-act-btn.view {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+.bento-act-btn.view:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.bento-act-btn.thermal {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+.bento-act-btn.thermal:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.bento-act-btn.a4 {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+.bento-act-btn.a4:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.bento-act-btn.return {
+  background: #faf5ff;
+  border-color: #e9d5ff;
+  color: #7e22ce;
+}
+.bento-act-btn.return:hover {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+.bento-act-btn.return:disabled {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.bento-act-btn.whatsapp {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+.bento-act-btn.whatsapp:hover {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.bento-act-btn.void {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.bento-act-btn.void:hover {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.bento-act-btn.collect {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+.bento-act-btn.collect:hover {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Empty State */
+.invoices-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+}
+
+.invoices-empty-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: #eff6ff;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.15rem;
+  border: 1px solid #dbeafe;
+}
+
+.invoices-empty-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.invoices-empty-sub {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.84rem;
+  color: #64748b;
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+.invoices-empty-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  border: none;
+  padding: 0.65rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  transition: all 0.15s ease;
+}
+
+.invoices-empty-action-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .invoices-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .invoices-controls-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .invoices-search-box {
+    max-width: 100%;
+  }
 }

@@ -16,8 +16,9 @@ import type { BranchCounterDetail } from '../../../../shared/types.ts';
 export interface SelectCounterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectCounter: (counterCode: string, counterName?: string) => void;
+  onSelectCounter: (counterCode: string, counterName?: string, counterId?: string) => void;
   currentCounter?: string;
+  currentCounterId?: string;
   branchName: string;
   branchCode: string;
   cashierName: string;
@@ -40,6 +41,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   onClose,
   onSelectCounter,
   currentCounter = '',
+  currentCounterId = '',
   branchName,
   branchCode,
   cashierName,
@@ -50,7 +52,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   // Helper to format clean display name from code or name
   const resolveCounterNameAndTag = (code: string, rawName?: string, index: number = 0): { name: string; tag: string; desc: string; isExpress: boolean } => {
     const isExpress = (code || '').toUpperCase().includes('EXP') || (rawName || '').toLowerCase().includes('express');
-    
+
     let name = rawName?.trim();
     if (!name || name === code) {
       const mNum = code.match(/(\d+)/);
@@ -85,7 +87,8 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   // Build list of active counters created for this particular branch
   const branchCountersList: ResolvedCounterOption[] = React.useMemo(() => {
     if (counterDetails && counterDetails.length > 0) {
-      return counterDetails.map((c, idx) => {
+      const activeDetails = counterDetails.filter(c => c.status !== 'DISABLED');
+      return activeDetails.map((c, idx) => {
         const { name, tag, desc, isExpress } = resolveCounterNameAndTag(c.code, c.name, idx);
         return {
           id: c.id || c.code,
@@ -112,17 +115,18 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
       });
     }
 
-    // Default fallback if branch has not registered counters yet
+    // Default fallback only if branch has not registered counters yet
     const prefix = (branchCode || 'MAIN').toUpperCase();
     return [
       { id: `${prefix}-C01`, code: `${prefix}-C01`, name: 'Counter 1', tag: 'Primary', desc: 'Main Billing Terminal • Register Lane 1' },
-      { id: `${prefix}-C02`, code: `${prefix}-C02`, name: 'Counter 2', tag: 'Lane 2', desc: 'Secondary POS Terminal • Register Lane 2' },
-      { id: `${prefix}-C03`, code: `${prefix}-C03`, name: 'Counter 3', tag: 'Lane 3', desc: 'Standard POS Terminal • Register Lane 3' },
-      { id: `${prefix}-C04`, code: `${prefix}-C04`, name: 'Express Counter', tag: 'Fast Track', desc: 'Quick Pay & Basket Only Express Lane', isExpress: true },
     ];
   }, [counterDetails, availableCounters, branchCode]);
 
   const [selectedCode, setSelectedCode] = useState<string>(() => {
+    if (currentCounterId) {
+      const match = branchCountersList.find(c => c.id === currentCounterId);
+      if (match) return match.code;
+    }
     if (currentCounter) {
       const match = branchCountersList.find(c => c.code.toUpperCase() === currentCounter.toUpperCase() || c.name.toLowerCase() === currentCounter.toLowerCase());
       if (match) return match.code;
@@ -141,8 +145,8 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   const displaySelectedLabel = isCustomMode
     ? (customCounterText.trim() || 'Custom Counter')
     : currentSelectedObj
-    ? `${currentSelectedObj.name} (${currentSelectedObj.code})`
-    : selectedCode;
+      ? `${currentSelectedObj.name} (${currentSelectedObj.code})`
+      : selectedCode;
 
   const handleSelect = (counterCode: string) => {
     setSelectedCode(counterCode);
@@ -153,6 +157,7 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
   const handleConfirm = () => {
     let finalCode = selectedCode;
     let finalName = currentSelectedObj?.name || selectedCode;
+    let finalId = currentSelectedObj?.id;
 
     if (isCustomMode) {
       const trimmed = customCounterText.trim();
@@ -169,7 +174,22 @@ export const SelectCounterModal: React.FC<SelectCounterModalProps> = ({
       return;
     }
 
-    onSelectCounter(finalCode, finalName);
+    if (branchCountersList.length > 0) {
+      const match = branchCountersList.find(c =>
+        (finalId && c.id === finalId) ||
+        c.code.toUpperCase() === finalCode.toUpperCase() ||
+        c.name.toLowerCase() === finalName.toLowerCase()
+      );
+      if (!match) {
+        setError('Please select an active counter belonging to this branch.');
+        return;
+      }
+      finalCode = match.code;
+      finalName = match.name;
+      finalId = match.id;
+    }
+
+    onSelectCounter(finalCode, finalName, finalId);
     onClose();
   };
 
