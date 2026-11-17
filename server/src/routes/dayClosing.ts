@@ -1,7 +1,7 @@
 import { requirePerm, requireUser } from '../auth.ts';
 import { bad, notFound, forbidden, HtmlResponse, FileResponse, V, type Router } from '../http.ts';
 import { newId, verifyPassword } from '../security.ts';
-import { j } from '../db/index.ts';
+import { j, type Queryable } from '../db/index.ts';
 import { audit } from '../audit.ts';
 import { fmtMoney } from '../../../shared/money.ts';
 import { resolveBranchScope } from '../branchScope.ts';
@@ -70,7 +70,7 @@ export interface SmartAuditResult {
 }
 
 export async function runSmartClosingAudit(
-  db: any,
+  db: Queryable,
   params: {
     tenantId: string;
     branchId: string;
